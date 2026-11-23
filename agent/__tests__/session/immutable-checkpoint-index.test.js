@@ -14,7 +14,7 @@ import { initializeImmutableSession } from "../../src/session/session-artifact-s
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { ImmutableSessionChanges } from "../../src/session/session-artifact-session/immutable-message-changes.js";
 import { immutableOrderKey } from "../../src/session/session-artifact-session/immutable-order-key.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
 import {
   immutableCheckpointKey,
   removeImmutableMessageCheckpoints,

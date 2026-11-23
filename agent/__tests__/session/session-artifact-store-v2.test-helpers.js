@@ -15,6 +15,7 @@ import {
   SESSION_ARTIFACT_PREDECESSOR,
 } from "../../src/session/session-artifact-store.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
+import { projectThinkingTimeline } from "@noobot/event-protocol/thinking-detail-projection";
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
@@ -44,6 +45,14 @@ export async function withTemp(fn) {
 
 export async function buildPersistedDisplaySummary(sessionPayload) {
   return buildSessionDisplaySummary(await persistSessionManifest(sessionPayload));
+}
+
+export async function buildPersistedDisplayAndThinking(sessionPayload, turnScopeId) {
+  const session = await persistSessionManifest(sessionPayload);
+  return {
+    summary: buildSessionDisplaySummary(session),
+    detail: projectThinkingTimeline(session.messages, { turnScopeId }),
+  };
 }
 
 export function canonicalMessages(messages, sessionId) {

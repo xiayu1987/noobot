@@ -23,11 +23,13 @@ const testPluginHost = Object.freeze({
     skipped: [],
     errors: [],
   }),
+  listSessionDeletionHandlers: () => [],
   emitAfterSessionDelete: async () => {},
 });
 
 export function registerSessionRoutes(app, options = {}) {
   return registerSessionRoutesImpl(app, {
+    runBotOperation: (operation) => operation(),
     ...options,
     pluginHost: options?.pluginHost || testPluginHost,
   });
@@ -58,7 +60,6 @@ export function createSessionApp(options = {}) {
         getSessionDisplayData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-        getAllSessionsData: async () => [],
         listSessionIds: async () => [],
         ...(options.session || {}),
       },

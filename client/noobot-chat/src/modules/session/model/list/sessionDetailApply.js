@@ -29,6 +29,7 @@ import {
   isSessionDetailEntryCurrent,
   requireSessionDetailDocument,
   selectMainSessionDetailEntry,
+  selectSessionDetailBlockingEntry,
 } from "@noobot/session-protocol/session-detail";
 import { isPlainObject, requireFunctionDependencies } from "@noobot/shared/value";
 
@@ -62,27 +63,27 @@ export function createSessionDetailApplicator({
     };
   }
 
-  function applyUnavailableEntry(sessionItem, mainEntry) {
-    sessionItem.availability = mainEntry.availability;
-    sessionItem.isUnavailable = true;
-    sessionItem.unavailableReason = mainEntry.unavailableReason;
+  function applyUnavailableEntry(sessionItem, blockingEntry) {
+    revokeMessagePreviewUrls(sessionItem.messages);
+    delete sessionItem.lastMessage;
+    delete sessionItem.turnLifecycleSnapshot;
+    Object.assign(sessionItem, {
+      detailUnavailableReason: blockingEntry.unavailableReason,
+      sessionDocs: [],
+      detailMessages: [],
+      messages: [],
+      loaded: false,
+    });
   }
 
   function applyAvailableEntry({ detail, sessionItem, mainEntry }) {
     const sessionId = detail.sessionId;
-    sessionItem.turnLifecycleSnapshot = mainEntry.turnLifecycleSnapshot;
-    applyLatestSessionAggregateVersion(sessionItem, mainEntry);
-    sessionItem.generation = mainEntry.generation;
-    sessionItem.createdAt = mainEntry.createdAt;
-    sessionItem.updatedAt = mainEntry.updatedAt;
-
     const canonicalDetail = mergeCanonicalSessionDetail(
       { sessionId, messages: [] },
       { sessionId, messages: mainEntry.messages },
       { replaceFields: ["messages"] },
     );
     const detailMessages = canonicalDetail.messages;
-    sessionItem.detailMessages = detailMessages.map((item) => ({ ...item }));
     const detailProjection = buildSessionDetailProjection({
       sessionDetail: canonicalDetail,
       sessionDocs: detail.sessions,
@@ -107,7 +108,23 @@ export function createSessionDetailApplicator({
       canonicalMessageCount: detailMessages.length,
       presentationMessageCount: normalizedDetailMessages.length,
     }));
-    sessionItem.messages = normalizedDetailMessages;
+    const lastMessage = findVisibleLastMessage(normalizedDetailMessages);
+    confirmSessionIdentity({ sessionItem, sessionId });
+    applyLatestSessionAggregateVersion(sessionItem, mainEntry);
+    delete sessionItem.detailUnavailableReason;
+    Object.assign(sessionItem, {
+      knownGeneration: mainEntry.generation,
+      turnLifecycleSnapshot: mainEntry.turnLifecycleSnapshot,
+      createdAt: mainEntry.createdAt,
+      updatedAt: mainEntry.updatedAt,
+      detailMessages: detailMessages.map((item) => ({ ...item })),
+      messages: normalizedDetailMessages,
+      messageCount: mainEntry.stats.messageCount,
+      lastMessage,
+      title: mainEntry.title,
+      sessionDocs: detail.sessions,
+      loaded: true,
+    });
 
     logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailApplied", () => ({
       sessionId,
@@ -122,38 +139,35 @@ export function createSessionDetailApplicator({
       mainSessionDoc: mainEntry,
       normalizedDetailMessages,
     });
-    sessionItem.messageCount = sessionItem.messages.length;
-    sessionItem.lastMessage = findVisibleLastMessage(sessionItem.messages);
-    sessionItem.title = mainEntry.title;
   }
 
   function applySessionDetail(document) {
     const detail = requireSessionDetailDocument(document);
     const mainEntry = selectMainSessionDetailEntry(detail);
     const sessionItem = findSessionByAnyIdInList(sessions.value, detail.sessionId);
-    if (!sessionItem) return;
+    if (!sessionItem || sessionItem.isUnavailable) return false;
     if (
       isAvailableSessionDetailEntry(mainEntry) &&
       !isSessionDetailEntryCurrent(mainEntry, sessionItem)
     )
-      return;
+      return false;
     logResendDebug("detail.apply.begin", () => ({
       sessionId: detail.sessionId,
       currentMessages: summarizeDebugMessages(sessionItem.messages),
     }));
-    sessionItem.loaded = true;
-    confirmSessionIdentity({ sessionItem, sessionId: detail.sessionId });
-    sessionItem.sessionDocs = detail.sessions;
+    const blockingEntry = selectSessionDetailBlockingEntry(detail);
     logWorkflowDiagnostics("frontend.workflowDetail.applySourceSelected", () => ({
       sessionId: detail.sessionId,
-      availability: mainEntry.availability,
+      blockingSessionId: blockingEntry?.sessionId ?? null,
       sessionDocCount: detail.sessions.length,
     }));
-    if (!isAvailableSessionDetailEntry(mainEntry)) {
-      applyUnavailableEntry(sessionItem, mainEntry);
-      return;
+    if (blockingEntry !== null) {
+      confirmSessionIdentity({ sessionItem, sessionId: detail.sessionId });
+      applyUnavailableEntry(sessionItem, blockingEntry);
+      return false;
     }
     applyAvailableEntry({ detail, sessionItem, mainEntry });
+    return true;
   }
 
   return { applySessionDetail };

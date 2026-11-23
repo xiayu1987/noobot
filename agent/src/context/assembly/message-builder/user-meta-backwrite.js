@@ -7,15 +7,12 @@
 import {
   createUserMetaBackwrite,
   isSameUserMetaBackwrite,
-  mergeUserMetaParsedResults,
   normalizeUserMetaBackwrites,
 } from "@noobot/context-protocol/policy/user-meta-backwrite";
 import { resolveMessagesByIds } from "@noobot/context-protocol/message/store";
-import {
-  readContextMessageValue,
-  writeContextMessageMetadata,
-} from "@noobot/context-protocol/message/codec";
+import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import { isNaturalDialogUserMessage } from "@noobot/session-protocol";
+import { requireUserMetaParsedResultReceipt } from "@noobot/session-protocol/session-changes";
 import { requireActiveModelContext } from "../../../runtime/active-model-context.js";
 
 function setBackwrites(modelContext, records) {
@@ -54,19 +51,15 @@ export async function applyPendingUserMetaBackwrites(
     if (!source) {
       throw new Error(`user_meta backwrite source not found: ${record.userMetaSourceMessageUid}`);
     }
-    await session.recordUserMetaParsedResult({
+    const receipt = await session.recordUserMetaParsedResult({
       userId,
       sessionId,
       persistenceScope,
       userMetaSourceMessageUid: record.userMetaSourceMessageUid,
       result: record.result,
     });
-    writeContextMessageMetadata(source, {
-      userMetaParsedResults: mergeUserMetaParsedResults(
-        readContextMessageValue(source, "userMetaParsedResults"),
-        record.result,
-      ),
-    });
+    const { userMetaParsedResults } = requireUserMetaParsedResultReceipt(receipt, record.result);
+    writeContextMessageMetadata(source, { userMetaParsedResults });
     remaining = remaining.slice(1);
     setBackwrites(modelContext, remaining);
     appliedCount += 1;

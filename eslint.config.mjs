@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { fileURLToPath } from "node:url";
+import { includeIgnoreFile } from "eslint/config";
 import security from "eslint-plugin-security";
 import unusedImports from "eslint-plugin-unused-imports";
 import globals from "globals";
@@ -23,17 +25,13 @@ const testGlobals = {
 };
 
 export default [
+  includeIgnoreFile(fileURLToPath(new URL(".gitignore", import.meta.url))),
   {
     ignores: [
-      "**/node_modules/**",
-      "**/dist/**",
       "**/build/**",
       "**/coverage/**",
       "**/vendor/**",
       "**/.cache/**",
-      "**/report/**",
-      "workspace/**",
-      ".e2e-workspace/**",
       "**/*.min.js",
       "**/assets/**/*.js",
     ],

@@ -39,6 +39,19 @@ export function availableDetailEntry({ sessionId, aggregateVersion, messages }) 
     turnLifecycleSnapshot: emptyTurnLifecycleSnapshot(sessionId),
     sessionArtifactEvents: [],
     messages,
+    stats: {
+      messageCount: messages.length,
+      displayMessageCount: messages.length,
+      injectedMessageCount: 0,
+      thinkingMessageCount: messages.filter((message) => message.hasThinkingDetails === true)
+        .length,
+      toolLogCount: 0,
+      displayToolLogCount: 0,
+      unassignedToolArtifactCount: 0,
+      conflictedToolArtifactCount: 0,
+      attachmentCount: 0,
+      hasToolDetails: false,
+    },
   });
 }
 

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { computed, ref, watch } from "vue";
+import { computed, onWatcherCleanup, ref, watch } from "vue";
 import {
   getMessageDialogProcessId,
   getMessageRole,
@@ -20,11 +20,7 @@ import {
   summarizeToolLogWindow,
 } from "../../debug/loggers/toolLogWindowDebugLogger.js";
 import { normalizeThinkingToolLogs } from "../model/thinkingDetailModel.js";
-import {
-  getCachedThinkingDetail,
-  loadThinkingDetail,
-  resolveThinkingDetailIdentity,
-} from "../model/thinkingDetailCache.js";
+import { resolveThinkingDetailIdentity } from "../model/thinkingDetailRequest.js";
 import {
   selectToolTimelineCount,
   selectToolTimelineLogs,
@@ -54,8 +50,8 @@ import {
   reduceThinkingDetailContentTimelines,
   selectThinkingDetailContentTimeline,
 } from "@noobot/event-protocol/thinking-detail-content";
-import { isApiRequestError } from "@noobot/shared/request-error";
 import { thinkingDetailService } from "../../../infrastructure/api/thinking/thinkingDetailService.js";
+import { useThinkingDetailPagination } from "./thinkingDetailPagination.js";
 
 export function useThinkingTimeline(
   props,
@@ -105,10 +101,37 @@ export function useThinkingTimeline(
 
   function timelineMessage(messageItem = {}) {
     if (messageItem !== props.messageItem) return messageItem;
+    if (props.variant === "details" && loadedThinkingDetail.value)
+      return loadedThinkingDetail.value.messageItem;
     return isMultiMessageRound.value ? roundTimelineFacets : messageItem;
   }
-  const thinkingDetailLoadingKey = ref("");
   const loadedThinkingDetail = ref(null);
+  const detailPagination = useThinkingDetailPagination({
+    identity: () =>
+      resolveThinkingDetailIdentity(props.messageItem, getMessageSessionId(props.messageItem)),
+    detail: loadedThinkingDetail,
+    getReader: () => {
+      if (props.fetchThinkingDetail === undefined || props.fetchThinkingDetail === null) {
+        const userId = props.userId;
+        return {
+          fetchPage: (target) => thinkingDetailService.getPage({ userId, ...target }),
+          releasePage: (target) => thinkingDetailService.release({ userId, ...target }),
+        };
+      }
+      if (typeof props.releaseThinkingDetail !== "function")
+        throw new TypeError("Injected thinking detail reader requires releaseThinkingDetail");
+      const userId = props.userId;
+      const fetchPage = props.fetchThinkingDetail;
+      const releasePage = props.releaseThinkingDetail;
+      return {
+        fetchPage: (target) => fetchPage({ ...target, userId }),
+        releasePage: (target) => releasePage({ ...target, userId }),
+      };
+    },
+  });
+  const thinkingDetailLoadingKey = computed(() =>
+    detailPagination.loading.value ? thinkingDetailLoadKey.value : "",
+  );
   function selectActivityMessage(messageItem = props.messageItem) {
     const current = timelineMessage(messageItem);
     if (selectActivityTimelineLogs(current).length > 0) return current;
@@ -197,13 +220,21 @@ export function useThinkingTimeline(
   const currentAnalysisProjection = computed(() =>
     selectLatestAnalysisActivities(selectActivityMessage()),
   );
-  const currentToolTimelineLogs = computed(() =>
-    String(props.variant || "panel") === "details"
-      ? selectToolTimelineLogs(timelineMessage(props.messageItem), { includeDetail: false })
-      : selectToolTimelineLogs(timelineMessage(props.messageItem)).slice(
-          -EXECUTION_LOG_DISPLAY_LIMIT,
-        ),
-  );
+  const currentToolTimelineLogs = computed(() => {
+    const current = timelineMessage(props.messageItem);
+    if (props.variant === "details")
+      return selectToolTimelineLogs(current, { includeDetail: false });
+    const detail = loadedThinkingDetail.value?.messageItem;
+    const message = detail
+      ? {
+          toolTimeline: mergeToolTimelines(
+            selectMessageToolTimeline(current),
+            selectMessageToolTimeline(detail),
+          ),
+        }
+      : current;
+    return selectToolTimelineLogs(message).slice(-EXECUTION_LOG_DISPLAY_LIMIT);
+  });
   const currentExecutionTimelineProjection = computed(() =>
     projectExecutionTimeline(currentToolTimelineLogs.value),
   );
@@ -256,16 +287,10 @@ export function useThinkingTimeline(
     return messageItem?.hasThinkingDetails === true || selectThinkingDetailCount(messageItem) > 0;
   }
 
-  function hasLocalThinkingDetails(messageItem = {}) {
-    const completedLogs = selectToolTimelineLogs(timelineMessage(messageItem), {
-      completedOnly: true,
-    });
-    return (
-      selectActivityTimelineLogs(timelineMessage(messageItem)).length > 0 ||
-      selectThinkingDetailContentTimeline(timelineMessage(messageItem)).length > 0 ||
-      getAllRealtimeLogs(messageItem).length > 0 ||
-      completedLogs.length > 0
-    );
+  function getThinkingDetailCount(messageItem = {}) {
+    const count = selectThinkingDetailCount(timelineMessage(messageItem));
+    if (count > 0 || messageItem !== props.messageItem) return count;
+    return selectThinkingDetailCount(loadedThinkingDetail.value?.messageItem);
   }
 
   function getThinkingDetailForMessage(messageItem = {}) {
@@ -279,7 +304,7 @@ export function useThinkingTimeline(
     const identity = resolveThinkingDetailIdentity(messageItem, getMessageSessionId(messageItem));
     if (identity === null) return null;
     if (loaded?.__thinkingDetailIdentity?.key === identity.key) return loaded;
-    return getCachedThinkingDetail(identity);
+    return null;
   }
 
   const currentExecutionLogs = computed(() =>
@@ -391,83 +416,29 @@ export function useThinkingTimeline(
   });
 
   watch(
-    thinkingDetailLoadKey,
-    async (key) => {
-      if (!key) return;
-      const messageItem = props.messageItem || {};
-      const identity = resolveThinkingDetailIdentity(messageItem, getMessageSessionId(messageItem));
-      if (identity === null) return;
-      const cached = getCachedThinkingDetail(identity);
-      if (cached && hasLocalThinkingDetails(cached.messageItem || {})) {
-        loadedThinkingDetail.value = { ...cached, __thinkingDetailIdentity: identity };
-        logThinkingReplayDebug("frontend.thinkingReplay.detailCacheCommitted", () => ({
-          ...thinkingReplayScope(messageItem),
-          key,
-          identity,
-          detail: summarizeThinkingMessage(cached?.messageItem || {}),
-        }));
+    [
+      thinkingDetailLoadKey,
+      () => props.userId,
+      () => props.fetchThinkingDetail,
+      () => props.releaseThinkingDetail,
+    ],
+    async ([key]) => {
+      let cancelled = false;
+      onWatcherCleanup(() => {
+        cancelled = true;
+      });
+      const released = detailPagination.invalidate();
+      loadedThinkingDetail.value = null;
+      try {
+        await released;
+      } catch (cause) {
+        detailPagination.error.value = cause;
         return;
       }
-      try {
-        thinkingDetailLoadingKey.value = key;
-        logThinkingReplayDebug("frontend.thinkingReplay.detailRequestStarted", () => ({
-          ...thinkingReplayScope(messageItem),
-          key,
-          identity,
-          runtime: getRuntimeView(messageItem),
-          message: summarizeThinkingMessage(messageItem),
-        }));
-        const detail = await loadThinkingDetail({
-          sessionId: identity.sessionId,
-          messageItem,
-          fetchThinkingDetail: (target) =>
-            thinkingDetailService.getDetail({ userId: props.userId, ...target }),
-        });
-        if (!detail) {
-          logThinkingReplayDebug("frontend.thinkingReplay.detailRequestEmpty", () => ({
-            ...thinkingReplayScope(messageItem),
-            key,
-            identity,
-          }));
-          return;
-        }
-        logThinkingReplayDebug("frontend.thinkingReplay.detailPayloadReceived", () => ({
-          ...thinkingReplayScope(messageItem),
-          key,
-          exists: detail?.exists === true,
-          messageItemPresent: Boolean(detail?.messageItem),
-          messageRole: String(detail?.messageItem?.role || ""),
-          toolTimelineCount: Array.isArray(detail?.messageItem?.toolTimeline)
-            ? detail.messageItem.toolTimeline.length
-            : 0,
-          activityTimelineCount: Array.isArray(detail?.messageItem?.activityTimeline)
-            ? detail.messageItem.activityTimeline.length
-            : 0,
-          counts: detail?.counts || {},
-        }));
-        loadedThinkingDetail.value = { ...detail, __thinkingDetailIdentity: identity };
-        logThinkingReplayDebug("frontend.thinkingReplay.detailCommitted", () => ({
-          ...thinkingReplayScope(messageItem),
-          key,
-          identity,
-          detail: summarizeThinkingMessage(detail?.messageItem || {}),
-        }));
-      } catch (error) {
-        if (!isApiRequestError(error)) throw error;
-        logThinkingReplayDebug("frontend.thinkingReplay.detailRequestFailed", () => ({
-          ...thinkingReplayScope(messageItem),
-          key,
-          identity,
-          errorCode: error.code,
-          errorMessage: error.message,
-        }));
-      } finally {
-        if (thinkingDetailLoadingKey.value === key) {
-          thinkingDetailLoadingKey.value = "";
-        }
-      }
+      if (!key || cancelled) return;
+      await detailPagination.restart();
     },
-    { immediate: true },
+    { immediate: true, flush: "sync" },
   );
 
   function hasThinkingLogs(messageItem = {}) {
@@ -540,6 +511,7 @@ export function useThinkingTimeline(
   }
 
   return {
+    detailPagination,
     thinkingContentItems,
     hasThinking,
     loadedThinkingDetail,
@@ -551,6 +523,7 @@ export function useThinkingTimeline(
     getExecutionLogs,
     getCanonicalExecutionLogs,
     getExecutionLogCount,
+    getThinkingDetailCount,
     getThinkingDetailForMessage,
     getCompletedToolLogsForMessage,
     isMessageRuntimeRunning,

@@ -51,6 +51,7 @@ test("lifecycle bridge preserves invalid identities for protocol rejection witho
 
 test("authority dispatch rejects noncanonical identity before accessing the session", () => {
   const dispatch = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     resolveBot: () => assert.fail("invalid request must not access the session"),
     sendEvent: () => assert.fail("invalid request must not send"),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
@@ -63,6 +64,7 @@ test("authority dispatch rejects noncanonical identity before accessing the sess
   assert.throws(
     () =>
       createAuthorityEventDispatcher({
+        runNewOperation: (operation) => operation(),
         resolveBot: () => {},
         sendEvent: () => {},
         consumerId: " service.websocket ",
@@ -78,12 +80,12 @@ test("authority dispatch stops on outbox record identity conflict before attempt
   ];
   const before = structuredClone(source);
   const dispatch = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     resolveBot: () => ({
       session: {
-        async getPendingAuthorityEvents({ consumerId }) {
+        async prepareAuthorityEventDelivery({ consumerId }) {
           return { found: true, events: listPendingAuthorityEvents(source, { consumerId }) };
         },
-        recordAuthorityEventAttempts: () => assert.fail("invalid outbox must not record attempts"),
       },
     }),
     sendEvent: () => assert.fail("invalid outbox must not send"),

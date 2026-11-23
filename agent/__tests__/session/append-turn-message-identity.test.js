@@ -18,9 +18,9 @@ async function identityHarness(session, now = "2026-07-25T00:01:00.000Z") {
   const fixture = await harness(session);
   fixture.service.now = () => now;
   const repo = fixture.service.sessionRepo;
-  const withSessionReader = repo.withSessionReader.bind(repo);
-  repo.withSessionReader = async (...args) => {
-    const result = await withSessionReader(...args);
+  const withSessionCommit = repo.withSessionCommit.bind(repo);
+  repo.withSessionCommit = async (...args) => {
+    const result = await withSessionCommit(...args);
     Object.assign(session, fixture.get());
     return result;
   };

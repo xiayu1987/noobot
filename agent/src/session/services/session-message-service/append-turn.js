@@ -29,30 +29,30 @@ export async function appendTurns({
   if (!turns.length && !messageContentAppends.length && !messageMetadataUpdates.length) {
     throw new TypeError("appendTurns requires non-empty message changes");
   }
-  return this.sessionRepo.withSessionReader(
+  return this.sessionRepo.withSessionCommit(
     userId,
     sessionId,
-    async (reader, scope, commitChanges) => {
+    async ({ prepareRequest, scope, commitChanges }) => {
       const committed = await submission.submit({
         userId,
         sessionId,
-        prepare: () => ({
-          expectedGeneration: reader.generation,
-          operationId: randomUUID(),
-          changes: {
-            messages: turns.map((turn) =>
-              buildTurnEntity(this, scope.resolvedParentSessionId, {
-                ...turn,
-                userId,
-                sessionId,
-              }),
-            ),
-            messageContentAppends,
-            messageMetadataUpdates,
-            ...(messageDiagnostics.length ? { messageDiagnostics } : {}),
-          },
-          committedAt: this.now(),
-        }),
+        prepare: () =>
+          prepareRequest({
+            operationId: randomUUID(),
+            changes: {
+              messages: turns.map((turn) =>
+                buildTurnEntity(this, scope.resolvedParentSessionId, {
+                  ...turn,
+                  userId,
+                  sessionId,
+                }),
+              ),
+              messageContentAppends,
+              messageMetadataUpdates,
+              ...(messageDiagnostics.length ? { messageDiagnostics } : {}),
+            },
+            committedAt: this.now(),
+          }),
         commit: commitChanges,
       });
       return { messageReceipts: committed.result.messageReceipts };

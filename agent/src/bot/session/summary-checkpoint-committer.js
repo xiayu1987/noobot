@@ -149,7 +149,7 @@ function prepareCheckpointTransaction({ runtime, turnPersister, identity, summar
     checkpointMessages,
     summarizedMessageUids,
   });
-  const changes = projectMessagePersistenceChanges(pendingMessages, entries, identity);
+  const changes = projectMessagePersistenceChanges(entries, identity);
   const { messages, messageContentAppends, messageMetadataUpdates } = structuredClone({
     ...changes,
     messages: turnPersister.prepareAgentMessages({ ...identity, messages: changes.messages }),

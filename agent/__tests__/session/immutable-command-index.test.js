@@ -17,7 +17,7 @@ import {
   immutableLifecycleCommandKey,
   immutableAttachmentBindingKey,
   writeImmutableCommand,
-  removeImmutableTurnCommands,
+  retireImmutableSuffixCommands,
 } from "../../src/session/session-artifact-session/immutable-command-index.js";
 import { upgradeImmutableCommandIndexes } from "../../src/session/session-artifact-session/immutable-command-index-upgrade.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
@@ -68,31 +68,31 @@ async function mutate(store, operationId, apply, generation) {
   });
 }
 
-test("turn command removal atomically removes binding aliases, preserves global receipts and pinned readers", async (t) => {
+test("suffix retirement removes deleted bindings but preserves surviving bindings, global receipts and pinned readers", async (t) => {
   const store = await fixture(t);
   await mutate(store, "seed", async (plan) => {
     for (const item of [
       receipt("a", "t1"),
       receipt("b", "t1", SESSION_COMMAND.TURN_ATTACHMENTS_BIND),
+      receipt("kept", "t1", SESSION_COMMAND.TURN_ATTACHMENTS_BIND),
       receipt("c", "t2"),
       receipt("global", ""),
     ])
       await writeImmutableCommand(store, plan, item);
   });
   const before = await store.snapshot();
-  const remove = async (plan) => {
-    const result = await removeImmutableTurnCommands(store, plan, ["t1", "t1"]);
+  const remove = (owner) => async (plan) => {
+    await retireImmutableSuffixCommands(owner, plan, { turnScopeIds: ["t1"], uids: ["m:b"] });
     plan.set("metadata", "removal", { complete: true });
-    return result;
   };
-  const result = await mutate(store, "remove", remove, before.generation);
-  assert.deepEqual(result.result, { removed: 2 });
+  const result = await mutate(store, "remove", remove(store), before.generation);
   const after = await store.snapshot();
   assert.equal(after.generation, before.generation + 1);
   assert.equal(await store.get(after, "commands", immutableLifecycleCommandKey("a")), null);
   assert.equal(await store.get(after, "commands", immutableLifecycleCommandKey("b")), null);
   assert.equal(await store.get(after, "commands", immutableAttachmentBindingKey("m:b")), null);
-  assert.equal(await store.get(after, "turnCommands", "t1"), null);
+  assert.equal((await store.get(after, "turnCommands", "t1")).count, 1);
+  assert.equal(await store.get(after, "commands", immutableAttachmentBindingKey("m:kept")), "kept");
   assert.equal((await store.get(after, "turnCommands", "t2")).count, 1);
   assert.deepEqual(
     await store.get(after, "commands", immutableLifecycleCommandKey("global")),
@@ -103,7 +103,7 @@ test("turn command removal atomically removes binding aliases, preserves global 
     receipt("a", "t1"),
   );
   const reopened = new ImmutableSessionStore({ sessionDir: store.sessionDir, sessionId: "s1" });
-  assert.deepEqual(await mutate(reopened, "remove", remove, before.generation), {
+  assert.deepEqual(await mutate(reopened, "remove", remove(reopened), before.generation), {
     ...result,
     replayed: true,
   });
@@ -125,14 +125,10 @@ test("cold command removal does not read unrelated receipt bodies", async (t) =>
   setFsAdapter(await forbidRecordReads(store, records));
   t.after(resetFsAdapter);
   const reopened = new ImmutableSessionStore({ sessionDir: store.sessionDir, sessionId: "s1" });
-  assert.deepEqual(
-    (
-      await mutate(reopened, "remove", (plan) =>
-        removeImmutableTurnCommands(reopened, plan, ["t2"]),
-      )
-    ).result,
-    { removed: 1 },
+  await mutate(reopened, "remove", (plan) =>
+    retireImmutableSuffixCommands(reopened, plan, { turnScopeIds: ["t2"], uids: ["m:selected"] }),
   );
+  assert.equal(await reopened.get(await reopened.snapshot(), "turnCommands", "t2"), null);
 });
 
 test("publication failure leaves command receipts and binding aliases intact", async (t) => {
@@ -145,6 +141,8 @@ test("publication failure leaves command receipts and binding aliases intact", a
     ),
   );
   const before = await store.snapshot();
+  const remove = (plan) =>
+    retireImmutableSuffixCommands(store, plan, { turnScopeIds: ["t1"], uids: ["m:bind"] });
   setFsAdapter({
     rename: async (source, target) => {
       if (target === store.headPath)
@@ -153,10 +151,7 @@ test("publication failure leaves command receipts and binding aliases intact", a
     },
   });
   try {
-    await assert.rejects(
-      mutate(store, "remove", (plan) => removeImmutableTurnCommands(store, plan, ["t1"])),
-      { code: "SESSION_COMMIT_UNCERTAIN" },
-    );
+    await assert.rejects(mutate(store, "remove", remove), { code: "SESSION_COMMIT_UNCERTAIN" });
   } finally {
     resetFsAdapter();
   }
@@ -165,11 +160,8 @@ test("publication failure leaves command receipts and binding aliases intact", a
     await store.get(before, "commands", immutableAttachmentBindingKey("m:bind")),
     "bind",
   );
-  assert.deepEqual(
-    (await mutate(store, "remove", (plan) => removeImmutableTurnCommands(store, plan, ["t1"])))
-      .result,
-    { removed: 1 },
-  );
+  await mutate(store, "remove", remove);
+  assert.equal(await store.get(await store.snapshot(), "turnCommands", "t1"), null);
 });
 
 test("missing index requires explicit upgrade; rebuilding preserves receipts and is idempotent", async (t) => {
@@ -195,11 +187,10 @@ test("missing index requires explicit upgrade; rebuilding preserves receipts and
   assert.equal((await store.get(after, "turnCommands", "t1")).count, 1);
   assert.equal((await upgradeImmutableCommandIndexes(options)).result.upgraded, false);
   assert.deepEqual(await store.snapshot(), after);
-  assert.deepEqual(
-    (await mutate(store, "remove", (plan) => removeImmutableTurnCommands(store, plan, ["t1"])))
-      .result,
-    { removed: 1 },
+  await mutate(store, "remove", (plan) =>
+    retireImmutableSuffixCommands(store, plan, { turnScopeIds: ["t1"], uids: ["m:bind"] }),
   );
+  assert.equal(await store.get(await store.snapshot(), "turnCommands", "t1"), null);
 });
 
 test("corrupt membership or attachment alias aborts removal without publishing partial changes", async (t) => {
@@ -219,7 +210,9 @@ test("corrupt membership or attachment alias aborts removal without publishing p
     });
     const before = await store.snapshot();
     await assert.rejects(
-      mutate(store, "remove", (plan) => removeImmutableTurnCommands(store, plan, ["t1"])),
+      mutate(store, "remove", (plan) =>
+        retireImmutableSuffixCommands(store, plan, { turnScopeIds: ["t1"], uids: ["m:bind"] }),
+      ),
       { code: "SESSION_IMMUTABLE_STORAGE_INVALID" },
     );
     assert.deepEqual(await store.snapshot(), before);

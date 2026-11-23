@@ -10,6 +10,7 @@ import { summarizeProcessingTiming } from "@noobot/shared/processing-timing";
 import { assertToolCallTimingInterval } from "@noobot/event-protocol/tool-timing";
 import { readAuxiliaryModelRelayPurpose } from "@noobot/context-protocol/message/injected-types";
 import { seedPerformanceHistory } from "../helpers/performance-history.js";
+import { openSessionAuditRuntime } from "../helpers/session-audit-runtime.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 import { test as baseTest, expect } from "../fixtures/noobot.fixture.js";
 import {
@@ -492,8 +493,10 @@ test("@perf PBE-058 Harness performance session", async ({
       sessionId: noobot.sessionId,
       turnScopeId: initialization.identity.turnScopeId,
     });
-    history = await test.step("Prepare and verify performance history", () =>
-      seedPerformanceHistory(noobot));
+    history = await test.step("Prepare and verify performance history", async () => {
+      await using runtime = await openSessionAuditRuntime();
+      return await seedPerformanceHistory(runtime, noobot);
+    });
     await reloadAndWaitForReconnect(noobot.page, protocolCapture);
     await installPerformanceInputTiming(noobot.page);
     await selectPlugins(noobot.page, PERF_PLUGINS);

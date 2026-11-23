@@ -17,7 +17,8 @@ const message = {
   content: "body",
   activityTimeline: [{ eventId: "event-1" }],
 };
-const receipt = () => createMessagePersistenceReceipt(message, 1, "test-content-m1-1");
+const receipt = (owner = 1) =>
+  createMessagePersistenceReceipt(message, 1, "test-content-m1-1", owner);
 
 for (const [name, invalid] of [
   ["missing", () => []],
@@ -29,6 +30,7 @@ for (const [name, invalid] of [
   ["missing activity", () => [{ ...receipt(), activityEventIds: [] }]],
   ["duplicate activity", () => [{ ...receipt(), activityEventIds: ["event-1", "event-1"] }]],
   ["invalid generation", () => [{ ...receipt(), generation: 0 }]],
+  ["missing creation owner", () => [{ ...receipt(), owner: undefined }]],
   ["missing body version", () => [{ ...receipt(), contentReference: undefined }]],
   ["empty body version", () => [{ ...receipt(), contentReference: "" }]],
   ["body in receipt", () => [{ ...receipt(), content: "body" }]],
@@ -64,7 +66,9 @@ test("validated receipts preserve the submitted body version while concurrent ch
         await release.promise;
         return [original];
       }
-      return [createMessagePersistenceReceipt(messages[0], 2, "next-content-version")];
+      return [
+        createMessagePersistenceReceipt(messages[0], 2, "next-content-version", original.owner),
+      ];
     },
   });
   const first = runtime.persistCurrentTurnMessages();
@@ -82,6 +86,33 @@ test("validated receipts preserve the submitted body version while concurrent ch
   const [updated] = store.readPendingChanges().entries;
   assert.equal(updated.persisted.receipt.contentReference, "next-content-version");
   assert.equal(updated.persisted.message.content, "body plus concurrent content");
+});
+
+test("partition owner is captured and cannot change across confirmations", async () => {
+  const store = createCurrentTurnMessagesStore([message]);
+  const runtime = { currentTurnMessages: store };
+  const owner = { epoch: "a".repeat(32), partition: 0, sequence: 1, slot: 0 };
+  let next = receipt(owner);
+  bindCurrentTurnPersistence({
+    ...identity,
+    dispatchRuntime: runtime,
+    appendAgentMessages: async () => [next],
+  });
+  await runtime.persistCurrentTurnMessages();
+  owner.slot = 1;
+  store.updateByUid("m1", { content: "body appended" });
+  const acknowledged = store.readPendingChanges().entries[0].persisted.receipt.owner;
+  assert.equal(acknowledged.slot, 0);
+  assert.ok(Object.isFrozen(acknowledged));
+  next = { ...next, generation: 2, contentReference: "new-version" };
+  await assert.rejects(runtime.persistCurrentTurnMessages(), /changed the message creation owner/);
+  assert.equal(
+    store.readPendingChanges().entries[0].persisted.receipt.contentReference,
+    "test-content-m1-1",
+  );
+  next.owner = { ...acknowledged };
+  await runtime.persistCurrentTurnMessages();
+  assert.equal(store.readPendingChanges().entries.length, 0);
 });
 
 test("failed activity verification never advances the authoritative body version", async () => {

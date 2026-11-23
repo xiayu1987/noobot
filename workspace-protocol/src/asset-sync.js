@@ -103,12 +103,20 @@ function planRetiredFile(relativePath, installedHash, userHash) {
   return entry(relativePath, WORKSPACE_ASSET_ACTION.REMOVE, WORKSPACE_ASSET_REASON.RETIRED);
 }
 
-function planFile(operation, relativePath, packageHash, installedHash, userHash) {
+function planFile(operation, { relativePath, packageHash, installedHash, userHash }) {
   if (operation === WORKSPACE_OPERATION.SYNC) {
     return planSyncFile(relativePath, packageHash, installedHash, userHash);
   }
   if (operation === WORKSPACE_OPERATION.REPAIR && (userHash || installedHash)) return null;
   return entry(relativePath, WORKSPACE_ASSET_ACTION.INSTALL, WORKSPACE_ASSET_REASON.MISSING);
+}
+
+function collectRetiredFiles(actions, packageFiles, installed, userFiles) {
+  for (const relativePath of Object.keys(installed).sort()) {
+    if (packageFiles[relativePath]) continue;
+    const planned = planRetiredFile(relativePath, installed[relativePath], userFiles[relativePath]);
+    if (planned) actions.push(planned);
+  }
 }
 
 function nextInstalledHash(planned, packageHash, installedHash, userHash) {
@@ -135,21 +143,13 @@ export function planWorkspaceAssetSync({
     const packageHash = packageFiles[relativePath];
     const userHash = userFiles[relativePath];
     const installedHash = installed[relativePath];
-    const planned = planFile(operation, relativePath, packageHash, installedHash, userHash);
+    const planned = planFile(operation, { relativePath, packageHash, installedHash, userHash });
     if (planned) actions.push(planned);
     const nextHash = nextInstalledHash(planned, packageHash, installedHash, userHash);
     if (nextHash) nextFiles[relativePath] = nextHash;
   }
   if (operation === WORKSPACE_OPERATION.SYNC) {
-    for (const relativePath of Object.keys(installed).sort()) {
-      if (packageFiles[relativePath]) continue;
-      const planned = planRetiredFile(
-        relativePath,
-        installed[relativePath],
-        userFiles[relativePath],
-      );
-      if (planned) actions.push(planned);
-    }
+    collectRetiredFiles(actions, packageFiles, installed, userFiles);
   }
   return Object.freeze({
     actions: Object.freeze(actions),

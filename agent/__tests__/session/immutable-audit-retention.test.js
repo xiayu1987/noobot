@@ -235,7 +235,7 @@ test("snapshot audits release their read budget and cancellation scope on every 
 test("overlapping snapshot audits keep independent budgets while source reads remain usable", async (t) => {
   const { store } = await fixture(t);
   const snapshot = await store.snapshot();
-  const originalRead = store.objects.read;
+  const originalReadObject = store.objects.readObject;
   let resume;
   let entered;
   const paused = new Promise((resolve) => {
@@ -245,27 +245,30 @@ test("overlapping snapshot audits keep independent budgets while source reads re
     resume = resolve;
   });
   let blocked = false;
-  t.mock.method(store.objects.constructor.prototype, "read", async function (reference) {
+  t.mock.method(store.objects.constructor.prototype, "readObject", async function (...args) {
     if (this !== store.objects && !blocked) {
       blocked = true;
       entered();
       await gate;
     }
-    return originalRead.call(this, reference);
+    return originalReadObject.apply(this, args);
   });
-  const sourceRead = store.objects.read;
-  const limited = auditImmutableSnapshot({ store, snapshot, maxObjectReads: 1 });
+  const sourceRead = store.objects.readObject;
+  const retainedObjects = new Set();
+  const limited = auditImmutableSnapshot({ store, snapshot, maxObjectReads: 1, retainedObjects });
   try {
     await paused;
-    assert.equal(store.objects.read, sourceRead);
+    assert.equal(store.objects.readObject, sourceRead);
     await store.objects.withSnapshot(snapshot, () => store.objects.read(snapshot.commit));
     const complete = await auditImmutableSnapshot({ store, snapshot });
     assert.equal(complete.ok, true, JSON.stringify(complete));
   } finally {
     resume();
     const report = await limited;
-    assert.equal(store.objects.read, sourceRead);
+    assert.equal(store.objects.readObject, sourceRead);
     assert.equal(report.ok, false);
     assert.equal(report.objectReads, 1);
+    assert.equal(report.issues[0].code, "SESSION_MAINTENANCE_BUDGET_EXCEEDED");
+    assert.deepEqual(retainedObjects, new Set([snapshot.root]));
   }
 });

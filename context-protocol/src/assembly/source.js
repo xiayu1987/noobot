@@ -13,7 +13,7 @@ import { excludeActiveContextScopeItems } from "./scope.js";
 import { projectTurnTerminalStatuses } from "@noobot/session-protocol";
 import {
   projectSessionRecordSelectionMetadata,
-  projectSessionRecordsToContextMessages,
+  projectSessionRecordToContextMessage,
 } from "../message/session-projection.js";
 import { readContextMessageField } from "../message/codec.js";
 
@@ -22,31 +22,66 @@ export function isContextSourceMessageCandidate(record) {
   return isTerminalHistorySourceCandidate(message) || isModelHistorySourceMessage(message);
 }
 
-export function selectContextSourceMessageUids(options) {
+function selectContextSourceMessageUids(options) {
   return new Set(
-    projectContextSource(options).messages.flatMap((message) => {
+    projectHistory(options, projectSessionRecordSelectionMetadata).flatMap((message) => {
       const uid = readContextMessageField(message, "messageUid");
       return uid === undefined ? [] : [uid];
     }),
   );
 }
 
-export function projectContextSource({ source, scope, historyLimit }) {
-  const messages = projectSessionRecordsToContextMessages(
-    excludeActiveContextScopeItems(source.messages, scope),
-  );
+function projectHistory({ source, scope, historyLimit }, projectRecord) {
+  const messages = excludeActiveContextScopeItems(source.messages, scope).map(projectRecord);
   const terminalStatuses = excludeActiveContextScopeItems(
     projectTurnTerminalStatuses(source.turnLifecycle),
     scope,
   );
   const terminalHistoryMessages = projectTerminalHistoryMessages({ messages, terminalStatuses });
+  return resolveModelHistoryMessages({ sourceMessages: terminalHistoryMessages, historyLimit });
+}
+
+export function projectContextSource(options) {
   return Object.freeze({
-    scope,
-    messages: resolveModelHistoryMessages({
-      sourceMessages: terminalHistoryMessages,
-      historyLimit,
-    }),
+    scope: options.scope,
+    messages: projectHistory(options, projectSessionRecordToContextMessage),
   });
+}
+
+export async function readIndexedContextWindow({
+  scope,
+  historyLimit,
+  readLifecycle,
+  readDialogs,
+  readDialog,
+}) {
+  if (!Number.isSafeInteger(historyLimit) || historyLimit < 0)
+    throw new TypeError("Context history window requires a nonnegative safe integer limit");
+  const lifecycle = await readLifecycle();
+  const retained = [];
+  if (historyLimit > 0) {
+    for await (const { dialogProcessId, descriptor } of readDialogs()) {
+      if (dialogProcessId === scope?.dialogProcessId) continue;
+      const source = await readDialog(descriptor);
+      const selected = selectContextSourceMessageUids({ source, scope, historyLimit });
+      if (!selected.size) continue;
+      retained.push({ source, selected });
+      if (retained.length === historyLimit) break;
+    }
+  }
+  retained.reverse();
+  const messages = [];
+  for (const { source, selected } of retained)
+    messages.push(...(await source.materialize(selected)));
+  return {
+    messages,
+    turnLifecycle: {
+      ...lifecycle,
+      turns: Object.fromEntries(
+        retained.flatMap(({ source }) => Object.entries(source.turnLifecycle.turns)),
+      ),
+    },
+  };
 }
 
 function selectLifecycleTurns(turnLifecycle, items) {

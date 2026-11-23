@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   enqueueUserInterjection,
   findActiveRun,
@@ -16,16 +17,18 @@ import {
 import { isAbortLikeError, isSocketCloseRunAbort, isUserStopRunAbort } from "./stop-lifecycle.js";
 import { resetRunState } from "./connection-state.js";
 import { isTurnLifecycleRejectedError } from "@noobot/session-protocol";
+import { isWorkspaceMaintenanceError } from "@noobot/workspace-protocol";
 import {
   AGENT_COMMAND,
   AGENT_COMMAND_RECEIPT_OUTCOME,
   EXECUTION_QUERY_COMMAND_TYPES,
+  RUN_COMMAND_TYPES,
   isAgentTransportProtocolError,
   parseAgentCommand,
 } from "@noobot/agent-transport-protocol";
 import { createMessageQueryHandlers } from "./message-query-handlers.js";
 import { createMessageStopHandler } from "./message-stop-handler.js";
-import { createMessageRunHandler } from "./message-run-handler.js";
+import { createMessageRunHandler, createRunBusyError } from "./message-run-handler.js";
 import { sendCommandReceipt, sendFailedCommandReceipt } from "./command-receipt.js";
 import { text } from "@noobot/shared/value";
 
@@ -37,6 +40,7 @@ export function createMessageHandler({
   translateText,
   mapAgentRunCommand,
   connectorAccessPort,
+  runNewOperation,
   resolveBot,
   rejectTurnInteractions,
   userInteractionBridge,
@@ -52,6 +56,8 @@ export function createMessageHandler({
   turnRecovery,
   persistenceScope,
 }) {
+  if (typeof runNewOperation !== "function")
+    throw new TypeError("Chat requires operation admission");
   const canonicalRunOwnerId = text(authInfo?.userId);
 
   const { handleInteractionResponse, handleSnapshotGet, handleExecutionQuery, handleFinalize } =
@@ -71,7 +77,7 @@ export function createMessageHandler({
     rejectTurnInteractions,
     commitTurnLifecycle,
   });
-  const { handleRun, commitCurrentFailure } = createMessageRunHandler({
+  const { handleRun, rebindRun, commitCurrentFailure } = createMessageRunHandler({
     state,
     authInfo,
     sendEvent,
@@ -108,14 +114,57 @@ export function createMessageHandler({
       handleExecutionQuery,
       handleSnapshotGet,
       handleFinalize,
-      handleInteractionResponse,
       handleStop,
     },
   };
 
-  return async function onMessage(rawMessage) {
-    let runMessageStarted = false;
+  async function startRun(command, continueOperation) {
     let boundRunHandle = null;
+    try {
+      await handleRun(command, (handle) => {
+        boundRunHandle = handle;
+        runOperations.set(handle, {
+          runNewOperation,
+          continueOperation: AsyncLocalStorage.bind(continueOperation),
+        });
+      });
+    } catch (error) {
+      if (!boundRunHandle || !state.currentRunMeta) throw error;
+      await settleFailedRun(context, error);
+    } finally {
+      if (boundRunHandle) releaseRun(context, boundRunHandle);
+    }
+  }
+
+  async function dispatch(command) {
+    const { commandType, identity } = command;
+    if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
+      handleInteractionResponse(command);
+      return;
+    }
+    const activeRun = findCommandRun(canonicalRunOwnerId, commandType, identity);
+    const owner = runOperations.get(activeRun);
+    const continuation =
+      owner?.runNewOperation === runNewOperation ? owner.continueOperation : null;
+    if (!RUN_COMMAND_TYPES.includes(commandType)) {
+      await (continuation ?? runNewOperation)(() => routeNonRunCommand(context, command));
+    } else if (state.isRunning) {
+      throw createRunBusyError();
+    } else if (continuation && !activeRun.abortController.signal.aborted) {
+      await continuation(async () => {
+        await rebindRun(activeRun);
+        sendCommandReceipt(sendEvent, command, AGENT_COMMAND_RECEIPT_OUTCOME.REBOUND);
+      });
+    } else {
+      await runNewOperation((continueOperation) =>
+        resolveBot().runWorkspaceOperation(canonicalRunOwnerId, () =>
+          startRun(command, continueOperation),
+        ),
+      );
+    }
+  }
+
+  return async function onMessage(rawMessage) {
     let parsedCommand = null;
     try {
       const command = parseAgentCommand(rawMessage);
@@ -126,37 +175,27 @@ export function createMessageHandler({
         userId: canonicalRunOwnerId,
         data: { accepted: true, transport: "websocket" },
       });
-      if (await routeNonRunCommand(context, command)) return;
-      if (state.isRunning) {
-        sendFailedCommandReceipt(sendEvent, command, {
-          code: "session_already_running",
-          message: translateText("ws.sessionAlreadyRunning", state.currentLocale),
-        });
-        return;
-      }
-      runMessageStarted = true;
-      const runResult = await handleRun(command, {
-        onRunBound: (handle) => {
-          boundRunHandle = handle;
-        },
-      });
-      if (runResult?.rebound === true) {
-        runMessageStarted = false;
-        sendCommandReceipt(sendEvent, command, AGENT_COMMAND_RECEIPT_OUTCOME.REBOUND);
-      }
+      await dispatch(command);
     } catch (error) {
-      if (!runMessageStarted || !state.currentRunMeta) {
-        rejectCommand(context, error, parsedCommand, rawMessage);
-        return;
-      }
-      await settleFailedRun(context, error);
-    } finally {
-      if (runMessageStarted) releaseRun(context, boundRunHandle);
+      rejectCommand(context, error, parsedCommand, rawMessage);
     }
   };
 }
 
 const INTERJECT_IDENTITY_FIELDS = ["sessionId", "dialogProcessId", "turnScopeId"];
+const runOperations = new WeakMap();
+
+function findCommandRun(userId, commandType, { sessionId, turnScopeId, dialogProcessId }) {
+  if (
+    !RUN_COMMAND_TYPES.includes(commandType) &&
+    commandType !== AGENT_COMMAND.STOP &&
+    commandType !== AGENT_COMMAND.INTERJECT
+  )
+    return null;
+  if (!userId || !sessionId || !turnScopeId) return null;
+  const run = findActiveRun({ userId, sessionId, turnScopeId });
+  return run && (!dialogProcessId || run.dialogProcessId === dialogProcessId) ? run : null;
+}
 
 async function routeNonRunCommand(context, command) {
   const { routes } = context;
@@ -167,16 +206,13 @@ async function routeNonRunCommand(context, command) {
     await routes.handleSnapshotGet(command);
   } else if (commandType === AGENT_COMMAND.FINALIZE) {
     await routes.handleFinalize(command);
-  } else if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
-    routes.handleInteractionResponse(command);
   } else if (commandType === AGENT_COMMAND.INTERJECT) {
     await handleInterject(context, command);
   } else if (commandType === AGENT_COMMAND.STOP) {
     await routes.handleStop(command);
   } else {
-    return false;
+    throw new Error(`Unsupported chat command: ${commandType}`);
   }
-  return true;
 }
 
 function findInterjectTarget({ sendEvent, canonicalRunOwnerId }, command) {
@@ -264,7 +300,21 @@ function buildRejectionDebugData(error, parsedCommand) {
 const COMMAND_DISPATCH_FAILED = "command_dispatch_failed";
 
 function resolveRejectedCommand({ state, translateText }, error, parsedCommand) {
-  if (parsedCommand && isTurnLifecycleRejectedError(error)) {
+  if (parsedCommand && error?.code === "session_already_running") {
+    return {
+      command: parsedCommand,
+      error: {
+        code: error.code,
+        message: translateText("ws.sessionAlreadyRunning", state.currentLocale),
+      },
+    };
+  }
+  if (
+    parsedCommand &&
+    (isTurnLifecycleRejectedError(error) ||
+      isWorkspaceMaintenanceError(error) ||
+      error?.code === "RUNTIME_CLOSED")
+  ) {
     return {
       command: parsedCommand,
       error: {
@@ -349,6 +399,7 @@ async function settleFailedRun(context, error) {
 
 function releaseRun({ state }, boundRunHandle) {
   if (boundRunHandle) {
+    runOperations.delete(boundRunHandle);
     unregisterActiveRun(boundRunHandle);
   }
   if (!boundRunHandle || state.currentRunHandle === boundRunHandle) {

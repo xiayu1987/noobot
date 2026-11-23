@@ -20,7 +20,8 @@ import { fileIdentityKey } from "@noobot/shared/file-identity";
 import { mkdir, open, rename, writeFile } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { assertStoredCheckpointReceipts } from "@noobot/session-protocol/summary-checkpoint-storage";
-import { invalidateArtifactRead, recordStorageWork } from "./storage-transaction.js";
+import { invalidateSessionRead } from "../session-read-cache.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 
 export const TURN_JOURNAL_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
 
@@ -131,7 +132,7 @@ export function summarySnapshotIndex(receipt, file, contentHash) {
 }
 
 export async function writeSummarySnapshot(file, payload) {
-  invalidateArtifactRead(file);
+  invalidateSessionRead(file);
   await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
   const content = `${JSON.stringify(payload, null, 2)}\n`;
@@ -206,7 +207,7 @@ export async function readJournalRecords(file, committedBytes) {
 }
 
 export async function appendJournal(file, records, committedBytes = 0) {
-  invalidateArtifactRead(file);
+  invalidateSessionRead(file);
   await mkdir(path.dirname(file), { recursive: true });
   const handle = await open(file, "a+");
   try {
@@ -226,7 +227,7 @@ export async function appendJournal(file, records, committedBytes = 0) {
 }
 
 export async function replaceJournalRecords(file, records) {
-  invalidateArtifactRead(file);
+  invalidateSessionRead(file);
   const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
   const payload = records.map((record) => `${JSON.stringify(record)}\n`).join("");
   const handle = await open(temp, "w");

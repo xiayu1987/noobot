@@ -210,10 +210,15 @@ defineExpose({
         />
 
         <div v-if="!presentedMessages.length && !loadingSessionDetail" class="empty-state">
-          <div class="empty-icon">
-            <img :src="emptyLogoSrc" alt="Noobot Logo" class="empty-logo" />
-          </div>
-          <p>{{ translate("common.emptyChatHint") }}</p>
+          <p v-if="activeSession?.detailUnavailableReason" role="alert">
+            {{ activeSession.detailUnavailableReason.message }}
+          </p>
+          <template v-else>
+            <div class="empty-icon">
+              <img :src="emptyLogoSrc" alt="Noobot Logo" class="empty-logo" />
+            </div>
+            <p>{{ translate("common.emptyChatHint") }}</p>
+          </template>
         </div>
 
         <div

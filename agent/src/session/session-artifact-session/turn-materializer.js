@@ -16,7 +16,8 @@ import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { isPlainObject } from "@noobot/shared/value";
-import { memoizeArtifactRead, recordStorageWork } from "./storage-transaction.js";
+import { memoizeSessionRead } from "../session-read-cache.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 import { assertStorageBatchSucceeded } from "./storage-batch-results.js";
 import {
   committedProjection,
@@ -138,12 +139,12 @@ async function readVerifiedTier(
   const identity = await readRegisteredSnapshotIdentity(artifactPath, index.file);
   const verified =
     getVerifiedSnapshotCache()[tier](artifactPath, index.contentHash, identity) ||
-    (await memoizeArtifactRead(
+    (await memoizeSessionRead(
       JSON.stringify([tier, index.contentHash, identity.key]),
       artifactPath,
       async () =>
         (
-          await memoizeArtifactRead(
+          await memoizeSessionRead(
             JSON.stringify(["verifiedSnapshot", index.contentHash, identity.key]),
             artifactPath,
             () => verifySnapshotFromDisk({ storageService, artifactPath, index, identity }),

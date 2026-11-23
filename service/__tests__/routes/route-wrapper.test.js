@@ -53,6 +53,16 @@ test("withJsonError: 未标注状态码的异常默认 500，保留显式错误�
   });
 });
 
+test("withJsonError passes failures through when a JSON error response cannot be sent", async () => {
+  const failure = new Error("snapshot release failed");
+  const handler = withJsonError(async () => {
+    throw failure;
+  });
+  for (const response of [{ destroyed: true }, { headersSent: true }]) {
+    await assert.rejects(handler({}, response), (error) => error === failure);
+  }
+});
+
 test("withJsonError: 透传 createBadRequestError 的 400 与 errorCode", async () => {
   const app = express();
   app.get(

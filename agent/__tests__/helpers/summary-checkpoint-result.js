@@ -18,6 +18,7 @@ export function summaryCheckpointResult(payload, result) {
         },
         result.checkpointRevision,
         `test-content-${message.messageUid}-${result.checkpointRevision}`,
+        result.checkpointRevision,
       ),
     ),
   };

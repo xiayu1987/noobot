@@ -262,6 +262,7 @@ const MCP_SERVER_ENTRY_STRUCTURE = object(
 export const CONFIG_STRUCTURE = object({
   workspace_root: systemField(CONFIG_STRUCTURE_KIND.STRING, { policy: GLOBAL_ONLY }),
   workspace_template_path: systemField(CONFIG_STRUCTURE_KIND.STRING, { policy: GLOBAL_ONLY }),
+  partitionSessionStorage: object({}, { access: SYSTEM, policy: GLOBAL_ONLY, autoRepair: false }),
   super_admin: object(
     { user_id: string(), connect_code: string() },
     {

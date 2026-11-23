@@ -1,4 +1,10 @@
 :root {
+  --noobot-duration-thinking-sweep: 0.95s;
+  --noobot-thinking-text-sweep-width: 12rem;
+  --noobot-thinking-panel-tint: color-mix(in srgb, var(--noobot-accent) 5%, transparent);
+  --noobot-thinking-text-sweep-steel: var(--noobot-base-slate-500);
+  --noobot-thinking-text-sweep-silver: var(--noobot-base-slate-200);
+  --noobot-thinking-text-sweep-shine: var(--noobot-base-white);
   --noobot-thinking-log-detail-radius: var(--noobot-radius-xs);
   --noobot-thinking-log-event-radius: 3px;
   --noobot-thinking-detail-background: var(--noobot-panel-muted);
@@ -7,4 +13,11 @@
   --noobot-thinking-muted: var(--noobot-text-secondary);
   --noobot-thinking-line-border: var(--noobot-divider);
   --noobot-thinking-tool-border: var(--noobot-divider);
+}
+
+:root[data-theme="light"] {
+  --noobot-thinking-panel-tint: color-mix(in srgb, var(--noobot-accent) 3%, transparent);
+  --noobot-thinking-text-sweep-steel: var(--noobot-base-slate-600);
+  --noobot-thinking-text-sweep-silver: var(--noobot-base-slate-400);
+  --noobot-thinking-text-sweep-shine: var(--noobot-base-slate-200);
 }

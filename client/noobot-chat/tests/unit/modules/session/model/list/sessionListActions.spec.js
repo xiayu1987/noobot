@@ -202,7 +202,7 @@ describe("createSessionListActions.selectSession freshness", () => {
     const sessionItem = {
       sessionId: "s1",
       aggregateVersion: 1,
-      generation: 10,
+      knownGeneration: 10,
       isLocal: false,
       loaded: true,
       sessionDocs: detail.sessions,
@@ -232,7 +232,7 @@ describe("createSessionListActions stale projection", () => {
     const sessionItem = {
       sessionId: "s1",
       aggregateVersion: 2,
-      generation: 10,
+      knownGeneration: 10,
       isLocal: false,
       loaded: true,
       sessionDocs: detailDocument("s1").sessions,

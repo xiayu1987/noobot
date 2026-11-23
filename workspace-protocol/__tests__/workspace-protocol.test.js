@@ -241,6 +241,10 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-message-fields-v41",
       "session-message-display-index-v42",
       "session-message-inline-metadata-v43",
+      "session-title-index-v44",
+      "attachment-catalog-v45",
+      "session-partition-storage-v46",
+      "session-partition-format-v47",
     ],
   );
   assert.deepEqual(
@@ -286,6 +290,19 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-message-fields-v41",
       "session-message-display-index-v42",
       "session-message-inline-metadata-v43",
+      "session-title-index-v44",
+      "attachment-catalog-v45",
+      "session-partition-storage-v46",
+      "session-partition-format-v47",
+    ],
+  );
+  assert.deepEqual(
+    planWorkspaceLayoutUpgrades({ installedVersion: 43 }).map((item) => item.id),
+    [
+      "session-title-index-v44",
+      "attachment-catalog-v45",
+      "session-partition-storage-v46",
+      "session-partition-format-v47",
     ],
   );
   assert.deepEqual(planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_VERSION }), []);

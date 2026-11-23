@@ -4,11 +4,28 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
+import {
+  requireRetainedSessionDisplayPageRequest,
+  requireSessionDetailStartRequest,
+  requireSessionDetailStartResponse,
+  requireSessionDisplayPageRelease,
+  requireSessionDisplayPageTransition,
+} from "@noobot/session-protocol/session-detail";
+import {
+  decodeMessageContentPage,
+  requireDisplayArtifactPageTransition,
+  requireMessageContentPage,
+  requireRetainedDisplayArtifactPageRelease,
+  requireRetainedDisplayArtifactPageRequest,
+  requireSessionPageReleaseResult,
+} from "@noobot/session-protocol/message-read-budget";
+import { requireServerNow } from "@noobot/session-protocol/server-clock";
 import { projectAttachmentAccessRequest } from "@noobot/attachment-protocol";
 import { WORKSPACE_FILE_ROUTE } from "@noobot/shared/resource-access";
 import { FILE_TRACE_ID_HEADER } from "@noobot/shared/runtime-events-config";
 import { text } from "@noobot/shared/value";
 import { readApiResponseEnvelope } from "@noobot/shared/request-error";
+import { readRetainedSessionPage } from "@noobot/session-protocol/retained-session-page";
 function requireFetcher(fetcher) {
   if (typeof fetcher !== "function") throw new Error("authenticated fetcher is required");
   return fetcher;
@@ -110,6 +127,130 @@ export async function getSessionDetailApi({ userId = "", sessionId = "" }, { fet
   );
 }
 
+async function requestSessionPage({ userId, request, fetcher, signal, path, method }) {
+  const { sessionId, ...selection } = request;
+  const response = await requireFetcher(fetcher)(
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${path}`,
+    {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(selection),
+      ...(signal ? { signal } : {}),
+    },
+  );
+  return readApiResponseEnvelope(response);
+}
+
+export async function getSessionMessageContentPageApi(
+  { userId, sessionId, row, byteOffset, maxBytes },
+  { fetcher, signal },
+) {
+  const selection = requireMessageContentPage({
+    messageUid: row.messageUid,
+    expectedContentReference: row.contentReference,
+    byteOffset,
+    maxBytes,
+  });
+  const { page } = await requestSessionPage({
+    userId,
+    request: { sessionId, ...selection },
+    fetcher,
+    signal,
+    path: "message-content-page",
+    method: "POST",
+  });
+  return decodeMessageContentPage(page, selection, row.contentBytes);
+}
+
+function requestRetainedDisplayPage({ userId, request, fetcher, signal, path, validate, release }) {
+  return readRetainedSessionPage({
+    cursor: request.cursor,
+    receive: () => requestSessionPage({ userId, request, fetcher, signal, path, method: "POST" }),
+    accept(page, { serverNow }) {
+      requireServerNow(serverNow);
+      validate(page);
+      return { page, serverNow };
+    },
+    release,
+  });
+}
+
+function displayPageRelease({ userId, request: { sessionId }, fetcher }) {
+  return (cursor) =>
+    releaseSessionDisplayPageApi({ userId, request: { sessionId, cursor } }, { fetcher });
+}
+
+export async function getSessionDetailStartApi({ userId, request }, { fetcher, signal }) {
+  requireSessionDetailStartRequest(request);
+  return requestRetainedDisplayPage({
+    userId,
+    request,
+    fetcher,
+    signal,
+    path: "detail-start",
+    validate: (page) => requireSessionDetailStartResponse(page, request),
+    release: displayPageRelease({ userId, request, fetcher }),
+  });
+}
+
+export async function getSessionDisplayPageApi({ userId, request, previous }, { fetcher, signal }) {
+  requireRetainedSessionDisplayPageRequest(request);
+  return requestRetainedDisplayPage({
+    userId,
+    request,
+    fetcher,
+    signal,
+    path: "display-page",
+    validate: (page) => requireSessionDisplayPageTransition(page, request, previous),
+    release: displayPageRelease({ userId, request, fetcher }),
+  });
+}
+
+async function releaseRetainedDisplayPage({ userId, request, fetcher, path }) {
+  const { page, serverNow } = await requestSessionPage({
+    userId,
+    request,
+    fetcher,
+    path,
+    method: "DELETE",
+  });
+  requireServerNow(serverNow);
+  return requireSessionPageReleaseResult(page);
+}
+
+export async function releaseSessionDisplayPageApi({ userId, request }, { fetcher }) {
+  requireSessionDisplayPageRelease(request);
+  return releaseRetainedDisplayPage({ userId, request, fetcher, path: "display-page" });
+}
+
+const DISPLAY_ARTIFACT_PAGE_PATH = "display-artifact-page";
+
+export async function getSessionDisplayArtifactPageApi(
+  { userId, request, previous },
+  { fetcher, signal },
+) {
+  requireRetainedDisplayArtifactPageRequest(request);
+  const { sessionId, dialogProcessId, turnScopeId } = request;
+  return requestRetainedDisplayPage({
+    userId,
+    request,
+    fetcher,
+    signal,
+    path: DISPLAY_ARTIFACT_PAGE_PATH,
+    validate: (page) => requireDisplayArtifactPageTransition(page, request, previous),
+    release: (cursor) =>
+      releaseSessionDisplayArtifactPageApi(
+        { userId, request: { sessionId, dialogProcessId, turnScopeId, cursor } },
+        { fetcher },
+      ),
+  });
+}
+
+export async function releaseSessionDisplayArtifactPageApi({ userId, request }, { fetcher }) {
+  requireRetainedDisplayArtifactPageRelease(request);
+  return releaseRetainedDisplayPage({ userId, request, fetcher, path: DISPLAY_ARTIFACT_PAGE_PATH });
+}
+
 export async function resolveTurnTerminalStateApi(
   { userId, sessionId, turnScopeId, commandId },
   { fetcher },
@@ -122,13 +263,34 @@ export async function resolveTurnTerminalStateApi(
 }
 
 export async function getSessionThinkingDetailApi(
-  { userId, sessionId, dialogProcessId, turnScopeId },
+  { userId, sessionId, dialogProcessId, turnScopeId, cursor, limit },
   { fetcher },
 ) {
   const runFetch = requireFetcher(fetcher);
-  const query = new URLSearchParams({ dialogProcessId, turnScopeId });
+  const query = new URLSearchParams({
+    dialogProcessId,
+    turnScopeId,
+    cursor: JSON.stringify(cursor),
+    limit: String(limit),
+  });
   return runFetch(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/thinking-detail?${query.toString()}`,
+  );
+}
+
+export async function releaseSessionThinkingDetailApi(
+  { userId, sessionId, dialogProcessId, turnScopeId, cursor },
+  { fetcher },
+) {
+  const runFetch = requireFetcher(fetcher);
+  const query = new URLSearchParams({
+    dialogProcessId,
+    turnScopeId,
+    cursor: JSON.stringify(cursor),
+  });
+  return runFetch(
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/thinking-detail?${query.toString()}`,
+    { method: "DELETE" },
   );
 }
 

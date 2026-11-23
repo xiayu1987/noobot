@@ -13,7 +13,7 @@ import { ImmutableObjectStore } from "../../src/session/session-artifact-session
 import { ImmutableRecordStore } from "../../src/session/session-artifact-session/immutable-record-store.js";
 import { CurrentImmutableRecordStore } from "../../src/session/session-artifact-session/immutable-storage-backends.js";
 import { migrateImmutableSessionSegments } from "../../src/session/session-artifact-session/immutable-segment-migration.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 
 const committedAt = "2026-01-01T00:00:00.000Z";
@@ -76,8 +76,16 @@ async function fixture(t, objectStore, corrupt) {
     input: { changes: request.changes, committedAt },
     prepare: async () => ({
       changes: [
-        { collection: "messages", key: "one", value: { message: messages[2] } },
-        { collection: "messages", key: "two", value: { message: messages[1] } },
+        {
+          collection: "messages",
+          key: "one",
+          value: { ordinal: 1, turnOrdinal: 1, message: messages[2] },
+        },
+        {
+          collection: "messages",
+          key: "two",
+          value: { ordinal: 2, turnOrdinal: 2, message: messages[1] },
+        },
       ],
       result,
     }),
@@ -125,6 +133,10 @@ for (const objectStore of [
     assert.deepEqual(
       replay.result.messageReceipts.map((item) => item.messageUid),
       ["one", "two", "one"],
+    );
+    assert.deepEqual(
+      replay.result.messageReceipts.map((item) => item.owner),
+      [1, 2, 1],
     );
     assert.ok(
       replay.result.messageReceipts.every(

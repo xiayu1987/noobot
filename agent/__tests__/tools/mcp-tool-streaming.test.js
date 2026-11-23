@@ -80,7 +80,7 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
         runCalls.push(payload);
         return {
           sessionId: "child-session",
-          result: { answer: "done", traces: [], messages: [], dialogProcessId: "dp_child" },
+          result: { answer: "done", traces: [], dialogProcessId: "dp_child" },
         };
       },
     },
@@ -113,6 +113,12 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
   );
   const payload = JSON.parse(String(raw || "{}"));
   assert.equal(payload.ok, true);
+  assert.deepEqual(payload.summary, {
+    answerLength: 4,
+    traceCount: 0,
+    usedTools: [],
+    dialogProcessId: "dp_child",
+  });
   assert.equal(runCalls.length, 1);
   assert.equal(runCalls[0]?.runConfigPatch?.streaming, false);
   assert.deepEqual(runCalls[0]?.runConfigPatch?.pluginPolicy, { mode: "none" });

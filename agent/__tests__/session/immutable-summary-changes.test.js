@@ -11,120 +11,27 @@ import {
   forbidRecordReads,
 } from "./helpers/immutable-record-reads.js";
 import test from "node:test";
-import { mkdtemp, rm, rename } from "node:fs/promises";
-import path from "node:path";
-import { tmpdir } from "node:os";
-import { SESSION_CALLER } from "@noobot/shared/session-caller";
-import { createEmptyTurnLifecycle, SESSION_ERROR_CODE } from "@noobot/session-protocol";
-import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { open, rename } from "node:fs/promises";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
 import { ImmutableSessionChanges } from "../../src/session/session-artifact-session/immutable-message-changes.js";
 import { immutableCheckpointKey } from "../../src/session/session-artifact-session/immutable-checkpoint-index.js";
 import { readImmutableTurnPage } from "../../src/session/session-artifact-session/immutable-message-reader.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
-import {
-  readImmutableCheckpoint,
-  readImmutableCheckpointPage,
-} from "../../src/session/session-artifact-session/immutable-checkpoint-reader.js";
-import { exportImmutableSession } from "../../src/session/session-artifact-session/immutable-session-export.js";
-import { immutableOrderKey } from "../../src/session/session-artifact-session/immutable-order-key.js";
-import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { readImmutableCheckpointPage } from "../../src/session/session-artifact-session/immutable-checkpoint-reader.js";
 import { turnRecord } from "../helpers/turn-record.js";
 
-const ts = "2026-01-01T00:00:00.000Z";
-function message(uid, overrides = {}) {
-  return {
-    messageUid: uid,
-    userMessageId: uid,
-    sessionId: "s1",
-    parentSessionId: "",
-    dialogProcessId: "d1",
-    parentDialogProcessId: "",
-    turnScopeId: "t1",
-    role: "user",
-    messageOrigin: "natural",
-    type: "message",
-    content: uid,
-    attachments: [],
-    transferEnvelopes: [],
-    ts,
-    ...overrides,
-  };
-}
-function toolMessages() {
-  const call = message("call", {
-    role: "assistant",
-    type: "tool_call",
-    modelMessageId: "model-call",
-    presentationMessageId: "p1",
-    chatPresentation: false,
-    tool_calls: [
-      { id: "read-1", type: "function", function: { name: "read_file", arguments: "{}" } },
-    ],
-  });
-  delete call.userMessageId;
-  delete call.messageOrigin;
-  const result = message("result", {
-    role: "tool",
-    type: "tool_result",
-    presentationMessageId: "p1",
-    tool_call_id: "read-1",
-    toolName: "read_file",
-  });
-  delete result.userMessageId;
-  delete result.messageOrigin;
-  return [call, result];
-}
-function checkpoint(overrides = {}) {
-  return {
-    userId: "admin",
-    sessionId: "s1",
-    dialogProcessId: "d1",
-    turnScopeId: "t1",
-    checkpointId: "cp1",
-    expectedCheckpointRevision: 0,
-    persistedMessageUids: ["m1"],
-    summarizedMessageUids: ["m1"],
-    retainedMessageUids: [],
-    messages: [],
-    ...overrides,
-  };
-}
-async function fixture(t, messages = [message("m1")]) {
-  const sessionDir = await mkdtemp(path.join(tmpdir(), "immutable-summary-"));
-  t.after(() => rm(sessionDir, { recursive: true, force: true }));
-  await initializeImmutableSession({
-    sessionDir,
-    operationId: "initialize",
-    session: {
-      sessionId: "s1",
-      parentSessionId: "",
-      caller: SESSION_CALLER.USER,
-      aggregateVersion: 0,
-      messages,
-      dialogOrder: messages.length
-        ? [{ dialogProcessId: "d1", dialogOrdinal: 1, turnScopeId: "t1", userMessageUid: "m1" }]
-        : [],
-      turnTimings: [],
-      sessionArtifactEvents: [],
-      turnLifecycle: createEmptyTurnLifecycle(),
-      createdAt: ts,
-      updatedAt: ts,
-    },
-  });
-  return new ImmutableSessionStore({ sessionDir, sessionId: "s1" });
-}
-async function commit(store, changes, operationId = "checkpoint") {
-  return commitSessionChanges({
-    sessionDir: store.sessionDir,
-    sessionId: "s1",
-    expectedGeneration: (await store.snapshot()).generation,
-    operationId,
-    changes,
-    committedAt: ts,
-  });
-}
+import {
+  ts,
+  message,
+  toolMessages,
+  checkpoint,
+  fixture,
+  commit,
+} from "./immutable-summary-changes.test-helpers.js";
 
 test("checkpoint metadata uses one ordered batch across committed and pending messages", async (t) => {
   const store = await fixture(t, [message("m1"), message("m2")]);
@@ -228,10 +135,12 @@ test("successive checkpoints never read acknowledged message bodies or earlier r
     store,
     snapshot,
     turnScopeId: "t1",
+    cursor: null,
     limit: count,
+    maxBytes: 32768,
   });
   assert.equal(page.receipts.length, count);
-  assert.equal(page.hasMore, false);
+  assert.equal(page.nextCursor, null);
   assert.equal(
     (await store.get(snapshot, "messages", retained.messageUid)).message.summarized,
     false,
@@ -556,11 +465,29 @@ test("message and summary publication retries atomically without replaying an ac
   assert.deepEqual(await store.snapshot(), previous);
   assert.equal(await store.get(previous, "messages", "m1"), null);
   assert.equal(await store.get(previous, "checkpointHeads", "t1"), null);
-  await retry();
+  let published = false;
+  setFsAdapter({
+    rename: async (source, target) => {
+      await rename(source, target);
+      if (target === store.headPath) published = true;
+    },
+    open: async (file, flags, mode) => {
+      if (published && file === store.headPath) throw new Error("Read after head publication");
+      return open(file, flags, mode);
+    },
+  });
+  let first;
+  try {
+    first = await retry();
+    assert.equal(published, true);
+    assert.equal(first.result.summaryCheckpoints[0].messageReceipts[0].messageUid, "m1");
+  } finally {
+    resetFsAdapter();
+  }
   const committed = await store.snapshot();
   assert.equal((await store.get(committed, "messages", "m1")).message.summarized, true);
   const replay = await retry();
-  assert.equal(replay.replayed, true);
+  assert.deepEqual(replay, { ...first, replayed: true });
   assert.deepEqual(await store.snapshot(), committed);
   await commit(
     store,
@@ -589,128 +516,6 @@ test("message and summary publication retries atomically without replaying an ac
   assert.deepEqual(await store.snapshot(), current);
 });
 
-test("checkpoint history remains pageable beyond the exported retry window and pins its generation", async (t) => {
-  const store = await fixture(t);
-  const count = QUANTITY_THRESHOLDS.contextProtocol.turnSummaryCheckpointReceiptLimit + 2;
-  let pinned;
-  for (let revision = 1; revision <= count; revision += 1) {
-    await commit(
-      store,
-      {
-        summaryCheckpoints: [
-          checkpoint({
-            checkpointId: `cp${revision}`,
-            expectedCheckpointRevision: revision - 1,
-            persistedMessageUids: [],
-            summarizedMessageUids: [],
-          }),
-        ],
-      },
-      `checkpoint-${revision}`,
-    );
-    if (revision === 2) pinned = await store.snapshot();
-  }
-  const snapshot = await store.snapshot();
-  const reopened = new ImmutableSessionStore({ sessionDir: store.sessionDir, sessionId: "s1" });
-  const historical = await readImmutableCheckpoint(reopened, snapshot, "t1", "cp1");
-  assert.equal(historical.checkpointRevision, 1);
-  assert.equal(await readImmutableCheckpoint(reopened, pinned, "t1", `cp${count}`), null);
-  const seen = [];
-  let after = 0;
-  let page;
-  do {
-    page = await readImmutableCheckpointPage({
-      store: reopened,
-      snapshot,
-      turnScopeId: "t1",
-      after,
-      limit: 7,
-    });
-    assert.equal(page.generation, snapshot.generation);
-    assert.ok(page.receipts.length <= 7);
-    seen.push(...page.receipts.map((receipt) => receipt.checkpointRevision));
-    after = page.cursor;
-  } while (page.hasMore);
-  assert.deepEqual(
-    seen,
-    Array.from({ length: count }, (_, i) => i + 1),
-  );
-  const oldPage = await readImmutableCheckpointPage({
-    store: reopened,
-    snapshot: pinned,
-    turnScopeId: "t1",
-  });
-  assert.deepEqual(
-    oldPage.receipts.map((receipt) => receipt.checkpointRevision),
-    [1, 2],
-  );
-  assert.equal(oldPage.hasMore, false);
-  const exported = await exportImmutableSession({ store: reopened, snapshot });
-  assert.equal(exported.turnSummaryCheckpoints.t1.receipts.length, count - 2);
-  assert.equal(exported.turnSummaryCheckpoints.t1.receipts[0].checkpointId, "cp3");
-  assert.equal(exported.turnSummaryCheckpoints.t1.checkpointRevision, count);
-});
-
-test("checkpoint pagination bounds gaps and validates cursors and dangling order entries", async (t) => {
-  const store = await fixture(t);
-  for (let revision = 1; revision <= 3; revision += 1) {
-    await commit(
-      store,
-      {
-        summaryCheckpoints: [
-          checkpoint({
-            checkpointId: `cp${revision}`,
-            expectedCheckpointRevision: revision - 1,
-            persistedMessageUids: [],
-            summarizedMessageUids: [],
-          }),
-        ],
-      },
-      `checkpoint-${revision}`,
-    );
-  }
-  await store.commit({
-    expectedGeneration: (await store.snapshot()).generation,
-    operationId: "legacy-gap",
-    changes: [
-      {
-        collection: "checkpointOrder",
-        key: immutableCheckpointKey("t1", immutableOrderKey(1)),
-        remove: true,
-      },
-    ],
-  });
-  const snapshot = await store.snapshot();
-  const readPage = (options = {}) =>
-    readImmutableCheckpointPage({ store, snapshot, turnScopeId: "t1", ...options });
-  assert.deepEqual(await readPage({ limit: 1 }), {
-    generation: snapshot.generation,
-    receipts: [],
-    cursor: 1,
-    hasMore: true,
-  });
-  assert.equal((await readPage({ after: 1, limit: 1 })).receipts[0].checkpointId, "cp2");
-  assert.equal((await readPage({ after: 99 })).hasMore, false);
-  assert.equal(await readPage({ turnScopeId: "missing" }), null);
-  for (const options of [{ after: -1 }, { after: 0.5 }, { limit: 0 }, { limit: 257 }])
-    await assert.rejects(readPage(options), TypeError);
-  await store.commit({
-    expectedGeneration: snapshot.generation,
-    operationId: "dangling-order",
-    changes: [
-      {
-        collection: "checkpointOrder",
-        key: immutableCheckpointKey("t1", immutableOrderKey(2)),
-        value: "missing",
-      },
-    ],
-  });
-  await assert.rejects(
-    readPage({ snapshot: await store.snapshot(), after: 1, limit: 1 }),
-    /invalid receipt/,
-  );
-});
-
 test("checkpoint append replay returns its original version after later edits without appending twice", async (t) => {
   const store = await fixture(t);
   const seeded = await commit(store, { messages: [message("m1")] }, "seed-version");
@@ -720,6 +525,7 @@ test("checkpoint append replay returns its original version after later edits wi
     dialogProcessId: "d1",
     turnScopeId: "t1",
     expectedContentReference: initial.contentReference,
+    owner: initial.owner,
     content: "🙂 suffix",
   };
   const changes = {
@@ -744,6 +550,13 @@ test("checkpoint append replay returns its original version after later edits wi
     { messages: [message("m1", { content: "later replacement" })] },
     "later-edit",
   );
+  for (let index = 0; index < 32; index++) {
+    await store.commit({
+      expectedGeneration: (await store.snapshot()).generation,
+      operationId: `checkpoint-history-gap:${index}`,
+      changes: [],
+    });
+  }
   const beforeReplay = await store.snapshot();
   const cold = new ImmutableSessionStore({ sessionDir: store.sessionDir, sessionId: "s1" });
   const sameOperation = await commitSessionChanges(originalRequest);
@@ -758,4 +571,74 @@ test("checkpoint append replay returns its original version after later edits wi
     (await cold.get(beforeReplay, "messages", "m1")).message.content,
     "later replacement",
   );
+
+  const committedRetry = {
+    ...originalRequest,
+    expectedGeneration: beforeReplay.generation,
+    operationId: "checkpoint-retry-with-timing",
+    changes: {
+      ...changes,
+      timings: [{ turnScopeId: "t1", dialogProcessId: "d1", modelLoopRound: 1 }],
+    },
+  };
+  const committedDuplicate = await commitSessionChanges(committedRetry);
+  assert.equal(committedDuplicate.generation, beforeReplay.generation + 1);
+  assert.equal(committedDuplicate.result.summaryCheckpoints[0].deduplicated, true);
+  assert.deepEqual(committedDuplicate.result.summaryCheckpoints[0].messageReceipts, receipts);
+
+  await commit(
+    cold,
+    {
+      messageDeletion: {
+        anchor: { turnScopeId: "t1" },
+        commandId: "delete-checkpoint-turn",
+        expectedAggregateVersion: null,
+      },
+    },
+    "delete-checkpoint-turn",
+  );
+  const afterDeletion = await cold.snapshot();
+  const key = immutableCheckpointKey("t1", "cp1");
+  assert.equal(await cold.get(afterDeletion, "checkpoints", key), null);
+  assert.equal(await cold.get(afterDeletion, "checkpointCommits", key), null);
+  const commitFixture = new URL("../helpers/commit-immutable-session-fixture.js", import.meta.url);
+  const storeModule = new URL(
+    "../../src/session/session-artifact-session/immutable-session-store.js",
+    import.meta.url,
+  );
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    [
+      "--import",
+      new URL("../../../shared/testing/runtime-params.js", import.meta.url).href,
+      "--input-type=module",
+      "--eval",
+      `import { commitSessionChanges } from ${JSON.stringify(commitFixture.href)};
+       import { ImmutableSessionStore } from ${JSON.stringify(storeModule.href)};
+       import assert from "node:assert/strict";
+       const [original, duplicate] = JSON.parse(process.argv[1]);
+       const read = ImmutableSessionStore.prototype.readCommitRecord;
+       const generations = [];
+       ImmutableSessionStore.prototype.readCommitRecord = function(reference, generation) {
+         generations.push(generation);
+         return read.call(this, reference, generation);
+       };
+       console.log(JSON.stringify([
+         await commitSessionChanges(original),
+         await commitSessionChanges(duplicate),
+       ]));
+       assert.deepEqual(generations, [
+         original.expectedGeneration + 1,
+         duplicate.expectedGeneration + 1,
+         original.expectedGeneration + 1,
+       ]);`,
+      JSON.stringify([originalRequest, committedRetry]),
+    ],
+    { timeout: 10000 },
+  );
+  assert.deepEqual(JSON.parse(stdout), [
+    { ...first, replayed: true },
+    { ...committedDuplicate, replayed: true },
+  ]);
+  assert.deepEqual(await cold.snapshot(), afterDeletion);
 });

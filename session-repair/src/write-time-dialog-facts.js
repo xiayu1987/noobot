@@ -92,6 +92,21 @@ export function deriveWriteTimeDialogOrder(dialogOrder, messages) {
   return combined.sort((left, right) => left.dialogOrdinal - right.dialogOrdinal);
 }
 
+function migrateLegacyCheckpointReceipts(checkpoints) {
+  if (!isPlainObject(checkpoints)) return checkpoints;
+  return Object.fromEntries(
+    Object.entries(checkpoints).map(([key, state]) => {
+      if (!isPlainObject(state) || !Array.isArray(state.receipts)) return [key, state];
+      const receipts = state.receipts.map((receipt) =>
+        isPlainObject(receipt) && !("retainedMessageUids" in receipt)
+          ? { ...receipt, retainedMessageUids: [] }
+          : receipt,
+      );
+      return [key, { ...state, receipts }];
+    }),
+  );
+}
+
 export function migrateWriteTimeDialogFacts(context) {
   if (context.sourceSchemaVersion >= SESSION_ARTIFACT_WRITE_TIME_DIALOG_FACTS_SCHEMA_VERSION)
     return;
@@ -104,7 +119,10 @@ export function migrateWriteTimeDialogFacts(context) {
   if ("turnSummaryCheckpoints" in next) {
     writeTurnSummaryCheckpoints(
       next,
-      pruneTurnSummaryCheckpoints(next.turnSummaryCheckpoints, messages),
+      pruneTurnSummaryCheckpoints(
+        migrateLegacyCheckpointReceipts(next.turnSummaryCheckpoints),
+        messages,
+      ),
     );
   }
   context.changed = true;

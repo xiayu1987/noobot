@@ -157,10 +157,10 @@ test("repository preserves partial source outcomes and recovers projection witho
       sessionRepository: {
         async withSessionReader(_userId, _sessionId, run) {
           const empty = async () => ({ entries: [], sequence: 0, pending: false });
-          return run(
-            { readTurnMessageDiagnosticPage: empty, readMessageDiagnosticPage: empty },
-            { sessionDir },
-          );
+          return run({
+            reader: { readTurnMessageDiagnosticPage: empty, readMessageDiagnosticPage: empty },
+            scope: { sessionDir },
+          });
         },
         async requireSessionScope() {
           return { sessionDir };

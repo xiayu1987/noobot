@@ -5,12 +5,12 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createImmutableReaderLifecycle } from "../src/immutable-storage.js";
+import { createSessionReaderLifecycle } from "../src/session-reader.js";
 
 test("closing drains accepted reads, rejects new work and shares one release", async () => {
   const pending = Promise.withResolvers();
   let releases = 0;
-  const reader = createImmutableReaderLifecycle({
+  const reader = createSessionReaderLifecycle({
     generation: 1,
     methods: { read: () => pending.promise },
     release: async () => {
@@ -33,7 +33,7 @@ test("closing drains accepted reads, rejects new work and shares one release", a
 test("a rejected read drains and a failed release can be retried without reopening", async () => {
   let attempts = 0;
   const failure = new Error("read failure");
-  const reader = createImmutableReaderLifecycle({
+  const reader = createSessionReaderLifecycle({
     generation: 1,
     methods: {
       read: async () => {
@@ -57,7 +57,7 @@ test("a rejected read drains and a failed release can be retried without reopeni
 test("scoped ownership keeps a reader open until a multi-step operation settles", async () => {
   const gate = Promise.withResolvers();
   let released = false;
-  const reader = createImmutableReaderLifecycle({
+  const reader = createSessionReaderLifecycle({
     generation: 1,
     methods: { read: async () => "value" },
     release: async () => {
@@ -76,4 +76,30 @@ test("scoped ownership keeps a reader open until a multi-step operation settles"
   gate.resolve();
   assert.equal(await result, "value");
   assert.equal(released, true);
+});
+
+test("disposal joins in-flight close then transfers responsibility if it fails", async () => {
+  const gate = Promise.withResolvers();
+  const failure = new Error("explicit close failed");
+  const disposalFailure = new Error("scope exit failed");
+  const modes = [];
+  const reader = createSessionReaderLifecycle({
+    generation: 1,
+    methods: {},
+    async release({ scopeExit }) {
+      modes.push(scopeExit);
+      if (scopeExit) throw disposalFailure;
+      await gate.promise;
+      throw failure;
+    },
+  });
+  const close = reader.close();
+  const dispose = reader[Symbol.asyncDispose]();
+  assert.equal(reader.close(), dispose);
+  assert.equal(reader[Symbol.asyncDispose](), dispose);
+  assert.deepEqual(modes, [false]);
+  gate.resolve();
+  await assert.rejects(close, (error) => error === failure);
+  await assert.rejects(dispose, { cause: failure, errors: [failure, disposalFailure] });
+  assert.deepEqual(modes, [false, true]);
 });

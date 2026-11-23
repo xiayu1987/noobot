@@ -33,11 +33,13 @@ export function createReconnectCoordinator({
 }) {
   requireFunctionDependencies("createReconnectCoordinator", { requestSessionNavigation });
   async function handleReconnect() {
+    const session = activeSession.value;
+    const reconnectSessionId = text(session?.sessionId);
+    if (!reconnectSessionId) return false;
     let pendingReconnectReplayCount = 0;
     let reconnectReplayQueue = Promise.resolve();
     const reconnectReplayFailures = [];
     const directExecutionRestoreCommandIds = new Set();
-    const reconnectSessionId = text(activeSession.value.sessionId);
     const knownLifecycleSequence = selectSessionRuntimeBucket(
       turnRuntimeRegistry.value,
       reconnectSessionId,
@@ -46,11 +48,11 @@ export function createReconnectCoordinator({
       knownLifecycleSequence > 0 ? { [reconnectSessionId]: knownLifecycleSequence } : {};
     logThinkingReplayDebug("frontend.thinkingReplay.reconnectStarted", () => ({
       sessionId: reconnectSessionId,
-      visibleMessageCount: activeSession.value.messages.length,
+      visibleMessageCount: session.messages.length,
     }));
     return chatWebSocketClient
       .reconnect({
-        identity: buildChannelIdentity(activeSession.value),
+        identity: buildChannelIdentity(session),
         knownLifecycleSequenceMap,
         onReconnectData: (reconnectPayload) => {
           const protocolEvent = reconnectPayload.event;
@@ -155,18 +157,20 @@ export function createReconnectCoordinator({
           activeTurnAfter: summarizeStateMachineTurn(replayRuntime),
         }));
 
+        const currentSession = activeSession.value;
+        if (currentSession?.sessionId !== reconnectSessionId) return;
         requestSessionNavigation(reconnectSessionId);
-        const sessionId = text(activeSession.value.sessionId);
         const currentTurn = resolveActiveTurn();
         if (currentTurn === null) return;
         const execution = selectTurnExecution(
           turnRuntimeRegistry.value,
-          sessionId,
+          reconnectSessionId,
           currentTurn.turnScopeId,
         );
         if (!execution) return;
         const { executionId, rootExecutionId } = execution;
         const requestExecution = async (action, payload, expectedEvent) => {
+          if (activeSession.value?.sessionId !== reconnectSessionId) return;
           const commandId = createSecureId(`reconnect:${action}`);
           directExecutionRestoreCommandIds.add(commandId);
           logStateMachineDebug("stateMachine.reconnect.executionQuery.before", () => ({
@@ -182,7 +186,7 @@ export function createReconnectCoordinator({
                 commandType: action,
                 commandId,
                 identity: buildAgentCommandIdentity(action, {
-                  channel: activeSession.value,
+                  channel: currentSession,
                   turn: {},
                 }),
                 query: payload,
@@ -227,13 +231,13 @@ export function createReconnectCoordinator({
             StreamEventEnum.EXECUTION_SNAPSHOT,
           );
           logStateMachineDebug("stateMachine.reconnect.executionRestore.complete", () => ({
-            sessionId,
+            sessionId: reconnectSessionId,
             executionId,
             rootExecutionId,
           }));
         } catch (error) {
           logStateMachineDebug("stateMachine.reconnect.executionRestore.failed", () => ({
-            sessionId,
+            sessionId: reconnectSessionId,
             executionId,
             rootExecutionId,
             errorType: String(error?.name || "Error"),

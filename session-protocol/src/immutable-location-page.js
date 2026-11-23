@@ -31,16 +31,20 @@ export function immutableLocationPageByteLength(page) {
   return bytes;
 }
 
+function requireLocationLeafPath(page, prefix) {
+  if (prefix.length) {
+    if (page.entries.some(([key]) => !storageDigest(key).startsWith(prefix)))
+      throw immutableStorageError("Location leaf key does not belong to its hash path");
+  }
+  if (immutableLocationPageByteLength(page) > IMMUTABLE_VALUE_BLOCK_BYTES)
+    throw immutableStorageError("Invalid location index leaf size");
+}
+
 export function requireImmutableLocationPagePath(page, prefix) {
   if (typeof prefix !== "string" || !/^[a-f0-9]{0,64}$/.test(prefix))
     throw immutableStorageError("Invalid location index path");
   if (page.kind === "index-leaf") {
-    for (const [key] of page.entries) {
-      if (prefix.length && !storageDigest(key).startsWith(prefix))
-        throw immutableStorageError("Location leaf key does not belong to its hash path");
-    }
-    if (immutableLocationPageByteLength(page) > IMMUTABLE_VALUE_BLOCK_BYTES)
-      throw immutableStorageError("Invalid location index leaf size");
+    requireLocationLeafPath(page, prefix);
   } else if (page.kind !== "index-branch" || page.depth !== prefix.length) {
     throw immutableStorageError("Location branch does not belong to its hash path");
   }

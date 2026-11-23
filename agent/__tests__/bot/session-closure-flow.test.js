@@ -84,6 +84,13 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     async getSessionTurns() {
       return persistedTurns;
     },
+    async withSessionDialogMessageRecords({ dialogProcessId }, consume) {
+      return consume(
+        persistedTurns
+          .map((message, index) => ({ ordinal: index + 1, message }))
+          .filter(({ message }) => message.dialogProcessId === dialogProcessId),
+      );
+    },
     async assertReusedUserTurnIdentity(payload = {}) {
       const messageUid = `sm_${payload.turnScopeId}`;
       const userMessage = {
@@ -119,8 +126,8 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       const userMessage = { ...persistedTurns[index], attachments: payload.attachments };
       persistedTurns[index] = userMessage;
       return {
-        session: { sessionId: payload.sessionId },
-        userMessage,
+        messageUid: payload.messageUid,
+        deduplicated: false,
         attachments: payload.attachments,
         aggregateVersion: 2,
       };
@@ -331,7 +338,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         {
           name: "input.png",
           mimeType: "image/png",
-          size: 1024,
+          contentBase64: "aW5wdXQ=",
         },
       ],
       eventListener: {
@@ -377,8 +384,12 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   assert.deepEqual(finalAssistantTurn.transferEnvelopes, []);
 
   assert.equal(result.answer, "已切换模型并生成附件");
-  assert.equal(Array.isArray(result.messages), true);
-  assert.equal(result.messages.length, 3);
+  assert.equal(Object.hasOwn(result, "messages"), false);
+  assert.deepEqual(result.messageSource, {
+    sessionId,
+    dialogProcessId: acceptedTurn.dialogProcessId,
+    turnScopeId: acceptedTurn.turnScopeId,
+  });
   assert.equal("executionLogs" in result, false);
   assert.equal("executionSummary" in result, false);
   const fullTurnLog = persistedDiagnostics.find(
@@ -396,7 +407,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     [],
     "turn_committed 应只回传已持久化的用户消息",
   );
-  assert.equal(
+  assert.deepEqual(
     upstreamEvents.find((event) => event?.event === "turn_attachments_bound")?.data?.userMessage,
     userTurn,
     "turn_attachments_bound 应回传绑定 canonical 附件后的唯一持久化用户消息",
@@ -451,6 +462,13 @@ test("continue mode closed-loop: should build continue context and persist paren
     },
     async getSessionTurns() {
       return persistedTurns;
+    },
+    async withSessionDialogMessageRecords({ dialogProcessId }, consume) {
+      return consume(
+        persistedTurns
+          .map((message, index) => ({ ordinal: index + 1, message }))
+          .filter(({ message }) => message.dialogProcessId === dialogProcessId),
+      );
     },
     async assertReusedUserTurnIdentity(payload = {}) {
       const messageUid = `sm_${payload.turnScopeId}`;

@@ -13,7 +13,7 @@ import { ImmutableRecordStore } from "../../src/session/session-artifact-session
 import { migrateImmutableSessionSegments } from "../../src/session/session-artifact-session/immutable-segment-migration.js";
 import { auditImmutableSession } from "../../src/session/session-artifact-session/immutable-session-audit.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import {
   IMMUTABLE_SEALED_SEGMENT_SESSION_FORMAT,
   encodeImmutableSessionHead,

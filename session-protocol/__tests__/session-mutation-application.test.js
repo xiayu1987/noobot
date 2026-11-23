@@ -26,7 +26,7 @@ const commit = {
   baseAggregateVersion: 3,
   metadata: { sessionId: "s1", parentSessionId: "", aggregateVersion: 4 },
   lifecycleHead: { sequence: 5, activeTurnScopeId: "" },
-  deletedMessageUids: ["removed"],
+  messageSuffix: { firstOrdinal: 3, previousMessageCount: 3 },
   messages: [],
   turns: [{ key: "turn-removed", value: null }],
   replacements: [],
@@ -45,10 +45,10 @@ function decide(overrides = {}) {
   });
 }
 
-test("a command effect advances only its exact predecessor document", () => {
-  assert.deepEqual(decide(), { action: "apply", requiredGeneration: 9 });
+test("command evidence requires a detail snapshot even at the exact predecessor", () => {
+  assert.deepEqual(decide(), { action: "synchronize", requiredGeneration: 9 });
   assert.deepEqual(decide({ knownGeneration: 9 }), {
-    action: "apply",
+    action: "synchronize",
     requiredGeneration: 9,
   });
   for (const appliedGeneration of [null, 1, 2, 7]) {
@@ -57,6 +57,13 @@ test("a command effect advances only its exact predecessor document", () => {
       requiredGeneration: 9,
     });
   }
+});
+
+test("the first command response establishes a freshness bound without an applied detail", () => {
+  assert.deepEqual(decide({ knownGeneration: null, appliedGeneration: null }), {
+    action: "synchronize",
+    requiredGeneration: 9,
+  });
 });
 
 test("knowing a server generation does not advance the message document", () => {
@@ -123,7 +130,7 @@ test("late responses still validate command evidence before deciding it is alrea
   assert.throws(
     () =>
       decide({
-        projection: { ...commit, deletedMessageUids: ["one", "two"] },
+        projection: { ...commit, messageSuffix: { firstOrdinal: 3, previousMessageCount: 4 } },
         appliedGeneration: 100,
         knownGeneration: 100,
       }),

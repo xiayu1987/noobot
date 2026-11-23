@@ -64,6 +64,8 @@ export function buildTurnEntity(service, resolvedParentSessionId, input) {
     modelResponseMetadata: input.modelResponseMetadata ?? null,
     ...optionalArrayField("activityTimeline", input.activityTimeline),
     ...optionalArrayField("toolTimeline", input.toolTimeline),
+    ...optionalArrayField("resourceRefs", input.resourceRefs),
+    ...optionalArrayField("mutationRefs", input.mutationRefs),
     injectedMessage: input.injectedMessage === true,
     noobotInternalMessageType: normalizedString(input.noobotInternalMessageType),
     injectedBy: normalizedString(input.injectedBy),

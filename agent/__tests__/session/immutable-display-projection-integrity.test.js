@@ -13,6 +13,7 @@ import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { readImmutableDisplayProjection } from "../../src/session/session-artifact-session/immutable-display-projection.js";
+import { openSessionArtifactReader } from "../../src/session/session-artifact-session/immutable-session-reader.js";
 import { exportImmutableSession } from "../../src/session/session-artifact-session/immutable-session-export.js";
 import { buildSessionDisplayProjection } from "../../src/session/session-summary-builders/session-display-summary.js";
 import { registerDialogOrderMessage } from "../../src/session/entities/dialog-order-entity.js";
@@ -60,7 +61,7 @@ async function fixture(t) {
     },
   });
   const store = new ImmutableSessionStore({ sessionDir, sessionId: "s1" });
-  return { store, snapshot: await store.snapshot() };
+  return { sessionDir, store, snapshot: await store.snapshot() };
 }
 
 test("display uses validated metadata without materializing suppressed content and equals export projection", async (t) => {
@@ -73,8 +74,69 @@ test("display uses validated metadata without materializing suppressed content a
       if (metadata.value?.message) selected.push(metadata.value.message.messageUid);
     return materialize(records);
   });
-  assert.deepEqual(await readImmutableDisplayProjection({ store, snapshot }), expected);
+  assert.deepEqual(await readImmutableDisplayProjection({ store, snapshot }), {
+    ...expected,
+    messages: [{ ...expected.messages[0], sessionOrdinal: 1 }],
+  });
   assert.deepEqual(selected, ["m0"]);
+});
+
+test("display source pages retain global order and skip suppressed bodies within their byte budget", async (t) => {
+  const { sessionDir, store, snapshot } = await fixture(t);
+  await using reader = await openSessionArtifactReader({ sessionDir });
+  const first = await reader.readDisplaySourcePage({ cursor: null, limit: 1 });
+  const metadata = await reader.readMetadata();
+  await store.transact({
+    expectedGeneration: reader.generation,
+    operationId: "advance-display-snapshot",
+    input: { customTitle: "New title" },
+    prepare: async () => ({
+      changes: [
+        {
+          collection: "metadata",
+          key: "session",
+          value: { ...metadata, customTitle: "New title" },
+        },
+      ],
+    }),
+  });
+  await using latest = await openSessionArtifactReader({ sessionDir });
+  assert.ok(latest.generation > snapshot.generation);
+  await assert.rejects(latest.readDisplaySourcePage({ cursor: first.nextCursor }), {
+    code: "SESSION_PAGE_CURSOR_CONFLICT",
+  });
+  const second = await reader.readDisplaySourcePage({
+    cursor: first.nextCursor,
+    limit: 1,
+    maxBytes: 4096,
+  });
+  assert.equal(first.generation, second.generation);
+  assert.equal(first.messageCount, 2);
+  assert.equal(second.nextCursor, null);
+  const records = [...first.records, ...second.records];
+  assert.deepEqual(
+    records.map(({ ordinal, message }) => [ordinal, message.messageUid]),
+    [
+      [1, "m0"],
+      [2, "m1"],
+    ],
+  );
+  await assert.rejects(reader.readMessagePage({ cursor: first.nextCursor }), {
+    code: "SESSION_PAGE_CURSOR_CONFLICT",
+  });
+  await assert.rejects(reader.readDisplaySourcePage({ cursor: first.nextCursor, maxBytes: 1 }), {
+    code: "SESSION_MESSAGE_READ_BUDGET_EXCEEDED",
+  });
+  const { messages, ...source } = await reader.exportSession();
+  const timelines = new Map(records.map(({ message, display }) => [message, display.toolTimeline]));
+  const fromPages = buildSessionDisplayProjection(
+    { ...source, messages: records.map(({ message }) => message) },
+    { selectToolTimeline: (message) => timelines.get(message) },
+  );
+  assert.deepEqual(await reader.readDisplayProjection(), {
+    ...fromPages,
+    messages: [{ ...fromPages.messages[0], sessionOrdinal: 1 }],
+  });
 });
 
 for (const [overrides, error] of [

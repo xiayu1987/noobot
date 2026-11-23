@@ -9,14 +9,15 @@ import { fileIdentityKey } from "@noobot/shared/file-identity";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { projectCheckpointIdentity } from "@noobot/session-protocol/summary-checkpoint-storage";
-import { memoizeArtifactRead, recordStorageWork } from "./storage-transaction.js";
+import { memoizeSessionRead } from "../session-read-cache.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 
 export async function readFileIdentity(file, { fresh = false } = {}) {
   const read = async () => {
     recordStorageWork("fileIdentityReads");
     return fileIdentityOf(await stat(file, { bigint: true }));
   };
-  return fresh ? read() : memoizeArtifactRead("identity", file, read);
+  return fresh ? read() : memoizeSessionRead("identity", file, read);
 }
 
 export function fileIdentityOf(info) {

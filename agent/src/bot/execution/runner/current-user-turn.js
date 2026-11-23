@@ -10,6 +10,7 @@ import { assertTurnAttachmentsBoundEventData } from "@noobot/session-protocol/tu
 import {
   createTurnAcceptanceReceipt,
   deriveAttachmentBindCommandId,
+  requireAttachmentBindingResponse,
 } from "@noobot/session-protocol";
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 
@@ -157,17 +158,21 @@ export async function prepareCurrentUserTurn({
   }
   if (precommittedUserTurn) await prepareCanonicalAttachments();
   if (!reuseExistingUserTurn && canonicalAttachments.length > 0) {
-    const attachmentBinding = await bindSessionTurnAttachments({
-      userId,
-      sessionId,
-      turnScopeId,
-      messageUid: currentUserMessage.messageUid,
-      attachments: canonicalAttachments,
-      expectedAggregateVersion: committedTurnResult?.aggregateVersion,
-      commandId: deriveAttachmentBindCommandId(turnScopeId),
-      persistenceScope,
-    });
-    currentUserMessage = attachmentBinding.userMessage;
+    const attachmentBinding = requireAttachmentBindingResponse(
+      await bindSessionTurnAttachments({
+        userId,
+        sessionId,
+        turnScopeId,
+        messageUid: currentUserMessage.messageUid,
+        attachments: canonicalAttachments,
+        expectedAggregateVersion: committedTurnResult?.aggregateVersion,
+        commandId: deriveAttachmentBindCommandId(turnScopeId),
+        persistenceScope,
+      }),
+    );
+    if (attachmentBinding.messageUid !== currentUserMessage.messageUid)
+      throw new TypeError("Attachment binding response message identity mismatch");
+    currentUserMessage = { ...currentUserMessage, attachments: attachmentBinding.attachments };
     committedTurnResult = {
       ...committedTurnResult,
       aggregateVersion: attachmentBinding.aggregateVersion,

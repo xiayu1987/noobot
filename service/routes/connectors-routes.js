@@ -35,10 +35,10 @@ async function removeConnectorFromSessionSelections({ bot, userId, connectorId }
   return updatedSessionCount;
 }
 
-function registerConnectorSelectionRoutes(router, { bot, connectorRuntime, jsonOptions }) {
+function registerConnectorSelectionRoutes(router, { bot, connectorRuntime, route }) {
   router.get(
     "/:userId/sessions/:sessionId",
-    withJsonError(async (req, res) => {
+    route(async (req, res) => {
       const userId = text(req.params.userId);
       const selectedConnectorIds = await bot.session.getRootSessionSelectedConnectorIds({
         userId,
@@ -52,12 +52,12 @@ function registerConnectorSelectionRoutes(router, { bot, connectorRuntime, jsonO
         connectors,
         selectedConnectorIds,
       });
-    }, jsonOptions),
+    }),
   );
 
   router.put(
     "/:userId/sessions/:sessionId/selection",
-    withJsonError(async (req, res) => {
+    route(async (req, res) => {
       const userId = text(req.params.userId);
       const connectors = await connectorRuntime.listUserConnectors(userId);
       const selectedConnectorIds = decodeRequestInput(
@@ -91,17 +91,20 @@ function registerConnectorSelectionRoutes(router, { bot, connectorRuntime, jsonO
         sessionId: req.params.sessionId,
         selectedConnectorIds: savedSelectedConnectorIds,
       });
-    }, jsonOptions),
+    }),
   );
 }
 
 export function registerConnectorRoutes(
   app,
-  { bot, connectorRuntime, translateText, ownerOnlyUserScopeParam } = {},
+  { bot, connectorRuntime, translateText, ownerOnlyUserScopeParam, runBotOperation } = {},
 ) {
   if (!isFunction(ownerOnlyUserScopeParam))
     throw new TypeError("connector routes require an ownerOnlyUserScopeParam guard");
+  if (!isFunction(runBotOperation)) throw new TypeError("connector routes require runBotOperation");
   const jsonOptions = { fallbackErrorKey: "common.getConnectorsFailed", translateText };
+  const route = (handler) =>
+    withJsonError((req, res) => runBotOperation(() => handler(req, res)), jsonOptions);
   const router = express.Router();
   router.param("userId", ownerOnlyUserScopeParam);
 
@@ -111,16 +114,16 @@ export function registerConnectorRoutes(
 
   router.get(
     "/:userId",
-    withJsonError(async (req, res) => {
+    route(async (req, res) => {
       const userId = text(req.params.userId);
       const connectors = await connectorRuntime.listUserConnectors(userId);
       res.json({ ok: true, userId, connectors });
-    }, jsonOptions),
+    }),
   );
 
   router.post(
     "/:userId",
-    withJsonError(async (req, res) => {
+    route(async (req, res) => {
       const userId = text(req.params.userId);
       const record = await connectorRuntime.createConnector({
         userId,
@@ -133,12 +136,12 @@ export function registerConnectorRoutes(
         connectorId: record.connectorId,
       });
       res.status(201).json({ ok: true, connection });
-    }, jsonOptions),
+    }),
   );
 
   router.put(
     "/:userId/:connectorId",
-    withJsonError(async (req, res) => {
+    route(async (req, res) => {
       const userId = text(req.params.userId);
       const connectorId = text(req.params.connectorId);
       const record = await connectorRuntime.updateConnector({
@@ -157,12 +160,12 @@ export function registerConnectorRoutes(
         connectorId,
       });
       res.json({ ok: true, connection });
-    }, jsonOptions),
+    }),
   );
 
   router.delete(
     "/:userId/:connectorId",
-    withJsonError(async (req, res) => {
+    route(async (req, res) => {
       const userId = text(req.params.userId);
       const connectorId = text(req.params.connectorId);
       const connectorExists = (await connectorRuntime.listUserConnectors(userId)).some(
@@ -178,24 +181,24 @@ export function registerConnectorRoutes(
         : false;
       const connectors = await connectorRuntime.listUserConnectors(userId);
       res.json({ ok: true, userId, connectorId, deleted, updatedSessionCount, connectors });
-    }, jsonOptions),
+    }),
   );
 
   router.post(
     "/:userId/:connectorId/connect",
-    withJsonError(async (req, res) => {
+    route(async (req, res) => {
       const userId = text(req.params.userId);
       const connection = await connectorRuntime.connect({
         userId,
         connectorId: req.params.connectorId,
       });
       res.json({ ok: true, connection });
-    }, jsonOptions),
+    }),
   );
 
   router.post(
     "/:userId/:connectorId/disconnect",
-    withJsonError(async (req, res) => {
+    route(async (req, res) => {
       const userId = text(req.params.userId);
       const connectorId = text(req.params.connectorId);
       const disconnected = await connectorRuntime.disconnect({ userId, connectorId });
@@ -205,9 +208,9 @@ export function registerConnectorRoutes(
         connectorId,
       });
       res.json({ ok: true, connectorId, disconnected, updatedSessionCount });
-    }, jsonOptions),
+    }),
   );
 
-  registerConnectorSelectionRoutes(router, { bot, connectorRuntime, jsonOptions });
+  registerConnectorSelectionRoutes(router, { bot, connectorRuntime, route });
   app.use("/internal/connectors", router);
 }

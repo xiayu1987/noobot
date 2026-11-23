@@ -3,7 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { updateManifestCached, appendJsonlBuffered, writeJson } from "../store/store.js";
+import {
+  updateManifestCached,
+  appendJsonlBuffered,
+  initializeRun,
+  writeJson,
+} from "../store/store.js";
 import { isHarnessPromptAlreadyInjected, injectSystemMessages } from "../prompt/prompt-injector.js";
 import { nowIso, safeError } from "../data/record-builders.js";
 import {
@@ -16,7 +21,7 @@ import {
   HARNESS_TERMINAL_RUN_STATUSES,
 } from "../core/constants.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { createRunPaths, ensureRunDir } from "../core/context.js";
+import { createRunPaths } from "../core/context.js";
 import { advanceFsmState } from "../fsm/state-machine.js";
 import {
   buildTraceContextSnapshot,
@@ -108,8 +113,6 @@ function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths, p
     plugin: plugin.name,
     version: plugin.version,
     userId: ctx.userId,
-    sessionId: ctx.sessionId,
-    parentSessionId: ctx.parentSessionId,
     dialogProcessId: ctx.dialogProcessId,
     caller: text(ctx.caller),
     status: HARNESS_RUN_STATUS.RUNNING,
@@ -216,8 +219,8 @@ export async function injectPrompt(point, ctx, options) {
   if (!injected || !options.writePrompts) return;
   const paths = createRunPaths(ctx, options);
   if (!paths) return;
-  await ensureRunDir(paths);
   await appendJsonlBuffered(
+    paths,
     paths.prompts,
     buildTracePromptRecord({
       promptId: id,
@@ -230,15 +233,20 @@ export async function injectPrompt(point, ctx, options) {
 }
 
 export async function traceHook(point, ctx, options, plugin = {}) {
-  if (!options.enabled || !options.trace) return;
+  if (!options.enabled || (!options.trace && (!options.promptPolicy || !options.writePrompts)))
+    return;
+  const startsRun =
+    point === HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD ||
+    (point === HOOK_POINT.AGENT.BEFORE_TURN && isStoppedSnapshotResumeTurn(ctx));
+  if (!options.trace && !startsRun) return;
   const paths = createRunPaths(ctx, options);
-  if (!paths) return;
-  await ensureRunDir(paths);
+  if (startsRun) await initializeRun(paths);
+  if (!options.trace) return;
   const fsm = await advanceFsmState(point, ctx, paths, options);
   const event = buildTraceEvent({ point, ctx, options });
   const flushReason = resolveFlushReasonByPoint(point);
 
-  await appendJsonlBuffered(paths.events, event, options.jsonlFlushStrategy, {
+  await appendJsonlBuffered(paths, paths.events, event, options.jsonlFlushStrategy, {
     reason: flushReason,
   });
   const capabilityTraceLogs = (
@@ -246,6 +254,7 @@ export async function traceHook(point, ctx, options, plugin = {}) {
   ).filter((log) => log?.event === "capability_model_trace");
   for (const log of capabilityTraceLogs) {
     await appendJsonlBuffered(
+      paths,
       paths.capabilityTraces,
       {
         eventId: event.eventId,
@@ -263,6 +272,7 @@ export async function traceHook(point, ctx, options, plugin = {}) {
 
   if (point === HOOK_POINT.AGENT.AFTER_CONTEXT_BUILD && options.writeContextSnapshot) {
     await writeJson(
+      paths,
       paths.contextSnapshot,
       buildTraceContextSnapshot({
         ctx,

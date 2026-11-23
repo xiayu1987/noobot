@@ -154,12 +154,13 @@ export function mountViewer({
     };
   });
   let viewer;
+  const emit = vi.fn();
   const wrapper = mount(
     defineComponent({
       setup() {
         viewer = useWorkflowNodeSessionViewer({
           props: viewerProps,
-          emit: vi.fn(),
+          emit,
           translate: (key) => key,
           flowNodes,
           runtimeNodeSessions: ref(runtimeNodes),
@@ -170,5 +171,5 @@ export function mountViewer({
       },
     }),
   );
-  return { wrapper, state, viewer, applyWorkflowRuntimeEvent, flowNodes, viewerProps };
+  return { wrapper, state, viewer, applyWorkflowRuntimeEvent, flowNodes, viewerProps, emit };
 }

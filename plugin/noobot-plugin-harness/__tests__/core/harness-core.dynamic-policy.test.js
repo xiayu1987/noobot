@@ -248,6 +248,7 @@ test("harness policy prompt survives agent-side system message compaction", asyn
     },
   };
 
+  await hookManager.emit("agent.before_context_build", { ...ctx });
   await hookManager.emit("agent.before_llm_call", ctx);
 
   assert.equal(

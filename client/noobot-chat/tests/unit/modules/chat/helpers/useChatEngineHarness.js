@@ -133,10 +133,9 @@ export function makeTurnReplacementBody({
     commandId,
     committedAggregateVersion: aggregateVersion,
     deduplicated: false,
-    deletedMessageUids: ["deleted-fixture:user"],
     sessionId,
     generation: 10,
-    displayMessages: [message],
+    displayMessages: [{ ...message, sessionOrdinal: 1 }],
     turnReplacement,
     projection: {
       kind: "commit",
@@ -150,9 +149,9 @@ export function makeTurnReplacementBody({
         result: { turnReplacement },
       },
       baseAggregateVersion: aggregateVersion - 1,
+      messageSuffix: { firstOrdinal: 1, previousMessageCount: 1 },
       metadata: { sessionId, parentSessionId: "", aggregateVersion },
       lifecycleHead: { sequence: 0, activeTurnScopeId: "" },
-      deletedMessageUids: ["deleted-fixture:user"],
       messages: [{ ordinal: 1, turnOrdinal: 1, message }],
       turns: replacedTurnScopeIds.map((key) => ({ key, value: null })),
       replacements: [],
@@ -162,9 +161,10 @@ export function makeTurnReplacementBody({
 }
 
 export function makeTurnReplacementResponse(input) {
-  const { turnReplacement, ...envelope } = makeTurnReplacementBody(input);
+  const { deduplicated, sessionId, generation, projection, displayMessages } =
+    makeTurnReplacementBody(input);
   return mutationSuccessResponse(
-    createTurnReplaceResponse({ receiptResult: { turnReplacement }, ...envelope }),
+    createTurnReplaceResponse({ deduplicated, sessionId, generation, projection, displayMessages }),
   );
 }
 
@@ -172,15 +172,11 @@ export function applyMainEntryMessages(readActiveSession) {
   return vi.fn((response) => {
     const session = readActiveSession().value;
     if (!session || session.sessionId !== response.sessionId) return false;
-    const deletedUids = new Set(response.deletedMessageUids);
     const deletedScopes = new Set(
       response.projection.turns.filter(({ value }) => value === null).map(({ key }) => key),
     );
     session.messages = [
-      ...session.messages.filter(
-        (message) =>
-          !deletedUids.has(message.messageUid) && !deletedScopes.has(message.turnScopeId),
-      ),
+      ...session.messages.filter((message) => !deletedScopes.has(message.turnScopeId)),
       ...response.displayMessages,
     ];
     session.aggregateVersion = response.committedAggregateVersion;

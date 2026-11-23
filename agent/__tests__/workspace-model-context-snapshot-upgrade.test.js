@@ -23,6 +23,7 @@ import {
   listQuarantinedUnits,
 } from "../src/workspace-lifecycle/migration-quarantine.js";
 import { TEST_STORAGE_SERVICE } from "./helpers/storage-service.js";
+import { createTestPartitionStorageBudget } from "./helpers/partition-journal-cases.js";
 
 const SESSION = `${WORKSPACE_LAYOUT.SESSION_DIR}/s-1`;
 const SNAPSHOT_DIR = `${SESSION}/model-message-snapshots`;
@@ -73,14 +74,14 @@ async function createWorkspace(t) {
   return base;
 }
 
-test("current layouts retry quarantined snapshots once and preserve rejected units", async (t) => {
+test("partition cutover preserves rejected snapshots and retries them after same-process repair", async (t) => {
   const base = await createWorkspace(t);
   await mkdir(path.dirname(path.join(base, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE)), {
     recursive: true,
   });
   await writeFile(
     path.join(base, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE),
-    JSON.stringify({ version: WORKSPACE_LAYOUT_VERSION }),
+    JSON.stringify({ version: 45 }),
   );
   const kind = WORKSPACE_LAYOUT_UPGRADE_OWNER.MODEL_CONTEXT_SNAPSHOT;
   const validPath = `${SNAPSHOT_DIR}/retry-valid.json`;
@@ -104,9 +105,11 @@ test("current layouts retry quarantined snapshots once and preserve rejected uni
     created: false,
     scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
     storageService: TEST_STORAGE_SERVICE,
+    targetStorageBudget: createTestPartitionStorageBudget(),
   };
   const reports = await upgradeWorkspaceLayout(options);
   const retry = reports.find(({ id }) => id === `quarantine-retry:${kind}`);
+  assert.equal(retry.failed, undefined, JSON.stringify(reports));
   assert.deepEqual(new Set(retry.released), new Set([validPath, invalidPath]));
   assert.equal(retry.result.migrated.length, 1);
   assert.equal(retry.result.quarantined.length, 1);
@@ -123,8 +126,20 @@ test("current layouts retry quarantined snapshots once and preserve rejected uni
   assert.equal(units[0].path, invalidPath);
   assert.equal(units[0].error.details.reason, "unsupported_version");
   assert.equal(await exists(path.join(base, invalidPath)), false);
+  const [rejectedAgain] = await upgradeWorkspaceLayout(options);
+  assert.deepEqual(rejectedAgain.released, [invalidPath]);
+  assert.equal(rejectedAgain.result.quarantined.length, 1);
+  const [rejectedUnit] = await listQuarantinedUnits({ base });
+  await writeFile(path.join(base, rejectedUnit.quarantinePath), JSON.stringify(v3Snapshot()));
+  const [repaired] = await upgradeWorkspaceLayout(options);
+  assert.equal(repaired.result.migrated.length, 1);
+  assert.deepEqual(await listQuarantinedUnits({ base }), []);
+  const layoutFile = path.join(base, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE);
+  assert.equal(JSON.parse(await readFile(layoutFile, "utf8")).version, 45);
+  await rm(path.join(base, SESSION, "session.json"));
+  await upgradeWorkspaceLayout(options);
+  assert.equal(JSON.parse(await readFile(layoutFile, "utf8")).version, WORKSPACE_LAYOUT_VERSION);
   assert.deepEqual(await upgradeWorkspaceLayout(options), []);
-  assert.equal((await listQuarantinedUnits({ base })).length, 1);
 });
 
 test("snapshot upgrade migrates v3 snapshots in place and quarantines unmappable ones", async (t) => {

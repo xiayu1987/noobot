@@ -7,102 +7,113 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
+import { compactThinkingTimeline } from "@noobot/event-protocol/tool-timeline";
+import { buildPersistedDisplayAndThinking } from "./session-artifact-store-v2.test-helpers.js";
 
-test("session summary projects attachment identities without object stringification", async () => {
+test("session tool details project attachment identities without object stringification", async () => {
   const attachmentRef = "attachment:v1:summary-session/model/att-summary-1";
-  const summary = await buildPersistedDisplaySummary({
-    sessionId: "summary-session",
-    aggregateVersion: 0,
-    messages: [
-      {
-        modelMessageId: "assistant-1",
-        messageUid: "sm-summary-1",
-        presentationMessageId: "assistant-1",
-        dialogProcessId: "dialog-summary-1",
-        role: "assistant",
-        type: "message",
-        content: "done",
-        chatPresentation: true,
-        turnScopeId: "turn-1",
-        toolTimeline: [
-          {
-            key: "call:read-1",
-            toolCallId: "read-1",
-            tool: "read_file",
-            status: "completed",
-            args: { filePath: attachmentRef },
-            result: JSON.stringify({
-              toolName: "read_file",
-              ok: true,
-              path: { view: "attachment", attachmentRef },
-              fileName: "report.json",
-            }),
-            call: { eventId: "call-event" },
-            resultEvent: { eventId: "result-event" },
-          },
-        ],
-      },
-    ],
-  });
+  const { summary, detail } = await buildPersistedDisplayAndThinking(
+    {
+      sessionId: "summary-session",
+      aggregateVersion: 0,
+      messages: [
+        {
+          modelMessageId: "assistant-1",
+          messageUid: "sm-summary-1",
+          presentationMessageId: "assistant-1",
+          dialogProcessId: "dialog-summary-1",
+          role: "assistant",
+          type: "message",
+          content: "done",
+          chatPresentation: true,
+          turnScopeId: "turn-1",
+          toolTimeline: [
+            {
+              key: "call:read-1",
+              toolCallId: "read-1",
+              tool: "read_file",
+              status: "completed",
+              args: { filePath: attachmentRef },
+              result: JSON.stringify({
+                toolName: "read_file",
+                ok: true,
+                path: { view: "attachment", attachmentRef },
+                fileName: "report.json",
+              }),
+              call: { eventId: "call-event" },
+              resultEvent: { eventId: "result-event" },
+            },
+          ],
+        },
+      ],
+    },
+    "turn-1",
+  );
 
-  const timeline = summary.messages[0].toolTimeline[0];
+  assert.equal(summary.messages[0].hasThinkingDetails, true);
+  assert.equal(Object.hasOwn(summary.messages[0], "toolTimeline"), false);
+  const [timeline] = compactThinkingTimeline(detail.toolTimeline);
   assert.equal(timeline.call.summary, `read_file · ${attachmentRef}`);
   assert.equal(timeline.resultEvent.summary, "read_file · report.json");
   assert.doesNotMatch(JSON.stringify(timeline), /\[object Object\]/);
 });
 
-test("session summary uses the canonical tool presentation protocol", async () => {
-  const summary = await buildPersistedDisplaySummary({
-    sessionId: "tool-summary-session",
-    aggregateVersion: 0,
-    messages: [
-      {
-        modelMessageId: "assistant-tool-summary",
-        messageUid: "sm-tool-summary",
-        presentationMessageId: "assistant-tool-summary",
-        dialogProcessId: "dialog-tool-summary",
-        role: "assistant",
-        type: "message",
-        content: "done",
-        chatPresentation: true,
-        turnScopeId: "turn-tool-summary",
-        toolTimeline: [
-          {
-            key: "call:patch-1",
-            toolCallId: "patch-1",
-            tool: "patch_file",
-            status: "completed",
-            args: { format: "apply_patch", dryRun: true, patch: "*** Begin Patch" },
-            result: JSON.stringify({
-              ok: true,
-              dryRun: true,
-              changes: [{ path: { view: "workspace", path: "src/index.js" } }],
-            }),
-            call: { eventId: "patch-call-event" },
-            resultEvent: { eventId: "patch-result-event" },
-          },
-          {
-            key: "call:native-1",
-            toolCallId: "native-1",
-            tool: "execute_native_script",
-            status: "completed",
-            args: { inputs: [{ source: "src/index.js" }], arguments: { phase: "probe" } },
-            result: JSON.stringify({
-              ok: true,
-              output_file_count: 1,
-              output_bytes: 10,
-              transferEnvelopes: [{ payload: { attachments: [{ name: "result.txt" }] } }],
-            }),
-            call: { eventId: "native-call-event" },
-            resultEvent: { eventId: "native-result-event" },
-          },
-        ],
-      },
-    ],
-  });
+test("persisted tool details use the canonical tool presentation protocol", async () => {
+  const { summary, detail } = await buildPersistedDisplayAndThinking(
+    {
+      sessionId: "tool-summary-session",
+      aggregateVersion: 0,
+      messages: [
+        {
+          modelMessageId: "assistant-tool-summary",
+          messageUid: "sm-tool-summary",
+          presentationMessageId: "assistant-tool-summary",
+          dialogProcessId: "dialog-tool-summary",
+          role: "assistant",
+          type: "message",
+          content: "done",
+          chatPresentation: true,
+          turnScopeId: "turn-tool-summary",
+          toolTimeline: [
+            {
+              key: "call:patch-1",
+              toolCallId: "patch-1",
+              tool: "patch_file",
+              status: "completed",
+              args: { format: "apply_patch", dryRun: true, patch: "*** Begin Patch" },
+              result: JSON.stringify({
+                ok: true,
+                dryRun: true,
+                changes: [{ path: { view: "workspace", path: "src/index.js" } }],
+              }),
+              call: { eventId: "patch-call-event" },
+              resultEvent: { eventId: "patch-result-event" },
+            },
+            {
+              key: "call:native-1",
+              toolCallId: "native-1",
+              tool: "execute_native_script",
+              status: "completed",
+              args: { inputs: [{ source: "src/index.js" }], arguments: { phase: "probe" } },
+              result: JSON.stringify({
+                ok: true,
+                output_file_count: 1,
+                output_bytes: 10,
+                transferEnvelopes: [{ payload: { attachments: [{ name: "result.txt" }] } }],
+              }),
+              call: { eventId: "native-call-event" },
+              resultEvent: { eventId: "native-result-event" },
+            },
+          ],
+        },
+      ],
+    },
+    "turn-tool-summary",
+  );
 
-  const [patch, native] = summary.messages[0].toolTimeline;
+  assert.equal(summary.messages[0].hasThinkingDetails, true);
+  assert.equal(Object.hasOwn(summary.messages[0], "toolTimeline"), false);
+  const [patch, native] = compactThinkingTimeline(detail.toolTimeline);
   assert.equal(patch.call.summary, "patch_file · apply_patch · dry-run");
   assert.equal(patch.resultEvent.summary, "patch_file · src/index.js · dry-run");
   assert.equal(native.call.summary, "execute_native_script · 1 input · phase=probe");

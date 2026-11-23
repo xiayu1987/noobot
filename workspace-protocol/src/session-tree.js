@@ -129,8 +129,7 @@ export function resolveSessionTreeChain(tree, sessionId) {
         cycleSessionId: currentId,
       });
     }
-    const node = nodes[currentId];
-    if (!node) {
+    if (!Object.hasOwn(nodes, currentId)) {
       throw sessionTreeError(
         SESSION_TREE_ERROR.NODE_MISSING,
         `session tree node missing: ${currentId}`,
@@ -139,7 +138,7 @@ export function resolveSessionTreeChain(tree, sessionId) {
     }
     visited.add(currentId);
     chain.push(currentId);
-    currentId = node.parentSessionId;
+    currentId = nodes[currentId].parentSessionId;
   }
   return chain.reverse();
 }
@@ -149,8 +148,7 @@ export function isSessionTreeNodeRegistered(tree, sessionId) {
 }
 
 export function requireSessionTreeNode(tree, sessionId) {
-  const node = tree.nodes[requireSessionId(sessionId)];
-  if (!node) {
+  if (!isSessionTreeNodeRegistered(tree, sessionId)) {
     throw sessionTreeError(
       SESSION_TREE_ERROR.NODE_MISSING,
       `session tree node missing: ${sessionId}`,
@@ -160,34 +158,38 @@ export function requireSessionTreeNode(tree, sessionId) {
       },
     );
   }
-  return node;
+  return tree.nodes[sessionId];
 }
 
 export function resolveSessionTreeDepth(tree, sessionId) {
   return resolveSessionTreeChain(tree, sessionId).length;
 }
 
-export function collectSessionTreeBranch(tree, sessionId) {
-  const nodes = Object.values(tree.nodes);
-  const branch = [];
+export function collectSessionTreeBranches(tree, rootSessionIds, scopedSessions = []) {
+  const childrenByParent = new Map();
+  for (const { sessionId, parentSessionId } of [...Object.values(tree.nodes), ...scopedSessions]) {
+    const siblings = childrenByParent.get(parentSessionId);
+    if (siblings) siblings.push(sessionId);
+    else childrenByParent.set(parentSessionId, [sessionId]);
+  }
   const visited = new Set();
-  const queue = [requireSessionId(sessionId)];
-  while (queue.length) {
-    const currentId = queue.shift();
-    if (visited.has(currentId)) continue;
-    visited.add(currentId);
-    branch.push(currentId);
-    for (const node of nodes) {
-      if (node.parentSessionId === currentId) queue.push(node.sessionId);
+  for (const sessionId of rootSessionIds) {
+    const queue = [requireSessionId(sessionId)];
+    for (let index = 0; index < queue.length; index++) {
+      const id = queue[index];
+      if (visited.has(id)) continue;
+      visited.add(id);
+      const children = childrenByParent.get(id);
+      if (children) for (const childId of children) queue.push(childId);
     }
   }
-  return branch;
+  return [...visited];
 }
 
 export function placeSessionTreeChain(tree, placement) {
   const { sessionId: leafId, parentSessionId: parentId } = createSessionTreePlacement(placement);
-  const node = tree.nodes[leafId];
-  if (node) {
+  if (isSessionTreeNodeRegistered(tree, leafId)) {
+    const node = tree.nodes[leafId];
     if (parentId !== node.parentSessionId) {
       throw sessionTreeError(
         SESSION_TREE_ERROR.PARENT_MISMATCH,

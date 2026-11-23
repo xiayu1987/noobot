@@ -8,9 +8,13 @@ import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promise
 import os from "node:os";
 import test from "node:test";
 import { filePath as path } from "@noobot/path-resolver";
-import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
+import {
+  SESSION_DELETION_STAGE,
+  sessionBranchDeletionKey,
+  WORKSPACE_LAYOUT,
+} from "@noobot/workspace-protocol";
 import { upgradeSessionLifecycle } from "../src/workspace-lifecycle/session-lifecycle-upgrade.js";
-import { releaseQuarantinedUnits } from "../src/workspace-lifecycle/migration-quarantine.js";
+import { releaseQuarantinedUnits } from "./helpers/user-workspace.js";
 import { upgradeWorkspaceLayout } from "../src/workspace-lifecycle/sections.js";
 import { TEST_STORAGE_SERVICE } from "./helpers/storage-service.js";
 
@@ -107,6 +111,32 @@ test("v4 keeps an existing tombstone entry and is a no-op on re-run", async () =
       quarantined: [],
       tombstoneSessionsAdded: false,
     });
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("v4 preserves unfinished branch deletion while importing a legacy marker", async () => {
+  const fixture = await createFixture();
+  try {
+    const branchDeletions = {
+      [sessionBranchDeletionKey(["pending"])]: {
+        pluginHandlerIds: ["test.cleanup"],
+        targets: [
+          {
+            sessionId: "pending",
+            directory: [...WORKSPACE_LAYOUT.SESSION_DIR.split("/"), "pending"],
+          },
+        ],
+        nextStage: SESSION_DELETION_STAGE.TREE,
+      },
+    };
+    await fixture.write(TOMBSTONE, { sessions: { pending: 1 }, branchDeletions });
+    await fixture.write(`${RECORDS}/s-deleted.json`, deletedRecord);
+    await upgradeSessionLifecycle(fixture);
+    const state = await fixture.readJson(TOMBSTONE);
+    assert.deepEqual(state.sessions, { pending: 1, "s-deleted": Date.parse(DELETED_AT) });
+    assert.deepEqual(state.branchDeletions, branchDeletions);
   } finally {
     await fixture.restore();
   }

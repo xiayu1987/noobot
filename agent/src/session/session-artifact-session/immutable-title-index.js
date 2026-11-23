@@ -3,9 +3,18 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveSessionAutoTitle } from "@noobot/session-protocol";
-import { immutableStorageError } from "@noobot/session-protocol/immutable-storage";
-import { recordStorageWork } from "./storage-transaction.js";
+import {
+  resolveSessionAutoTitle,
+  SESSION_AUTO_TITLE_MAX_CODE_UNITS,
+} from "@noobot/session-protocol";
+import { requireImmutableMessageContentPart } from "@noobot/session-protocol/immutable-storage-graph";
+import {
+  IMMUTABLE_TITLE_INDEX_VERSION,
+  immutableStorageError,
+  immutableTitleIndexRequiresUpgrade,
+} from "@noobot/session-protocol/immutable-storage";
+import { recordStorageWork } from "../session-storage-observation.js";
+import { readImmutableStringPrefix } from "./immutable-string-content.js";
 
 function position(ordinal) {
   if (!Number.isSafeInteger(ordinal) || ordinal < 1)
@@ -13,17 +22,20 @@ function position(ordinal) {
   return ordinal.toString(2).padStart(53, "0");
 }
 
+function setTitleIndex(plan, root) {
+  plan.set("metadata", "titleIndex", { version: IMMUTABLE_TITLE_INDEX_VERSION, root });
+}
+
 export function seedImmutableTitleIndex(plan) {
-  plan.set("metadata", "titleIndex", { version: 1, root: null });
+  setTitleIndex(plan, null);
 }
 
 export async function requireImmutableTitleIndex(plan, requireReference) {
   const descriptor = await plan.get("metadata", "titleIndex");
-  if (descriptor === null)
+  if (immutableTitleIndexRequiresUpgrade(descriptor))
     throw Object.assign(new Error("Session title index requires an offline upgrade"), {
       code: "SESSION_IMMUTABLE_INDEX_UPGRADE_REQUIRED",
     });
-  if (descriptor.version !== 1) throw immutableStorageError("Unknown session title index version");
   if (descriptor.root !== null) requireReference(descriptor.root);
   return descriptor;
 }
@@ -98,27 +110,35 @@ export async function updateImmutableTitleCandidate(store, plan, previous, recor
       ? { kind: "title-candidate", ordinal: selected.ordinal, uid: selected.message.messageUid }
       : null,
   });
-  if (root !== descriptor.root) plan.set("metadata", "titleIndex", { version: 1, root });
+  if (root !== descriptor.root) setTitleIndex(plan, root);
 }
 
-async function readCandidateTitle(plan, node) {
-  const record = await plan.get("messages", node.uid);
+async function readCandidateTitle(store, plan, node) {
+  const stored = await plan.getMetadata("messages", node.uid);
+  const record = stored?.value;
   if (!record || record.ordinal !== node.ordinal || record.message.messageUid !== node.uid)
     throw immutableStorageError("Title candidate references a missing or reordered message");
-  const title = resolveSessionAutoTitle(record.message);
-  if (!title) throw immutableStorageError("Title candidate is no longer eligible");
-  return title;
+  const { message } = record;
+  const content = stored.parts.length
+    ? await readImmutableStringPrefix(
+        store.objects,
+        requireImmutableMessageContentPart(stored.parts).reference,
+        SESSION_AUTO_TITLE_MAX_CODE_UNITS,
+      )
+    : message.content;
+  const title = resolveSessionAutoTitle({ ...message, content });
+  if (title) return title;
+  throw immutableStorageError("Title candidate is no longer eligible");
+}
+
+async function findIndexedTitle(store, plan, reference, prefix = "") {
+  if (reference === null) return "";
+  const node = await readImmutableTitleNode(store, reference, prefix);
+  if (node.kind === "title-candidate") return readCandidateTitle(store, plan, node);
+  return findIndexedTitle(store, plan, node.zero, node.prefix + "0");
 }
 
 export async function readImmutableIndexedTitle(store, plan) {
   const descriptor = await requireImmutableTitleIndex(plan, store.requireReference);
-  let reference = descriptor.root;
-  let prefix = "";
-  while (reference !== null) {
-    const node = await readImmutableTitleNode(store, reference, prefix);
-    if (node.kind === "title-candidate") return readCandidateTitle(plan, node);
-    prefix = node.prefix + "0";
-    reference = node.zero;
-  }
-  return "";
+  return findIndexedTitle(store, plan, descriptor.root);
 }

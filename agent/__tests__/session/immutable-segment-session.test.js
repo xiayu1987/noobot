@@ -12,7 +12,7 @@ import { ImmutableSessionStore } from "../../src/session/session-artifact-sessio
 import { IMMUTABLE_COMMIT_INDEX_VERSION } from "@noobot/session-protocol/immutable-storage-graph";
 import { ImmutableRecordStore } from "../../src/session/session-artifact-session/immutable-record-store.js";
 import { ImmutableObjectStore } from "../../src/session/session-artifact-session/immutable-object-store.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import {
   IMMUTABLE_SEGMENT_SESSION_FORMAT,
   decodeImmutableSessionHead,

@@ -8,12 +8,11 @@ import { cleanupRunsBySessionIds } from "../utils/cleanup.js";
 import { injectPrompt, lockPolicyPromptForMainFlow, traceHook } from "../tracing/buffer-manager.js";
 import { safeError } from "../data/record-builders.js";
 import { emitHarnessHookProgress, isPrimaryExecutionScope } from "./context.js";
-import { HOOK_POINT, resolveSessionDeletionTargets } from "@noobot/hook-protocol";
+import { HOOK_POINT, requireSessionDeletionHookContext } from "@noobot/hook-protocol";
 import { applyAgentResolvedModelMessages } from "./model-message-context.js";
 import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-config";
 import { migrateHarnessBucket } from "./bucket-migration.js";
 import { invokeCapabilityModelWithinDeadline } from "./capability-model-invocation.js";
-import { text } from "@noobot/shared/value";
 
 const HARNESS_TRACE_POINTS = Object.freeze([
   HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
@@ -191,15 +190,12 @@ export function createRegisterHarnessHooks(deps = {}) {
       disposers.push(
         hookManager.on(
           point,
-          async (ctx = {}) => {
-            const sessionIds = resolveSessionDeletionTargets(ctx);
-
-            await flushAllManifestsFn();
-            await flushAllJsonlBuffersFn();
-
-            const basePath = text(ctx.basePath);
-            if (!basePath) throw new TypeError("harness session cleanup requires basePath");
-            const cleanup = await cleanupRunsBySessionIdsFn(basePath, sessionIds);
+          async (ctx = {}, invocation) => {
+            const { basePath, deletedSessionIds: sessionIds } =
+              requireSessionDeletionHookContext(ctx);
+            const cleanup = await cleanupRunsBySessionIdsFn(basePath, sessionIds, {
+              signal: invocation?.signal,
+            });
             emitHarnessHookProgressFn(ctx, "session_cleanup_done", { point, ...cleanup });
           },
           {

@@ -33,6 +33,9 @@ test("session execution preserves every user interjection into the next model hi
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-user-interjection-e2e-"));
   const sessionId = randomUUID();
   const persistedTurns = [];
+  const capturedRecords = [];
+  const postprocessErrors = [];
+  let captureCompleted = false;
   const dialogProcessId = "dialog-user-interjection-e2e";
   const turnScopeId = "turn-user-interjection-e2e";
   const checkpointSession = {
@@ -108,8 +111,18 @@ test("session execution preserves every user interjection into the next model hi
         messageReceipts: createTestMessagePersistenceReceipts({ messages: turns, ...identity }),
       };
     },
-    async getSessionTurns() {
-      return persistedTurns;
+    async withSessionDialogMessageRecords(identity, consume) {
+      assert.equal(identity.userId, "admin");
+      assert.equal(identity.sessionId, sessionId);
+      assert.equal(identity.dialogProcessId, dialogProcessId);
+      return consume(
+        (async function* () {
+          for (const message of persistedTurns) {
+            assert.equal(message.dialogProcessId, identity.dialogProcessId);
+            yield { message };
+          }
+        })(),
+      );
     },
     async assertReusedUserTurnIdentity(payload = {}) {
       const messageUid = `user:${payload.turnScopeId}`;
@@ -159,7 +172,14 @@ test("session execution preserves every user interjection into the next model hi
     globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot: root },
     session,
     memory: {
-      async captureDialogToShortMemory() {},
+      async readLongMemory({ userId }) {
+        assert.equal(userId, "admin");
+        return "";
+      },
+      async captureDialogToShortMemory({ messageRecords }) {
+        for await (const record of messageRecords) capturedRecords.push(record);
+        captureCompleted = true;
+      },
       async maybeSummarize() {},
     },
     attach: {
@@ -175,7 +195,7 @@ test("session execution preserves every user interjection into the next model hi
     },
     configService: {
       async loadUserConfig() {
-        return {};
+        return { memory: { postprocess_async: false } };
       },
     },
     workspaceService: {
@@ -186,7 +206,11 @@ test("session execution preserves every user interjection into the next model hi
         return path.join(root, userId);
       },
     },
-    errorLogger: { async log() {} },
+    errorLogger: {
+      async log(payload) {
+        postprocessErrors.push(payload);
+      },
+    },
     agentRunner: async ({ agentContext, currentUserMessage }) => {
       const runtime = agentContext.bindings.runtime;
       const modelContext = createModelContext({
@@ -273,6 +297,12 @@ test("session execution preserves every user interjection into the next model hi
       }),
     );
 
+    assert.equal(captureCompleted, true);
+    assert.deepEqual(postprocessErrors, []);
+    assert.deepEqual(
+      capturedRecords.map(({ message }) => message.messageUid),
+      persistedTurns.map((message) => message.messageUid),
+    );
     for (const expected of interjections) {
       assert.equal(
         appendedMessageUids.includes(expected.messageUid),

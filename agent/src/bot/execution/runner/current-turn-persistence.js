@@ -6,7 +6,7 @@
 import { emitEvent } from "../../../events/index.js";
 import { text } from "@noobot/shared/value";
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
-import { observeSessionStorageWork } from "../../../session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../../session/session-storage-observation.js";
 import {
   createSessionChangesSubmission,
   requireMessagePersistenceReceipt,
@@ -117,6 +117,40 @@ function verifyActivityDurability(
   return { activityMessages, durableActivityMessages };
 }
 
+async function appendPersistencePage({
+  appendAgentMessages,
+  store,
+  context,
+  entries,
+  changes,
+  submission,
+}) {
+  const messagesToPersist = entries.map((entry) => entry.message);
+  const preparedAt = performance.now();
+  const { result: persistedMessages, work: storageWork } = await observeSessionStorageWork(() =>
+    appendAgentMessages({
+      ...context,
+      messages: messagesToPersist,
+      changes,
+      submission,
+    }),
+  );
+  const appendedAt = performance.now();
+  verifyPersistenceReceipts(messagesToPersist, persistedMessages, context);
+  const activity = verifyActivityDurability(messagesToPersist, persistedMessages, context);
+  store.confirmPersistence(entries, persistedMessages);
+  store.acknowledgeChanges(entries);
+  return { messagesToPersist, preparedAt, appendedAt, storageWork, ...activity };
+}
+
+async function collectPersistenceFailure(failures, operation) {
+  try {
+    await operation();
+  } catch (error) {
+    if (!failures.includes(error)) failures.push(error);
+  }
+}
+
 export function bindCurrentTurnPersistence({
   dispatchRuntime,
   appendAgentMessages,
@@ -133,6 +167,15 @@ export function bindCurrentTurnPersistence({
   let batchDepth = 0;
   let persistenceRequested = false;
   let pendingSubmission = null;
+  const context = {
+    userId,
+    sessionId,
+    dialogProcessId,
+    parentDialogProcessId,
+    turnScopeId,
+    eventListener,
+    persistenceScope,
+  };
 
   const enqueue = (operation) => {
     const next = persistenceTail.then(operation);
@@ -143,53 +186,33 @@ export function bindCurrentTurnPersistence({
     return next;
   };
 
-  const persist = async (queuedAt) => {
+  const persistPage = async (queuedAt, throughRevision) => {
     const startedAt = performance.now();
     const store = dispatchRuntime.currentTurnMessages;
     if (!pendingSubmission) {
-      const changes = store.readPendingChanges();
-      if (!changes.entries.length) return;
-      pendingSubmission = { ...changes, submission: createSessionChangesSubmission() };
+      const batch = store.readPendingChangeBatch({
+        throughRevision,
+        ownership: { sessionId, dialogProcessId, turnScopeId },
+      });
+      if (!batch.entries.length) return false;
+      pendingSubmission = { ...batch, submission: createSessionChangesSubmission() };
     }
-    const { entries, counts, submission } = pendingSubmission;
-    const messagesToPersist = entries.map((entry) => entry.message);
-    const preparedAt = performance.now();
-    const { result: persistedMessages, work: storageWork } = await observeSessionStorageWork(() =>
-      appendAgentMessages({
-        userId,
-        sessionId,
-        messages: messagesToPersist,
-        persistedMessages: entries.map((entry) => ({
-          messageUid: entry.messageUid,
-          persisted: entry.persisted,
-          contentAppend: entry.contentAppend,
-        })),
-        submission,
-        dialogProcessId,
-        parentDialogProcessId,
-        turnScopeId,
-        eventListener,
-        persistenceScope,
-      }),
-    );
-    const appendedAt = performance.now();
-    verifyPersistenceReceipts(messagesToPersist, persistedMessages, {
-      sessionId,
-      dialogProcessId,
-      turnScopeId,
-    });
-    const { activityMessages, durableActivityMessages } = verifyActivityDurability(
+    const { entries, changes, counts, submission } = pendingSubmission;
+    const {
       messagesToPersist,
-      persistedMessages,
-      {
-        eventListener,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-      },
-    );
-    store.confirmPersistence(entries, persistedMessages);
-    store.acknowledgeChanges(entries);
+      preparedAt,
+      appendedAt,
+      storageWork,
+      activityMessages,
+      durableActivityMessages,
+    } = await appendPersistencePage({
+      appendAgentMessages,
+      store,
+      context,
+      entries,
+      changes,
+      submission,
+    });
     pendingSubmission = null;
     emitEvent(eventListener, "timeline_checkpoint_verified", {
       sessionId,
@@ -215,6 +238,14 @@ export function bindCurrentTurnPersistence({
       toolCount: counts.toolCount,
       messages: messagesToPersist.map(projectPersistedMessage),
     });
+    return true;
+  };
+  const persist = async (queuedAt) => {
+    const throughRevision = dispatchRuntime.currentTurnMessages.readPersistenceBoundary();
+    let hasPendingPage = true;
+    while (hasPendingPage) {
+      hasPendingPage = await persistPage(queuedAt, throughRevision);
+    }
   };
   const enqueuePersistence = () => {
     const queuedAt = performance.now();
@@ -240,11 +271,7 @@ export function bindCurrentTurnPersistence({
     batchDepth -= 1;
     if (batchDepth === 0 && persistenceRequested) {
       persistenceRequested = false;
-      try {
-        await enqueuePersistence();
-      } catch (error) {
-        if (!failures.includes(error)) failures.push(error);
-      }
+      await collectPersistenceFailure(failures, enqueuePersistence);
     }
     if (failures.length === 1) throw failures[0];
     if (failures.length > 1)

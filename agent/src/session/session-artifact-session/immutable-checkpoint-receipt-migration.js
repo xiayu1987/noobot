@@ -9,18 +9,28 @@ import { parseTurnSummaryCheckpointRequest } from "@noobot/context-protocol/poli
 import {
   requireImmutableOperationInputEvidence,
   immutableCheckpointMessageResult,
-  IMMUTABLE_OPERATION_RETRY_UNAVAILABLE,
 } from "@noobot/session-protocol/immutable-storage-graph";
+import { IMMUTABLE_OPERATION_RETRY_UNAVAILABLE } from "@noobot/session-protocol/immutable-operation-receipt";
 import { immutableStorageError } from "@noobot/session-protocol/immutable-storage";
 import { immutableCheckpointKey } from "./immutable-checkpoint-index.js";
 
-export function needsCheckpointReceiptMigration(result) {
+export function needsCheckpointInputEvidence(result) {
   if (!result || !Object.hasOwn(result, "summaryCheckpoints")) return false;
   if (!Array.isArray(result.summaryCheckpoints))
     throw immutableStorageError("Invalid checkpoint migration results");
   return result.summaryCheckpoints.some(
     (checkpoint) =>
       !Object.hasOwn(checkpoint, "turnScopeId") || !Object.hasOwn(checkpoint, "messages"),
+  );
+}
+
+export function needsCheckpointReceiptMigration(result) {
+  return (
+    needsCheckpointInputEvidence(result) ||
+    result?.summaryCheckpoints?.some(
+      (checkpoint) =>
+        checkpoint.deduplicated === true && !Object.hasOwn(checkpoint, "originGeneration"),
+    ) === true
   );
 }
 
@@ -35,9 +45,29 @@ async function validateOriginMessages(source, references, request, { identities,
       value.message?.messageUid !== uid ||
       value.message.sessionId !== source.sessionId ||
       value.message.turnScopeId !== request.turnScopeId ||
-      value.message.dialogProcessId !== request.dialogProcessId
+      (request.dialogProcessId !== undefined &&
+        value.message.dialogProcessId !== request.dialogProcessId)
     )
       throw immutableStorageError("Checkpoint migration message ownership mismatch");
+  }
+}
+
+async function verifyCheckpointOrigins({
+  source,
+  references,
+  matches,
+  origin,
+  generation,
+  signal,
+}) {
+  for (const { request, result, identities } of matches) {
+    if (!isDeepStrictEqual(origin, result.receipt))
+      throw immutableStorageError("Checkpoint migration receipt disagrees with its origin");
+    await validateOriginMessages(source, references, request, { identities, signal });
+    if (result.deduplicated !== true) continue;
+    if (Object.hasOwn(result, "originGeneration") && result.originGeneration !== generation)
+      throw immutableStorageError("Checkpoint migration origin generation mismatch");
+    result.originGeneration = generation;
   }
 }
 
@@ -56,11 +86,14 @@ async function validateCommitOrigins(source, record, pending, signal) {
         .filter((entry) => entry.collection === "messages")
         .map((entry) => [entry.key, entry.reference]),
     );
-    for (const { request, result, identities } of matches) {
-      if (!isDeepStrictEqual(origin, result.receipt))
-        throw immutableStorageError("Checkpoint migration receipt disagrees with its origin");
-      await validateOriginMessages(source, references, request, { identities, signal });
-    }
+    await verifyCheckpointOrigins({
+      source,
+      references,
+      matches,
+      origin,
+      generation: record.generation,
+      signal,
+    });
     pending.delete(mutation.key);
   }
 }
@@ -102,7 +135,7 @@ function migrateCheckpointResult(checkpoint, result, sessionId) {
   )
     throw immutableStorageError("Checkpoint migration conflicts with persisted identity");
   return {
-    origin: { request, result, identities: messages },
+    request,
     result: { ...result, turnScopeId: request.turnScopeId, messages },
   };
 }
@@ -115,28 +148,40 @@ export async function migrateCheckpointReceipts({
   signal,
 }) {
   if (receipt.retryUnavailable || !needsCheckpointReceiptMigration(receipt.result)) return receipt;
-  const evidence = isFunction(readOperationInput) ? await readOperationInput(operationId) : null;
-  signal?.throwIfAborted();
-  if (evidence === null || evidence === undefined)
-    return { ...receipt, retryUnavailable: IMMUTABLE_OPERATION_RETRY_UNAVAILABLE };
-  const input = requireImmutableOperationInputEvidence(receipt, evidence);
-  const requests = input?.changes?.summaryCheckpoints;
-  if (!Array.isArray(requests) || requests.length !== receipt.result.summaryCheckpoints.length)
-    throw immutableStorageError("Checkpoint migration input result count mismatch");
+  const stored = receipt.result.summaryCheckpoints;
+  let requests;
+  if (needsCheckpointInputEvidence(receipt.result)) {
+    const evidence = isFunction(readOperationInput) ? await readOperationInput(operationId) : null;
+    signal?.throwIfAborted();
+    if (evidence === null || evidence === undefined)
+      return { ...receipt, retryUnavailable: IMMUTABLE_OPERATION_RETRY_UNAVAILABLE };
+    requests = requireImmutableOperationInputEvidence(receipt, evidence)?.changes
+      ?.summaryCheckpoints;
+    if (!Array.isArray(requests) || requests.length !== stored.length)
+      throw immutableStorageError("Checkpoint migration input result count mismatch");
+  }
   const record = await source.readCommitRecord(receipt.commit, receipt.generation);
   if (record.operationId !== operationId)
     throw immutableStorageError("Checkpoint migration operation ownership mismatch");
-  const summaryCheckpoints = [];
   const origins = [];
-  for (const [index, checkpoint] of requests.entries()) {
-    const migrated = migrateCheckpointResult(
-      checkpoint,
-      receipt.result.summaryCheckpoints[index],
-      source.sessionId,
-    );
-    origins.push(migrated.origin);
-    summaryCheckpoints.push(migrated.result);
-  }
+  const summaryCheckpoints = stored.map((checkpoint, index) => {
+    if (
+      !requests &&
+      (checkpoint.deduplicated !== true || Object.hasOwn(checkpoint, "originGeneration"))
+    )
+      return checkpoint;
+    const { request, result } = requests
+      ? migrateCheckpointResult(requests[index], checkpoint, source.sessionId)
+      : {
+          request: {
+            turnScopeId: checkpoint.turnScopeId,
+            checkpointId: checkpoint.receipt.checkpointId,
+          },
+          result: { ...checkpoint },
+        };
+    origins.push({ request, result, identities: result.messages });
+    return result;
+  });
   await validateOrigins(source, record, origins, signal);
   return { ...receipt, result: { ...receipt.result, summaryCheckpoints } };
 }

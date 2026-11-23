@@ -44,6 +44,7 @@ export function withJsonError(
     try {
       return await handler(req, res);
     } catch (error) {
+      if (res.destroyed || res.headersSent) throw error;
       const fallbackMessage = fallbackErrorKey ? translateText(fallbackErrorKey, req?.locale) : "";
       const errorStatusCode = error?.statusCode;
       const responseStatusCode =

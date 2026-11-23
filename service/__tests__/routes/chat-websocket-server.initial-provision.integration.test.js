@@ -5,7 +5,11 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createSessionFacade, createSessionServices } from "noobot-agent/session";
+import {
+  createSessionFacade,
+  createSessionServices,
+  immutableSessionReaderAccess,
+} from "noobot-agent/session";
 import { AttachmentService } from "noobot-agent/attach";
 import { resolveScopedSessionRoots } from "@noobot/workspace-protocol";
 import { AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
@@ -26,6 +30,7 @@ function openSessionFacade(workspaceRoot) {
       { workspaceRoot },
       {
         now: () => new Date().toISOString(),
+        sessionReaderAccess: immutableSessionReaderAccess,
         attachmentService: new AttachmentService({ workspaceRoot }),
         scopedSessionRoots: resolveScopedSessionRoots([]),
       },
@@ -47,6 +52,7 @@ test("first WebSocket send persists its session and accepted message before Agen
     const server = await startAuthoritativeServerWithWs({
       resolveAuthByApiKey: () => ({ userId }),
       bot: {
+        runWorkspaceOperation: (_userId, operation) => operation(),
         session,
         resolveExecutionIntent: createAcceptedAgentExecutionIdentity,
         async runSession() {

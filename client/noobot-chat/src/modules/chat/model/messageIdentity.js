@@ -40,10 +40,6 @@ export function getMessageDialogProcessId(messageItem = {}) {
   return trim(messageItem?.dialogProcessId);
 }
 
-export function getMessageParentDialogProcessId(messageItem = {}) {
-  return trim(messageItem?.parentDialogProcessId);
-}
-
 export function getMessageTurnScopeId(messageItem = {}) {
   return trim(messageItem?.turnScopeId);
 }

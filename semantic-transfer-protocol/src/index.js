@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  AttachmentProtocolError,
   parseAttachmentDescriptor,
   parseAttachmentIdentity,
   attachmentIdentityKey,
@@ -14,6 +15,7 @@ import {
 import { isPlainObject } from "@noobot/shared/value";
 import { assertSemanticTransferRegistration } from "./registry.js";
 import { assertTransferIntentVocabulary } from "./policies/transfer-intent.js";
+import { TransferEnvelopeInputError } from "./errors.js";
 import {
   TRANSFER_PROTOCOL,
   TRANSFER_VERSION,
@@ -24,6 +26,7 @@ import {
 export * from "./registry.js";
 export * from "./policy.js";
 export * from "./constants.js";
+export { TransferEnvelopeInputError } from "./errors.js";
 export * from "./vocabulary.js";
 export * from "./policies/transfer-envelope-fields.js";
 export * from "./policies/transfer-intent.js";
@@ -68,17 +71,16 @@ const FORBIDDEN_PATH_KEYS = new Set([
 ]);
 
 function required(value, code) {
-  if (typeof value !== "string" || !value.trim()) throw new Error(code);
+  if (typeof value !== "string" || !value.trim()) throw new TransferEnvelopeInputError(code);
   return value.trim();
 }
 function normalizeSourceReferenceAddress(value) {
   if (typeof value === "string") return required(value, "invalid_source_reference_address");
-  const identity = parseAttachmentIdentity(value);
-  if (!identity) throw new Error("invalid_source_reference_address");
-  return identity;
+  return parseAttachmentIdentity(value);
 }
 function known(value, keys, code) {
-  for (const key of Object.keys(value)) if (!keys.has(key)) throw new Error(`${code}:${key}`);
+  for (const key of Object.keys(value))
+    if (!keys.has(key)) throw new TransferEnvelopeInputError(`${code}:${key}`);
 }
 function clean(value) {
   if (value === undefined || value === null) return undefined;
@@ -102,13 +104,14 @@ function assertNoPaths(value, location = "envelope") {
     return;
   }
   for (const [key, child] of Object.entries(value)) {
-    if (FORBIDDEN_PATH_KEYS.has(key)) throw new Error(`forbidden_path_field:${location}.${key}`);
+    if (FORBIDDEN_PATH_KEYS.has(key))
+      throw new TransferEnvelopeInputError(`forbidden_path_field:${location}.${key}`);
     assertNoPaths(child, `${location}.${key}`);
   }
 }
 
 function normalizeMeta(meta = {}) {
-  if (!isPlainObject(meta)) throw new Error("invalid_meta");
+  if (!isPlainObject(meta)) throw new TransferEnvelopeInputError("invalid_meta");
   assertNoPaths(meta, "meta");
   const normalized = {};
   const attributes = isPlainObject(meta.attributes) ? { ...meta.attributes } : {};
@@ -121,8 +124,10 @@ function normalizeMeta(meta = {}) {
   return clean(normalized) || {};
 }
 
-export function createTransferIdentity({ sessionId, turnScopeId, runId, producer } = {}) {
-  if (!isPlainObject(producer)) throw new Error("invalid_transfer_producer");
+export function createTransferIdentity(value = {}) {
+  if (!isPlainObject(value)) throw new TransferEnvelopeInputError("invalid_transfer_identity");
+  const { sessionId, turnScopeId, runId, producer } = value;
+  if (!isPlainObject(producer)) throw new TransferEnvelopeInputError("invalid_transfer_producer");
   known(producer, PRODUCER_KEYS, "unknown_transfer_producer_field");
   return Object.freeze({
     sessionId: required(sessionId, "invalid_transfer_session_id"),
@@ -240,26 +245,35 @@ export function sourceReferenceTransfer({ reference, ...options } = {}) {
 }
 
 function validateDirectPayload(payload) {
-  if (typeof payload.content !== "string") throw new Error("direct_content_required");
-  if (payload.attachments !== undefined) throw new Error("direct_attachments_forbidden");
+  if (typeof payload.content !== "string")
+    throw new TransferEnvelopeInputError("direct_content_required");
+  if (payload.attachments !== undefined)
+    throw new TransferEnvelopeInputError("direct_attachments_forbidden");
 }
 
 function validateAttachmentPayload(payload) {
   if (!Array.isArray(payload.attachments) || !payload.attachments.length)
-    throw new Error("attachment_list_required");
-  if (payload.content !== undefined) throw new Error("attachment_content_forbidden");
-  payload.attachments.forEach((x) => {
+    throw new TransferEnvelopeInputError("attachment_list_required");
+  if (payload.content !== undefined)
+    throw new TransferEnvelopeInputError("attachment_content_forbidden");
+  const { attachments } = payload;
+  for (let index = 0; index < attachments.length; index += 1) {
+    if (!Object.hasOwn(attachments, index))
+      throw new TransferEnvelopeInputError("invalid_transfer_attachment");
+    const x = attachments[index];
+    if (!isPlainObject(x)) throw new TransferEnvelopeInputError("invalid_transfer_attachment");
     known(x, REF_KEYS, "unknown_attachment_field");
     createAttachmentReference(x);
-  });
+  }
 }
 
 function validateSourceReferencePayload(payload) {
-  if (!isPlainObject(payload.reference)) throw new Error("source_reference_required");
+  if (!isPlainObject(payload.reference))
+    throw new TransferEnvelopeInputError("source_reference_required");
   known(payload.reference, SOURCE_REFERENCE_KEYS, "unknown_source_reference_field");
   normalizeSourceReferenceAddress(payload.reference.address);
   if (payload.content !== undefined || payload.attachments !== undefined) {
-    throw new Error("source_reference_payload_exclusive");
+    throw new TransferEnvelopeInputError("source_reference_payload_exclusive");
   }
 }
 
@@ -270,9 +284,8 @@ const PAYLOAD_VALIDATORS = Object.freeze({
 });
 
 export function validateTransferEnvelope(value, { strict = false } = {}) {
-  const errors = [];
   try {
-    if (!isPlainObject(value)) throw new Error("envelope_not_object");
+    if (!isPlainObject(value)) throw new TransferEnvelopeInputError("envelope_not_object");
     assertNoPaths(value);
     known(
       value,
@@ -289,23 +302,27 @@ export function validateTransferEnvelope(value, { strict = false } = {}) {
       ]),
       "unknown_envelope_field",
     );
-    if (value.protocol !== TRANSFER_PROTOCOL) throw new Error("invalid_protocol");
-    if (value.version !== TRANSFER_VERSION) throw new Error("invalid_version");
+    if (value.protocol !== TRANSFER_PROTOCOL)
+      throw new TransferEnvelopeInputError("invalid_protocol");
+    if (value.version !== TRANSFER_VERSION) throw new TransferEnvelopeInputError("invalid_version");
     required(value.transferId, "invalid_transfer_id");
     required(value.presentationMessageId, "invalid_presentation_message_id");
     createTransferIdentity(value.identity);
     if (!Object.values(TRANSFER_DIRECTION).includes(value.direction))
-      throw new Error("invalid_direction");
-    if (!isPlainObject(value.payload)) throw new Error("invalid_payload");
+      throw new TransferEnvelopeInputError("invalid_direction");
+    if (!isPlainObject(value.payload)) throw new TransferEnvelopeInputError("invalid_payload");
     known(
       value.payload,
       new Set(["mode", "content", "attachments", "reference"]),
       "unknown_payload_field",
     );
-    if (!Object.hasOwn(PAYLOAD_VALIDATORS, value.payload.mode))
-      throw new Error("invalid_payload_mode");
+    if (
+      typeof value.payload.mode !== "string" ||
+      !Object.hasOwn(PAYLOAD_VALIDATORS, value.payload.mode)
+    )
+      throw new TransferEnvelopeInputError("invalid_payload_mode");
     PAYLOAD_VALIDATORS[value.payload.mode](value.payload);
-    if (!isPlainObject(value.intent)) throw new Error("invalid_intent");
+    if (!isPlainObject(value.intent)) throw new TransferEnvelopeInputError("invalid_intent");
     known(value.intent, INTENT_KEYS, "unknown_intent_field");
     assertTransferIntentVocabulary({
       source: value.intent.source,
@@ -317,16 +334,20 @@ export function validateTransferEnvelope(value, { strict = false } = {}) {
       category: value.intent.category,
       businessPoint: value.intent.businessPoint,
     });
-    if (!isPlainObject(value.meta)) throw new Error("invalid_meta");
+    if (!isPlainObject(value.meta)) throw new TransferEnvelopeInputError("invalid_meta");
     known(value.meta, META_KEYS, "unknown_meta_field");
     if (value.meta.attributes !== undefined && !isPlainObject(value.meta.attributes))
-      throw new Error("invalid_meta_attributes");
+      throw new TransferEnvelopeInputError("invalid_meta_attributes");
   } catch (error) {
-    errors.push(error.message);
+    if (!(error instanceof TransferEnvelopeInputError || error instanceof AttachmentProtocolError))
+      throw error;
+    if (strict)
+      throw new TransferEnvelopeInputError(`invalid_transfer_envelope:${error.message}`, {
+        cause: error,
+      });
+    return { ok: false, errors: [error.message] };
   }
-  const result = { ok: errors.length === 0, errors };
-  if (!result.ok && strict) throw new Error(`invalid_transfer_envelope:${errors.join(";")}`);
-  return result;
+  return { ok: true, errors: [] };
 }
 
 export function assertTransferEnvelope(value) {
@@ -355,7 +376,7 @@ function stableProtocolValue(value) {
   );
 }
 
-function protocolValueKey(value) {
+export function transferProtocolValueKey(value) {
   return JSON.stringify(stableProtocolValue(value));
 }
 
@@ -381,7 +402,10 @@ function dedupeByIdentity(items, identityKeyOf, conflictCode) {
     if (existing === undefined) {
       identities.set(identityKey, item);
       result.push(item);
-    } else if (existing !== item && protocolValueKey(existing) !== protocolValueKey(item)) {
+    } else if (
+      existing !== item &&
+      transferProtocolValueKey(existing) !== transferProtocolValueKey(item)
+    ) {
       throw identityConflictError(conflictCode, identityKey);
     }
   }

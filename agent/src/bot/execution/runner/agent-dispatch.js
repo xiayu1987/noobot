@@ -36,18 +36,19 @@ function acceptDispatchedTurnMessages(runtime, messages) {
     !store ||
     !isFunction(store.push) ||
     !isFunction(store.updateByUid) ||
-    !isFunction(store.toArray)
+    !isFunction(store.readCounts)
   ) {
     throw new Error("bot dispatch requires the canonical currentTurnMessages store");
   }
   const accepted = [];
+  const acceptedMessages = [];
   for (const message of messages) {
     const identity = messageUidOf(message);
     const updated = store.updateByUid(identity, message);
-    if (updated === null) store.push(message);
+    acceptedMessages.push(updated === null ? store.push(message) : updated);
     accepted.push({ messageUid: identity, action: updated === null ? "inserted" : "updated" });
   }
-  return { messages: store.toArray(), accepted };
+  return { messages: acceptedMessages, accepted };
 }
 
 function buildDispatchModelContext({ context, dispatchRuntime, runtimeEventListener }) {
@@ -198,7 +199,8 @@ function acceptAgentResultMessages({
     modelMessageId: text(agentResult.modelMessageId),
     outputChars: agentResult.output.length,
     accepted: acceptedTurnMessages.accepted,
-    storeMessageUids: acceptedTurnMessages.messages.map(messageUidOf),
+    acceptedMessageUids: acceptedTurnMessages.messages.map(messageUidOf),
+    storeMessageCount: dispatchRuntime.currentTurnMessages.readCounts().messageCount,
   });
 }
 

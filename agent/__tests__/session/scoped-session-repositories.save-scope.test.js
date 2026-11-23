@@ -49,16 +49,15 @@ test("concurrent deltas reject stale generations and preserve unrelated turns on
       ...context,
     });
     const reader = () => sessionRepo.requireSessionReader("alice", sessionId, context);
-    const commit = (expectedGeneration, operationId, messages) =>
-      sessionRepo.commitChanges("alice", sessionId, {
-        ...context,
-        expectedGeneration,
-        operationId,
-        committedAt: TEST_MESSAGE_TS,
-        changes: { messages },
-      });
-    await commit((await reader()).generation, "seed", [keep, replaced]);
-    const pinned = await reader();
+    const prepare = (reader, operationId, messages) =>
+      reader.prepareRequest({ operationId, committedAt: TEST_MESSAGE_TS, changes: { messages } });
+    const submit = (run) => sessionRepo.withSessionReader("alice", sessionId, run, context);
+    const commit = (operationId, messages) =>
+      submit(async ({ reader, commitChanges }) =>
+        commitChanges(await prepare(reader, operationId, messages)),
+      );
+    await commit("seed", [keep, replaced]);
+    await using pinned = await reader();
 
     const replacement = (suffix) => ({
       attachments: [],
@@ -72,16 +71,17 @@ test("concurrent deltas reject stale generations and preserve unrelated turns on
       dialogProcessId: `dialog-${suffix}`,
       turnScopeId: `turn-${suffix}`,
     });
+    const requests = await Promise.all(
+      ["a", "b"].map((suffix) => prepare(pinned, `append-${suffix}`, [replacement(suffix)])),
+    );
     const outcomes = await Promise.allSettled(
-      ["a", "b"].map((suffix) =>
-        commit(pinned.generation, `append-${suffix}`, [replacement(suffix)]),
-      ),
+      requests.map((request) => submit(({ commitChanges }) => commitChanges(request))),
     );
     assert.equal(outcomes.filter((item) => item.status === "fulfilled").length, 1);
     const loser = outcomes.findIndex((item) => item.status === "rejected");
     assert.equal(outcomes[loser].reason.code, "SESSION_GENERATION_CONFLICT");
     const suffix = ["a", "b"][loser];
-    await commit((await reader()).generation, `retry-${suffix}`, [replacement(suffix)]);
+    await commit(`retry-${suffix}`, [replacement(suffix)]);
     const restored = await sessionRepo.requireById("alice", sessionId, context);
     assert.deepEqual(
       new Set(restored.messages.map((item) => item.messageUid)),
@@ -91,11 +91,12 @@ test("concurrent deltas reject stale generations and preserve unrelated turns on
       (await pinned.exportSession()).messages.map((item) => item.messageUid),
       ["keep-message", "replaced-message"],
     );
-    const current = await reader();
+    await using current = await reader();
     for (const turnScopeId of ["turn-keep", "turn-replaced", "turn-a", "turn-b"]) {
-      const view = await current.readTurnView({ turnScopeIds: [turnScopeId] });
-      assert.equal(view.session.messages.length, 1);
-      assert.equal(view.session.messages[0].turnScopeId, turnScopeId);
+      const page = await current.readTurnPage({ turnScopeId, limit: 1 });
+      assert.equal(page.records.length, 1);
+      assert.equal(page.hasMore, false);
+      assert.equal(page.records[0].message.turnScopeId, turnScopeId);
     }
   } finally {
     await harness.cleanup();

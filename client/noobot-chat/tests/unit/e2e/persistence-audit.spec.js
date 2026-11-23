@@ -19,67 +19,78 @@ import {
 } from "../../e2e/protocol/helpers/persistence-audit.js";
 import { rotatedPluginLogName } from "@noobot/plugin-protocol/log-artifact";
 import {
-  createTestSessionServices,
+  createTestPartitionSessionServices,
   provisionTestSession,
+  submitTestSessionRequest,
 } from "../../../../../agent/__tests__/helpers/session-services.js";
 import { initializeUserWorkspace } from "../../../../../agent/__tests__/helpers/user-workspace.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
-import { FileSystemSessionRepository, openSessionArtifactReader } from "noobot-agent/session";
+import { FileSystemSessionRepository } from "noobot-agent/session";
 import { createSessionPersistenceScope } from "@noobot/session-protocol";
-import { IMMUTABLE_SEGMENT } from "@noobot/session-protocol/immutable-segment";
 import { canonicalActivity } from "../../../../../agent/__tests__/session/session-repository-boundary.summaries.fixtures.js";
-import { ImmutableSessionStore } from "../../../../../agent/src/session/session-artifact-session/immutable-session-store.js";
+import { journalTestLimits } from "../../../../../agent/__tests__/helpers/partition-journal-cases.js";
 
-describe("immutable session persistence audit", () => {
-  it("fences background publishers until all audited projections have been read", async () => {
+async function configureAuditWorkspace(directory) {
+  const configPath = path.join(directory, "global.config.json");
+  await fs.writeFile(
+    configPath,
+    JSON.stringify({
+      workspace_root: directory,
+      partitionSessionStorage: {
+        journalLimits: journalTestLimits({ transactionBytes: 16 * 1024 }),
+        maxJournals: 4,
+      },
+    }),
+  );
+  vi.stubEnv("NOOBOT_WORKSPACE_ROOT", directory);
+  vi.stubEnv("NOOBOT_GLOBAL_CONFIG_PATH", configPath);
+  await initializeUserWorkspace(directory, "u1");
+}
+
+describe("partition session persistence audit", () => {
+  it("reads a publication committed before the list through the same partition authority", async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "immutable-audit-publisher-"));
-    vi.stubEnv("NOOBOT_WORKSPACE_ROOT", directory);
     let publishDuringList;
-    let writer;
     try {
-      await initializeUserWorkspace(directory, "u1");
-      const runtime = createTestSessionServices({ workspaceRoot: directory });
+      await configureAuditWorkspace(directory);
+      await using runtime = createTestPartitionSessionServices({ workspaceRoot: directory });
       await provisionTestSession(runtime, {
         userId: "u1",
         sessionId: "s1",
         caller: SESSION_CALLER.USER,
       });
       const repo = runtime.repositories.sessionRepository;
-      const scope = await repo.requireSessionScope(
-        "u1",
-        "s1",
-        repo.treePersistenceContext("u1", "s1"),
-      );
-      const store = await ImmutableSessionStore.open({ sessionDir: scope.sessionDir });
-      const before = await store.snapshot();
-      const start = Promise.withResolvers();
-      const started = Promise.withResolvers();
-
-      writer = (async () => {
-        await start.promise;
-        started.resolve();
-        await store.commit({
-          expectedGeneration: before.generation,
-          operationId: "background-maintenance",
-          changes: [{ collection: "metadata", key: "audit-probe", value: true }],
-        });
-      })();
+      const reader = await repo.requireSessionReader("u1", "s1", {
+        persistenceContext: repo.treePersistenceContext("u1", "s1"),
+      });
+      const before = reader.generation;
+      await reader.close();
+      await runtime.close();
       const readList = FileSystemSessionRepository.prototype.readSessionsSummary;
       publishDuringList = vi
         .spyOn(FileSystemSessionRepository.prototype, "readSessionsSummary")
         .mockImplementationOnce(async function (...args) {
-          start.resolve();
-          await started.promise;
+          await this.withSessionCommit(
+            "u1",
+            "s1",
+            async ({ prepareRequest, commitChanges }) =>
+              commitChanges(
+                await prepareRequest({
+                  operationId: "background-maintenance",
+                  committedAt: "2026-01-01T00:00:00.000Z",
+                  changes: { sessionMetadata: { customTitle: "published title" } },
+                }),
+              ),
+            { persistenceContext: this.treePersistenceContext("u1", "s1") },
+          );
           return readList.apply(this, args);
         });
       const audit = await auditSessionSummaryArtifacts("u1", "s1");
       expect(audit.status).toBe("passed");
-      expect(audit.sessions[0].generation).toBe(before.generation);
-      await writer;
-      expect((await store.snapshot()).generation).toBe(before.generation + 1);
+      expect(audit.sessions[0].generation).toBe(before + 1);
+      expect(audit.listTitle).toBe("published title");
     } finally {
       publishDuringList?.mockRestore();
-      await writer;
       vi.unstubAllEnvs();
       await fs.rm(directory, { recursive: true, force: true });
     }
@@ -87,10 +98,9 @@ describe("immutable session persistence audit", () => {
 
   it("audits assistant details in tree and detached descendants and rejects damaged descendant objects", async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "immutable-descendant-audit-"));
-    vi.stubEnv("NOOBOT_WORKSPACE_ROOT", directory);
     try {
-      await initializeUserWorkspace(directory, "u1");
-      const runtime = createTestSessionServices({ workspaceRoot: directory });
+      await configureAuditWorkspace(directory);
+      await using runtime = createTestPartitionSessionServices({ workspaceRoot: directory });
       const repo = runtime.repositories.sessionRepository;
       await provisionTestSession(runtime, {
         userId: "u1",
@@ -123,41 +133,49 @@ describe("immutable session persistence audit", () => {
       for (const sessionId of ["child", "detached"]) {
         const persistenceContext =
           sessionId === "detached" ? detachedContext : repo.treePersistenceContext("u1", sessionId);
-        const reader = await repo.requireSessionReader("u1", sessionId, { persistenceContext });
-        await repo.commitChanges("u1", sessionId, {
+        await using reader = await repo.requireSessionReader("u1", sessionId, {
           persistenceContext,
-          expectedGeneration: reader.generation,
-          operationId: `seed-${sessionId}`,
-          committedAt: "2026-01-01T00:00:00.000Z",
-          changes: {
-            messages: [
-              {
-                sessionId,
-                parentSessionId: sessionId === "child" ? "root" : "child",
-                messageUid: `assistant-${sessionId}`,
-                modelMessageId: `model-${sessionId}`,
-                presentationMessageId: `presentation-${sessionId}`,
-                dialogProcessId: `dialog-${sessionId}`,
-                parentDialogProcessId: "",
-                turnScopeId: `turn-${sessionId}`,
-                role: "assistant",
-                type: "message",
-                content: "done",
-                attachments: [],
-                ts: "2026-01-01T00:00:00.000Z",
-                activityTimeline: [
-                  canonicalActivity({
-                    sessionId,
-                    dialogProcessId: `dialog-${sessionId}`,
-                    turnScopeId: `turn-${sessionId}`,
-                    presentationMessageId: `presentation-${sessionId}`,
-                  }),
-                ],
-              },
-            ],
-          },
         });
+        await submitTestSessionRequest(
+          repo,
+          "u1",
+          sessionId,
+          await reader.prepareRequest({
+            operationId: `seed-${sessionId}`,
+            committedAt: "2026-01-01T00:00:00.000Z",
+            changes: {
+              messages: [
+                {
+                  sessionId,
+                  parentSessionId: sessionId === "child" ? "root" : "child",
+                  messageUid: `assistant-${sessionId}`,
+                  modelMessageId: `model-${sessionId}`,
+                  presentationMessageId: `presentation-${sessionId}`,
+                  dialogProcessId: `dialog-${sessionId}`,
+                  parentDialogProcessId: "",
+                  turnScopeId: `turn-${sessionId}`,
+                  role: "assistant",
+                  type: "message",
+                  content: "done",
+                  attachments: [],
+                  ts: "2026-01-01T00:00:00.000Z",
+                  activityTimeline: [
+                    canonicalActivity({
+                      sessionId,
+                      dialogProcessId: `dialog-${sessionId}`,
+                      turnScopeId: `turn-${sessionId}`,
+                      presentationMessageId: `presentation-${sessionId}`,
+                    }),
+                  ],
+                },
+              ],
+            },
+          }),
+          persistenceContext,
+        );
       }
+      const detachedScope = await repo.requireSessionScope("u1", "detached", detachedContext);
+      await runtime.close();
       const audit = await auditSessionSummaryArtifacts("u1", "root");
       expect(audit.projectionCount).toBe(3);
       expect(audit.thinkingDetailCount).toBe(2);
@@ -166,14 +184,7 @@ describe("immutable session persistence audit", () => {
         "detached",
         "root",
       ]);
-      const detached = audit.sessions.find((item) => item.sessionId === "detached");
-      const rootScope = await repo.requireSessionScope(
-        "u1",
-        "root",
-        repo.treePersistenceContext("u1", "root"),
-      );
-      const detachedDir = path.dirname(path.resolve(rootScope.sessionDir, detached.headFile));
-      await fs.rm(path.join(detachedDir, IMMUTABLE_SEGMENT.directory), { recursive: true });
+      await fs.writeFile(path.join(detachedScope.sessionDir, "CURRENT"), "corrupt");
       await expect(auditSessionSummaryArtifacts("u1", "root")).rejects.toThrow();
     } finally {
       vi.unstubAllEnvs();
@@ -183,10 +194,9 @@ describe("immutable session persistence audit", () => {
 
   it("audits canonical list and display facts without legacy files, pins reads and detects damage", async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "immutable-audit-"));
-    vi.stubEnv("NOOBOT_WORKSPACE_ROOT", directory);
     try {
-      await initializeUserWorkspace(directory, "u1");
-      const runtime = createTestSessionServices({ workspaceRoot: directory });
+      await configureAuditWorkspace(directory);
+      await using runtime = createTestPartitionSessionServices({ workspaceRoot: directory });
       const repo = runtime.repositories.sessionRepository;
       await provisionTestSession(runtime, {
         userId: "u1",
@@ -195,44 +205,60 @@ describe("immutable session persistence audit", () => {
       });
       const persistenceContext = repo.treePersistenceContext("u1", "s1");
       const scope = await repo.requireSessionScope("u1", "s1", persistenceContext);
-      const pinned = await openSessionArtifactReader({ sessionDir: scope.sessionDir });
-      await repo.commitChanges("u1", "s1", {
+      await using pinned = await repo.requireSessionReader("u1", "s1", { persistenceContext });
+      await submitTestSessionRequest(
+        repo,
+        "u1",
+        "s1",
+        await pinned.prepareRequest({
+          operationId: "seed-audit",
+          committedAt: "2026-01-01T00:00:00.000Z",
+          changes: {
+            messages: [
+              {
+                messageUid: "m1",
+                userMessageId: "m1",
+                sessionId: "s1",
+                parentSessionId: "",
+                dialogProcessId: "d1",
+                parentDialogProcessId: "",
+                turnScopeId: "t1",
+                role: "user",
+                type: "message",
+                messageOrigin: "natural",
+                content: "[PBE:test] task",
+                attachments: [],
+                transferEnvelopes: [],
+                ts: "2026-01-01T00:00:00.000Z",
+              },
+            ],
+          },
+        }),
         persistenceContext,
-        expectedGeneration: pinned.generation,
-        operationId: "seed-audit",
-        committedAt: "2026-01-01T00:00:00.000Z",
-        changes: {
-          messages: [
-            {
-              messageUid: "m1",
-              userMessageId: "m1",
-              sessionId: "s1",
-              parentSessionId: "",
-              dialogProcessId: "d1",
-              parentDialogProcessId: "",
-              turnScopeId: "t1",
-              role: "user",
-              type: "message",
-              messageOrigin: "natural",
-              content: "[PBE:test] task",
-              attachments: [],
-              transferEnvelopes: [],
-              ts: "2026-01-01T00:00:00.000Z",
-            },
-          ],
-        },
-      });
-      await fs.writeFile(scope.sessionFile, "unreadable obsolete manifest");
+      );
       await fs.writeFile(
         path.join(scope.sessionDir, "session-summary.json"),
         "unreadable obsolete cache",
       );
+      expect((await pinned.readDisplayProjection()).messages).toEqual([]);
+      await pinned.close();
+      await runtime.close();
+      await fs.writeFile(scope.sessionFile, "unreadable obsolete manifest");
+      await expect(readSessionFact("u1", "s1")).rejects.toMatchObject({
+        code: "SESSION_STORAGE_CORRUPT",
+        message: "Session has multiple storage authorities",
+      });
+      await expect(auditSessionSummaryArtifacts("u1", "s1")).rejects.toMatchObject({
+        code: "E2E_SESSION_SUMMARY_ARTIFACT_INVALID",
+        audit: { status: "failed", listAvailability: "unavailable" },
+      });
+      await fs.rm(scope.sessionFile);
       const audit = await auditSessionSummaryArtifacts("u1", "s1", {
         requiredTitlePrefix: "[PBE:",
       });
       expect(audit).toMatchObject({
-        protocolVersion: 2,
-        authority: "immutable_session_projection",
+        protocolVersion: 3,
+        authority: "partition_session_projection",
         status: "passed",
         projectionCount: 1,
         listAvailability: "available",
@@ -241,31 +267,48 @@ describe("immutable session persistence audit", () => {
       expect(
         (await readSessionFact("u1", "s1")).messages.map((message) => message.messageUid),
       ).toEqual(["m1"]);
-      expect((await pinned.readDisplayProjection()).messages).toEqual([]);
       const readList = FileSystemSessionRepository.prototype.readSessionsSummary;
       const publishDuringList = vi
         .spyOn(FileSystemSessionRepository.prototype, "readSessionsSummary")
         .mockImplementationOnce(async function (...args) {
           const list = await readList.apply(this, args);
-          await repo.commitChanges("u1", "s1", {
-            persistenceContext,
-            expectedGeneration: audit.sessions[0].generation,
-            operationId: "concurrent-audit",
-            committedAt: "2026-01-01T00:00:01.000Z",
-            changes: {
-              messages: [
-                {
-                  ...(await readSessionFact("u1", "s1")).messages[0],
-                  content: "[PBE:changed] task",
-                },
-              ],
-            },
-          });
+          await this.withSessionCommit(
+            "u1",
+            "s1",
+            async ({ prepareRequest, commitChanges }) =>
+              commitChanges(
+                await prepareRequest({
+                  operationId: "concurrent-audit",
+                  committedAt: "2026-01-01T00:00:01.000Z",
+                  changes: {
+                    messages: [
+                      {
+                        messageUid: "m2",
+                        userMessageId: "m2",
+                        sessionId: "s1",
+                        parentSessionId: "",
+                        dialogProcessId: "d2",
+                        parentDialogProcessId: "",
+                        turnScopeId: "t2",
+                        role: "user",
+                        type: "message",
+                        messageOrigin: "natural",
+                        content: "second task",
+                        attachments: [],
+                        transferEnvelopes: [],
+                        ts: "2026-01-01T00:00:01.000Z",
+                      },
+                    ],
+                  },
+                }),
+              ),
+            { persistenceContext: this.treePersistenceContext("u1", "s1") },
+          );
           return list;
         });
       try {
         await expect(auditSessionSummaryArtifacts("u1", "s1")).rejects.toMatchObject({
-          message: expect.stringContaining("changed during persistence audit"),
+          message: expect.stringContaining("session list and detail projections disagree"),
           audit: { status: "failed" },
         });
       } finally {
@@ -276,11 +319,11 @@ describe("immutable session persistence audit", () => {
       ).rejects.toThrow("required identity prefix");
       await expect(
         auditSessionSummaryArtifacts("u1", "s1", { expectation: "forbidden" }),
-      ).rejects.toThrow("published an immutable head");
+      ).rejects.toThrow("registered a persistence scope");
       await expect(
         auditSessionSummaryArtifacts("u1", "missing", { expectation: "forbidden" }),
       ).resolves.toMatchObject({ status: "passed", projectionCount: 0 });
-      await fs.writeFile(path.join(scope.sessionDir, "head.json"), "corrupt");
+      await fs.writeFile(path.join(scope.sessionDir, "CURRENT"), "corrupt");
       await expect(auditSessionSummaryArtifacts("u1", "s1")).rejects.toThrow(
         "canonical list projection",
       );

@@ -12,6 +12,7 @@ import {
   requirePlainObject,
 } from "@noobot/attachment-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { SessionCommitInputError } from "@noobot/session-protocol/session-changes";
 
 function compactAttachmentRef(reference) {
   return {
@@ -56,7 +57,8 @@ function compactSessionAttachmentRef(reference) {
 }
 
 export function dedupeSessionAttachmentRefs(refs) {
-  if (!Array.isArray(refs)) throw new TypeError("session attachments must be an array");
+  if (!Array.isArray(refs))
+    throw new SessionCommitInputError("session attachments must be an array");
   return dedupeAttachmentsByIdentity(refs.map(compactSessionAttachmentRef));
 }
 

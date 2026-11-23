@@ -5,6 +5,7 @@
  */
 import {
   access as nodeAccess,
+  link as nodeLink,
   mkdir as nodeMkdir,
   readFile as nodeReadFile,
   writeFile as nodeWriteFile,
@@ -20,6 +21,7 @@ import {
 function createDefaultFsAdapter() {
   return {
     access: (...args) => nodeAccess(...args),
+    link: (...args) => nodeLink(...args),
     mkdir: (...args) => nodeMkdir(...args),
     readFile: (...args) => nodeReadFile(...args),
     writeFile: (...args) => nodeWriteFile(...args),
@@ -40,6 +42,7 @@ function normalizeFsAdapter(adapter = null) {
   const source = adapter && typeof adapter === "object" ? adapter : {};
   return {
     access: typeof source.access === "function" ? source.access : defaultFsAdapter.access,
+    link: typeof source.link === "function" ? source.link : defaultFsAdapter.link,
     mkdir: typeof source.mkdir === "function" ? source.mkdir : defaultFsAdapter.mkdir,
     readFile: typeof source.readFile === "function" ? source.readFile : defaultFsAdapter.readFile,
     writeFile:
@@ -70,6 +73,10 @@ export function resetFsAdapter() {
 
 export async function fsAccess(...args) {
   return activeFsAdapter.access(...args);
+}
+
+export async function fsLink(...args) {
+  return activeFsAdapter.link(...args);
 }
 
 export async function fsMkdir(...args) {

@@ -8,6 +8,8 @@ import { createTestBotManager } from "./test-bot-manager.js";
 import { testWallClock } from "./session-services.js";
 import { createSessionPluginRuntimeBundle } from "../../src/extensions/plugins/session-plugin-runtime-provider.js";
 
+import { createWorkspaceAdmission } from "../../src/workspace-lifecycle/workspace-admission.js";
+
 export const testPluginRuntimeBundle = await createSessionPluginRuntimeBundle();
 
 export function createTestSessionExecutionEngine(overrides = {}) {
@@ -18,6 +20,7 @@ export function createTestSessionExecutionEngine(overrides = {}) {
     attach: {},
     skill: {},
     configService: {},
+    workspaceAdmission: createWorkspaceAdmission(async () => {}),
     workspaceService: { getWorkspacePath: (userId) => `/tmp/noobot-test-engine/${userId}` },
     errorLogger: { async log() {} },
     botManager: createTestBotManager(),

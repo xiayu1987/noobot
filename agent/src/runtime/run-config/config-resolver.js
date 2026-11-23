@@ -11,11 +11,19 @@ import {
   requireModelReference,
 } from "@noobot/agent-config-protocol";
 import { resolveEffectiveProvider } from "../../models/index.js";
+
+const phaseSummaryThresholdByScenario = new Map([
+  ["text", "phaseSummaryTextLoopTurns"],
+  ["programming", "phaseSummaryProgrammingLoopTurns"],
+]);
+
 export function resolvePhaseSummaryLoopTurns({ runConfig = {} } = {}) {
+  const thresholdKey =
+    phaseSummaryThresholdByScenario.get(runConfig.scenario) ?? "phaseSummaryLoopTurns";
   return resolveGatedThresholdValue({
     enabled: isRuntimeThresholdGateEnabled(runConfig),
     runtimeValue: runConfig?.summaryPolicy?.phaseSummaryLoopTurns,
-    fallbackValue: TURN_THRESHOLDS.agent.phaseSummaryLoopTurns,
+    fallbackValue: TURN_THRESHOLDS.agent[thresholdKey],
   });
 }
 

@@ -21,7 +21,7 @@ import {
   renderLongMemoryFieldsForPrompt,
 } from "@noobot/memory-protocol/long-memory";
 import { ExperienceManager } from "./experience/index.js";
-import { trimPromptPayloadByCharLimit } from "./utils/payload-trimmer.js";
+import { selectShortMemoryBatch } from "@noobot/memory-protocol/short-memory";
 import { assertNotAborted } from "../shared/utils/error-utils.js";
 import { MEMORY_SUMMARY_STAGE, runMemorySummaryStage } from "./stage-runner.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
@@ -85,14 +85,15 @@ export class MemoryManager {
     sessionId,
     parentSessionId,
     dialogProcessId,
-    messages,
+    messageRecords,
   }) {
     return this.shortMemory.captureDialogToShortMemory({
       basePath: this.storage.resolveBasePath(userId),
+      userId,
       sessionId,
       parentSessionId,
       dialogProcessId,
-      messages,
+      messageRecords,
     });
   }
 
@@ -155,6 +156,8 @@ export class MemoryManager {
     if (!isFunction(eventListener?.onEvent)) {
       throw new TypeError("maybeSummarize requires a memory execution eventListener");
     }
+    if (!isFunction(onStageError))
+      throw new TypeError("memory summary stage requires onStageError");
     const basePath = this.storage.resolveBasePath(userId);
     const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
     const locale = normalizeLocale(effectiveConfig?.locale || this.globalConfig?.locale);
@@ -162,11 +165,15 @@ export class MemoryManager {
 
     const unextracted = await this.shortMemory.readItems(basePath);
     assertNotAborted(abortSignal);
-    const shouldUpdateLongMemory = unextracted.length >= QUANTITY_THRESHOLDS.memory.maxItems;
-    const promptPayload = unextracted.map((item) => ({ records: item.records }));
-    const longMemoryPromptPayload = trimPromptPayloadByCharLimit(promptPayload, {
+    const batch = selectShortMemoryBatch(unextracted, {
+      maxItems: QUANTITY_THRESHOLDS.memory.maxItems,
       maxChars: LENGTH_THRESHOLDS.memory.longPromptPayloadChars,
     });
+    const { promptPayload } = batch;
+    const shouldUpdateLongMemory =
+      unextracted.length >= QUANTITY_THRESHOLDS.memory.maxItems ||
+      batch.entries.length < unextracted.length ||
+      batch.entries.some(({ source, end }) => end.record < source.records.length);
 
     const modelSpec = resolveMemoryModelSpec({
       globalConfig: this.globalConfig,
@@ -215,7 +222,14 @@ export class MemoryManager {
     };
 
     const summaryCreatedAt = new Date().toISOString();
-    const stageOptions = { abortSignal, onStageError };
+    let stageFailed = false;
+    const stageOptions = {
+      abortSignal,
+      onStageError: async (entry) => {
+        stageFailed = true;
+        await onStageError(entry);
+      },
+    };
     if (shouldUpdateLongMemory) {
       await runMemorySummaryStage(
         MEMORY_SUMMARY_STAGE.LONG_MEMORY,
@@ -223,7 +237,7 @@ export class MemoryManager {
           this.consolidateLongMemory({
             basePath,
             promptI18n,
-            promptPayload: longMemoryPromptPayload,
+            promptPayload,
             invokeModel,
             abortSignal,
           }),
@@ -264,7 +278,7 @@ export class MemoryManager {
       stageOptions,
     );
 
-    if (!shouldUpdateLongMemory) return;
-    await this.shortMemory.clear(basePath);
+    if (!shouldUpdateLongMemory || stageFailed) return;
+    await this.shortMemory.acknowledgeBatch(basePath, batch.entries);
   }
 }

@@ -7,16 +7,41 @@
 defineProps({
   disabled: { type: Boolean, default: false },
   operating: { type: Boolean, default: false },
+  showCopy: { type: Boolean, default: false },
   showResend: { type: Boolean, default: false },
   showDelete: { type: Boolean, default: false },
   t: { type: Function, default: (key = "") => key },
 });
 
-const emit = defineEmits(["edit", "delete"]);
+const emit = defineEmits(["copy", "edit", "delete"]);
 </script>
 
 <template>
   <div class="monotonic-action-bar">
+    <button
+      v-if="showCopy"
+      type="button"
+      class="noobot-icon-button noobot-flat-icon-btn"
+      :title="t('message.copyText')"
+      :aria-label="t('message.copyText')"
+      @click="emit('copy')"
+    >
+      <svg
+        class="monotonic-btn-icon"
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        width="14"
+        height="14"
+        stroke="currentColor"
+        stroke-width="2"
+        fill="none"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+    </button>
     <button
       v-if="showResend"
       type="button"

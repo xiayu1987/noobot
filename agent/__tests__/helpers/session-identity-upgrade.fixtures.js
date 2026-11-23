@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestPartitionStorageBudget } from "./partition-journal-cases.js";
 import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import { MESSAGE_ORIGIN } from "@noobot/session-protocol";
@@ -109,6 +110,7 @@ export function v9Options(root) {
     base: path.join(root, "alice"),
     backupBase: path.join(root, "layout-backup"),
     scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+    targetStorageBudget: createTestPartitionStorageBudget(),
     storageService: TEST_STORAGE_SERVICE,
   };
 }

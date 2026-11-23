@@ -9,6 +9,7 @@ import { readHandlePrefix } from "@noobot/shared/read-file-prefix";
 import {
   IMMUTABLE_CLEANUP_PLAN as PLAN,
   requireImmutableCleanupPlanId,
+  requireImmutableCleanupManifest,
   requireImmutableCleanupPreparation,
   requireImmutableRetainedSnapshot,
   encodeImmutableCleanupRecord,
@@ -41,34 +42,51 @@ export async function releaseImmutableCleanupRetention(directory) {
   );
 }
 
-async function readPublishedCleanupPreparation(directory, id) {
+async function readPublishedCleanupRecord(directory, id, file) {
   let handle;
   try {
-    handle = await fsOpen(path.join(directory, id, PLAN.preparation), "r");
+    handle = await fsOpen(path.join(directory, id, file), "r");
   } catch (error) {
     if (error.code === "ENOENT") return null;
     throw error;
   }
   const bytes = await readHandlePrefix(handle, PLAN.recordBytes + 1);
-  return requireImmutableCleanupPreparation(decodeImmutableCleanupBytes(bytes), id);
+  return decodeImmutableCleanupBytes(bytes);
 }
 
-export async function readImmutableCleanupRetentions(store, head, signal) {
-  const directory = path.join(store.sessionDir, PLAN.directory);
+async function* readCleanupPlanIds(directory, signal) {
   let entries;
   try {
     entries = await opendir(directory);
   } catch (error) {
-    if (error.code === "ENOENT") return [];
+    if (error.code === "ENOENT") return;
     throw error;
   }
-  const snapshots = new Map();
   for await (const entry of entries) {
     signal?.throwIfAborted();
     if (!entry.isDirectory()) throw immutableStorageError("Invalid cleanup plan directory entry");
-    const id = requireImmutableCleanupPlanId(entry.name);
-    const record = await readPublishedCleanupPreparation(directory, id);
+    yield requireImmutableCleanupPlanId(entry.name);
+  }
+}
+
+export async function hasPublishedImmutableCleanupPlan(sessionDir, signal) {
+  const directory = path.join(sessionDir, PLAN.directory);
+  for await (const id of readCleanupPlanIds(directory, signal)) {
+    const record = await readPublishedCleanupRecord(directory, id, PLAN.manifest);
     if (record === null) continue;
+    requireImmutableCleanupManifest(record, id);
+    return true;
+  }
+  return false;
+}
+
+export async function readImmutableCleanupRetentions(store, head, signal) {
+  const directory = path.join(store.sessionDir, PLAN.directory);
+  const snapshots = new Map();
+  for await (const id of readCleanupPlanIds(directory, signal)) {
+    const record = await readPublishedCleanupRecord(directory, id, PLAN.preparation);
+    if (record === null) continue;
+    requireImmutableCleanupPreparation(record, id);
     for (const snapshot of record.heads) {
       requireImmutableRetainedSnapshot(snapshot, head);
       snapshots.set(encodeImmutableCleanupRecord(snapshot), snapshot);

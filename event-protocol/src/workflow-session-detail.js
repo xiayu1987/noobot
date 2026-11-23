@@ -5,6 +5,10 @@
  */
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 import { requireTurnLookupKey } from "@noobot/session-protocol/turn-lookup-key";
+import {
+  requireThinkingDetailPageSelection,
+  requireThinkingDetailReleaseSelection,
+} from "@noobot/session-protocol/message-read-budget";
 import { validateEventEnvelope } from "./envelope.js";
 import {
   WORKFLOW_RUNTIME_EVENT,
@@ -31,6 +35,18 @@ const REQUEST_FIELDS = Object.freeze({
     "routeDialogProcessId",
     "dialogProcessId",
     "turnScopeId",
+    "nodeSessionId",
+    "cursor",
+    "limit",
+  ],
+  "thinking-detail-release": [
+    "userId",
+    "sessionId",
+    "routeDialogProcessId",
+    "dialogProcessId",
+    "turnScopeId",
+    "nodeSessionId",
+    "cursor",
   ],
   "execution-report": ["userId", "sessionId", "routeDialogProcessId", "dialogProcessId"],
 });
@@ -51,6 +67,7 @@ export function requireWorkflowSessionRequest(request, operation) {
   }
   if (operation === "thinking-detail") requireTurnLookupKey(request);
   for (const field of fields) {
+    if (field === "cursor" || field === "limit") continue;
     if (field === "traceId" && request[field] === undefined) continue;
     if (!isCanonicalText(request[field])) {
       const code =
@@ -58,6 +75,20 @@ export function requireWorkflowSessionRequest(request, operation) {
           ? WORKFLOW_SESSION_REQUEST_ERROR_CODE.REQUIRED
           : WORKFLOW_SESSION_REQUEST_ERROR_CODE.INVALID;
       throw requestError(`invalid workflow session request identity: ${field}`, code);
+    }
+  }
+  if (operation === "thinking-detail" || operation === "thinking-detail-release") {
+    try {
+      const requireSelection =
+        operation === "thinking-detail"
+          ? requireThinkingDetailPageSelection
+          : requireThinkingDetailReleaseSelection;
+      requireSelection({ ...request, sessionId: request.nodeSessionId });
+    } catch (cause) {
+      throw Object.assign(
+        requestError("invalid workflow thinking page", WORKFLOW_SESSION_REQUEST_ERROR_CODE.INVALID),
+        { cause },
+      );
     }
   }
   return request;

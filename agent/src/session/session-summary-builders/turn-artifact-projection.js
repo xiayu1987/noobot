@@ -6,7 +6,7 @@
 import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { selectPresentedSessionLifecycleTurns } from "../session-turn-read-model.js";
 import { text } from "@noobot/shared/value";
-import { TOOL_CALL_MESSAGE_TYPE, TOOL_RESULT_MESSAGE_TYPE } from "@noobot/session-protocol";
+import { TOOL_RESULT_MESSAGE_TYPE } from "@noobot/session-protocol";
 import { decodeToolResultText } from "@noobot/event-protocol/tool-result";
 import { resolveCanonicalToolTimelineStatus } from "@noobot/event-protocol/tool-timeline";
 
@@ -39,7 +39,10 @@ function buildLifecycleTurnPresentation(turn) {
 }
 
 export function buildLifecycleTurnPresentations(lifecycle) {
-  return selectPresentedSessionLifecycleTurns(lifecycle).map(buildLifecycleTurnPresentation);
+  return selectPresentedSessionLifecycleTurns(lifecycle).map((turn) => ({
+    row: buildLifecycleTurnPresentation(turn),
+    lifecycleSequence: turn.sequence,
+  }));
 }
 
 function createArtifactProjectionContext(sessionId) {
@@ -50,7 +53,6 @@ function createArtifactProjectionContext(sessionId) {
   return {
     sessionId,
     artifactByCallId: new Map(),
-    totalCount: 0,
     routeKeyOf,
     callKeyOf(message = {}, toolCallId = "") {
       const routeKey = routeKeyOf(message);
@@ -69,11 +71,6 @@ function messageArtifactIdentity(message = {}, context) {
   };
 }
 
-function collectToolCalls(message, context) {
-  if (message.type !== TOOL_CALL_MESSAGE_TYPE) return;
-  context.totalCount += message.tool_calls.length;
-}
-
 export function hasToolResultArtifacts(message) {
   return (
     message.type === TOOL_RESULT_MESSAGE_TYPE &&
@@ -85,7 +82,6 @@ export function hasToolResultArtifacts(message) {
 
 function collectToolResult(message, context) {
   if (message.type !== TOOL_RESULT_MESSAGE_TYPE) return;
-  context.totalCount += 1;
   const toolCallId = text(message?.tool_call_id);
   const callKey = context.callKeyOf(message, toolCallId);
   const transferEnvelopes = compactTransferEnvelopes(toolResultFacts(message, "transferEnvelopes"));
@@ -138,12 +134,6 @@ function buildTimelineByRoute(context) {
 
 export function buildToolArtifactTimelineProjection(session = {}) {
   const context = createArtifactProjectionContext(text(session?.sessionId));
-  for (const message of session.messages) {
-    collectToolCalls(message, context);
-    collectToolResult(message, context);
-  }
-  return {
-    timelineByRoute: buildTimelineByRoute(context),
-    totalCount: context.totalCount,
-  };
+  for (const message of session.messages) collectToolResult(message, context);
+  return { timelineByRoute: buildTimelineByRoute(context) };
 }

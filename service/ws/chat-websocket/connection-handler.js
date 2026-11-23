@@ -180,6 +180,7 @@ function registerCloseListener({
 
 function createConnectionMessageRuntime(context) {
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({
+    runNewOperation: context.serviceBotAccess.runNewOperation,
     resolveBot: context.resolveBot,
     sendEvent: context.sendEvent,
     consumerId: context.consumerId,
@@ -235,6 +236,7 @@ function createConnectionMessageHandler(context, runtime) {
     translateText: context.translateText,
     mapAgentRunCommand: context.mapAgentRunCommand,
     connectorAccessPort: context.connectorAccessPort,
+    runNewOperation: context.serviceBotAccess.runNewOperation,
     resolveBot: context.resolveBot,
     rejectTurnInteractions: runtime.rejectTurnInteractions,
     userInteractionBridge: runtime.userInteractionBridge,
@@ -256,6 +258,13 @@ export function createChatConnectionHandler(options) {
   if (!CONNECTION_CLOSE_POLICIES.has(options?.closePolicy)) {
     throw new Error("createChatConnectionHandler requires an explicit closePolicy");
   }
+  const { serviceBotAccess } = options;
+  if (
+    typeof serviceBotAccess?.getRetainedBot !== "function" ||
+    typeof serviceBotAccess.runNewOperation !== "function"
+  ) {
+    throw new TypeError("createChatConnectionHandler requires Service Bot access");
+  }
   return (webSocket, request) => {
     const authInfo = request?.auth || null;
     const state = createConnectionState({
@@ -265,6 +274,7 @@ export function createChatConnectionHandler(options) {
     registerConnectionDiagnostics(webSocket, authInfo, logConnection);
     const context = {
       ...options,
+      resolveBot: serviceBotAccess.getRetainedBot,
       webSocket,
       authInfo,
       state,

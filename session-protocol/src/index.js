@@ -26,6 +26,7 @@ export {
   createTurnLifecycleSnapshot,
   createTurnTerminalResolution,
   requireTurnTerminalResolutionIdentity,
+  requireTurnLifecycleHeader,
   collectTurnReplacementTombstoneErrors,
   isAuthoritativeTurnLifecycleEnvelope,
   validateSessionProvisionIntent,
@@ -61,9 +62,11 @@ export {
 export * from "./command/command-fingerprint.js";
 export {
   appendCommandReceipt,
+  createMessageDeleteResult,
   isCanonicalCommandReceipt,
   normalizeCommandReceipt,
   normalizeCommandReceipts,
+  resolveMessageDeleteResultEffect,
   validateCommandReceiptResult,
 } from "./command/command-receipt.js";
 export * from "./command/turn-commit-command.js";
@@ -105,3 +108,4 @@ export * from "./aggregate/session-detail.js";
 export * from "./aggregate/server-clock.js";
 export * from "./aggregate/session-mutation-response.js";
 export * from "./aggregate/session-mutation-projection.js";
+export * from "./aggregate/message-suffix.js";

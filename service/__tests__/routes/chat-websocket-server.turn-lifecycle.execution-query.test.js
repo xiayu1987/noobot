@@ -17,8 +17,12 @@ import {
   createTurnTerminalStatus,
 } from "@noobot/session-protocol";
 import { finalizeTurnSnapshot } from "../../ws/chat-websocket/turn-recovery.js";
+import { ExecutionReadService } from "../../../agent/src/session/services/execution-read-service.js";
 
-import { EXECUTION_QUERY_COMMAND } from "@noobot/session-protocol/execution-lifecycle";
+import {
+  EXECUTION_QUERY_COMMAND,
+  EXECUTION_QUERY_INCOMPLETE,
+} from "@noobot/session-protocol/execution-lifecycle";
 import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
 import { validateProtocolEvent } from "@noobot/event-protocol";
 import {
@@ -180,6 +184,7 @@ test("execution queries expose authoritative snapshot, children and tree envelop
   };
   const { createMessageHandler } = await import("../../ws/chat-websocket/message-handler.js");
   const handler = createMessageHandler({
+    runNewOperation: (operation) => operation(),
     state: {},
     authInfo: { userId: "u1" },
     webSocket: { close() {} },
@@ -237,10 +242,96 @@ test("execution queries expose authoritative snapshot, children and tree envelop
   assert.deepEqual(Object.keys(sent[2].data.payload).sort(), ["rootExecutionId", "tree"]);
 });
 
+test("incomplete execution queries emit failed command receipts instead of execution events", async () => {
+  const sent = [];
+  const { createMessageHandler } = await import("../../ws/chat-websocket/message-handler.js");
+  const incomplete = async () => ({
+    found: false,
+    reason: EXECUTION_QUERY_INCOMPLETE,
+    unreadableSessions: [{ sessionId: "broken", code: "SESSION_STORAGE_CORRUPT" }],
+  });
+  const handleMessage = createMessageHandler({
+    runNewOperation: (operation) => operation(),
+    translateText: (key) => key,
+    state: {},
+    authInfo: { userId: "u1" },
+    webSocket: { close() {} },
+    sendEvent: (event, data) => sent.push({ event, data }),
+    resolveBot: () => ({
+      session: {
+        getExecution: incomplete,
+        getExecutionChildren: incomplete,
+        getExecutionTree: incomplete,
+      },
+    }),
+  });
+  for (const commandType of Object.values(EXECUTION_QUERY_COMMAND)) {
+    await handleMessage(
+      JSON.stringify(
+        createProtocolTestCommand({
+          commandType,
+          sessionId: "s1",
+          executionId: "agent:x",
+          rootExecutionId: "",
+          commandId: commandType,
+        }),
+      ),
+    );
+  }
+  assert.deepEqual(
+    sent.map(({ data }) => [data.commandId, data.error?.code]),
+    Object.values(EXECUTION_QUERY_COMMAND).map((command) => [command, EXECUTION_QUERY_INCOMPLETE]),
+  );
+});
+
+test("scope discovery corruption reaches WebSocket as incomplete execution query receipts", async () => {
+  const sent = [];
+  const failure = Object.assign(new Error("damaged managed session header"), {
+    code: "SESSION_STORAGE_CORRUPT",
+  });
+  const session = new ExecutionReadService({
+    sessionRepo: {
+      async listExecutionSessionScopes() {
+        throw failure;
+      },
+    },
+    scopedSessionRoots: [],
+    now: () => assert.fail("failed discovery must not publish a read model"),
+  });
+  const { createMessageHandler } = await import("../../ws/chat-websocket/message-handler.js");
+  const handleMessage = createMessageHandler({
+    runNewOperation: (operation) => operation(),
+    translateText: (key) => key,
+    state: {},
+    authInfo: { userId: "u1" },
+    webSocket: { close() {} },
+    sendEvent: (event, data) => sent.push({ event, data }),
+    resolveBot: () => ({ session }),
+  });
+  for (const commandType of Object.values(EXECUTION_QUERY_COMMAND)) {
+    await handleMessage(
+      JSON.stringify(
+        createProtocolTestCommand({
+          commandType,
+          sessionId: "s1",
+          executionId: "agent:x",
+          rootExecutionId: "",
+          commandId: commandType,
+        }),
+      ),
+    );
+  }
+  assert.deepEqual(
+    sent.map(({ data }) => [data.commandId, data.error?.code]),
+    Object.values(EXECUTION_QUERY_COMMAND).map((command) => [command, EXECUTION_QUERY_INCOMPLETE]),
+  );
+});
+
 test("execution query rejects a malformed target", async () => {
   const sent = [];
   const { createMessageHandler } = await import("../../ws/chat-websocket/message-handler.js");
   const handleMessage = createMessageHandler({
+    runNewOperation: (operation) => operation(),
     state: {},
     authInfo: { userId: "u1" },
     webSocket: { close() {} },

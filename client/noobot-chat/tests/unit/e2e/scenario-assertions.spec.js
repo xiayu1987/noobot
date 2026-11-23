@@ -8,6 +8,7 @@ import {
   assertTurnLifecycle,
   settleSessionBeforeCleanup,
 } from "../../e2e/protocol/helpers/scenario-assertions.js";
+import { createCapturedFrameLog } from "../../e2e/protocol/helpers/websocket-capture.js";
 import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/session-protocol";
 
 afterEach(() => vi.useRealTimers());
@@ -17,7 +18,18 @@ function frame(value) {
 }
 
 function cleanupCapture(commandType = "turn.send") {
+  const received = createCapturedFrameLog();
+  received.append(
+    frame({
+      eventId: "old",
+      eventType: "turn.completed",
+      sessionId: "s",
+      turnScopeId: "old",
+      sequence: 1,
+    }),
+  );
   return {
+    received,
     websocketSent: [
       frame({ commandId: "send", commandType, identity: { sessionId: "s", turnScopeId: "old" } }),
       frame({
@@ -26,15 +38,8 @@ function cleanupCapture(commandType = "turn.send") {
         identity: { sessionId: "s", turnScopeId: "active" },
       }),
     ],
-    websocketReceived: [
-      frame({
-        eventId: "old",
-        eventType: "turn.completed",
-        sessionId: "s",
-        turnScopeId: "old",
-        sequence: 1,
-      }),
-    ],
+    websocketReceived: received.records,
+    waitForReceivedFrame: received.waitForMatch,
   };
 }
 
@@ -60,14 +65,14 @@ it.each(["turn.send", "turn.resend", "turn.continue"])(
     await vi.advanceTimersByTimeAsync(100);
     expect(stop).toHaveBeenCalledOnce();
     expect(release).not.toHaveBeenCalled();
-    capture.websocketReceived.push(terminalFrame({ sessionId: "other" }));
-    capture.websocketReceived.push(
+    capture.received.append(terminalFrame({ sessionId: "other" }));
+    capture.received.append(
       terminalFrame({ eventType: "turn.failed", phase: "stop", failure: { retryable: true } }),
     );
     await vi.advanceTimersByTimeAsync(100);
     expect(release).not.toHaveBeenCalled();
-    capture.websocketReceived.push(terminalFrame());
-    await vi.advanceTimersByTimeAsync(100);
+    capture.received.append(terminalFrame());
+
     await pending;
     expect(release).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledWith(
@@ -78,7 +83,7 @@ it.each(["turn.send", "turn.resend", "turn.continue"])(
 
 it("cleanup does not stop an already settled session", async () => {
   const capture = cleanupCapture();
-  capture.websocketReceived.push(terminalFrame());
+  capture.received.append(terminalFrame());
   const stop = vi.fn();
   await settleSessionBeforeCleanup(capture, "s", stop);
   expect(stop).not.toHaveBeenCalled();

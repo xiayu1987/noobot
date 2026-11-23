@@ -9,6 +9,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createServer } from "node:http";
 import { startHttpServer } from "../bootstrap/start-http-server.js";
+import { createServiceBotAccess } from "../services/service-bot-access.js";
 import { withRuntimeEventsRoot } from "./runtime-events-root.test-helpers.js";
 
 async function waitForFile(filePath, { timeoutMs = 1000 } = {}) {
@@ -43,12 +44,12 @@ async function closeServer(server) {
 
 test("startHttpServer writes a startup runtime event when listen succeeds", () =>
   withRuntimeEventsRoot("noobot-service-startup-", async (workspaceRoot) => {
-    const server = await startHttpServer({
+    const runtime = await startHttpServer({
       app: (_req, res) => {
         res.statusCode = 404;
         res.end("not-found");
       },
-      getBot: () => ({ runSession: async () => ({}) }),
+      serviceBotAccess: createServiceBotAccess({ getBot: () => ({}) }),
       resolveRequestLocale: () => "zh-CN",
       resolveAuthByApiKey: () => ({ userId: "primary-user" }),
       normalizeRunConfig: (config = {}) => config || {},
@@ -88,7 +89,8 @@ test("startHttpServer writes a startup runtime event when listen succeeds", () =
       assert.equal(typeof record.process.pid, "number");
       assert.equal(record.process.nodeVersion, process.version);
     } finally {
-      await closeServer(server);
+      await runtime.close();
+      await runtime.close();
     }
   }));
 
@@ -104,6 +106,7 @@ test("startHttpServer rejects a listen error instead of emitting it unhandled", 
       () =>
         startHttpServer({
           app: (_req, res) => res.end(),
+          serviceBotAccess: createServiceBotAccess({ getBot: () => ({}) }),
           host: "127.0.0.1",
           port: address.port,
         }),

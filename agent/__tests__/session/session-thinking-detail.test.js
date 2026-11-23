@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import {
+  IMMUTABLE_SESSION_FORMAT_FILE,
+  IMMUTABLE_SESSION_HEAD_FILE,
+} from "@noobot/session-protocol/immutable-storage";
 import { createTurnArtifactRevision } from "@noobot/session-protocol/turn-lookup-key";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -13,12 +18,16 @@ import path from "node:path";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { migrateSessionImmutableStorage } from "../../src/workspace-lifecycle/session-immutable-storage-upgrade.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { readImmutableTurn } from "../../src/session/session-artifact-session/immutable-turn-reader.js";
+import { immutableSessionReaderAccess as sessionReaderAccess } from "../../src/session/session-artifact-session/immutable-reader-access.js";
+import { readImmutableThinkingDetailPage } from "../../src/session/session-artifact-session/immutable-turn-reader.js";
+import { readImmutableScopedTurnMessagePage } from "../../src/session/session-artifact-session/immutable-message-reader.js";
 import { corruptRecord } from "./helpers/immutable-record-reads.js";
 import {
   buildThinkingDetailPayload,
-  readSessionThinkingDetail,
-} from "../../src/session/session-thinking-detail.js";
+  buildThinkingDetailPagePayload,
+} from "@noobot/event-protocol/thinking-detail-projection";
+import { readSessionThinkingDetail } from "../../src/session/session-thinking-detail.js";
+import { SessionPageSnapshots } from "../../src/session/session-page-snapshots.js";
 import {
   SESSION_ARTIFACT_PREDECESSOR,
   writeSessionArtifact,
@@ -429,14 +438,11 @@ test("session summary references canonical thinking detail without copying its t
   );
 
   assert.equal(Object.hasOwn(summaryMessage, "thinkingDetailCount"), false);
-  assert.equal(countCanonicalThinkingDetailEvents(summaryMessage), 4);
   assert.equal(summaryMessage.hasThinkingDetails, true);
-  assert.equal(summaryMessage.toolTimeline.length, 2);
-  assert.equal(summaryMessage.activityTimeline, undefined);
-  assert.equal(
-    countCanonicalThinkingDetailEvents(detail.messageItem),
-    countCanonicalThinkingDetailEvents(summaryMessage),
-  );
+  assert.equal(Object.hasOwn(summaryMessage, "toolTimeline"), false);
+  assert.equal(Object.hasOwn(summaryMessage, "activityTimeline"), false);
+  assert.equal(summary.stats.thinkingMessageCount, 1);
+  assert.equal(countCanonicalThinkingDetailEvents(detail.messageItem), 4);
   assert.equal(detail.messageItem.toolTimeline.length, 2);
 });
 
@@ -483,7 +489,10 @@ test("session summary does not copy large tool payloads retained by thinking det
 
   assert.equal(JSON.stringify(summary).includes(largePayload), false);
   assert.equal(Object.hasOwn(summary.messages[0], "thinkingDetailCount"), false);
-  assert.equal(countCanonicalThinkingDetailEvents(summary.messages[0]), 2);
+  assert.equal(Object.hasOwn(summary.messages[0], "toolTimeline"), false);
+  assert.equal(summary.messages[0].hasThinkingDetails, true);
+  assert.equal(summary.stats.thinkingMessageCount, 1);
+  assert.equal(countCanonicalThinkingDetailEvents(detail.messageItem), 2);
   assert.equal(detail.messageItem.toolTimeline[0].args.content, largePayload);
   assert.equal(JSON.parse(detail.messageItem.toolTimeline[0].result).content, largePayload);
   assert.equal(Object.hasOwn(detail, "allMessages"), false);
@@ -555,36 +564,49 @@ test("thinking detail reads only the selected immutable turn after migration", a
     await migrateSessionImmutableStorage({ storageService, sessionDir });
     const store = await ImmutableSessionStore.open({ sessionDir });
     const snapshot = await store.snapshot();
-    const unrelatedReference = await store.objects.withSnapshot(snapshot, async () => {
-      const root = await store.index.get(snapshot.root, "messages");
-      return store.index.get(root, "sm-one");
-    });
+    const { unrelatedReference, ordinaryBody } = await store.objects.withSnapshot(
+      snapshot,
+      async () => {
+        const root = await store.index.get(snapshot.root, "messages");
+        const selected = await store.index.get(root, "sm-two");
+        const { parts } = await store.objects.readValueMetadata(selected);
+        return {
+          unrelatedReference: await store.index.get(root, "sm-one"),
+          ordinaryBody: parts.find(({ path }) => path[1] === "content").reference,
+        };
+      },
+    );
     await corruptRecord(store, unrelatedReference);
+    await corruptRecord(store, ordinaryBody);
     await writeFile(path.join(sessionDir, "session.json"), "not-json\n", "utf8");
 
     const lookupKey = { turnScopeId: "turn-two", dialogProcessId: "dialog-two" };
-    const turn = await store.objects.withSnapshot(snapshot, () =>
-      readImmutableTurn({ store, snapshot, lookupKey }),
-    );
-    assert.equal(turn.turnScopeId, "turn-two");
-    assert.ok(turn.contentRevision);
-    assert.equal(Object.hasOwn(turn, "aggregateVersion"), false);
+    await using snapshots = new SessionPageSnapshots();
+    const pageSnapshots = snapshots.withReadAuthority(async () => {});
+    const selection = { sessionId: "scoped-session", ...lookupKey, cursor: null, limit: 1 };
+    const read = (key) =>
+      readSessionThinkingDetail({
+        pageSnapshots,
+        identity: [sessionDir],
+        open: () => sessionReaderAccess.openArtifact({ sessionDir }),
+        ...selection,
+        lookupKey: key,
+      });
+    const page = await read(lookupKey);
     assert.deepEqual(
-      turn.messages.map((message) => message.messageUid),
+      page.messages.map(({ messageUid }) => messageUid),
       ["sm-two"],
     );
-
-    const detail = await readSessionThinkingDetail({ storageService, sessionDir, ...lookupKey });
+    const detail = buildThinkingDetailPagePayload(page, selection);
     assert.equal(detail.exists, true);
     assert.equal(detail.sessionId, "scoped-session");
-    assert.equal(detail.revision, createTurnArtifactRevision(turn));
+    assert.equal(detail.page.count, 1);
+    assert.equal(detail.page.nextCursor, null);
     assert.equal(detail.messageItem.presentationMessageId, "pm_fx12");
     assert.equal(detail.messageItem.toolTimeline.length, 1);
 
     assert.deepEqual(
-      await readSessionThinkingDetail({
-        storageService,
-        sessionDir,
+      await read({
         turnScopeId: "turn-two",
         dialogProcessId: "dialog-one",
       }),
@@ -592,38 +614,165 @@ test("thinking detail reads only the selected immutable turn after migration", a
     );
   }));
 
-test("thinking detail lookup requires both Turn identities", async () =>
+test("thinking detail preserves tool pairing, activity order and relay replacement across storage pages", async () =>
   withSessionDir(async (sessionDir) => {
-    for (const lookupKey of [
-      { turnScopeId: "turn-two" },
-      { dialogProcessId: "dialog-two" },
-      { turnScopeId: "turn-two", dialogProcessId: "" },
-      { turnScopeId: " turn-two ", dialogProcessId: "dialog-two" },
-    ]) {
-      await assert.rejects(
-        readSessionThinkingDetail({ storageService, sessionDir, ...lookupKey }),
-        {
-          code: SESSION_ERROR_CODE.TURN_LOOKUP_KEY_INVALID,
-          statusCode: 400,
-        },
-      );
-    }
+    const sessionId = "cross-page-session";
+    const lookupKey = { turnScopeId: "cross-page-turn", dialogProcessId: "cross-page-dialog" };
+    const identity = { sessionId, ...lookupKey, presentationMessageId: "cross-page-presentation" };
+    const assistant = (messageUid, fields = {}) => ({
+      ...identity,
+      attachments: [],
+      messageUid,
+      modelMessageId: messageUid,
+      role: "assistant",
+      type: "message",
+      ts: TEST_MESSAGE_TS,
+      content: "ordinary response",
+      ...fields,
+    });
+    const activity = (name, sequence) =>
+      canonicalActivity({ ...identity, eventId: name, activityId: name, sequence });
+    const first = assistant("cross-page-first", {
+      toolTimeline: [
+        canonicalToolTimelineItem({
+          toolCallId: "paired-tool",
+          tool: "read_file",
+          args: { filePath: "paired-tool.txt" },
+          call: { eventId: "paired-call" },
+        }),
+      ],
+      activityTimeline: [
+        activity("duplicate-activity", 1),
+        { ...activity("relayed-activity", 2), relayCorrelationId: "cross-page-relay" },
+      ],
+    });
+    const pageSize = QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize;
+    const last = assistant("cross-page-last", {
+      toolTimeline: [
+        completedReadTool("paired-tool", {
+          call: { eventId: "paired-call" },
+          resultEvent: { eventId: "paired-result" },
+        }),
+      ],
+      activityTimeline: [activity("new-activity", 3), activity("duplicate-activity", 4)],
+    });
+    const injected = assistant("cross-page-injected", {
+      injectedMessage: true,
+      relayCorrelationId: "cross-page-relay",
+      content: "relayed detail",
+    });
+    await writeSessionArtifact({
+      storageService,
+      sessionDir,
+      atomic: true,
+      predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
+      sessionPayload: applySessionMessageFacts({
+        ...createTestSessionRequiredFields(),
+        sessionId,
+        aggregateVersion: 0,
+        messages: [
+          first,
+          ...Array.from({ length: pageSize - 1 }, (_, index) => assistant(`filler-${index}`)),
+          last,
+          injected,
+        ],
+      }),
+    });
+    await migrateSessionImmutableStorage({ storageService, sessionDir });
+
+    const store = await ImmutableSessionStore.open({ sessionDir });
+    const snapshot = await store.snapshot();
+    const options = { store, snapshot, lookupKey, cursor: null, limit: pageSize };
+    const firstPage = await readImmutableThinkingDetailPage(options);
+    assert.equal(firstPage.messageCount, pageSize + 2);
+    assert.equal(firstPage.records.length, pageSize);
+    assert.equal(firstPage.records[0].message.content, null);
+    const lastPage = await readImmutableThinkingDetailPage({
+      ...options,
+      cursor: firstPage.nextCursor,
+    });
+    assert.equal(lastPage.nextCursor, null);
+    assert.deepEqual(
+      lastPage.records.map(({ turnOrdinal }) => turnOrdinal),
+      [pageSize + 1, pageSize + 2],
+    );
+    assert.equal(lastPage.records[0].message.toolTimeline[0].resultEvent.eventId, "paired-result");
+    assert.equal(lastPage.records[1].message.content, "relayed detail");
+    await assert.rejects(
+      readImmutableScopedTurnMessagePage({ ...options, cursor: firstPage.nextCursor }),
+      { code: "SESSION_PAGE_CURSOR_CONFLICT" },
+    );
+    await assert.rejects(readImmutableThinkingDetailPage({ ...options, maxBytes: 1 }), {
+      code: "SESSION_MESSAGE_READ_BUDGET_EXCEEDED",
+    });
+
+    const { messageItem, counts } = buildThinkingDetailPayload({
+      sessionId,
+      ...lookupKey,
+      contentRevision: "test-pages",
+      messages: [...firstPage.records, ...lastPage.records].map(({ message }) => message),
+    });
+    assert.deepEqual(
+      messageItem.toolTimeline.map(({ status, resultEvent }) => [status, resultEvent.eventId]),
+      [["completed", "paired-result"]],
+    );
+    assert.deepEqual(
+      messageItem.activityTimeline.map(({ eventId, sequence }) => [eventId, sequence]),
+      [
+        ["relayed-activity", 2],
+        ["new-activity", 3],
+        ["duplicate-activity", 4],
+      ],
+    );
+    assert.deepEqual(
+      messageItem.thinkingContentTimeline
+        .filter(({ sourceEventId }) => sourceEventId)
+        .map(({ contentId }) => contentId),
+      ["event:new-activity", "event:duplicate-activity"],
+    );
+    assert.equal(
+      messageItem.thinkingContentTimeline.find(({ sourceMessageUid }) => sourceMessageUid)
+        ?.sequence,
+      pageSize + 2,
+    );
+    assert.equal(counts.executionLogCount, 2);
+    assert.equal(counts.thinkingContentCount, 3);
   }));
 
-test("thinking detail lookup reports a missing immutable head without falling back", async () =>
+test("thinking detail lookup requires both Turn identities", async () => {
+  for (const lookupKey of [
+    { turnScopeId: "turn-two" },
+    { dialogProcessId: "dialog-two" },
+    { turnScopeId: "turn-two", dialogProcessId: "" },
+    { turnScopeId: " turn-two ", dialogProcessId: "dialog-two" },
+  ]) {
+    await assert.rejects(readSessionThinkingDetail({ lookupKey }), {
+      code: SESSION_ERROR_CODE.TURN_LOOKUP_KEY_INVALID,
+      statusCode: 400,
+    });
+  }
+});
+
+test("thinking detail distinguishes an absent session from an immutable session missing its head", async () =>
   withSessionDir(async (sessionDir) => {
-    await assert.rejects(
+    await using snapshots = new SessionPageSnapshots();
+    const pageSnapshots = snapshots.withReadAuthority(async () => {});
+    const read = () =>
       readSessionThinkingDetail({
-        storageService,
-        sessionDir,
-        turnScopeId: "turn-two",
-        dialogProcessId: "dialog-two",
-      }),
-      (error) => {
-        assert.equal(error.code, "SESSION_IMMUTABLE_STORAGE_INVALID");
-        assert.equal(error.cause.code, "ENOENT");
-        assert.equal(error.cause.path, path.join(sessionDir, "head.json"));
-        return true;
-      },
-    );
+        pageSnapshots,
+        identity: [sessionDir],
+        open: () => sessionReaderAccess.openArtifact({ sessionDir }),
+        sessionId: "missing-session",
+        lookupKey: { turnScopeId: "turn-two", dialogProcessId: "dialog-two" },
+        cursor: null,
+        limit: 1,
+      });
+    await assert.rejects(read(), { code: SESSION_ERROR_CODE.SESSION_NOT_FOUND });
+    await writeFile(path.join(sessionDir, IMMUTABLE_SESSION_FORMAT_FILE), "");
+    await assert.rejects(read(), (error) => {
+      assert.equal(error.code, "SESSION_IMMUTABLE_STORAGE_INVALID");
+      assert.equal(error.cause.code, "ENOENT");
+      assert.equal(error.cause.path, path.join(sessionDir, IMMUTABLE_SESSION_HEAD_FILE));
+      return true;
+    });
   }));

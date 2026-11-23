@@ -19,6 +19,7 @@ import {
   immutableStorageError,
 } from "@noobot/session-protocol/immutable-storage";
 import { sessionMutationCoordinator } from "../session-mutation-coordinator.js";
+import { withImmutableAuthorityMutation } from "../session-storage-authority.js";
 import {
   contentDigest,
   writeDurableReplacement,
@@ -26,12 +27,13 @@ import {
 } from "./immutable-object-store.js";
 import { withStorageCleanup } from "./immutable-storage-io.js";
 import {
+  hasPublishedImmutableCleanupPlan,
   readImmutableCleanupRetentions,
   publishImmutableCleanupRetention,
 } from "./immutable-cleanup-preparation.js";
 
 export function acquireImmutableReaderRetention(store, validate) {
-  return sessionMutationCoordinator.run(store.lockPath, async () => {
+  return withImmutableAuthorityMutation(store.sessionDir, async () => {
     const head = await store.snapshot();
     await validate(head);
     return publishRetention(store, head);
@@ -123,23 +125,21 @@ async function releaseRetentions(retentions) {
 }
 
 export async function captureImmutablePreparationRetention(store, options) {
-  return sessionMutationCoordinator.run(store.lockPath, async () => {
-    options.signal?.throwIfAborted();
-    const head = await store.snapshot();
-    const retainedSnapshots = await readImmutableReaderRetentions(store, head, options.signal);
-    await publishImmutableCleanupRetention(options.directory, options.id, [
-      head,
-      ...retainedSnapshots,
-    ]);
-    return { head, retainedSnapshots };
-  });
+  options.signal?.throwIfAborted();
+  const head = await store.snapshot();
+  const retainedSnapshots = await readImmutableReaderRetentions(store, head, options.signal);
+  await publishImmutableCleanupRetention(options.directory, options.id, [
+    head,
+    ...retainedSnapshots,
+  ]);
+  return { head, retainedSnapshots };
 }
 
 export async function withImmutableAuditRetention(store, signal, run) {
   const retentions = [];
   return withStorageCleanup(
     async () => {
-      const captured = await sessionMutationCoordinator.run(store.lockPath, async () => {
+      const captured = await withImmutableAuthorityMutation(store.sessionDir, async () => {
         signal?.throwIfAborted();
         const head = await store.snapshot();
         const retainedSnapshots = await readImmutableReaderRetentions(store, head, signal);
@@ -176,6 +176,17 @@ function retentionEntryId(name) {
   } catch (cause) {
     throw immutableStorageError("Invalid reader retention identity", cause);
   }
+}
+
+export async function assertImmutableMigrationRetentionsReleased(store, head, signal) {
+  if (
+    (await readImmutableReaderRetentions(store, head, signal)).length ||
+    (await hasPublishedImmutableCleanupPlan(store.sessionDir, signal))
+  )
+    throw Object.assign(
+      new Error("Release retained readers and cleanup plans before offline storage migration"),
+      { code: "SESSION_STORAGE_MIGRATION_READERS_ACTIVE" },
+    );
 }
 
 export async function readImmutableReaderRetentions(store, head, signal) {

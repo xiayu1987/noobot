@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { BotManager } from "#agent/bot";
+import { createPartitionSessionServices } from "noobot-agent/session";
+import { assertWorkspaceStorageReady } from "noobot-agent/workspace-session-storage";
 import { resolveConfiguredSuperUserId } from "../deps/agent-utils.js";
 import {
   normalizeLocale,
@@ -18,10 +20,21 @@ import { createConfigParamsService } from "../services/config-params-service.js"
 import { createConfigScopeService } from "../services/config-scope-service.js";
 import { createRequestContextService } from "../services/request-context-service.js";
 import { createRuntimeConfigService } from "../services/runtime-config-service.js";
+import { createServiceBotAccess } from "../services/service-bot-access.js";
 import { createWorkspacePathService } from "../services/workspace-path-service.js";
 import { createWorkspaceUsersService } from "../services/workspace-users-service.js";
 import { createOpenVSCodeService } from "../services/openvscode-service.js";
+import { resolveWorkspaceRootPath } from "@noobot/runtime-topology-protocol/workspace-root";
 import { text, isFunction } from "@noobot/shared/value";
+
+export function createConfiguredSessionRuntime(config, dependencies) {
+  const { journalLimits, maxJournals } = config.partitionSessionStorage;
+  return createPartitionSessionServices(config, {
+    ...dependencies,
+    journalLimits,
+    maxJournals,
+  });
+}
 
 export async function createAppDependencies({
   serviceDir,
@@ -54,8 +67,9 @@ export async function createAppDependencies({
     serviceDir,
     getGlobalConfigRaw: () => globalConfigRaw,
   });
-  const { workspaceRootPath, templateRootPath } = workspacePathService;
-  workspacePathService.assertWorkspaceRootMatchesEnv();
+  const { templateRootPath } = workspacePathService;
+  const workspaceRoot = workspacePathService.assertWorkspaceRootMatchesEnv();
+  const workspaceRootPath = () => workspaceRoot;
 
   const configParamsService = createConfigParamsService({
     workspaceRootPath,
@@ -126,11 +140,27 @@ export async function createAppDependencies({
     },
   });
 
+  const serviceBotAccess = createServiceBotAccess({ getBot: () => bot });
   const runtimeConfigService = createRuntimeConfigService({
     startupContext,
     readWorkspaceConfigParams,
     globalConfigBuilder: configBuilder,
     BotManager,
+    createSessionRuntime(config, dependencies) {
+      const configuredRoot = resolveWorkspaceRootPath({
+        configuredRoot: config.workspaceRoot,
+        serviceDir,
+      });
+      if (configuredRoot !== workspaceRoot) {
+        throw new Error(
+          "Configured workspace root differs from the service workspace storage lease",
+        );
+      }
+      return createConfiguredSessionRuntime(
+        { ...config, workspaceRoot },
+        { ...dependencies, assertWorkspaceStorageReady },
+      );
+    },
     now,
     setGlobalConfigRaw: (nextGlobalConfigRaw) => {
       globalConfigRaw = nextGlobalConfigRaw;
@@ -138,6 +168,8 @@ export async function createAppDependencies({
     setGlobalConfig: (nextGlobalConfig) => {
       globalConfig = nextGlobalConfig;
     },
+    getBot: () => bot,
+    withBotRetirement: serviceBotAccess.withRetirement,
     setBot: (nextBot) => {
       bot = nextBot;
     },
@@ -166,12 +198,14 @@ export async function createAppDependencies({
     resolveAuthByApiKey,
     workspaceRootPath,
     getBot: () => bot,
+    serviceBotAccess,
     getGlobalConfig: () => globalConfig,
     readSessionUserIds,
     openVSCodeService,
     buildHttpModuleDependencies: () => ({
       pluginRootDir: startupContext.paths.pluginRootDir,
-      bot,
+      bot: serviceBotAccess,
+      runBotOperation: serviceBotAccess.runOperation,
       openVSCodeService,
       globalConfigProvider: () => globalConfig,
       issueApiKey,

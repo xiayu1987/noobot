@@ -7,11 +7,11 @@ import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
+import { requireWorkspaceRootEnv } from "@noobot/runtime-topology-protocol/workspace-root";
 import { request as playwrightRequest } from "@playwright/test";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 import { readE2eCredentials } from "./fixtures/auth.fixture.js";
 import { admissionRetryDelayMs } from "./helpers/http-admission.js";
-import { workspaceRoot } from "./helpers/persistence-audit.js";
 import { e2eRunId, runOpsWorkdir, runOpsWorkdirPath } from "./helpers/run-ops-workdir.js";
 import { text } from "@noobot/shared/value";
 import { validateRequestLogOrder } from "../../../../../scripts/quality/model-context-convergence/request-log-audit.mjs";
@@ -20,7 +20,7 @@ const REGISTRY_FILE = "suite-sessions.json";
 
 function registryPath() {
   const { userId } = readE2eCredentials();
-  return path.join(workspaceRoot(), userId, runOpsWorkdirPath(REGISTRY_FILE));
+  return path.join(requireWorkspaceRootEnv(), userId, runOpsWorkdirPath(REGISTRY_FILE));
 }
 
 async function connectForCleanup(context, credentials) {
@@ -161,7 +161,7 @@ export default class SuiteSessionCleanupReporter {
     await fs.mkdir(evidenceDir, { recursive: true });
     const runtimeDir = WORKSPACE_LAYOUT.RUNTIME_DIR;
     await fs.cp(
-      path.join(workspaceRoot(), userId, runtimeDir),
+      path.join(requireWorkspaceRootEnv(), userId, runtimeDir),
       path.join(evidenceDir, runtimeDir),
       {
         recursive: true,
@@ -202,7 +202,7 @@ export default class SuiteSessionCleanupReporter {
     console.log(`[model-request-log] pre-cleanup audit passed: ${checked.length} logs`);
     if (records.length > 0) await deleteRegisteredSessions(records, credentials);
     await fs.rm(this.failureEvidenceRoot, { recursive: true, force: true });
-    await fs.rm(path.join(workspaceRoot(), credentials.userId, runOpsWorkdir()), {
+    await fs.rm(path.join(requireWorkspaceRootEnv(), credentials.userId, runOpsWorkdir()), {
       recursive: true,
       force: true,
     });

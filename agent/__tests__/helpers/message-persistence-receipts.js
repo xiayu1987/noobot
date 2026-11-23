@@ -3,7 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createMessagePersistenceReceipt } from "@noobot/session-protocol/session-changes";
+import {
+  createMessagePersistenceReceipt,
+  mergeMessagePersistenceDeltas,
+} from "@noobot/session-protocol/session-changes";
+
+export function createTestMessageCreationBatch({ messages, ...payload }) {
+  return { ...payload, messages, changes: mergeMessagePersistenceDeltas([{ messages }]) };
+}
 
 export function createTestMessagePersistenceReceipts(
   { messages, sessionId, dialogProcessId, turnScopeId },
@@ -19,6 +26,7 @@ export function createTestMessagePersistenceReceipts(
       },
       generation,
       `test-content-${message.messageUid}-${generation}`,
+      1,
     ),
   );
 }

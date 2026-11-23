@@ -6,11 +6,8 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { requireStorageService } from "../storage-service.js";
-import {
-  invalidateArtifactRead,
-  memoizeArtifactRead,
-  recordStorageWork,
-} from "./storage-transaction.js";
+import { invalidateSessionRead, memoizeSessionRead } from "../session-read-cache.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 
 const OWNER = "session artifact JSON io";
 
@@ -24,7 +21,7 @@ function observeJsonBytes(artifactPath, operation) {
 
 export async function writeJsonWithStorage({ storageService, artifactPath, payload, atomic }) {
   const storage = requireStorageService(storageService, OWNER);
-  invalidateArtifactRead(artifactPath);
+  invalidateSessionRead(artifactPath);
   const options = { onWrite: observeJsonBytes(artifactPath, "Write") };
   if (atomic === true) return storage.writeJsonAtomic(artifactPath, payload, options);
   if (atomic === false) return storage.writeJson(artifactPath, payload, options);
@@ -45,7 +42,7 @@ export async function readJsonWithStorage({
 }
 
 export async function readOptionalJsonWithStorage({ storageService, artifactPath }) {
-  const snapshot = await memoizeArtifactRead("json", artifactPath, async () => {
+  const snapshot = await memoizeSessionRead("json", artifactPath, async () => {
     recordStorageWork("optionalJsonReads");
     const observe = observeJsonBytes(artifactPath, "Read");
     let source;

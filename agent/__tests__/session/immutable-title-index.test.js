@@ -8,7 +8,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { deriveSessionAutoTitle } from "@noobot/session-protocol";
+import { deriveSessionAutoTitle, SESSION_AUTO_TITLE_MAX_LENGTH } from "@noobot/session-protocol";
+import { IMMUTABLE_TITLE_INDEX_VERSION } from "@noobot/session-protocol/immutable-storage";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { ImmutableSessionChanges } from "../../src/session/session-artifact-session/immutable-message-changes.js";
 import {
@@ -87,17 +88,17 @@ test("title index reads one source message and preserves prior roots while candi
     assert.equal((await requireImmutableTitleIndex(plan, store.requireReference)).root, root);
     const requested = [];
     const selected = {
-      get: async (collection, key) => {
-        if (collection === "messages") requested.push(key);
-        return plan.get(collection, key);
+      get: plan.get.bind(plan),
+      getMetadata: (collection, key) => {
+        requested.push(key);
+        return plan.getMetadata(collection, key);
       },
     };
     assert.equal(await readImmutableIndexedTitle(store, selected), "edited");
     assert.deepEqual(requested, ["m1"]);
     const old = new Map(plan.pending);
-    const oldPlan = new ImmutableSessionChanges(
-      async (collection, key) => old.get(JSON.stringify([collection, key]))?.value ?? null,
-    );
+    const oldPlan = new ImmutableSessionChanges(async () => null);
+    oldPlan.pending = old;
     await updateImmutableTitleCandidate(store, plan, edited, null);
     plan.remove("messages", "m1");
     assert.equal(await readImmutableIndexedTitle(store, plan), "title-2");
@@ -105,15 +106,31 @@ test("title index reads one source message and preserves prior roots while candi
   });
 });
 
-test("missing versions, invalid pages and stale title sources fail explicitly", async (t) => {
+test("current title lookup rejects ineligible candidates instead of searching later messages", async (t) => {
   const { store } = await fixture(t);
   await store.objects.withDurabilityBatch(async () => {
     store.objects.beginCommit(await store.snapshot());
     const plan = new ImmutableSessionChanges(async () => null);
+    seedImmutableTitleIndex(plan);
+    const first = record(1);
+    await updateImmutableTitleCandidate(store, plan, null, first);
+    plan.set("messages", "m1", record(1, `${" ".repeat(SESSION_AUTO_TITLE_MAX_LENGTH)}text`));
+    const second = record(2);
+    await updateImmutableTitleCandidate(store, plan, null, second);
+    plan.set("messages", "m2", second);
+    await assert.rejects(readImmutableIndexedTitle(store, plan), /no longer eligible/);
+  });
+});
+
+test("missing versions, invalid pages and stale title sources fail explicitly", async (t) => {
+  const { store } = await fixture(t);
+  await store.objects.withDurabilityBatch(async () => {
+    store.objects.beginCommit(await store.snapshot());
+    const plan = new ImmutableSessionChanges(async () => null, { getMetadata: async () => null });
     await assert.rejects(requireImmutableTitleIndex(plan, store.requireReference), {
       code: "SESSION_IMMUTABLE_INDEX_UPGRADE_REQUIRED",
     });
-    plan.set("metadata", "titleIndex", { version: 2, root: null });
+    plan.set("metadata", "titleIndex", { version: 999, root: null });
     await assert.rejects(requireImmutableTitleIndex(plan, store.requireReference), {
       code: "SESSION_IMMUTABLE_STORAGE_INVALID",
     });
@@ -131,30 +148,58 @@ test("missing versions, invalid pages and stale title sources fail explicitly", 
         }),
       ),
     );
-    plan.set("metadata", "titleIndex", { version: 1, root: bad });
+    plan.set("metadata", "titleIndex", { version: IMMUTABLE_TITLE_INDEX_VERSION, root: bad });
     await assert.rejects(readImmutableIndexedTitle(store, plan), /Invalid title index page/);
   });
 });
 
-test("offline title upgrade publishes once, isolates failure and skips history after completion", async (t) => {
+test("offline title upgrade rebuilds published V1, isolates failure and skips history after completion", async (t) => {
   const { store, sessionDir } = await fixture(t);
-  const source = [record(1, ""), record(2), record(3)];
-  await store.commit({
+  const source = [record(1, `${" ".repeat(SESSION_AUTO_TITLE_MAX_LENGTH)}text`), record(2)];
+  const metadata = { sessionId: "s1", autoTitle: "published title" };
+  await store.transact({
     expectedGeneration: 0,
     operationId: "seed",
-    changes: [
-      { collection: "metadata", key: "facts", value: { messageSequence: 3, messageCount: 3 } },
-      ...source.flatMap((r) => [
-        { collection: "messages", key: r.message.messageUid, value: r },
-        {
-          collection: "messageOrder",
-          key: immutableOrderKey(r.ordinal),
-          value: r.message.messageUid,
-        },
-      ]),
-    ],
+    input: {},
+    prepare: async () => {
+      const zero = await store.objects.putPage({ kind: "title-candidate", uid: "m1", ordinal: 1 });
+      const one = await store.objects.putPage({ kind: "title-candidate", uid: "m2", ordinal: 2 });
+      const root = await store.objects.putPage({
+        kind: "title-branch",
+        prefix: "0".repeat(51),
+        zero,
+        one,
+      });
+      return {
+        result: null,
+        changes: [
+          { collection: "metadata", key: "titleIndex", value: { version: 1, root } },
+          { collection: "metadata", key: "session", value: metadata },
+          { collection: "metadata", key: "facts", value: { messageSequence: 2, messageCount: 2 } },
+          ...source.flatMap((r) => [
+            { collection: "messages", key: r.message.messageUid, value: r },
+            {
+              collection: "messageOrder",
+              key: immutableOrderKey(r.ordinal),
+              value: r.message.messageUid,
+            },
+          ]),
+        ],
+      };
+    },
   });
   const before = await store.snapshot();
+  const lookup = (snapshot) => {
+    const plan = new ImmutableSessionChanges(
+      (collection, key) => store.get(snapshot, collection, key),
+      {
+        getMetadata: async (collection, key) =>
+          (await store.getManyMetadata(snapshot, collection, [key])).get(key),
+      },
+    );
+    return store.objects.withSnapshot(snapshot, () => readImmutableIndexedTitle(store, plan));
+  };
+  await assert.rejects(lookup(before), { code: "SESSION_IMMUTABLE_INDEX_UPGRADE_REQUIRED" });
   const options = { sessionDir, sessionId: "s1" };
   setFsAdapter({
     rename: async (from, to) => {
@@ -168,16 +213,12 @@ test("offline title upgrade publishes once, isolates failure and skips history a
     resetFsAdapter();
   }
   assert.deepEqual(await store.snapshot(), before);
-  assert.equal(await store.get(before, "metadata", "titleIndex"), null);
+  assert.equal((await store.get(before, "metadata", "titleIndex")).version, 1);
   assert.equal((await upgradeImmutableTitleIndex(options)).result.upgraded, true);
   const snapshot = await store.snapshot();
-  const plan = new ImmutableSessionChanges((collection, key) =>
-    store.get(snapshot, collection, key),
-  );
-  assert.equal(
-    await store.objects.withSnapshot(snapshot, () => readImmutableIndexedTitle(store, plan)),
-    "title-2",
-  );
+  assert.equal(snapshot.generation, before.generation + 1);
+  assert.equal(await lookup(snapshot), "title-2");
+  assert.deepEqual(await store.get(snapshot, "metadata", "session"), metadata);
   const forbidden = new Set();
   await store.objects.withSnapshot(snapshot, async () => {
     for (const r of source) {

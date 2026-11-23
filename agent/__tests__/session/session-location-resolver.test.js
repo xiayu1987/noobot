@@ -25,7 +25,6 @@ const scopedOptions = Object.freeze({
   userId: "alice",
   sessionId: "child",
   parentSessionId: "parent",
-  scopeId: "agent:child",
   allowedRoot: "runtime/plugin-data/workflow/session",
   relativeDir: "runtime/plugin-data/workflow/session/run/node",
 });
@@ -81,7 +80,6 @@ test("scoped resolver requires every binding field including the parent session"
     "userId",
     "sessionId",
     "parentSessionId",
-    "scopeId",
     "relativeDir",
     "allowedRoot",
   ]) {
@@ -124,16 +122,13 @@ test("persistence contexts are immutable, execution-local and accept only sessio
     assert.equal(context.userId, "alice");
   }
   assert.equal(scoped.scoped, true);
-  assert.equal(scoped.scopeId, "agent:child");
   assert.equal(tree.scoped, false);
-  assert.equal(tree.scopeId, "");
   assert.ok(tree.locationResolver instanceof SessionTreeLocationContext);
   assert.notEqual(scoped.locationResolver, tree.locationResolver);
 
   const lookalike = {
     userId: "alice",
     sessionId: "child",
-    scopeId: "agent:child",
     locateSessionScope() {},
     placeSessionScope() {},
     commitSessionPlacement() {},

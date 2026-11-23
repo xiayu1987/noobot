@@ -10,7 +10,7 @@ import { recordServiceWebSocketRuntimeError } from "./runtime-events.js";
 const maintenanceByRuntime = new WeakMap();
 
 async function compactIdleOutbox(work) {
-  const { resolveBot, identity, entry } = work;
+  const { runNewOperation, resolveBot, identity, entry } = work;
   entry.timer = null;
   entry.due = true;
   if (entry.active || entry.running) return;
@@ -18,16 +18,18 @@ async function compactIdleOutbox(work) {
   entry.running = true;
   entry.dirty = false;
   try {
-    const bot = resolveBot();
-    const now = readServiceClockMs(bot);
-    const result = await bot.session.compactAuthorityEvents({
-      ...identity,
-      retainDeliveredAfter: new Date(
-        now - TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,
-      ).toISOString(),
+    await runNewOperation(async () => {
+      const bot = resolveBot();
+      const now = readServiceClockMs(bot);
+      const result = await bot.session.compactAuthorityEvents({
+        ...identity,
+        retainDeliveredAfter: new Date(
+          now - TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,
+        ).toISOString(),
+      });
+      if (result.hasMore === true) entry.dirty = true;
+      scheduleRetentionCompaction(work, result.nextRetainedDeliveryAt, readServiceClockMs(bot));
     });
-    if (result.hasMore === true) entry.dirty = true;
-    scheduleRetentionCompaction(work, result.nextRetainedDeliveryAt, readServiceClockMs(bot));
   } catch (error) {
     entry.dirty = true;
     await recordServiceWebSocketRuntimeError({
@@ -80,16 +82,20 @@ function scheduleIdleCompaction(work) {
   entry.timer.unref();
 }
 
-export async function withAuthorityOutboxDelivery(resolveBot, payload, deliver) {
+export async function withAuthorityOutboxDelivery(
+  { runNewOperation, resolveBot },
+  payload,
+  deliver,
+) {
   const identity = {
     userId: payload.userId,
     sessionId: payload.sessionId,
     persistenceScope: payload.persistenceScope,
   };
-  let entries = maintenanceByRuntime.get(resolveBot);
+  let entries = maintenanceByRuntime.get(runNewOperation);
   if (!entries) {
     entries = new Map();
-    maintenanceByRuntime.set(resolveBot, entries);
+    maintenanceByRuntime.set(runNewOperation, entries);
   }
   const key = JSON.stringify([
     identity.userId,
@@ -118,6 +124,6 @@ export async function withAuthorityOutboxDelivery(resolveBot, payload, deliver) 
     return result;
   } finally {
     entry.active -= 1;
-    scheduleIdleCompaction({ resolveBot, identity, entries, key, entry });
+    scheduleIdleCompaction({ runNewOperation, resolveBot, identity, entries, key, entry });
   }
 }

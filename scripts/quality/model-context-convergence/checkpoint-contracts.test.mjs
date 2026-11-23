@@ -18,12 +18,29 @@ const CASES = [
     marker: "commit: commitChanges,",
   },
   {
+    file: `${ROOT}services/session-message-service/turn-summary-checkpoint.js`,
+    marker: "prepareRequest({",
+  },
+  {
     file: `${ROOT}session-artifact-session/commit-session-changes.js`,
     marker: "prepareImmutableSummaryCheckpoint({",
   },
   {
     file: `${ROOT}session-artifact-session/immutable-summary-changes.js`,
-    marker: "applyTurnSummaryCheckpoint(session, request, committedAt)",
+    marker: "applyIndexedTurnSummaryCheckpoint(",
+  },
+  {
+    file: `${ROOT}session-artifact-session/immutable-summary-changes.js`,
+    marker: 'plan.getMany("toolPairs", keys)',
+  },
+  {
+    file: `${ROOT}session-artifact-session/immutable-summary-changes.js`,
+    marker:
+      'if (!pairs.get(key)) throw immutableStorageError("Selected message has no tool pair index")',
+  },
+  {
+    file: "context-protocol/src/policy/summary-checkpoint-transaction.js",
+    marker: "assertSummaryCheckpointToolPairSelection(key, pairs.get(key), count)",
   },
 ];
 

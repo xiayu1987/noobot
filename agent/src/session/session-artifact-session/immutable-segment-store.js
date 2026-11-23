@@ -26,7 +26,7 @@ import {
   syncStorageDirectory,
   withStorageCleanup,
 } from "./immutable-storage-io.js";
-import { recordStorageWork } from "./storage-transaction.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 
 const MAGIC = Buffer.from(IMMUTABLE_SEGMENT.magic);
 
@@ -263,12 +263,6 @@ export class ImmutableSegmentStore {
         }
         await writeRecords(handle, records);
         await handle.sync();
-
-        const lease = this.readScopes.getStore()?.handles.get(tail.segmentId);
-        if (lease) {
-          const opened = await lease.pending;
-          opened.size = Math.max(...records.map(({ offset, length }) => offset + length));
-        }
         recordStorageWork("immutableSegmentSyncs");
         recordStorageWork("immutableSegmentWrites");
         recordStorageWork(
@@ -406,8 +400,6 @@ export class ImmutableSegmentStore {
       return await withStorageCleanup(
         async () => {
           ({ opened, release } = await this.acquireReadSegment(record.segmentId, scope));
-          if (opened.size < record.offset + length)
-            throw immutableStorageError("Invalid immutable segment size");
           const bytes = await readRange(opened.handle, record.offset, length);
           recordStorageWork("immutableObjectReads", records.length);
           recordStorageWork("immutableReadBytes", bytes.length);

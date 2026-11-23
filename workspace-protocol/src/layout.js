@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const WORKSPACE_LAYOUT_VERSION = 43;
+export const WORKSPACE_LAYOUT_VERSION = 47;
 
 export const WORKSPACE_ROOT_LAYOUT = Object.freeze({
   USERS_FILE: "user.json",
@@ -22,10 +22,14 @@ export const WORKSPACE_LAYOUT = Object.freeze({
   RUNTIME_DIR: "runtime",
   SESSION_DIR: "runtime/session",
   SESSION_TREE_FILE: "runtime/session/session-tree.json",
+  SESSION_TREE_UPGRADE_FILE: "runtime/session/.session-tree-upgrade.json",
   SESSION_SUMMARY_FILE: "runtime/session/sessions.json",
   SESSION_TOMBSTONE_FILE: "runtime/session/.deleted-sessions.json",
   RETIRED_SESSION_LIFECYCLE_RECORDS_DIR: "runtime/session/.lifecycle/records",
   SESSION_LIFECYCLE_LOCKS_DIR: "runtime/session/.lifecycle/locks",
+  SESSION_TREE_LOCK_FILE: "runtime/session/.lifecycle/tree.lock",
+  SESSION_TOMBSTONE_LOCK_FILE: "runtime/session/.lifecycle/tombstones.lock",
+  SESSION_EVENT_PUBLICATION_LOCK_FILE: "runtime/.session-event-publication.lock",
   ATTACH_DIR: "runtime/attach",
   SCOPED_ATTACH_DIR: "runtime/attach/scoped",
   CONNECTORS_DIR: "runtime/connectors",
@@ -96,18 +100,28 @@ export function resolvePluginDataRelativePath(pluginId, ...segments) {
 
 export const AGENT_SCOPED_SESSION_ROOTS = Object.freeze([WORKSPACE_LAYOUT.AGENT_SESSION_DIR]);
 
+export function resolvePluginScopedSessionRoots({ pluginId, scopedSessionRoots }) {
+  if (!Array.isArray(scopedSessionRoots)) {
+    throw new TypeError(`plugin ${pluginId} scopedSessionRoots must be an array`);
+  }
+  return scopedSessionRoots.map((root) =>
+    resolvePluginDataRelativePath(pluginId, ...root.split("/")),
+  );
+}
+
+export function resolvePluginScopedSessionRelativePath({ pluginId, roots, segments }) {
+  if (!Array.isArray(segments)) throw new TypeError("plugin session segments must be an array");
+  const target = resolvePluginDataRelativePath(pluginId, ...segments);
+  return roots.some((root) => target.startsWith(`${root}/`)) ? target : null;
+}
+
 export function resolveScopedSessionRoots(pluginDeclarations = []) {
   if (!Array.isArray(pluginDeclarations)) {
     throw new TypeError("scoped session root declarations must be an array");
   }
   const roots = [...AGENT_SCOPED_SESSION_ROOTS];
-  for (const { pluginId, scopedSessionRoots } of pluginDeclarations) {
-    if (!Array.isArray(scopedSessionRoots)) {
-      throw new TypeError(`plugin ${pluginId} scopedSessionRoots must be an array`);
-    }
-    for (const root of scopedSessionRoots) {
-      roots.push(resolvePluginDataRelativePath(pluginId, ...String(root ?? "").split("/")));
-    }
+  for (const declaration of pluginDeclarations) {
+    roots.push(...resolvePluginScopedSessionRoots(declaration));
   }
   if (new Set(roots).size !== roots.length) {
     throw new TypeError(`scoped session roots must be unique: ${roots.join(",")}`);

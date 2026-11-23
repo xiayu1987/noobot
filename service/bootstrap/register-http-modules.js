@@ -21,6 +21,7 @@ export async function registerHttpModules(
   app,
   {
     bot,
+    runBotOperation,
     openVSCodeService,
     globalConfigProvider,
     issueApiKey,
@@ -121,6 +122,7 @@ export async function registerHttpModules(
 
   registerConnectorRoutes(app, {
     bot,
+    runBotOperation,
     connectorRuntime,
     translateText,
     ownerOnlyUserScopeParam,
@@ -144,12 +146,14 @@ export async function registerHttpModules(
   const servicePluginHost = createServicePluginHost({ pluginRootDir });
   await servicePluginHost.registerServiceRoutes(app, {
     translateText,
+    runBotOperation,
     enforceUserScopeParam: administrableUserScopeParam,
     ports: createPluginServicePorts({ bot, translateText }),
   });
 
   registerSessionRoutes(app, {
     bot,
+    runBotOperation,
     translateText,
     pluginHost: servicePluginHost,
   });

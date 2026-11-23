@@ -7,6 +7,8 @@ import {
   EXECUTION_CHILDREN_WIRE_EVENT,
   EXECUTION_SNAPSHOT_WIRE_EVENT,
   EXECUTION_TREE_WIRE_EVENT,
+  isDirectExecutionChild,
+  isExecutionInRoot,
   validateExecutionRecord,
 } from "@noobot/session-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
@@ -53,7 +55,9 @@ function childrenErrors({ execution, children }) {
   if (!Array.isArray(children)) return ["children_not_array"];
   return children.flatMap((child, index) => [
     ...recordErrors(child, `children.${index}`),
-    ...(child?.parentExecutionId === execution?.executionId
+    ...(isPlainObject(child) &&
+    isPlainObject(execution) &&
+    isDirectExecutionChild(child, execution.executionId)
       ? []
       : [`child_parent_mismatch:${index}`]),
   ]);
@@ -65,7 +69,7 @@ function treeErrors({ rootExecutionId, tree }) {
   return Object.entries(tree.executions).flatMap(([id, item]) => [
     ...recordErrors(item, `tree.${id}`),
     ...(item?.executionId === id ? [] : [`tree_key_mismatch:${id}`]),
-    ...(item?.executionId === rootExecutionId || item?.rootExecutionId === rootExecutionId
+    ...(isPlainObject(item) && isExecutionInRoot(item, rootExecutionId)
       ? []
       : [`tree_root_conflict:${id}`]),
   ]);

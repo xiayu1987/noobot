@@ -5,43 +5,56 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getSessionTurns } from "../../src/session/services/session-message-service/message-queries.js";
+import { getSessionTurnMessagePage } from "../../src/session/services/session-message-service/message-queries.js";
 
 const identity = { userId: "user", sessionId: "session", persistenceContext: {} };
 
-test("scoped message queries use the selected turn view and preserve dialog ownership", async () => {
+test("scoped message queries read one page and release the snapshot", async () => {
   const owned = { messageUid: "owned", turnScopeId: "turn", dialogProcessId: "dialog" };
   const calls = [];
+  const page = { records: [{ message: owned }], nextCursor: null };
   const service = {
     sessionRepo: {
-      async requireById() {
-        throw new Error("full session reads are forbidden");
-      },
-      async requireTurnView(...args) {
+      async requireSessionReader(...args) {
         calls.push(args);
         return {
-          session: { messages: [owned, { messageUid: "other", dialogProcessId: "other-dialog" }] },
+          async readScopedTurnMessagePage(selection) {
+            calls.push(selection);
+            return page;
+          },
+          async [Symbol.asyncDispose]() {
+            calls.push("released");
+          },
         };
       },
     },
   };
   assert.deepEqual(
-    await getSessionTurns.call(service, {
+    await getSessionTurnMessagePage.call(service, {
       ...identity,
       turnScopeId: "turn",
       dialogProcessId: "dialog",
+      cursor: null,
+      limit: 1,
+      maxBytes: 1024,
     }),
-    [owned],
+    page,
   );
   assert.deepEqual(calls, [
     [
       "user",
       "session",
       {
-        turnScopeIds: ["turn"],
         persistenceContext: identity.persistenceContext,
       },
     ],
+    {
+      lookupKey: { turnScopeId: "turn", dialogProcessId: "dialog" },
+      cursor: null,
+      limit: 1,
+      maxBytes: 1024,
+    },
+    "released",
   ]);
 });
 
@@ -57,26 +70,12 @@ test("incomplete scoped query identities fail before repository access", async (
     ),
   };
   for (const selection of [
+    {},
     { turnScopeId: "turn" },
     { dialogProcessId: "dialog" },
     { turnScopeId: "", dialogProcessId: "dialog" },
   ])
-    await assert.rejects(getSessionTurns.call(service, { ...identity, ...selection }), {
+    await assert.rejects(getSessionTurnMessagePage.call(service, { ...identity, ...selection }), {
       code: "SESSION_TURN_LOOKUP_KEY_INVALID",
     });
-});
-
-test("unscoped message queries retain explicit full export behavior", async () => {
-  const messages = [{ messageUid: "all" }];
-  const service = {
-    sessionRepo: {
-      async requireById(userId, sessionId, options) {
-        assert.equal(userId, identity.userId);
-        assert.equal(sessionId, identity.sessionId);
-        assert.equal(options.persistenceContext, identity.persistenceContext);
-        return { messages };
-      },
-    },
-  };
-  assert.equal(await getSessionTurns.call(service, identity), messages);
 });

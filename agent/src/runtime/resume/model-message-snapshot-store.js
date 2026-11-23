@@ -78,13 +78,11 @@ function auditSnapshotBlock(messages, blockName, audit) {
       summary.complete += 1;
       continue;
     }
-    if (presentCount === 1) {
-      summary.partial += 1;
-      if (key) audit.partialMessageKeys.push(key);
-      continue;
-    }
-    summary.missing += 1;
-    if (key && blockName !== "system") audit.missingScopedMessageKeys.push(key);
+    if (presentCount === 1) summary.partial += 1;
+    else summary.missing += 1;
+    if (!key) continue;
+    if (presentCount === 1) audit.partialMessageKeys.push(key);
+    else if (blockName !== "system") audit.missingScopedMessageKeys.push(key);
   }
   return summary;
 }

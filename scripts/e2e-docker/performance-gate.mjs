@@ -6,8 +6,7 @@
 import assert from "node:assert/strict";
 import { isPlainObject } from "@noobot/shared/value";
 import { DEVELOPMENT_THRESHOLDS } from "../lib/development-thresholds.mjs";
-import { IMMUTABLE_CHECKPOINT_FORBIDDEN_WORK } from "@noobot/session-protocol/immutable-storage";
-import { IMMUTABLE_SEGMENT_CHECKPOINT_WORK } from "@noobot/session-protocol/immutable-segment";
+import { PARTITION_CHECKPOINT_JOURNAL_WORK } from "@noobot/session-protocol/partition-journal";
 import {
   PERF_ROUNDS,
   PERF_SCENARIO,
@@ -29,23 +28,13 @@ export function median(values) {
 function assertCheckpoint(point) {
   for (const name of ["durationMs", "preparationMs", "appendMs", "verificationMs", "queueWaitMs"])
     assert.ok(Number.isFinite(point[name]) && point[name] >= 0, `invalid checkpoint ${name}`);
-  assert.ok(isPlainObject(point.storageWork), "missing storage work");
-  for (const [name, amount] of Object.entries(point.storageWork))
-    assert.ok(Number.isSafeInteger(amount) && amount >= 0, `invalid storage work: ${name}`);
-  for (const name of IMMUTABLE_SEGMENT_CHECKPOINT_WORK)
-    assert.ok(point.storageWork[name] > 0, `checkpoint must record ${name}`);
-  assert.equal(
-    point.storageWork.immutableSegmentSyncs,
-    point.storageWork.immutableSegmentWrites,
-    "checkpoint must sync each published segment exactly once",
-  );
-  assert.equal(
-    Object.hasOwn(point.storageWork, "immutableObjectWrites"),
-    false,
-    "checkpoint must not publish legacy object files",
-  );
-  for (const name of IMMUTABLE_CHECKPOINT_FORBIDDEN_WORK)
-    assert.equal(point.storageWork[name], 0, `warm checkpoint must not perform ${name}`);
+  const work = point.storageWork?.partitionJournal;
+  assert.ok(isPlainObject(work), "missing partition journal work");
+  assert.deepEqual(Object.keys(work).sort(), [...PARTITION_CHECKPOINT_JOURNAL_WORK].sort());
+  for (const name of PARTITION_CHECKPOINT_JOURNAL_WORK)
+    assert.ok(Number.isSafeInteger(work[name]) && work[name] > 0, `invalid journal work: ${name}`);
+  assert.ok(work.dataSyncs >= work.publications, "published journal data must be synchronized");
+  assert.ok(work.partitionOpens >= work.dataSyncs, "journal syncs must correspond to opened files");
 }
 
 function assertPerformanceSample(sample, plan) {

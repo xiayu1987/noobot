@@ -4,20 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile } from "node:fs/promises";
-import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_UPGRADE_OWNER } from "@noobot/workspace-protocol";
 import { ACTIVITY_KIND, MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import {
   ACTIVITY_TIMELINE_FACT_FIELDS,
   isCanonicalActivityTimelineFact,
 } from "@noobot/event-protocol/activity-timeline";
-import {
-  RUNTIME_EVENTS_DIR,
-  RUNTIME_EVENT_CATEGORIES,
-  RUNTIME_EVENT_SCOPES,
-  resolveRuntimeEventFileName,
-} from "@noobot/runtime-events";
 import { isPlainObject } from "@noobot/shared/value";
+import { legacyActivityEvidenceFiles } from "./legacy-activity-evidence-files.js";
 import { ignoreSessionProgress } from "./session-directory-walk.js";
 import { createSessionMessageRewriter } from "./session-message-rewrite.js";
 import { upgradeSessionDirectories } from "./session-upgrade-driver.js";
@@ -37,11 +31,6 @@ const LEGACY_EVIDENCE_FIELDS = Object.freeze([
   "turnScopeId",
   "presentationMessageId",
 ]);
-const SYSTEM_EVENT_FILE = resolveRuntimeEventFileName({
-  scope: RUNTIME_EVENT_SCOPES.SESSION,
-  category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-});
-
 function upgradeError(reason, details, cause) {
   const error = new Error(`workspace session activity timeline upgrade failed: ${reason}`);
   error.code = UPGRADE_INVALID_CODE;
@@ -68,16 +57,8 @@ function isLegacyEvidenceRecord(record) {
   );
 }
 
-async function readLegacyEvidence(sessionDir) {
-  const filePath = path.join(sessionDir, RUNTIME_EVENTS_DIR, SYSTEM_EVENT_FILE);
-  let text;
-  try {
-    text = await readFile(filePath, "utf8");
-  } catch (error) {
-    if (error?.code === "ENOENT") return new Map();
-    throw error;
-  }
-  const evidence = new Map();
+async function indexLegacyEvidenceFile(filePath, evidence) {
+  const text = await readFile(filePath, "utf8");
   for (const [index, line] of text.split("\n").entries()) {
     if (!line.trim()) continue;
     let record;
@@ -92,6 +73,13 @@ async function readLegacyEvidence(sessionDir) {
     }
     evidence.set(record.data.eventId, record.data);
   }
+}
+
+async function readLegacyEvidence(sessionDir) {
+  const evidence = new Map();
+  for await (const file of legacyActivityEvidenceFiles(sessionDir)) {
+    await indexLegacyEvidenceFile(file, evidence);
+  }
   return evidence;
 }
 
@@ -103,6 +91,8 @@ async function migrateLegacyFact(fact, context) {
   if (
     data.text !== fact.text ||
     data.sessionId !== context.message.sessionId ||
+    data.dialogProcessId !== context.message.dialogProcessId ||
+    data.turnScopeId !== context.message.turnScopeId ||
     data.presentationMessageId !== context.message.presentationMessageId
   ) {
     throw upgradeError("legacy_activity_evidence_mismatch", details);
@@ -125,11 +115,45 @@ function trimToFactFields(fact) {
   );
 }
 
+function migrateProjectedFact(fact, message) {
+  const migrated = isPlainObject(fact) ? trimToFactFields(fact) : fact;
+  if (
+    !isPlainObject(fact) ||
+    fact.sessionId !== message.sessionId ||
+    fact.turnScopeId !== message.turnScopeId ||
+    fact.presentationMessageId !== message.presentationMessageId ||
+    !Object.keys(fact).every(
+      (field) => field === "messageId" || ACTIVITY_TIMELINE_FACT_FIELDS.has(field),
+    )
+  )
+    return migrated;
+
+  if (fact.eventType === LEGACY_MAIN_MODEL_CONTENT) {
+    if (fact.activityKind === ACTIVITY_KIND.MAIN_MODEL_ANALYSIS) {
+      migrated.eventType = MESSAGE_EVENT_TYPE.MODEL_ANALYSIS;
+    } else if (fact.activityKind === "" && !Object.hasOwn(fact, "activityId")) {
+      migrated.eventType = MESSAGE_EVENT_TYPE.MODEL_ANALYSIS;
+      migrated.activityKind = ACTIVITY_KIND.MAIN_MODEL_ANALYSIS;
+      migrated.activityId = fact.eventId;
+    }
+  } else if (
+    fact.eventType === MESSAGE_EVENT_TYPE.THINKING &&
+    fact.activityKind === "guidance_analysis" &&
+    fact.purpose === "guidance" &&
+    fact.pluginFlow === "analysis" &&
+    fact.chain === "auxiliary" &&
+    !Object.hasOwn(fact, "activityId")
+  ) {
+    migrated.activityId = fact.eventId;
+  }
+  return migrated;
+}
+
 async function migrateActivityFact(fact, context) {
   if (isCanonicalActivityTimelineFact(fact)) return fact;
   const migrated = isLegacyLogFact(fact)
     ? await migrateLegacyFact(fact, context)
-    : trimToFactFields(fact);
+    : migrateProjectedFact(fact, context.message);
   if (!isCanonicalActivityTimelineFact(migrated)) {
     throw upgradeError("activity_fact_unrecognized", {
       ...context.details,
@@ -139,7 +163,7 @@ async function migrateActivityFact(fact, context) {
   return migrated;
 }
 
-async function migrateMessage(message, context) {
+export async function migrateSessionActivityTimelineMessage(message, context) {
   if (!Array.isArray(message.activityTimeline)) return message;
   const messageContext = {
     ...context,
@@ -156,7 +180,10 @@ async function migrateMessage(message, context) {
   return changed ? { ...message, activityTimeline } : message;
 }
 
-const rewriter = createSessionMessageRewriter({ upgradeError, migrateMessage });
+const rewriter = createSessionMessageRewriter({
+  upgradeError,
+  migrateMessage: migrateSessionActivityTimelineMessage,
+});
 
 export async function upgradeSessionActivityTimeline({
   base,

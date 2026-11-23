@@ -37,7 +37,7 @@ async function fixture(t, indexed = true) {
           eventId,
           ordinal,
           artifact: ordinal === 2 || ordinal === 5,
-          envelope: { identity: { eventId, sessionId: "s1" } },
+          envelope: { identity: { eventId, sessionId: "s1", turnScopeId: `t${ordinal}` } },
         };
         plan.set("events", eventId, record);
         if (indexed) await indexImmutableArtifactEvent(store, plan, record);
@@ -75,10 +75,21 @@ test("artifact index shares authoritative references, reads only members and pre
     envelopes.map((event) => event.identity.eventId),
     ["e2", "e5"],
   );
-  assert.equal(requested.length, 3);
   await store.objects.withSnapshot(snapshot, async () => {
-    const descriptor = await store.get(snapshot, "metadata", "artifactEventIndex");
+    const reads = requested.slice();
+    const metadataRoot = await store.index.get(snapshot.root, "metadata");
     const eventsRoot = await store.index.get(snapshot.root, "events");
+    assert.deepEqual(
+      new Set(reads),
+      new Set([
+        await store.index.get(metadataRoot, "artifactEventIndex"),
+        await store.index.get(metadataRoot, "events"),
+        await store.index.get(eventsRoot, "e2"),
+        await store.index.get(eventsRoot, "e5"),
+      ]),
+    );
+    assert.equal(reads.length, 4);
+    const descriptor = await store.get(snapshot, "metadata", "artifactEventIndex");
     for await (const [eventId, reference] of store.index.entries(descriptor.root))
       assert.equal(reference, await store.index.get(eventsRoot, eventId));
     await verifyImmutableArtifactEventIndex(store, snapshot);

@@ -279,9 +279,12 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
   }
 });
 
-test("prepareTurnInput ingests raw attachments once and keeps canonical ones as-is", async () => {
+test("prepareTurnInput ingests uploads once and resolves existing attachments by identity", async () => {
   const ingestCalls = [];
-  const attachmentService = createTestAttachmentService({
+  const attachmentService = {
+    async readAttachmentMetadata({ identities }) {
+      return identities.map((identity) => ({ ...identity, path: "/workspace/resume.docx" }));
+    },
     async ingest(payload) {
       ingestCalls.push(payload);
       return [
@@ -295,7 +298,7 @@ test("prepareTurnInput ingests raw attachments once and keeps canonical ones as-
         },
       ];
     },
-  });
+  };
 
   const { userMessageAttachments: attachments } = await prepareTurnInput({
     attachmentService,
@@ -308,7 +311,7 @@ test("prepareTurnInput ingests raw attachments once and keeps canonical ones as-
         turnScopeId: "turn-test",
         caller: SESSION_CALLER.USER,
       },
-      userMessageAttachments: [{ name: "resume.docx", type: "application/octet-stream" }],
+      userMessageAttachments: [{ name: "resume.docx", contentBase64: "eA==" }],
     },
   });
 

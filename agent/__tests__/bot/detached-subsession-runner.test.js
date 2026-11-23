@@ -8,12 +8,11 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
-import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
+import { createImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import {
   openImmutableSessionReader,
   withImmutableSessionReader,
 } from "../../src/session/session-artifact-session/immutable-session-reader.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
 
 import {
   createDetachedSubSessionRunner,
@@ -171,9 +170,12 @@ test("detached sub-session delegates execution and persistence to the main runne
   );
   assert.equal("persisted" in result, false);
   assert.equal(result.result.answer, "agent answer");
-  assert.deepEqual(result.result.messages, [
-    { messageUid: "sm_child", role: "assistant", content: "agent answer" },
-  ]);
+  assert.deepEqual(result.result.messageSource, {
+    sessionId: "sub1",
+    dialogProcessId: "sub-dialog",
+    turnScopeId: "turn-1",
+  });
+  assert.equal(Object.hasOwn(result.result, "messages"), false);
   assert.equal(Object.hasOwn(result.result, "turnTasks"), false);
 });
 
@@ -402,7 +404,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     async isSessionDeleted() {
       return false;
     },
-    async recoverImmutableSessionPlacement() {
+    async recoverSessionPlacement() {
       return persisted ? open() : null;
     },
     requireSessionReader: open,
@@ -410,35 +412,36 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
       return this.withSessionMutation(userId, sessionId, (scope) =>
         withImmutableSessionReader(
           { sessionDir, sessionId, parentSessionId: scope.resolvedParentSessionId },
-          async (reader, commitChanges) => {
-            const result = await operation(reader, scope, commitChanges);
-            persisted = await (await open()).exportSession();
+          async (reader, commitChanges, readCurrent) => {
+            const result = await operation({ reader, scope, commitChanges, readCurrent });
+            persisted = await readCurrent((current) => current.exportSession());
             return result;
           },
         ),
       );
     },
-    async findImmutableSessionReader() {
+    async findSessionReader() {
       return persisted ? open() : null;
     },
     async findById() {
       return persisted ? normalizeSessionEntity(structuredClone(persisted)) : null;
     },
-    async createImmutableSession(_userId, session, { authorityEvents }) {
+    async createStoredSession(_userId, session, { initialTurn, scopedMetadata = null }) {
       assert.equal(persisted, null);
-      await initializeImmutableSession({
-        sessionDir,
+      const committed = await createImmutableSession({
+        scope: {
+          sessionDir,
+          sessionId: session.sessionId,
+          parentSessionId: session.parentSessionId,
+        },
         session,
         operationId: "initialize-detached-test",
-        authorityEvents,
-        outbox: authorityEvents,
+        initialTurn,
+        scopedMetadata,
       });
-      persisted = await (await open()).exportSession();
-    },
-    async commitChanges(_userId, sessionId, request) {
-      const result = await commitSessionChanges({ ...request, sessionDir, sessionId });
-      persisted = await (await open()).exportSession();
-      return result;
+      await using reader = await open();
+      persisted = await reader.exportSession();
+      return committed;
     },
   };
   const messageService = new SessionMessageService({ sessionRepo: repo, now: fixedNow });
@@ -501,14 +504,26 @@ test("invalid runner results commit failure instead of a successful empty result
     { messages: {} },
     { messages: [{ role: "assistant" }] },
     { traces: undefined },
+    { messageSource: undefined },
+    { messageSource: {} },
+    { transferEnvelopes: undefined },
     { answer: null },
     { dialogProcessId: undefined },
     { dialogProcessId: " sub-dialog " },
   ]) {
     const { calls, deps } = createDeps({
       sessionRunner: {
-        async runSession({ dialogProcessId }) {
-          return { answer: "done", messages: [], traces: [], dialogProcessId, ...patch };
+        async runSession({ sessionId, dialogProcessId, turnScopeId }) {
+          return {
+            answer: "done",
+            traces: [],
+            sessionId,
+            dialogProcessId,
+            turnScopeId,
+            messageSource: { sessionId, dialogProcessId, turnScopeId },
+            transferEnvelopes: [],
+            ...patch,
+          };
         },
       },
     });
@@ -537,8 +552,16 @@ test("invalid runner results commit failure instead of a successful empty result
 test("detached sub-session rejects a runner result with a second dialog identity", async () => {
   const { calls, deps } = createDeps({
     sessionRunner: {
-      async runSession() {
-        return { answer: "done", traces: [], messages: [], dialogProcessId: "foreign-dialog" };
+      async runSession({ sessionId, turnScopeId }) {
+        return {
+          answer: "done",
+          traces: [],
+          sessionId,
+          turnScopeId,
+          dialogProcessId: "foreign-dialog",
+          messageSource: { sessionId, turnScopeId, dialogProcessId: "foreign-dialog" },
+          transferEnvelopes: [],
+        };
       },
     },
   });

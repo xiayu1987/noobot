@@ -3,94 +3,42 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  persistSessionDeletionMarkers,
+  submitTestSessionRequest,
+} from "../helpers/session-services.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { SESSION_CALLER } from "@noobot/shared/session-caller";
-import { createTurnArtifactRevision } from "@noobot/session-protocol/turn-lookup-key";
-import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
-import { initializeUserWorkspace } from "../helpers/user-workspace.js";
-import { migrateSessionImmutableStorage } from "../../src/workspace-lifecycle/session-immutable-storage-upgrade.js";
+import { decodeSessionPageSnapshotCursor } from "@noobot/session-protocol/message-read-budget";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { createSessionFacade } from "../../src/session/index.js";
-import { createPluginArtifactCommitRequest } from "@noobot/event-protocol/plugin-artifact-event";
-import { createAuthorityEventDispatcher } from "../../../service/ws/chat-websocket/authority-event-dispatcher.js";
 import {
   registerImmutableContextRepositoryTests,
   registerImmutableLifecycleRepositoryTests,
 } from "../helpers/immutable-repository-cases.js";
 import { registerImmutableAttachmentRepositoryTests } from "../helpers/immutable-repository-attachment-cases.js";
 import { registerImmutableTurnIdentityTests } from "../helpers/immutable-repository-turn-identity-cases.js";
-
-const ts = "2026-01-01T00:00:00.000Z";
-const outboxIdentity = { userId: "u1", sessionId: "s1", persistenceScope: null };
+import { ts, message, fixture } from "./immutable-session-repository.test-helpers.js";
 
 registerImmutableTurnIdentityTests({ fixture, message, ts });
 
 registerImmutableAttachmentRepositoryTests({ fixture, message, ts });
 
-function artifactRequest(operation = "created", baseRevision = null) {
-  return createPluginArtifactCommitRequest({
-    pluginId: "example",
-    artifactType: "document",
-    artifactId: "one",
-    sessionId: "s1",
-    turnScopeId: "t1",
-    data: { text: "result" },
-    operation,
-    baseRevision,
-  });
-}
-function message(uid) {
-  return {
-    messageUid: uid,
-    userMessageId: uid,
-    sessionId: "s1",
-    parentSessionId: "",
-    dialogProcessId: "d1",
-    parentDialogProcessId: "",
-    turnScopeId: "t1",
-    role: "user",
-    type: "message",
-    messageOrigin: "natural",
-    content: uid,
-    attachments: [],
-    transferEnvelopes: [],
-    ts,
-  };
-}
-async function fixture(t) {
-  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "immutable-repository-"));
-  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
-  await initializeUserWorkspace(workspaceRoot, "u1");
-  const runtime = createTestSessionServices({ workspaceRoot }, { now: () => ts });
-  const repository = runtime.repositories.sessionRepository;
-  await provisionTestSession(runtime, {
-    userId: "u1",
-    sessionId: "s1",
-    caller: SESSION_CALLER.USER,
-  });
-  const persistenceContext = repository.treePersistenceContext("u1", "s1");
-  const scope = await repository.requireSessionScope("u1", "s1", persistenceContext);
-  await migrateSessionImmutableStorage({
-    storageService: repository.storageService,
-    sessionDir: scope.sessionDir,
-  });
-  return { runtime, repository, persistenceContext, scope, workspaceRoot };
-}
-
 test("display reads use immutable authority without reading legacy artifacts", async (t) => {
   const { repository, scope, persistenceContext } = await fixture(t);
   const reader = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-  await repository.commitChanges("u1", "s1", {
+  await submitTestSessionRequest(
+    repository,
+    "u1",
+    "s1",
+    await reader.prepareRequest({
+      operationId: "seed-display",
+      committedAt: ts,
+      changes: { messages: [message("display-message")] },
+    }),
     persistenceContext,
-    expectedGeneration: reader.generation,
-    operationId: "seed-display",
-    committedAt: ts,
-    changes: { messages: [message("display-message")] },
-  });
+  );
   await writeFile(scope.sessionFile, "invalid legacy manifest");
   await writeFile(path.join(scope.sessionDir, "session-summary.json"), "invalid legacy cache");
   const direct = await repository.readSessionDisplaySummary("u1", "s1", { persistenceContext });
@@ -99,206 +47,51 @@ test("display reads use immutable authority without reading legacy artifacts", a
   await assert.rejects(repository.readSessionDisplaySummary("u1", "s1", { persistenceContext }));
 });
 
-test("production event submission, partial delivery and restart use only the immutable authority", async (t) => {
-  const { runtime, repository, scope, workspaceRoot, persistenceContext } = await fixture(t);
-  const session = createSessionFacade(runtime);
-  await writeFile(scope.sessionFile, "invalid legacy manifest");
-  repository.readSessionEventManifest = () => assert.fail("must not read old event manifest");
-  repository.saveSessionArtifactEvents = () => assert.fail("must not save old event manifest");
-  const first = await session.commitAuthorityEvent({ ...outboxIdentity, ...artifactRequest() });
-  const second = await session.commitAuthorityEvent({
-    ...outboxIdentity,
-    ...artifactRequest("replaced", 1),
-  });
-  assert.equal(first.aggregateVersion, 1);
-  assert.equal(second.aggregateVersion, 2);
-  assert.equal(second.envelope.ordering.sequence, 2);
-  assert.equal(
-    (await session.commitAuthorityEvent({ ...outboxIdentity, ...artifactRequest("replaced", 1) }))
-      .reason,
-    "revision_conflict",
-  );
-  const bot = { session };
-  const sent = [];
-  const dispatch = createAuthorityEventDispatcher({
-    resolveBot: () => bot,
-    consumerId: "service.websocket",
-    sendEvent: async (_type, envelope) => {
-      sent.push(envelope.identity.eventId);
-      return sent.length !== 2;
-    },
-  });
-  assert.deepEqual(await dispatch(outboxIdentity), {
-    dispatched: false,
-    reason: "authority_event_send_failed",
-    delivered: 1,
-  });
-  assert.deepEqual(sent, [first.envelope.identity.eventId, second.envelope.identity.eventId]);
-  const restarted = createTestSessionServices({ workspaceRoot }, { now: () => ts });
-  const resumed = [];
-  const retry = createAuthorityEventDispatcher({
-    resolveBot: () => ({ session: createSessionFacade(restarted) }),
-    consumerId: "service.websocket",
-    sendEvent: async (_type, envelope) => {
-      resumed.push(envelope.identity.eventId);
-      return true;
-    },
-  });
-  assert.deepEqual(await retry(outboxIdentity), { dispatched: true, delivered: 1 });
-  assert.deepEqual(resumed, [second.envelope.identity.eventId]);
-  const pinned = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-  const result = await session.compactAuthorityEvents({
-    ...outboxIdentity,
-    retainDeliveredAfter: "2026-01-02T00:00:00.000Z",
-  });
-  assert.equal(result.removed, 2);
-  assert.equal(result.scanned, 2);
-  assert.equal(
-    (await pinned.readOutboxEvent(first.envelope.identity.eventId)).eventId,
-    first.envelope.identity.eventId,
-  );
-  const current = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-  assert.equal(await current.readOutboxEvent(first.envelope.identity.eventId), null);
-  assert.equal((await current.readPluginArtifact(artifactRequest().payload)).revision, 2);
-});
-
-test("production dispatcher crosses compacted empty pages and maintenance respects its batch budget", async (t) => {
-  const { runtime, repository, persistenceContext, scope } = await fixture(t);
-  const session = createSessionFacade(runtime);
-  await writeFile(scope.sessionFile, "invalid legacy manifest");
-  const envelopes = [];
-  for (let index = 0; index < 65; index += 1) {
-    const result = await session.commitAuthorityEvent({
-      ...outboxIdentity,
-      ...artifactRequest(index ? "replaced" : "created", index || null),
-    });
-    envelopes.push(result.envelope);
-  }
-  const reader = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-  await repository.commitChanges("u1", "s1", {
-    persistenceContext,
-    expectedGeneration: reader.generation,
-    operationId: "ack-prefix-without-cursor",
-    committedAt: ts,
-    changes: {
-      deliveries: envelopes.slice(0, 64).map((envelope) => ({
-        type: "acknowledge",
-        eventId: envelope.identity.eventId,
-        consumerId: "service.websocket",
-        orderingDomain: envelope.ordering.domain,
-        orderingScopeId: envelope.ordering.scopeId,
-        sequence: envelope.ordering.sequence,
-        deliveredAt: ts,
-      })),
-    },
-  });
-  const compactRequest = { ...outboxIdentity, retainDeliveredAfter: "2026-01-02T00:00:00.000Z" };
-  const retentionRequest = { ...outboxIdentity, retainDeliveredAfter: ts };
-  assert.deepEqual(await session.compactAuthorityEvents(retentionRequest), {
-    compacted: false,
-    removed: 0,
-    scanned: 64,
-    hasMore: true,
-    nextRetainedDeliveryAt: ts,
-  });
-  assert.deepEqual(await session.compactAuthorityEvents(retentionRequest), {
-    compacted: false,
-    removed: 0,
-    scanned: 1,
-    hasMore: false,
-    nextRetainedDeliveryAt: null,
-  });
-  assert.deepEqual(await session.compactAuthorityEvents(compactRequest), {
-    compacted: true,
-    removed: 64,
-    scanned: 64,
-    hasMore: true,
-    nextRetainedDeliveryAt: null,
-  });
-  assert.deepEqual(await session.compactAuthorityEvents(compactRequest), {
-    compacted: false,
-    removed: 0,
-    scanned: 1,
-    hasMore: false,
-    nextRetainedDeliveryAt: null,
-  });
-  const sent = [];
-  const dispatch = createAuthorityEventDispatcher({
-    resolveBot: () => ({ session }),
-    consumerId: "service.websocket",
-    sendEvent: async (_type, envelope) => {
-      sent.push(envelope.identity.eventId);
-      return true;
-    },
-  });
-  assert.deepEqual(await dispatch(outboxIdentity), { dispatched: true, delivered: 1 });
-  assert.deepEqual(sent, [envelopes[64].identity.eventId]);
-});
-
-test("production delivery retries a stable event after acknowledgement failure", async (t) => {
-  const { runtime, repository } = await fixture(t);
-  const session = createSessionFacade(runtime);
-  const event = await session.commitAuthorityEvent({ ...outboxIdentity, ...artifactRequest() });
-  const original = repository.withSessionReader.bind(repository);
-  let failAcknowledgement = true;
-  repository.withSessionReader = (userId, sessionId, run, options) =>
-    original(
-      userId,
-      sessionId,
-      (reader, scope, commit) =>
-        run(reader, scope, (input) => {
-          if (
-            failAcknowledgement &&
-            input.changes.deliveries?.some((item) => item.type === "acknowledge")
-          )
-            throw new Error("ack write failed");
-          return commit(input);
-        }),
-      options,
-    );
-  const sent = [];
-  const dispatch = createAuthorityEventDispatcher({
-    resolveBot: () => ({ session }),
-    consumerId: "service.websocket",
-    sendEvent: async (_type, envelope) => {
-      sent.push(envelope.identity.eventId);
-      return true;
-    },
-  });
-  await assert.rejects(dispatch(outboxIdentity), /ack write failed/);
-  failAcknowledgement = false;
-  assert.deepEqual(await dispatch(outboxIdentity), { dispatched: true, delivered: 1 });
-  assert.deepEqual(sent, [event.envelope.identity.eventId, event.envelope.identity.eventId]);
-  const pending = await session.getPendingAuthorityEvents({
-    ...outboxIdentity,
-    consumerId: "service.websocket",
-  });
-  assert.equal(pending.events.length, 0);
-});
-
 test("repository delta commit and pinned queries work without a readable legacy manifest", async (t) => {
   const { repository, persistenceContext, scope } = await fixture(t);
   await writeFile(scope.sessionFile, "invalid legacy manifest");
   const before = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-  const input = {
-    persistenceContext,
-    expectedGeneration: before.generation,
+  const command = {
     operationId: "append",
     changes: { messages: [message("m1")] },
     committedAt: ts,
   };
-  const committed = await repository.commitChanges("u1", "s1", input);
+  const submit = (request) =>
+    submitTestSessionRequest(repository, "u1", "s1", request, persistenceContext);
+  const request = await before.prepareRequest(command);
+  const committed = await submit(request);
   assert.equal(committed.generation, before.generation + 1);
-  assert.equal((await repository.commitChanges("u1", "s1", input)).replayed, true);
+  assert.equal((await submit(request)).replayed, true);
   assert.equal(await before.readMessage("m1"), null);
   const current = await repository.requireSessionReader("u1", "s1", { persistenceContext });
   assert.equal((await current.readMessage("m1")).message.content, "m1");
   assert.equal((await current.readFacts()).messageCount, 1);
   assert.equal((await current.readTurnPage({ turnScopeId: "t1" })).records.length, 1);
   assert.equal((await current.exportSession()).messages.length, 1);
-  await assert.rejects(repository.commitChanges("u1", "s1", { ...input, operationId: "stale" }), {
+  await assert.rejects(submit(await before.prepareRequest({ ...command, operationId: "stale" })), {
     code: "SESSION_GENERATION_CONFLICT",
   });
+});
+
+test("reader captures changes before submission waits for session scope", async (t) => {
+  const { repository, persistenceContext } = await fixture(t);
+  await using reader = await repository.requireSessionReader("u1", "s1", { persistenceContext });
+  const command = {
+    operationId: "capture-before-scope",
+    changes: { messages: [message("m1")] },
+    committedAt: ts,
+  };
+  const pending = submitTestSessionRequest(
+    repository,
+    "u1",
+    "s1",
+    await reader.prepareRequest(command),
+    persistenceContext,
+  );
+  command.changes.messages[0].content = "changed while waiting";
+  await pending;
+  await using current = await repository.requireSessionReader("u1", "s1", { persistenceContext });
+  assert.equal((await current.readMessage("m1")).message.content, "m1");
 });
 
 test("registered sessions require their head even without a format marker", async (t) => {
@@ -316,18 +109,17 @@ test("registered sessions require their head even without a format marker", asyn
       turnScopeId: "t1",
       dialogProcessId: "d1",
     });
-  t.mock.method(repository, "requireTurnView", () => assert.fail("query must not switch readers"));
   await rm(path.join(scope.sessionDir, "immutable-session.format"), { force: true });
   await rm(path.join(scope.sessionDir, "head.json"));
   for (const read of [
-    () => repository.findImmutableSessionReader("u1", "s1", { persistenceContext }),
+    () => repository.findSessionReader("u1", "s1", { persistenceContext }),
     () => repository.findTurnTerminalSource("u1", "s1", { persistenceContext, turnScopeId: "t1" }),
     sources,
     checkpoint,
   ]) {
     await assert.rejects(read(), { code: "SESSION_IMMUTABLE_STORAGE_INVALID" });
   }
-  await repository.markSessionsDeleted("u1", ["s1"]);
+  await persistSessionDeletionMarkers(repository, "u1", ["s1"]);
   await assert.rejects(sources(), { code: "SESSION_DELETED" });
   await assert.rejects(checkpoint(), { code: "SESSION_DELETED" });
 });
@@ -335,11 +127,7 @@ test("registered sessions require their head even without a format marker", asyn
 test("required message queries reject an unregistered session", async (t) => {
   const { runtime, repository, persistenceContext } = await fixture(t);
   t.mock.method(repository, "locateSessionScope", async () => null);
-  t.mock.method(repository, "requireTurnView", () => assert.fail("query must not switch readers"));
-  assert.equal(
-    await repository.findImmutableSessionReader("u1", "absent", { persistenceContext }),
-    null,
-  );
+  assert.equal(await repository.findSessionReader("u1", "absent", { persistenceContext }), null);
   const query = { userId: "u1", sessionId: "absent", persistenceContext };
   await assert.rejects(
     runtime.sessionMessageService.getSessionMessageSources({
@@ -362,264 +150,156 @@ test("required message queries reject an unregistered session", async (t) => {
 test("repository rejects deleted sessions and does not fall back when an immutable head is missing", async (t) => {
   const { repository, persistenceContext, scope } = await fixture(t);
   await rm(path.join(scope.sessionDir, "head.json"));
-  await assert.rejects(repository.findImmutableSessionReader("u1", "s1", { persistenceContext }), {
+  await assert.rejects(repository.findSessionReader("u1", "s1", { persistenceContext }), {
     code: "SESSION_IMMUTABLE_STORAGE_INVALID",
   });
   await assert.rejects(repository.requireSessionReader("u1", "s1", { persistenceContext }), {
     code: "SESSION_IMMUTABLE_STORAGE_INVALID",
   });
-  await repository.markSessionsDeleted("u1", ["s1"]);
+  await persistSessionDeletionMarkers(repository, "u1", ["s1"]);
+  assert.equal(await repository.findSessionReader("u1", "s1", { persistenceContext }), null);
+  assert.equal(
+    await repository.findTurnLifecycleSource("u1", "s1", { persistenceContext, terminalLimit: 1 }),
+    null,
+  );
   await assert.rejects(repository.requireSessionReader("u1", "s1", { persistenceContext }), {
     code: "SESSION_DELETED",
   });
   await assert.rejects(
-    repository.commitChanges("u1", "s1", {
-      persistenceContext,
-      expectedGeneration: 1,
-      operationId: "revive",
-      changes: { messages: [message("m1")] },
-      committedAt: ts,
-    }),
+    repository.withSessionReader(
+      "u1",
+      "s1",
+      async ({ reader, commitChanges }) =>
+        commitChanges(
+          await reader.prepareRequest({
+            operationId: "revive",
+            changes: { messages: [message("m1")] },
+            committedAt: ts,
+          }),
+        ),
+      { persistenceContext },
+    ),
     { code: "SESSION_DELETED" },
   );
 });
 
-async function seedEvents(repository, persistenceContext) {
-  for (const event of [
-    {
-      eventType: "turn.action_accepted",
-      phase: "action",
-      action: "send",
-      presentationMessageId: "p1",
-      dialogProcessId: "d1",
-      executionId: "agent:t1",
-      executionKind: "agent",
-      rootExecutionId: "agent:t1",
-    },
-    { eventType: "turn.processing_started", phase: "processing" },
-  ]) {
-    await using reader = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-    const result = await repository.commitChanges("u1", "s1", {
-      persistenceContext,
-      expectedGeneration: reader.generation,
-      operationId: event.eventType,
-      changes: {
-        turnTransition: {
-          ...event,
-          sessionId: "s1",
-          turnScopeId: "t1",
-          commandId: event.eventType,
-          causationId: event.eventType,
-        },
-      },
-      committedAt: ts,
-    });
-    assert.equal(result.result.turnTransition.applied, true);
-  }
-}
-
-test("production delivery resumes after a publisher exception without resending its acknowledged prefix", async (t) => {
-  const { runtime, repository, persistenceContext } = await fixture(t);
-  await seedEvents(repository, persistenceContext);
-  const bot = { session: createSessionFacade(runtime) };
-  const first = [];
-  const dispatch = createAuthorityEventDispatcher({
-    resolveBot: () => bot,
-    consumerId: "service.websocket",
-    sendEvent: async (_type, envelope) => {
-      first.push(envelope.identity.eventId);
-      if (first.length === 2) throw new Error("send failed");
-      return true;
-    },
-  });
-  await assert.rejects(dispatch(outboxIdentity), /send failed/);
-  await using reader = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-  const remaining = await reader.readOutboxPage({ consumerId: "service.websocket" });
-  assert.equal(remaining.after, 1);
-  assert.deepEqual(
-    remaining.events.map((item) => item.eventId),
-    [first[1]],
-  );
-  const retried = [];
-  assert.deepEqual(
-    await dispatch(outboxIdentity, async (_type, envelope) => {
-      retried.push(envelope.identity.eventId);
-      return true;
-    }),
-    { dispatched: true, delivered: 1 },
-  );
-  assert.deepEqual(retried, [first[1]]);
-  assert.deepEqual(
-    await dispatch(outboxIdentity, () => assert.fail("acknowledged prefix must not replay")),
-    {
-      dispatched: true,
-      delivered: 0,
-    },
-  );
-});
-
-test("production sending releases session locks and does not acknowledge concurrent appended events", async (t) => {
-  const { runtime, repository, persistenceContext } = await fixture(t);
-  await seedEvents(repository, persistenceContext);
-  const bot = { session: createSessionFacade(runtime) };
-  let sends = 0;
-  let appended;
-  const dispatch = createAuthorityEventDispatcher({
-    resolveBot: () => bot,
-    consumerId: "service.websocket",
-    sendEvent: async () => {
-      if (++sends === 2) return false;
-      await using reader = await repository.requireSessionReader("u1", "s1", {
-        persistenceContext,
-      });
-      await repository.commitChanges("u1", "s1", {
-        persistenceContext,
-        expectedGeneration: reader.generation,
-        operationId: "during-send",
-        changes: { sessionMetadata: { customTitle: "updated during external send" } },
-        committedAt: ts,
-      });
-      appended = await bot.session.commitAuthorityEvent({
-        ...outboxIdentity,
-        ...artifactRequest(),
-      });
-      return true;
-    },
-  });
-  assert.deepEqual(await dispatch(outboxIdentity), {
-    dispatched: false,
-    reason: "authority_event_send_failed",
-    delivered: 1,
-  });
-  await using reader = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-  assert.equal((await reader.readMetadata()).customTitle, "updated during external send");
-  const pending = await reader.readOutboxPage({ consumerId: "service.websocket" });
-  assert.equal(pending.after, 1);
-  assert.equal(pending.events.length, 2);
-  assert.equal(pending.events[1].eventId, appended.envelope.identity.eventId);
-});
-
-test("production concurrent connections deduplicate acknowledgements and resume the committed prefix", async (t) => {
-  const { runtime, repository, persistenceContext } = await fixture(t);
-  await seedEvents(repository, persistenceContext);
-  const bot = { session: createSessionFacade(runtime) };
-  const resolveBot = () => bot;
-  const entered = Promise.withResolvers();
-  const barrier = Promise.withResolvers();
-  const staleIds = [];
-  const slow = createAuthorityEventDispatcher({
-    resolveBot,
-    consumerId: "service.websocket",
-    sendEvent: async (_type, envelope) => {
-      staleIds.push(envelope.identity.eventId);
-      if (staleIds.length === 2) return false;
-      entered.resolve();
-      await barrier.promise;
-      return true;
-    },
-  });
-  const inFlight = slow(outboxIdentity);
-  await entered.promise;
-  try {
-    let sends = 0;
-    const winner = createAuthorityEventDispatcher({
-      resolveBot,
-      consumerId: "service.websocket",
-      sendEvent: async () => ++sends === 1,
-    });
-    assert.deepEqual(await winner(outboxIdentity), {
-      dispatched: false,
-      reason: "authority_event_send_failed",
-      delivered: 1,
-    });
-  } finally {
-    barrier.resolve();
-  }
-  assert.deepEqual(await inFlight, {
-    dispatched: false,
-    reason: "authority_event_send_failed",
-    delivered: 1,
-  });
-  await using reader = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-  const pending = await reader.readOutboxPage({ consumerId: "service.websocket" });
-  assert.equal(pending.after, 1);
-  assert.deepEqual(
-    pending.events.map((event) => event.eventId),
-    [staleIds[1]],
-  );
-  const resumedIds = [];
-  assert.deepEqual(
-    await slow(outboxIdentity, async (_type, envelope) => {
-      resumedIds.push(envelope.identity.eventId);
-      return true;
-    }),
-    { dispatched: true, delivered: 1 },
-  );
-  assert.deepEqual(resumedIds, [staleIds[1]]);
-});
-
-test("selected immutable turn views pin messages and resolve a UID without expanding its historical turn", async (t) => {
+test("scoped turn pages preserve snapshots, dialog ownership and read budgets", async (t) => {
   const { repository, persistenceContext, scope } = await fixture(t);
   const initial = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-  await repository.commitChanges("u1", "s1", {
+  await submitTestSessionRequest(
+    repository,
+    "u1",
+    "s1",
+    await initial.prepareRequest({
+      operationId: "selected-view",
+      committedAt: ts,
+      changes: {
+        messages: [
+          message("m1"),
+          message("m2"),
+          { ...message("old1"), dialogProcessId: "old", turnScopeId: "history" },
+          { ...message("old2"), dialogProcessId: "old", turnScopeId: "history" },
+        ],
+      },
+    }),
     persistenceContext,
-    expectedGeneration: initial.generation,
-    operationId: "selected-view",
-    committedAt: ts,
-    changes: {
-      messages: [
-        message("m1"),
-        message("m2"),
-        { ...message("old1"), dialogProcessId: "old", turnScopeId: "history" },
-        { ...message("old2"), dialogProcessId: "old", turnScopeId: "history" },
-      ],
-    },
-  });
-  await writeFile(scope.sessionFile, "invalid legacy manifest");
-  const pinned = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-  const query = { turnScopeIds: ["t1"], messageUids: ["old1", "missing", "m1"] };
-  const view = await repository.requireTurnView("u1", "s1", { ...query, persistenceContext });
-  assert.deepEqual(
-    view.session.messages.map((item) => item.messageUid),
-    ["m1", "m2", "old1"],
   );
-  assert.deepEqual(view.turnScopeIds, ["t1", "history"]);
-  assert.equal(view.generation, pinned.generation);
+  await writeFile(scope.sessionFile, "invalid legacy manifest");
+  await using pinned = await repository.requireSessionReader("u1", "s1", { persistenceContext });
+  const query = { lookupKey: { turnScopeId: "t1", dialogProcessId: "d1" }, cursor: null, limit: 1 };
+  const first = await pinned.readScopedTurnMessagePage(query);
+  assert.equal(first.generation, pinned.generation);
+  assert.equal(first.messageCount, 2);
+  assert.deepEqual(
+    first.records.map(({ message }) => message.messageUid),
+    ["m1"],
+  );
+  assert.ok(first.nextCursor);
+  await assert.rejects(pinned.readScopedTurnMessagePage({ ...query, maxBytes: 1 }), {
+    code: "SESSION_MESSAGE_READ_BUDGET_EXCEEDED",
+  });
+  const foreign = { ...query, lookupKey: { turnScopeId: "t1", dialogProcessId: "wrong" } };
+  assert.equal(await pinned.readScopedTurnMessagePage(foreign), null);
+  await assert.rejects(pinned.readScopedTurnMessagePage({ ...foreign, cursor: first.nextCursor }), {
+    code: "SESSION_PAGE_CURSOR_CONFLICT",
+  });
   const detailQuery = {
     persistenceContext,
     lookupKey: { turnScopeId: "t1", dialogProcessId: "d1" },
+    cursor: null,
+    limit: 1,
   };
-  const detail = await repository.readSessionTurn("u1", "s1", detailQuery);
+  const detail = await repository.readSessionThinkingDetail("u1", "s1", detailQuery);
+  assert.equal(detail.exists, true);
+  assert.equal(detail.messages[0].turnScopeId, "t1");
+  assert.equal(detail.generation, pinned.generation);
+  const detailPage = await pinned.readThinkingDetailPage(detailQuery);
   assert.deepEqual(
-    detail.messages.map((item) => item.messageUid),
-    ["m1", "m2"],
+    detailPage.records.map(({ message }) => message),
+    detail.messages,
   );
-  assert.match(createTurnArtifactRevision(detail), /^turn-objects:/);
-  assert.equal(
-    await repository.readSessionTurn("u1", "s1", {
+  assert.deepEqual(
+    decodeSessionPageSnapshotCursor(detail.nextCursor).cursor,
+    detailPage.nextCursor,
+  );
+  const continueDetail = (lookupKey = detailQuery.lookupKey) =>
+    repository.readSessionThinkingDetail("u1", "s1", {
+      ...detailQuery,
+      lookupKey,
+      cursor: detail.nextCursor,
+    });
+  await assert.rejects(continueDetail(foreign.lookupKey), {
+    code: "SESSION_PAGE_SNAPSHOT_EXPIRED",
+  });
+  assert.deepEqual(
+    await repository.readSessionThinkingDetail("u1", "s1", {
       ...detailQuery,
       lookupKey: { turnScopeId: "t1", dialogProcessId: "wrong" },
     }),
-    null,
+    { exists: false },
   );
-  await repository.commitChanges("u1", "s1", {
+  await submitTestSessionRequest(
+    repository,
+    "u1",
+    "s1",
+    await pinned.prepareRequest({
+      operationId: "update-selected",
+      committedAt: ts,
+      changes: { messages: [{ ...message("m1"), content: "changed" }, message("m3")] },
+    }),
     persistenceContext,
-    expectedGeneration: pinned.generation,
-    operationId: "update-selected",
-    committedAt: ts,
-    changes: { messages: [{ ...message("m1"), content: "changed" }] },
-  });
-  assert.equal((await pinned.readTurnView(query)).session.messages[0].content, "m1");
-  const updatedDetail = await repository.readSessionTurn("u1", "s1", detailQuery);
-  assert.notEqual(createTurnArtifactRevision(updatedDetail), createTurnArtifactRevision(detail));
+  );
+  assert.equal((await pinned.readScopedTurnMessagePage(query)).records[0].message.content, "m1");
+  const second = await pinned.readScopedTurnMessagePage({ ...query, cursor: first.nextCursor });
+  assert.deepEqual(
+    second.records.map(({ message }) => message.messageUid),
+    ["m2"],
+  );
+  assert.equal(second.nextCursor, null);
+  const continuedDetail = await continueDetail();
+  assert.equal(continuedDetail.generation, detail.generation);
+  assert.deepEqual(
+    continuedDetail.messages.map(({ messageUid }) => messageUid),
+    ["m2"],
+  );
+  assert.equal(continuedDetail.nextCursor, null);
+  await assert.rejects(continueDetail(), { code: "SESSION_PAGE_SNAPSHOT_EXPIRED" });
+  const updatedDetail = await repository.readSessionThinkingDetail("u1", "s1", detailQuery);
+  assert.notEqual(updatedDetail.generation, detail.generation);
+  assert.equal(updatedDetail.messages[0].messageUid, "m1");
+  assert.equal(updatedDetail.messages[0].content, null);
+  await using current = await repository.requireSessionReader("u1", "s1", { persistenceContext });
   assert.equal(
-    (await repository.requireTurnView("u1", "s1", { ...query, persistenceContext })).session
-      .messages[0].content,
+    (await current.readScopedTurnMessagePage(query)).records[0].message.content,
     "changed",
   );
-  await assert.rejects(pinned.readTurnView({ turnScopeIds: [""] }), /turnScopeId/);
-  await repository.markSessionsDeleted("u1", ["s1"]);
-  assert.equal(await repository.findTurnView("u1", "s1", { ...query, persistenceContext }), null);
+  await assert.rejects(current.readScopedTurnMessagePage({ ...query, cursor: first.nextCursor }), {
+    code: "SESSION_PAGE_CURSOR_CONFLICT",
+  });
+  await persistSessionDeletionMarkers(repository, "u1", ["s1"]);
+  await assert.rejects(repository.requireSessionReader("u1", "s1", { persistenceContext }), {
+    code: "SESSION_DELETED",
+  });
 });
 
 test("metadata settings and user meta stay on the immutable authority after migration", async (t) => {
@@ -628,7 +308,6 @@ test("metadata settings and user meta stay on the immutable authority after migr
   const identity = { userId: "u1", sessionId: "s1", persistenceContext };
   await service.appendTurns({ ...identity, turns: [message("m1")] });
   await writeFile(scope.sessionFile, "invalid legacy manifest");
-  repository.requireTurnView = () => assert.fail("user meta must resolve its named UID");
   repository.saveTurnView = () => assert.fail("user meta must commit only its changed message");
   const pinned = await repository.requireSessionReader("u1", "s1", { persistenceContext });
   const result = { sourceAttachmentRef: "attach://source", summary: "parsed source" };
@@ -666,7 +345,6 @@ test("metadata settings and user meta stay on the immutable authority after migr
 test("business append and summary commit use immutable deltas without opening the legacy turn view", async (t) => {
   const { runtime, repository, persistenceContext, scope } = await fixture(t);
   await writeFile(scope.sessionFile, "invalid legacy manifest");
-  repository.requireTurnView = () => assert.fail("business delta must not materialize a turn view");
   repository.saveTurnView = () => assert.fail("business delta must not save a turn view");
   const appended = await runtime.sessionMessageService.appendTurns({
     userId: "u1",
@@ -755,21 +433,24 @@ test("scoped commits resolve identity once, preserve replay and reject escaped c
   await repository.withSessionReader(
     "u1",
     "s1",
-    async (reader, _scope, commit) => {
+    async ({ reader, commitChanges: commit }) => {
       escaped = commit;
-      request = {
-        expectedGeneration: reader.generation,
+      const command = {
         operationId: "scoped-commit",
         changes: { sessionMetadata: { customTitle: "scoped" } },
         committedAt: ts,
       };
+      request = await reader.prepareRequest(command);
       const first = await commit(request);
       assert.equal(first.generation, reader.generation + 1);
       assert.equal((await reader.readMetadata()).customTitle, undefined);
       assert.equal((await commit(request)).replayed, true);
-      await assert.rejects(commit({ ...request, operationId: "stale" }), {
-        code: "SESSION_GENERATION_CONFLICT",
-      });
+      await assert.rejects(
+        commit(await reader.prepareRequest({ ...command, operationId: "stale" })),
+        {
+          code: "SESSION_GENERATION_CONFLICT",
+        },
+      );
     },
     { persistenceContext },
   );
@@ -781,24 +462,6 @@ test("scoped commits resolve identity once, preserve replay and reject escaped c
   assert.equal((await current.readMetadata()).customTitle, "scoped");
 });
 
-test("authority delivery commits use the enclosing lifecycle scope and retain persisted attempts", async (t) => {
-  const { runtime, repository, persistenceContext } = await fixture(t);
-  const session = createSessionFacade(runtime);
-  const created = await session.commitAuthorityEvent({ ...outboxIdentity, ...artifactRequest() });
-  t.mock.method(repository, "commitChanges", () => assert.fail("nested repository mutation"));
-  const locate = t.mock.method(repository, "locateSessionScope");
-  const attempted = await session.recordAuthorityEventAttempts({
-    ...outboxIdentity,
-    consumerId: "service.websocket",
-    eventIds: [created.envelope.identity.eventId],
-  });
-  assert.equal(attempted.recorded, true);
-
-  assert.equal(locate.mock.callCount(), 2);
-  await using current = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-  const item = await current.readOutboxEvent(created.envelope.identity.eventId);
-  assert.equal(item.deliveries["service.websocket"].attempts, 1);
-});
-
 registerImmutableContextRepositoryTests({ fixture, message, ts });
+
 registerImmutableLifecycleRepositoryTests({ fixture, ts });

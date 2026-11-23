@@ -5,6 +5,7 @@
  */
 
 import { AgentConfigProtocolError, CONFIG_ERROR_CODE } from "../contract/errors.js";
+import { requirePartitionSessionStorageBudget } from "@noobot/session-protocol/partition-journal-budget";
 import { isFunction, isPlainObject, text } from "@noobot/shared/value";
 
 export function normalizeConfigValidators(validators) {
@@ -32,12 +33,27 @@ function normalizeValidatorResult(result, name) {
   };
 }
 
+function validatePartitionStorageBudget(budget) {
+  try {
+    requirePartitionSessionStorageBudget(budget);
+  } catch (cause) {
+    if (!(cause instanceof TypeError)) throw cause;
+    throw new AgentConfigProtocolError(`invalid partitionSessionStorage: ${cause.message}`, {
+      code: CONFIG_ERROR_CODE.VALIDATION_FAILED,
+      details: { path: "partitionSessionStorage" },
+    });
+  }
+}
+
 export async function validateEffectiveConfig({
   rawConfig = {},
   resolvedConfig = {},
   validators,
   context = {},
+  requirePartitionStorage = false,
 } = {}) {
+  if (requirePartitionStorage || Object.hasOwn(resolvedConfig, "partitionSessionStorage"))
+    validatePartitionStorageBudget(resolvedConfig.partitionSessionStorage);
   const warnings = [];
   for (const validator of normalizeConfigValidators(validators)) {
     const result = normalizeValidatorResult(

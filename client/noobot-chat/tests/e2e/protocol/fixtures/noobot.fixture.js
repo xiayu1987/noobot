@@ -20,6 +20,7 @@ import {
 } from "../helpers/model-observation-policy.js";
 import {
   auditSessionSummaryArtifacts,
+  sessionSummaryAuditIdentity,
   modelInvocationTraces,
   iterateSessionExecutionEventTree,
   waitForModelInvocationTraces,
@@ -255,9 +256,7 @@ async function auditSessionSummaryPersistence({
   } catch (error) {
     audit = {
       ...(error?.audit || {}),
-      protocolVersion: 2,
-      authority: "immutable_session_projection",
-      rootSessionId: sessionId,
+      ...sessionSummaryAuditIdentity(sessionId),
       status: "failed",
       failure: String(error?.message || error),
     };

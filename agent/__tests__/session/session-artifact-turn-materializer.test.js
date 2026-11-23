@@ -10,10 +10,8 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { createSessionStorageMessageIndex } from "@noobot/session-protocol";
-import {
-  observeSessionStorageWork,
-  withSessionStorageTransaction,
-} from "../../src/session/session-artifact-session/storage-transaction.js";
+import { withSessionReadCache } from "../../src/session/session-read-cache.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 
 import {
   buildSessionArtifactFileMap,
@@ -145,7 +143,7 @@ test("transaction shares cold snapshot verification between identity and payload
     getVerifiedSnapshotCache().forget(file);
     const options = { storageService, sessionDir: root, index, previousCheckpointHash: "" };
     const { work } = await observeSessionStorageWork(() =>
-      withSessionStorageTransaction(root, async () => {
+      withSessionReadCache(root, async () => {
         const [identity, snapshot] = await Promise.all([
           readVerifiedCheckpointIdentity(options),
           readVerifiedSnapshot(options),

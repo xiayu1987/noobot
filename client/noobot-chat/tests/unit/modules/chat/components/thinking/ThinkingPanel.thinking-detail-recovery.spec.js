@@ -6,16 +6,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
-import {
-  __resetThinkingDetailCacheForTests,
-  getCachedThinkingDetail,
-  loadThinkingDetail,
-  resolveThinkingDetailIdentity,
-} from "../../../../../../src/modules/chat/model/thinkingDetailCache.js";
+import { loadThinkingDetail } from "../../../../../../src/modules/chat/model/thinkingDetailRequest.js";
 import { normalizeThinkingToolLogs } from "../../../../../../src/modules/chat/model/thinkingDetailModel.js";
 import ThinkingPanelRealtime from "../../../../../../src/modules/chat/components/thinking/ThinkingPanelRealtime.vue";
 import { setTurnThinkingOpenNames } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
 import { API_REQUEST_ERROR_CODE, ApiRequestError } from "@noobot/shared/request-error";
+import { compactThinkingTimeline } from "@noobot/event-protocol/tool-timeline";
 import {
   completedToolTimelineItem,
   toolResultText,
@@ -24,7 +20,7 @@ import {
 const detailServiceMock = vi.hoisted(() => ({ getDetail: null }));
 vi.mock("../../../../../../src/infrastructure/api/thinking/thinkingDetailService.js", () => ({
   thinkingDetailService: {
-    getDetail: (...args) => detailServiceMock.getDetail(...args),
+    getPage: (...args) => detailServiceMock.getDetail(...args),
   },
 }));
 
@@ -47,6 +43,7 @@ function thinkingDetailPayload(messageItem) {
     ok: true,
     exists: true,
     messageItem,
+    page: { generation: 3, messageCount: 1, after: 0, count: 1, nextCursor: null },
   };
 }
 
@@ -87,18 +84,54 @@ function persistedToolTimeline(name, id = "call-1") {
 
 describe("ThinkingPanel thinking-detail recovery", () => {
   afterEach(() => {
-    __resetThinkingDetailCacheForTests();
     detailServiceMock.getDetail = rejectUnservedDetail;
     vi.restoreAllMocks();
   });
 
-  it("loads summary-only thinking details on expansion and reuses the cache across message replacement", async () => {
+  it("keeps the restored event count and window when a detail page has only some calls", async () => {
+    const toolTimeline = Array.from({ length: 6 }, (_, index) => {
+      const [item] = persistedToolTimeline(`file-${index}`, `call-${index}`);
+      const sequence = index * 2 + 1;
+      return {
+        ...item,
+        call: { ...item.resultEvent, eventId: `call-${index}`, sequence },
+        resultEvent: { ...item.resultEvent, sequence: sequence + 1 },
+      };
+    });
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-restored-window",
+      turnScopeId: "client-turn:restored-window",
+      dialogProcessId: "dp-restored-window",
+      hasThinkingDetails: true,
+      toolTimeline: compactThinkingTimeline(toolTimeline),
+    };
+    detailServiceMock.getDetail = async () =>
+      thinkingDetailPayload({ ...messageItem, toolTimeline: toolTimeline.slice(0, 2) });
+    const wrapper = mountThinkingPanel(messageItem, { userId: "user-1" });
+    const realtime = wrapper.getComponent(ThinkingPanelRealtime);
+    expect(realtime.props("executionLogCount")).toBe(12);
+    expect(realtime.props("executionLogs")).toHaveLength(10);
+    expect(realtime.props("thinkingDetailLabel")).toMatch(/\(12\)/);
+
+    setTurnThinkingOpenNames(messageItem, ["thinking-panel"]);
+    await flushAsync();
+    expect(realtime.props("executionLogCount")).toBe(12);
+    expect(realtime.props("executionLogs")).toHaveLength(10);
+    expect(realtime.props("executionLogs")[0].detailText).toContain("docs/file-1.md");
+    expect(realtime.props("executionLogs").at(-1).eventId).toBe("result:call-5");
+    expect(realtime.props("thinkingDetailLabel")).toMatch(/\(12\)/);
+  });
+
+  it("retains only the mounted panel page across same-turn message replacement", async () => {
     const getDetail = vi.fn(async (params) => {
       expect(params).toEqual({
         userId: "user-1",
         sessionId: "session-restore",
         turnScopeId: "client-turn:restore",
         dialogProcessId: "dp-restore",
+        cursor: null,
+        snapshot: null,
       });
       return thinkingDetailPayload({
         role: "assistant",
@@ -134,16 +167,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     setTurnThinkingOpenNames(wrapper.props("messageItem"), ["thinking-panel"]);
     await flushAsync();
     expect(getDetail).toHaveBeenCalledTimes(1);
-    const identity = resolveThinkingDetailIdentity(
-      {
-        role: "assistant",
-        sessionId: "session-restore",
-        turnScopeId: "client-turn:restore",
-        dialogProcessId: "dp-restore",
-      },
-      "session-restore",
-    );
-    const cached = getCachedThinkingDetail(identity);
+    const cached = wrapper.vm.loadedThinkingDetail;
     expect(cached).toBeTruthy();
     expect(cached?.messageItem?.toolTimeline).toHaveLength(1);
     expect(
@@ -166,7 +190,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     await flushAsync();
 
     expect(getDetail).toHaveBeenCalledTimes(1);
-    expect(getCachedThinkingDetail(identity)?.messageItem?.toolTimeline).toHaveLength(1);
+    expect(wrapper.vm.loadedThinkingDetail?.messageItem?.toolTimeline).toHaveLength(1);
   });
 
   it("loads authoritative detail content on expansion even when local tool logs exist", async () => {
@@ -217,7 +241,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     );
   });
 
-  it("retries an eventually consistent thinking detail until it becomes available", async () => {
+  it("reports missing detail without an implicit retry", async () => {
     const getDetail = vi
       .fn()
       .mockRejectedValueOnce(
@@ -244,22 +268,19 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         }),
       );
 
-    const detail = await loadThinkingDetail({
-      sessionId: "session-eventual-detail",
-      fetchThinkingDetail: getDetail,
-      messageItem: {
+    await expect(
+      loadThinkingDetail({
         sessionId: "session-eventual-detail",
-        turnScopeId: "client-turn:eventual-detail",
-        dialogProcessId: "dp-eventual-detail",
-      },
-      retryLimit: 1,
-      retryDelayMs: 0,
-    });
+        fetchThinkingDetail: getDetail,
+        messageItem: {
+          sessionId: "session-eventual-detail",
+          turnScopeId: "client-turn:eventual-detail",
+          dialogProcessId: "dp-eventual-detail",
+        },
+      }),
+    ).rejects.toMatchObject({ code: API_REQUEST_ERROR_CODE.NOT_FOUND });
 
-    expect(getDetail).toHaveBeenCalledTimes(2);
-    expect(detail.messageItem.thinkingContentTimeline[0].text).toBe(
-      "persisted after terminal lifecycle",
-    );
+    expect(getDetail).toHaveBeenCalledTimes(1);
   });
 
   it("loads a summary-only canonical detail in details mode", async () => {
@@ -297,7 +318,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     ).toContainEqual(["read_file", "message.executionStatusCompleted"]);
   });
 
-  it("refreshes an empty cached detail in details mode", async () => {
+  it("opens a fresh page and explicitly restarts it in details mode", async () => {
     const messageItem = {
       role: "assistant",
       sessionId: "session-cached-details",
@@ -325,6 +346,9 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     await flushAsync();
 
     expect(getDetail).toHaveBeenCalledTimes(1);
+    wrapper.findComponent({ name: "ThinkingPanelDetails" }).vm.$emit("restart-pages");
+    await flushAsync();
+    expect(getDetail).toHaveBeenCalledTimes(2);
     expect(
       wrapper
         .findAll(".execution-log-line")

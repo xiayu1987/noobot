@@ -44,12 +44,13 @@ test("user_meta backwrite records the parsed result on the source user message",
   assert.equal(backwrite.userMetaSourceMessageUid, "sm_user_1");
 
   const calls = [];
+  const previouslyCommitted = { sourceAttachmentRef: "attach://other", summary: "retained" };
   const persistenceScope = { kind: "test-scope" };
   const outcome = await applyPendingUserMetaBackwrites(runtime, {
     session: {
       async recordUserMetaParsedResult(payload) {
         calls.push(payload);
-        return { userMetaParsedResults: [payload.result] };
+        return { userMetaParsedResults: [previouslyCommitted, payload.result] };
       },
     },
     userId: "u1",
@@ -67,7 +68,10 @@ test("user_meta backwrite records the parsed result on the source user message",
       result,
     },
   ]);
-  assert.deepEqual(readContextMessageValue(source, "userMetaParsedResults"), [result]);
+  assert.deepEqual(readContextMessageValue(source, "userMetaParsedResults"), [
+    previouslyCommitted,
+    result,
+  ]);
   assert.deepEqual(runtime.activeMessageContext.userMetaBackwrites, []);
 });
 
@@ -88,6 +92,32 @@ test("user_meta backwrite propagates session errors and keeps the record pending
   );
   assert.equal(runtime.activeMessageContext.userMetaBackwrites.length, 1);
 });
+
+for (const [name, receipt] of [
+  ["a missing receipt", undefined],
+  ["an absent result array", {}],
+  ["an empty result array", { userMetaParsedResults: [] }],
+  ["a malformed result", { userMetaParsedResults: [result, {}] }],
+  ["duplicate results", { userMetaParsedResults: [result, result] }],
+  ["a stale result", { userMetaParsedResults: [{ ...result, summary: "stale" }] }],
+]) {
+  test(`user_meta backwrite rejects ${name} without changing context or draining the queue`, async () => {
+    const { runtime, source } = createRuntime();
+    queueUserMetaBackwrite(runtime, { attachmentRef: "attach://a1", result });
+    const queue = runtime.activeMessageContext.userMetaBackwrites;
+    const before = readContextMessageValue(source, "userMetaParsedResults");
+    await assert.rejects(
+      applyPendingUserMetaBackwrites(runtime, {
+        session: { recordUserMetaParsedResult: async () => receipt },
+        userId: "u1",
+        sessionId: "s1",
+      }),
+      /user_meta/,
+    );
+    assert.equal(runtime.activeMessageContext.userMetaBackwrites, queue);
+    assert.equal(readContextMessageValue(source, "userMetaParsedResults"), before);
+  });
+}
 
 test("user_meta backwrite requires the current natural user message", () => {
   const { runtime } = createRuntime();

@@ -64,6 +64,7 @@ test("an in-flight write survives local removal and its acknowledgement preserve
           },
           attempts,
           `test-content-${message.messageUid}-${attempts}`,
+          1,
         ),
       );
     },

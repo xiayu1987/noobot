@@ -13,11 +13,9 @@ import { SessionMessageService } from "../../src/session/services/session-messag
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
-import {
-  openImmutableSessionReader,
-  withImmutableSessionReader,
-} from "../../src/session/session-artifact-session/immutable-session-reader.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { openImmutableSessionReader } from "../../src/session/session-artifact-session/immutable-session-reader.js";
+import { sessionReaderMethods } from "../../src/session/repositories/file-system-session-repository/reader-methods.js";
+import { immutableSessionReaderAccess } from "../../src/session/session-artifact-session/immutable-reader-access.js";
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
@@ -45,8 +43,12 @@ export async function harness(initial = {}) {
   });
   const open = () =>
     openImmutableSessionReader({ sessionDir, sessionId: "s1", parentSessionId: "" });
-  session = await (await open()).exportSession();
+  {
+    await using reader = await open();
+    session = await reader.exportSession();
+  }
   const repo = {
+    sessionReaderAccess: immutableSessionReaderAccess,
     async withSessionMutation(_u, _s, operation) {
       lockCalls += 1;
       return operation(await this.locateSessionScope());
@@ -56,23 +58,31 @@ export async function harness(initial = {}) {
     },
     async ensureSession() {},
     requireSessionReader: open,
-    async withSessionReader(userId, sessionId, operation) {
-      return this.withSessionMutation(userId, sessionId, (scope) =>
-        withImmutableSessionReader(
-          { sessionDir, sessionId: "s1", parentSessionId: scope.resolvedParentSessionId },
-          async (reader, commitChanges) => {
-            const result = await operation(reader, scope, commitChanges);
-            session = await (await open()).exportSession();
-            return result;
-          },
-        ),
+    findSessionReader: open,
+    async withSessionCommit(userId, sessionId, operation, options) {
+      const result = await sessionReaderMethods.withSessionCommit.call(
+        this,
+        userId,
+        sessionId,
+        operation,
+        options,
       );
+      await using reader = await open();
+      session = await reader.exportSession();
+      return result;
     },
-    findImmutableSessionReader: open,
-    async commitChanges(_u, _s, request) {
-      const committed = await commitSessionChanges({ ...request, sessionDir, sessionId: "s1" });
-      session = await (await open()).exportSession();
-      return committed;
+    withSessionReader(userId, sessionId, operation, options) {
+      return sessionReaderMethods.withSessionReader.call(
+        this,
+        userId,
+        sessionId,
+        async (transaction) => {
+          const result = await operation(transaction);
+          session = await transaction.readCurrent((reader) => reader.exportSession());
+          return result;
+        },
+        options,
+      );
     },
   };
   return {

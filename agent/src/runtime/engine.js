@@ -65,7 +65,7 @@ export function commitAuthoritativeFinalOutput({ result, runtime }) {
     ...finalMessageArtifacts(matches[0]),
   });
   if (!updated) return false;
-  result.turnMessages = store.toArray();
+  result.turnMessages = store.readResultMessages();
   return true;
 }
 
@@ -106,7 +106,7 @@ export async function commitAuthoritativeFinalResult({ result, runtime }) {
     modelMessages: result.modelMessages,
     turnMessageStore: store,
   });
-  result.turnMessages = store.toArray();
+  result.turnMessages = store.readResultMessages();
   const diagnostics = authoritativeFinalDiagnostics(result, runtime);
   emitEvent(eventListener, "authoritative_final_commit_started", diagnostics);
   const messages = authoritativeFinalMessages(result, runtime);

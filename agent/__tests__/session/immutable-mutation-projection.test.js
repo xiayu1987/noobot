@@ -9,6 +9,7 @@ import { requireSessionMutationProjection, SESSION_ERROR_CODE } from "@noobot/se
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { immutableLifecycleCommandKey } from "../../src/session/session-artifact-session/immutable-command-index.js";
 import { readImmutableMutationProjection } from "../../src/session/session-artifact-session/immutable-mutation-projection.js";
+import { immutableOrderKey } from "../../src/session/session-artifact-session/immutable-order-key.js";
 import {
   immutableMutationFixture,
   mutationMessage as message,
@@ -59,6 +60,40 @@ test("mutation projection rejects a checksummed commit whose receipt and effect 
     );
     assert.deepEqual(await reader.readMutationProjection("delete"), valid);
   }
+});
+
+test("mutation replay rejects a message order that truncates a different position", async (t) => {
+  const f = await immutableMutationFixture(t, { messages: [message("keep"), message("drop")] });
+  await f.service.deleteFromMessage({
+    ...f.request,
+    commandId: "delete",
+    anchor: { turnScopeId: "drop" },
+  });
+  await using reader = await f.open();
+  const original = await reader.readMutationProjection("delete");
+  const { changes } = await reader.readCommandChanges("delete");
+  const store = new ImmutableSessionStore({ sessionDir: f.scope.sessionDir, sessionId: "s1" });
+  await store.commit({
+    expectedGeneration: reader.generation,
+    operationId: "invalid-suffix-order",
+    changes: [
+      ...changes.map((change) =>
+        change.collection === "messageOrder" ? { ...change, key: immutableOrderKey(1) } : change,
+      ),
+      {
+        collection: "commands",
+        key: immutableLifecycleCommandKey("delete"),
+        value: original.receipt,
+      },
+    ],
+  });
+  await using reopened = await f.open();
+  await assert.rejects(reopened.readMutationProjection("delete"), {
+    code: "SESSION_IMMUTABLE_STORAGE_INVALID",
+    message: "Mutation commit has an incomplete published message suffix",
+  });
+  assert.deepEqual(original.messageSuffix, { firstOrdinal: 2, previousMessageCount: 2 });
+  assert.deepEqual(await reader.readMutationProjection("delete"), original);
 });
 
 test("replacement projections validate receipt identity for both commits and imported baselines", async (t) => {

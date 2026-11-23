@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { compactThinkingTimeline } from "@noobot/event-protocol/tool-timeline";
-import { projectThinkingTimeline } from "../../src/session/thinking-timeline-projection.js";
+import { projectThinkingTimeline } from "@noobot/event-protocol/thinking-detail-projection";
 
 test("compact tool timeline requires the reducer-written key and toolCallId", () => {
   assert.throws(

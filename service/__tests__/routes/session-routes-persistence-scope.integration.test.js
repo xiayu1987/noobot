@@ -9,7 +9,11 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 
-import { createSessionFacade, createSessionServices } from "noobot-agent/session";
+import {
+  createSessionFacade,
+  createSessionServices,
+  immutableSessionReaderAccess,
+} from "noobot-agent/session";
 import { AttachmentService } from "noobot-agent/attach";
 import { resolveScopedSessionRoots } from "@noobot/workspace-protocol";
 import { buildExecutionReport } from "@noobot/session-protocol/execution-report";
@@ -34,6 +38,7 @@ async function withRealFacadeServer(operation) {
       { workspaceRoot },
       {
         now: () => new Date().toISOString(),
+        sessionReaderAccess: immutableSessionReaderAccess,
         attachmentService: new AttachmentService({ workspaceRoot }),
         scopedSessionRoots: resolveScopedSessionRoots([
           { pluginId: "workflow", scopedSessionRoots: ["session"] },
@@ -176,7 +181,10 @@ for (const replace of [false, true]) {
       assert.equal(committed.deduplicated, false);
       assert.equal(committed.sessionId, SESSION_ID);
       assert.equal(committed.committedAggregateVersion, 1);
-      assert.deepEqual(committed.deletedMessageUids, ["message-remove"]);
+      assert.deepEqual(committed.projection.messageSuffix, {
+        firstOrdinal: 2,
+        previousMessageCount: 2,
+      });
       assert.equal(Object.hasOwn(committed, "detail"), false);
       assert.equal(committed.projection.messages.length, replace ? 1 : 0);
 

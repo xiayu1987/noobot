@@ -68,8 +68,9 @@ test("checkpoint retries backwrite after persistence without repeating the commi
     }),
   ];
   let attempts = 0;
-  input.session.recordUserMetaParsedResult = async () => {
+  input.session.recordUserMetaParsedResult = async ({ result }) => {
     if (++attempts === 1) throw new Error("backwrite unavailable");
+    return { userMetaParsedResults: [result] };
   };
   await assert.rejects(commitSummaryCheckpoint(input), /backwrite unavailable/);
   runtime.currentTurnMessages.push({ messageUid: "new", role: "assistant", content: "new work" });

@@ -16,6 +16,7 @@ import {
   mergeTransferEnvelopes,
 } from "@noobot/semantic-transfer-protocol";
 import { requireAgentDispatchAttachments } from "@noobot/hook-protocol";
+import { assertSessionExecutionResult } from "@noobot/agent-transport-protocol/session-execution-result";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 export function mergeAttachments(existing = [], incoming = []) {
@@ -73,7 +74,7 @@ export function normalizeWorkflowTransferPayload(payload = {}) {
 export function getWorkflowTransferPayloadFromResult(result) {
   return {
     transferEnvelopes: mergeTransferEnvelopes(
-      ...result.messages.map((message) => message.transferEnvelopes),
+      assertSessionExecutionResult(result).transferEnvelopes,
     ),
   };
 }

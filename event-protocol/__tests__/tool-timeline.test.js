@@ -293,6 +293,23 @@ test("projectTaskCheckReceipt rejects successful results that break the task_che
   );
 });
 
+test("compact timeline preserves event identity without inventing one for message-derived results", async () => {
+  const { compactThinkingTimeline } = await import("../src/tool-timeline.js");
+  const entry = {
+    ...taskCheckEntry({ resultEvent: { timestamp: "2026-01-01T00:00:00.000Z" } }),
+    status: "completed",
+  };
+  const [derived, sequenced] = compactThinkingTimeline([
+    entry,
+    { ...entry, resultEvent: { ...entry.resultEvent, eventId: "e-1", sequence: 17 } },
+  ]);
+  assert.equal(Object.hasOwn(derived.resultEvent, "eventId"), false);
+  assert.equal(Object.hasOwn(derived.resultEvent, "sequence"), false);
+  assert.equal(sequenced.resultEvent.eventId, "e-1");
+  assert.equal(sequenced.resultEvent.sequence, 17);
+  assert.deepEqual(JSON.parse(JSON.stringify(derived)), derived);
+});
+
 test("selectTaskCheckReceipt reads the projected receipt from compacted summary entries", async () => {
   const { selectTaskCheckReceipt } = await import("../src/tool-timeline.js");
   const { result: _result, ...compacted } = taskCheckEntry();

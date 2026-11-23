@@ -92,15 +92,15 @@ export function decideTurnLifecycleSnapshotApplication({
       throw new TypeError("Snapshot observation belongs to another session");
     if (previousObservation.sequence > snapshot.sequence)
       return { applied: false, reason: "stale_snapshot" };
-    if (previousObservation.sequence === snapshot.sequence) {
-      if (!reconcileSameSequence(previousObservation, observation))
-        return { applied: false, reason: "snapshot_sequence_conflict" };
-      if (
-        sameEntries(previousObservation.turns, observation.turns) &&
-        sameEntries(previousObservation.replacements, observation.replacements)
-      )
-        return { applied: false, deduplicated: true, reason: "duplicate_snapshot" };
-    }
+  }
+  if (previousObservation?.sequence === snapshot.sequence) {
+    if (!reconcileSameSequence(previousObservation, observation))
+      return { applied: false, reason: "snapshot_sequence_conflict" };
+    if (
+      sameEntries(previousObservation.turns, observation.turns) &&
+      sameEntries(previousObservation.replacements, observation.replacements)
+    )
+      return { applied: false, deduplicated: true, reason: "duplicate_snapshot" };
   }
   return { applied: true, observation: deepFreeze(observation) };
 }

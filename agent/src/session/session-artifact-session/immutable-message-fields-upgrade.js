@@ -13,6 +13,7 @@ import { assertSessionMessageMetadata } from "@noobot/session-protocol";
 import { immutableStorageError } from "./immutable-object-store.js";
 import { ImmutableSessionStore } from "./immutable-session-store.js";
 import { ImmutableSessionChanges, publishMessageIndexes } from "./immutable-message-changes.js";
+import { indexImmutableMessageDisplay } from "./immutable-message-display.js";
 
 async function publishBatch(store, generation, batch) {
   return store.transact({
@@ -21,7 +22,14 @@ async function publishBatch(store, generation, batch) {
     input: { messageUids: batch.map(([uid]) => uid) },
     prepare: async ({ get, getMetadata }) => {
       const plan = new ImmutableSessionChanges(get, { getMetadata });
-      for (const [uid, { value, parts }] of batch) plan.set("messages", uid, value, parts);
+      for (const [uid, { value, parts }] of batch) {
+        plan.set(
+          "messages",
+          uid,
+          await indexImmutableMessageDisplay(store.objects, value, parts),
+          parts,
+        );
+      }
       await publishMessageIndexes(store, plan);
       return { changes: plan.changes(), result: { count: batch.length } };
     },

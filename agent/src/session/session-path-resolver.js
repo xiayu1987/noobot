@@ -70,20 +70,17 @@ export class SessionPathResolver {
 
   async commitSessionPlacement(userId, { sessionId, parentSessionId, caller }) {
     const node = createSessionTreeNode({ sessionId, parentSessionId, caller });
-    return this.treeRepository.withLock(userId, async () => {
-      const tree = await this.treeRepository.getTree(userId);
+    return this.treeRepository.updateTree(userId, (tree) => {
       this._scopeOf(userId, node.sessionId, false, () => placeSessionTreeChain(tree, node));
-      const current = tree.nodes[node.sessionId];
-      if (current) {
-        if (current.caller === node.caller) return;
+      if (isSessionTreeNodeRegistered(tree, node.sessionId)) {
+        const current = tree.nodes[node.sessionId];
+        if (current.caller === node.caller) return tree;
         const error = new Error("session tree node conflicts with requested node");
         error.statusCode = 409;
         error.code = SESSION_ERROR_CODE.SESSION_TREE_NODE_CONFLICT;
         throw error;
       }
-      await this.treeRepository.saveTree(userId, {
-        nodes: { ...tree.nodes, [node.sessionId]: node },
-      });
+      return { nodes: { ...tree.nodes, [node.sessionId]: node } };
     });
   }
 

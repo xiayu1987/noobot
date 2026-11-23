@@ -3,12 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveSessionMessageRecordDialogProcessId } from "@noobot/session-protocol";
+import { randomUUID } from "node:crypto";
 import { isPlainObject } from "@noobot/shared/value";
+import { sessionMutationCoordinator } from "../../session/session-mutation-coordinator.js";
+import { assertSessionsWritable } from "../../session/session-deletion-state.js";
+import { recoverDurableJsonPublication } from "../../shared/storage/durable-file.js";
 import {
+  acknowledgeShortMemoryBatch,
   excludeShortMemoryItemsBySessionIds,
   sortShortMemoryItems,
-  toShortMemoryRecords,
+  collectShortMemoryRecords,
 } from "@noobot/memory-protocol/short-memory";
 
 export class ShortMemoryManager {
@@ -29,46 +33,57 @@ export class ShortMemoryManager {
     return sortShortMemoryItems(short.items);
   }
 
-  async writeItems(basePath, items = []) {
-    await this.storage.writeJson(this.storage.shortPath(basePath), {
+  async #writeItems(filePath, items) {
+    await this.storage.writeJson(filePath, {
       items: sortShortMemoryItems(items),
       updatedAt: new Date().toISOString(),
     });
   }
 
-  async clear(basePath) {
-    await this.writeItems(basePath, []);
+  async #mutateItems(basePath, update) {
+    const filePath = this.storage.shortPath(basePath);
+    return sessionMutationCoordinator.run(`${filePath}.lock`, async () => {
+      const items = await this.readItems(basePath);
+      const retainedItems = await update(items);
+      await recoverDurableJsonPublication(filePath);
+      if (retainedItems !== items) await this.#writeItems(filePath, retainedItems);
+      return { deletedCount: items.length - retainedItems.length };
+    });
+  }
+
+  async acknowledgeBatch(basePath, entries) {
+    return this.#mutateItems(basePath, (items) => acknowledgeShortMemoryBatch(items, entries));
   }
 
   async removeBySessionIds(basePath, sessionIds = []) {
-    const items = await this.readItems(basePath);
-    const retainedItems = excludeShortMemoryItemsBySessionIds(items, sessionIds);
-    const deletedCount = items.length - retainedItems.length;
-    if (deletedCount > 0) await this.writeItems(basePath, retainedItems);
-    return { deletedCount };
+    return this.#mutateItems(basePath, (items) => {
+      const retainedItems = excludeShortMemoryItemsBySessionIds(items, sessionIds);
+      return retainedItems.length === items.length ? items : retainedItems;
+    });
   }
 
   async captureDialogToShortMemory({
     basePath,
+    userId,
     sessionId,
     parentSessionId,
     dialogProcessId,
-    messages,
+    messageRecords,
   }) {
-    const dialogRecords = messages.filter(
-      (messageItem) => resolveSessionMessageRecordDialogProcessId(messageItem) === dialogProcessId,
-    );
-    const records = toShortMemoryRecords(dialogRecords);
+    const records = await collectShortMemoryRecords({ sessionId, dialogProcessId, messageRecords });
     if (!records.length) return false;
 
-    const items = await this.readItems(basePath);
-    items.push({
+    const item = {
+      captureId: randomUUID(),
       sessionId,
       parentSessionId,
       records,
       createdAt: new Date().toISOString(),
+    };
+    await this.#mutateItems(basePath, async (items) => {
+      await assertSessionsWritable(basePath, userId, [sessionId, parentSessionId]);
+      return [...items, item];
     });
-    await this.writeItems(basePath, items);
     return true;
   }
 }

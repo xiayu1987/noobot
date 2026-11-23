@@ -20,6 +20,8 @@ import {
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createSessionFacade } from "../../src/session/index.js";
 import {
+  executeEmptySessionCleanup,
+  createTestPartitionSessionServices,
   createTestSessionServices,
   provisionTestSession,
   withTreeContext,
@@ -229,7 +231,7 @@ test("shared file mutation lock makes concurrent initial provisions idempotent a
 
 test("deleted Session cannot be revived by initial provision", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
-    const runtime = createTestSessionServices({ workspaceRoot });
+    await using runtime = createTestPartitionSessionServices({ workspaceRoot });
     await provisionTestSession(runtime, {
       userId: "u1",
       sessionId: "session-1",
@@ -241,16 +243,19 @@ test("deleted Session cannot be revived by initial provision", async () => {
       "session-1",
       runtime.repositories.sessionRepository.treePersistenceContext("u1", "session-1"),
     );
-    await runtime.sessionTreeService.deleteSessionBranch({
-      userId: "u1",
-      sessionIds: ["session-1"],
-    });
+    await runtime.sessionTreeService.deleteSessionBranch(
+      {
+        userId: "u1",
+        sessionIds: ["session-1"],
+      },
+      executeEmptySessionCleanup,
+    );
     const result = await runtime.sessionMessageService.applyTurnLifecycleEvent(
       withTreeContext(runtime, firstSend("revive-command")),
     );
     assert.equal(result.applied, false);
     assert.equal(result.reason, "session_deleted");
-    assert.equal(await exists(scope.sessionFile), false);
+    assert.equal(await exists(scope.sessionDir), false);
   });
 });
 
@@ -263,9 +268,13 @@ test("failed initial provision save leaves no empty Session artifact or summary"
       { sessionId: "session-1", parentSessionId: "" },
       repository.treePersistenceContext("u1", "session-1"),
     );
-    const originalCreate = repository.createImmutableSession.bind(repository);
-    repository.createImmutableSession = async (...args) => {
-      assert.equal(args[2]?.authorityEvents.length, 1);
+    const originalCreate = repository.createStoredSession.bind(repository);
+    repository.createStoredSession = async (...args) => {
+      assert.equal(args[1].aggregateVersion, 0);
+      assert.equal(args[1].messages.length, 0);
+      assert.equal(args[1].turnLifecycle.sequence, 0);
+      assert.equal(args[2].initialTurn.changes.messages.length, 1);
+      assert.equal(Object.hasOwn(args[2], "authorityEvents"), false);
       throw new Error("injected provision save failure");
     };
 
@@ -275,7 +284,7 @@ test("failed initial provision save leaves no empty Session artifact or summary"
       ),
       /injected provision save failure/,
     );
-    repository.createImmutableSession = originalCreate;
+    repository.createStoredSession = originalCreate;
 
     assert.equal(await exists(scope.sessionFile), false);
     assert.equal(await exists(path.join(scope.sessionDir, "head.json")), false);
@@ -427,7 +436,7 @@ test("appendTurns cannot implicitly create a missing Session", async () => {
   });
 });
 
-test("getSessionTurns reads from the same scoped persistence location used by appendTurns", async () => {
+test("turn message pages use the same scoped persistence location as appendTurns", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const runtime = createTestSessionServices({ workspaceRoot });
     const session = createSessionFacade(runtime);
@@ -473,19 +482,26 @@ test("getSessionTurns reads from the same scoped persistence location used by ap
       ],
     });
 
-    const scopedTurns = await session.getSessionTurns({
+    const query = {
       userId: "u1",
       sessionId: "child-session-1",
+      dialogProcessId: "dialog-child-1",
+      turnScopeId: "turn-child-1",
+      cursor: null,
+      limit: 1,
+    };
+    const page = await session.getSessionTurnMessagePage({
+      ...query,
       persistenceScope,
     });
-    assert.equal(scopedTurns.length, 1);
-    assert.equal(scopedTurns[0]?.messageUid, "sm-child-1");
-    assert.equal(scopedTurns[0]?.activityTimeline?.[0]?.eventId, "model-content:msg-child-1");
+    assert.equal(page.records.length, 1);
+    assert.equal(page.records[0].message.messageUid, "sm-child-1");
+    assert.equal(page.records[0].message.activityTimeline[0].eventId, "model-content:msg-child-1");
+    assert.equal(page.nextCursor, null);
 
     await assert.rejects(
-      session.getSessionTurns({
-        userId: "u1",
-        sessionId: "child-session-1",
+      session.getSessionTurnMessagePage({
+        ...query,
         persistenceScope: null,
       }),
       (error) => error?.code === "SESSION_NOT_FOUND" && error?.statusCode === 404,

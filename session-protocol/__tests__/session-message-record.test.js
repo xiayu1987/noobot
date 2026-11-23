@@ -195,6 +195,11 @@ test("session auto title truncates to the protocol length", () => {
   assert.equal(resolveSessionAutoTitle({ sessionId: "s", role: "user", content }).length, 20);
 });
 
+test("session auto title removes whitespace left at the truncation boundary", () => {
+  const title = "x".repeat(SESSION_AUTO_TITLE_MAX_LENGTH - 2);
+  assert.equal(resolveSessionAutoTitle({ role: "user", content: ` ${title} next` }), title);
+});
+
 test("session auto title is empty when no message qualifies", () => {
   assert.equal(deriveSessionAutoTitle([{ sessionId: "s", role: "assistant", content: "a" }]), "");
   assert.equal(resolveSessionAutoTitle({ sessionId: "s", role: "user", content: "" }), "");

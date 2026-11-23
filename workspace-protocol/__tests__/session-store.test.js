@@ -6,7 +6,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
-import { SESSION_TOMBSTONE_ERROR } from "../src/session-tombstone.js";
+import {
+  advanceSessionBranchDeletion,
+  requireBranchDeletionDirectoriesAvailable,
+  SESSION_DELETION_STAGE,
+  SESSION_TOMBSTONE_ERROR,
+  sessionBranchDeletionKey,
+} from "../src/session-tombstone.js";
 import {
   SESSION_STORE_ERROR,
   parseWorkspaceSessionTombstones,
@@ -71,6 +77,60 @@ test("tombstone sessions are parsed and invalid tombstones are rejected", () => 
   assert.throws(() => parseWorkspaceSessionTombstones({ raw: "{", file: TOMBSTONE_FILE }), {
     code: SESSION_STORE_ERROR.CORRUPTED,
   });
+});
+
+test("pending recursive cleanup owns overlapping directories in either direction", () => {
+  const parent = { sessionId: "parent", directory: ["runtime", "session", "parent"] };
+  const child = { sessionId: "child", directory: [...parent.directory, "child"] };
+  for (const [pending, requested] of [
+    [child, parent],
+    [parent, child],
+  ]) {
+    const deletionKey = sessionBranchDeletionKey([pending.sessionId]);
+    const operation = {
+      targets: [pending],
+      pluginHandlerIds: [],
+      nextStage: SESSION_DELETION_STAGE.DIRECTORIES,
+    };
+    const state = {
+      sessions: { [pending.sessionId]: 1 },
+      branchDeletions: { [deletionKey]: operation },
+    };
+    assert.throws(() => requireBranchDeletionDirectoriesAvailable(state, [requested]), {
+      code: SESSION_TOMBSTONE_ERROR.DELETION_CONFLICT,
+      statusCode: 409,
+      details: { sessionId: requested.sessionId, deletionKey, pendingSessionId: pending.sessionId },
+    });
+    requireBranchDeletionDirectoriesAvailable(state, [
+      { sessionId: "parent-other", directory: ["runtime", "session", "parent-other"] },
+    ]);
+    operation.nextStage = SESSION_DELETION_STAGE.TREE;
+    requireBranchDeletionDirectoriesAvailable(state, [requested]);
+  }
+});
+
+test("branch deletion advances only the persisted stage that cleanup completed", () => {
+  const operation = {
+    targets: [{ sessionId: "s1", directory: ["runtime", "session", "s1"] }],
+    pluginHandlerIds: ["handler"],
+    nextStage: SESSION_DELETION_STAGE.TREE,
+  };
+  const next = advanceSessionBranchDeletion(operation, SESSION_DELETION_STAGE.TREE);
+  assert.deepEqual(next, { ...operation, nextStage: SESSION_DELETION_STAGE.PLUGINS });
+  assert.equal(operation.nextStage, SESSION_DELETION_STAGE.TREE);
+  for (const stage of [undefined, "directories", "plugins", "complete"]) {
+    assert.throws(() => advanceSessionBranchDeletion(operation, stage), {
+      code: SESSION_TOMBSTONE_ERROR.DELETION_CONFLICT,
+      statusCode: 409,
+    });
+  }
+  assert.throws(() => advanceSessionBranchDeletion(undefined, "directories"), {
+    code: SESSION_TOMBSTONE_ERROR.INVALID,
+  });
+  assert.throws(
+    () => advanceSessionBranchDeletion({ ...operation, nextStage: "complete" }, "complete"),
+    TypeError,
+  );
 });
 
 test("session store requires a file and raw content that is a string or null", () => {

@@ -25,7 +25,9 @@ export const DEFAULT_TURN_THRESHOLDS = deepFreeze({
 
     toolLoopLimitBufferTurns: 5,
 
-    phaseSummaryLoopTurns: 20,
+    phaseSummaryLoopTurns: 30,
+    phaseSummaryTextLoopTurns: 20,
+    phaseSummaryProgrammingLoopTurns: 50,
 
     taskCheckLoopTurns: 10,
 
@@ -66,7 +68,7 @@ export const DEFAULT_TURN_THRESHOLDS = deepFreeze({
 
     modeThresholds: {
       full: {
-        summaryTurns: 20,
+        summaryTurns: 30,
         analysisTurns: 1,
         planUpdateTriggerTurns: 8,
         phaseAcceptanceTriggerTurns: 9,

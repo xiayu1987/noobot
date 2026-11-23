@@ -15,10 +15,8 @@ import {
   writeSessionArtifactEvents,
 } from "../../src/session/session-artifact-session/artifact-event-journal.js";
 import { createParsedTextMemo } from "../../src/shared/storage/parsed-text-memo.js";
-import {
-  observeSessionStorageWork,
-  withSessionStorageTransaction,
-} from "../../src/session/session-artifact-session/storage-transaction.js";
+import { withSessionReadCache } from "../../src/session/session-read-cache.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 
 const SESSION_ID = "journal-cache-session";
 
@@ -163,7 +161,7 @@ test("artifact event reads share one verification per transaction and invalidate
   await withSessionDir(async (sessionDir) => {
     const first = await commit(sessionDir, [envelope("event-1", 1)], null);
     const { work } = await observeSessionStorageWork(() =>
-      withSessionStorageTransaction(sessionDir, async () => {
+      withSessionReadCache(sessionDir, async () => {
         const [left, right] = await Promise.all([
           readSessionArtifactEvents(sessionDir, first),
           readSessionArtifactEvents(sessionDir, structuredClone(first)),
@@ -177,7 +175,7 @@ test("artifact event reads share one verification per transaction and invalidate
     );
     assert.equal(work.eventJournalIdentityReads, 3);
     const { work: next } = await observeSessionStorageWork(() =>
-      withSessionStorageTransaction(sessionDir, () => readSessionArtifactEvents(sessionDir, first)),
+      withSessionReadCache(sessionDir, () => readSessionArtifactEvents(sessionDir, first)),
     );
     assert.equal(next.eventJournalIdentityReads, 1);
   });
@@ -187,9 +185,7 @@ test("transaction event reuse does not hide replacement or missing files in the 
   await withSessionDir(async (sessionDir) => {
     const manifest = await commit(sessionDir, [envelope("event-1", 1)], null);
     const read = () =>
-      withSessionStorageTransaction(sessionDir, () =>
-        readSessionArtifactEvents(sessionDir, manifest),
-      );
+      withSessionReadCache(sessionDir, () => readSessionArtifactEvents(sessionDir, manifest));
     await read();
     const file = path.join(sessionDir, manifest.artifactEventJournal.file);
     const raw = await readFile(file, "utf8");

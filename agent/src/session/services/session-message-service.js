@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { bindTurnAttachments } from "./session-message-service/bind-turn-attachments.js";
+import { withSessionDialogMessageRecords } from "./session-message-service/dialog-message-stream.js";
 import { appendTurns } from "./session-message-service/append-turn.js";
 import { commitMessageEvent } from "./session-message-service/message-event.js";
 import {
@@ -11,7 +12,7 @@ import {
   commitAuthorityEvent,
   compactAuthorityEvents,
   getPendingAuthorityEvents,
-  recordAuthorityEventAttempts,
+  prepareAuthorityEventDelivery,
 } from "./session-message-service/authority-event.js";
 import { createPluginArtifactQueryResult } from "@noobot/event-protocol";
 import { deleteFromMessage, replaceTurn } from "./session-message-service/turn-mutations.js";
@@ -22,8 +23,9 @@ import {
   upsertTurnTiming,
 } from "./session-message-service/turn-state.js";
 import {
-  getSessionTurns,
+  getSessionTurnMessagePage,
   getSessionMessageSources,
+  getSessionMessageContentPage,
   getSessionContextSource,
   getTurnSummaryCheckpointState,
 } from "./session-message-service/message-queries.js";
@@ -75,8 +77,8 @@ export class SessionMessageService {
   async getPendingAuthorityEvents(payload = {}) {
     return getPendingAuthorityEvents.call(this, payload);
   }
-  async recordAuthorityEventAttempts(payload = {}) {
-    return recordAuthorityEventAttempts.call(this, payload);
+  async prepareAuthorityEventDelivery(payload = {}) {
+    return prepareAuthorityEventDelivery.call(this, payload);
   }
   async acknowledgeAuthorityEvents(payload = {}) {
     return acknowledgeAuthorityEvents.call(this, payload);
@@ -96,14 +98,20 @@ export class SessionMessageService {
   async recordUserMetaParsedResult(payload = {}) {
     return recordUserMetaParsedResult.call(this, payload);
   }
-  async getSessionTurns(payload = {}) {
-    return getSessionTurns.call(this, payload);
+  async getSessionTurnMessagePage(payload = {}) {
+    return getSessionTurnMessagePage.call(this, payload);
+  }
+  async withSessionDialogMessageRecords(payload, consume) {
+    return withSessionDialogMessageRecords.call(this, payload, consume);
   }
   async getSessionContextSource(payload = {}) {
     return getSessionContextSource.call(this, payload);
   }
   async getSessionMessageSources(payload) {
     return getSessionMessageSources.call(this, payload);
+  }
+  async getSessionMessageContentPage(payload) {
+    return getSessionMessageContentPage.call(this, payload);
   }
   async getTurnSummaryCheckpointState(payload = {}) {
     return getTurnSummaryCheckpointState.call(this, payload);

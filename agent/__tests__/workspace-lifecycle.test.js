@@ -23,6 +23,7 @@ import { renderDefaultExperienceModelText } from "@noobot/memory-protocol/experi
 import { WORKSPACE_LAYOUT, WORKSPACE_RUNTIME_DIRECTORIES } from "@noobot/workspace-protocol";
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
 import { TEST_STORAGE_SERVICE } from "./helpers/storage-service.js";
+import { createTestPartitionStorageBudget } from "./helpers/partition-journal-cases.js";
 import {
   ensureUserWorkspace,
   repairUserWorkspace,
@@ -57,6 +58,7 @@ async function createFixture() {
     baseValues: BASE_VALUES,
     scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
     storageService: TEST_STORAGE_SERVICE,
+    targetStorageBudget: createTestPartitionStorageBudget(),
   };
   return {
     root,

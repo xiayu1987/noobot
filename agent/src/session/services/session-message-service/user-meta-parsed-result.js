@@ -15,15 +15,16 @@ export async function recordUserMetaParsedResult(payload = {}) {
   return this.sessionRepo.withSessionReader(
     userId,
     sessionId,
-    async (reader, _scope, commitChanges) => {
-      const committed = await commitChanges({
-        expectedGeneration: reader.generation,
-        operationId: randomUUID(),
-        changes: {
-          userMetaParsedResult: { messageUid: sourceMessageUid, result: payload.result },
-        },
-        committedAt: this.now(),
-      });
+    async ({ reader, commitChanges }) => {
+      const committed = await commitChanges(
+        await reader.prepareRequest({
+          operationId: randomUUID(),
+          changes: {
+            userMetaParsedResult: { messageUid: sourceMessageUid, result: payload.result },
+          },
+          committedAt: this.now(),
+        }),
+      );
       return committed.result.userMetaParsedResult;
     },
     { persistenceContext },

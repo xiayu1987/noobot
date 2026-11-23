@@ -13,8 +13,8 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import { forbidRecordReads, readCommittedPage } from "./helpers/immutable-record-reads.js";
 
@@ -85,6 +85,7 @@ function request(store, receipt, content, operationId) {
           dialogProcessId: receipt.dialogProcessId,
           turnScopeId: receipt.turnScopeId,
           expectedContentReference: receipt.contentReference,
+          owner: receipt.owner,
           content,
         },
       ],

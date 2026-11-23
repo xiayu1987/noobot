@@ -6,7 +6,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServicePluginHost } from "../../services/service-plugin-host.js";
+import { createServiceBotAccess } from "../../services/service-bot-access.js";
+import { express, withTestServer } from "./session-routes.helpers.js";
 const enforceUserScopeParam = (_req, _res, next) => next();
+const runBotOperation = (operation) => operation();
 
 function serviceEntry({
   activate,
@@ -35,6 +38,70 @@ function serviceEntry({
   return { pluginId: "demo", manifest, surface: "service", activate };
 }
 
+test("plugin HTTP operations retain their runtime across awaits and reject retirement admission", async (t) => {
+  const entered = Promise.withResolvers();
+  const resume = Promise.withResolvers();
+  t.after(() => resume.resolve());
+  const previous = { session: { revision: 1 } };
+  let current = previous;
+  let closed = false;
+  const access = createServiceBotAccess({ getBot: () => current });
+  const entry = serviceEntry({
+    routes: [{ id: "demo.detail", method: "GET", paths: ["/demo"], auth: "connected_user" }],
+    activate(host) {
+      host.routes.bind("demo.detail", async (_req, res) => {
+        const before = access.session;
+        entered.resolve();
+        await resume.promise;
+        assert.equal(closed, false);
+        assert.equal(access.session, before);
+        return res.json({ revision: access.session.revision });
+      });
+      return { protocolVersion: 2, pluginId: "demo", surface: "service" };
+    },
+  });
+  const host = createServicePluginHost({
+    loadPluginRuntime: async () => ({ registry: new Map([["demo", entry]]), errors: [] }),
+  });
+  t.after(() => host.dispose());
+  const app = express();
+  await host.registerServiceRoutes(app, {
+    enforceUserScopeParam,
+    runBotOperation: access.runOperation,
+  });
+  await withTestServer(app, async (baseUrl) => {
+    const pending = fetch(`${baseUrl}/demo`);
+    await entered.promise;
+    const retirement = access.withRetirement(() => {
+      closed = true;
+      current = { session: { revision: 2 } };
+    });
+    try {
+      const rejected = await fetch(`${baseUrl}/demo`);
+      assert.equal(rejected.status, 503);
+      assert.equal((await rejected.json()).errorCode, "RUNTIME_CLOSED");
+      assert.equal(closed, false);
+    } finally {
+      resume.resolve();
+    }
+    assert.deepEqual(await (await pending).json(), { revision: 1 });
+    await retirement;
+    assert.equal(closed, true);
+    assert.equal(access.session.revision, 2);
+  });
+});
+
+test("service plugin routes require an explicit operation retention boundary", async () => {
+  const host = createServicePluginHost({
+    loadPluginRuntime: async () => ({ registry: new Map(), errors: [] }),
+  });
+  await assert.rejects(
+    host.registerServiceRoutes({ use() {} }, { enforceUserScopeParam }),
+    /runBotOperation/,
+  );
+  await host.dispose();
+});
+
 test("service plugin host binds declared routes without exposing Express", async () => {
   let receivedHost;
   const entry = serviceEntry({
@@ -56,8 +123,8 @@ test("service plugin host binds declared routes without exposing Express", async
   const sessionScopes = [];
   const ports = Object.freeze({
     sessions: Object.freeze({
-      forPlugin(pluginId) {
-        sessionScopes.push(pluginId);
+      forPlugin(manifest) {
+        sessionScopes.push(manifest);
         return scopedSessions;
       },
     }),
@@ -70,11 +137,12 @@ test("service plugin host binds declared routes without exposing Express", async
     ports,
     translateText: () => "",
     enforceUserScopeParam,
+    runBotOperation,
   });
 
   assert.equal(result.length, 1);
   assert.equal(receivedHost.ports.sessions, scopedSessions);
-  assert.deepEqual(sessionScopes, ["demo"]);
+  assert.deepEqual(sessionScopes, [entry.manifest]);
   assert.equal(receivedHost.ports.http, undefined);
   assert.deepEqual(Object.keys(receivedHost).sort(), ["hooks", "ports", "routes"]);
   assert.equal(registrations.length, 1);
@@ -97,7 +165,7 @@ test("service plugin host scopes the workspace asset port to plugin identity", a
 
   await host.registerServiceRoutes(
     { use() {} },
-    { ports: { workspaceAssets: { forPlugin } }, enforceUserScopeParam },
+    { ports: { workspaceAssets: { forPlugin } }, enforceUserScopeParam, runBotOperation },
   );
 
   assert.equal(receivedPort, scoped);
@@ -114,7 +182,11 @@ test("service plugin host rejects an undeclared route", async () => {
     loadPluginRuntime: async () => ({ registry: new Map([["demo", entry]]), errors: [] }),
   });
   await assert.rejects(
-    () => host.registerServiceRoutes({ use() {} }, { ports: {}, enforceUserScopeParam }),
+    () =>
+      host.registerServiceRoutes(
+        { use() {} },
+        { ports: {}, enforceUserScopeParam, runBotOperation },
+      ),
     /did not declare route/,
   );
 });
@@ -129,7 +201,10 @@ test("service plugin host loads the service surface from the configured plugin r
       return { registry: new Map(), errors: [] };
     },
   });
-  await host.registerServiceRoutes({ use() {} }, { ports: {}, enforceUserScopeParam });
+  await host.registerServiceRoutes(
+    { use() {} },
+    { ports: {}, enforceUserScopeParam, runBotOperation },
+  );
   assert.deepEqual(calls, [{ surface: "service", pluginRootDir }]);
 });
 
@@ -158,7 +233,7 @@ test("failed refresh preserves the committed generation and disposes it only whe
   });
   const app = { use() {} };
 
-  await host.registerServiceRoutes(app, { ports: {}, enforceUserScopeParam });
+  await host.registerServiceRoutes(app, { ports: {}, enforceUserScopeParam, runBotOperation });
   await assert.rejects(() => host.refresh(), /candidate failed/);
   assert.equal(activeDisposals, 0);
 
@@ -184,7 +259,10 @@ test("successful refresh releases the previous scope exactly once", async () => 
       ),
   });
 
-  await host.registerServiceRoutes({ use() {} }, { ports: {}, enforceUserScopeParam });
+  await host.registerServiceRoutes(
+    { use() {} },
+    { ports: {}, enforceUserScopeParam, runBotOperation },
+  );
   await host.refresh();
   assert.equal(previousDisposals, 1);
   assert.equal(currentDisposals, 0);
@@ -221,7 +299,10 @@ test("concurrent refreshes commit in request order without an older generation o
     },
   });
 
-  await host.registerServiceRoutes({ use() {} }, { ports: {}, enforceUserScopeParam });
+  await host.registerServiceRoutes(
+    { use() {} },
+    { ports: {}, enforceUserScopeParam, runBotOperation },
+  );
   const first = host.refresh();
   const second = host.refresh();
   await new Promise((resolve) => setImmediate(resolve));
@@ -258,7 +339,7 @@ test("dispose invalidates an activation in progress and cleans its candidate sco
   });
   const registration = host.registerServiceRoutes(
     { use() {} },
-    { ports: {}, enforceUserScopeParam },
+    { ports: {}, enforceUserScopeParam, runBotOperation },
   );
   await new Promise((resolve) => setImmediate(resolve));
 
@@ -268,7 +349,11 @@ test("dispose invalidates an activation in progress and cleans its candidate sco
   await disposal;
   assert.equal(candidateDisposals, 1);
   await assert.rejects(
-    () => host.registerServiceRoutes({ use() {} }, { ports: {}, enforceUserScopeParam }),
+    () =>
+      host.registerServiceRoutes(
+        { use() {} },
+        { ports: {}, enforceUserScopeParam, runBotOperation },
+      ),
     /disposed/,
   );
 });

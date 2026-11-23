@@ -5,6 +5,7 @@
  */
 import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
+import { defaultExclude } from "vitest/config";
 import wasm from "vite-plugin-wasm";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
@@ -48,12 +49,29 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       setupFiles: ["../../shared/testing/runtime-params.js"],
-      environment: "jsdom",
-      include: [
-        "tests/unit/**/*.spec.js",
-        "tests/integration/**/*.spec.js",
-        "../../plugin/noobot-plugin-harness/frontend/__tests__/**/*.spec.js",
-        "../../plugin/noobot-plugin-workflow/frontend/__tests__/**/*.spec.js",
+      projects: [
+        {
+          extends: true,
+          test: {
+            name: "browser",
+            environment: "jsdom",
+            include: [
+              "tests/unit/**/*.spec.js",
+              "tests/integration/**/*.spec.js",
+              "../../plugin/noobot-plugin-harness/frontend/__tests__/**/*.spec.js",
+              "../../plugin/noobot-plugin-workflow/frontend/__tests__/**/*.spec.js",
+            ],
+            exclude: [...defaultExclude, "tests/unit/e2e/**"],
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: "e2e-helpers",
+            environment: "node",
+            include: ["tests/unit/e2e/**/*.spec.js"],
+          },
+        },
       ],
     },
     server: {

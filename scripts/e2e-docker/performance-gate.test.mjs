@@ -12,8 +12,7 @@ import {
 } from "./performance-gate.mjs";
 import { calibratePerformance } from "./calibrate-performance.mjs";
 import { performanceReportFixture } from "./__tests__/performance-fixture.mjs";
-import { IMMUTABLE_CHECKPOINT_FORBIDDEN_WORK } from "@noobot/session-protocol/immutable-storage";
-import { IMMUTABLE_SEGMENT_CHECKPOINT_WORK } from "@noobot/session-protocol/immutable-segment";
+import { PARTITION_CHECKPOINT_JOURNAL_WORK } from "@noobot/session-protocol/partition-journal";
 
 function fixture() {
   const report = performanceReportFixture();
@@ -89,44 +88,12 @@ test("collection requires complete coverage and enforces growth without a baseli
   assert.match(collect().failures.join(), /incomplete continuations/);
 });
 
-test("storage work rejects duplicate historical scans and invalid or missing counters", () => {
-  for (const work of [
-    undefined,
-    {},
-    { optionalJsonReads: 2, checkpointIdentityCollections: 1 },
-    { optionalJsonReads: 1, checkpointIdentityCollections: 2 },
-    { optionalJsonReads: 1, checkpointIdentityCollections: 1, journalReadBytes: -1 },
-    { optionalJsonReads: 1, checkpointIdentityCollections: 1, journalReadBytes: NaN },
-  ]) {
-    const { report, evaluate } = fixture();
-    report.stopContinues[1].continued.checkpointSamples[0].storageWork = work;
-    assert.equal(evaluate().passed, false);
-  }
-});
-
-test("warm storage gates reject reconstruction and scans in ordinary, long and resumed turns", () => {
-  for (const name of IMMUTABLE_CHECKPOINT_FORBIDDEN_WORK) {
-    for (const index of [1, 9, 19, 21]) {
-      const { report, evaluate } = fixture();
-      const samples = [
-        ...report.samples,
-        ...report.stopContinues.map(({ continued }) => continued),
-      ];
-      const work = samples[index].checkpointSamples.at(-1).storageWork;
-      work[name] = 1;
-      const failure = new RegExp(`warm checkpoint must not perform ${name}`);
-      assert.match(evaluate().failures.join(), failure);
-      delete work[name];
-      assert.match(evaluate().failures.join(), failure);
-    }
-  }
-});
-
-test("checkpoint coverage requires actual immutable reads and writes", () => {
-  for (const name of IMMUTABLE_SEGMENT_CHECKPOINT_WORK) {
+test("checkpoint coverage requires actual partition reads, writes and publication", () => {
+  for (const name of PARTITION_CHECKPOINT_JOURNAL_WORK) {
     for (const value of [undefined, 0, -1, NaN]) {
       const { report, evaluate } = fixture();
-      const work = report.stopContinues[0].continued.checkpointSamples[0].storageWork;
+      const work =
+        report.stopContinues[0].continued.checkpointSamples[0].storageWork.partitionJournal;
       if (value === undefined) delete work[name];
       else work[name] = value;
       assert.equal(evaluate().passed, false, `${name}: ${value}`);
@@ -134,18 +101,17 @@ test("checkpoint coverage requires actual immutable reads and writes", () => {
   }
 });
 
-test("checkpoint evidence requires segment durability and rejects legacy file publication", () => {
+test("checkpoint evidence requires journal durability and rejects legacy counters", () => {
   for (const mutate of [
     (work) => {
-      work.immutableSegmentSyncs = 2;
+      work.partitionJournal.publications = 2;
     },
     (work) => {
-      work.immutableObjectWrites = 1;
+      work.partitionJournal.dataSyncs = 5;
     },
     (work) => {
-      delete work.immutableSegmentWrites;
-      delete work.immutableSegmentSyncs;
-      work.immutableObjectWrites = 20;
+      delete work.partitionJournal;
+      work.immutableSegmentWrites = 1;
     },
   ]) {
     const { report, evaluate } = fixture();

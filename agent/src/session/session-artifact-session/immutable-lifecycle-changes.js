@@ -5,18 +5,18 @@
  */
 import { commitIndexedTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
-  decideAggregateConcurrency,
+  decideTurnAcceptanceVersionAdvance,
   materializeTurnTerminalMessages,
+  requireNextTurnAcceptanceVersion,
 } from "@noobot/session-protocol";
-import { ImmutableSessionChanges, prepareImmutableMessages } from "./immutable-message-changes.js";
+import { prepareImmutableMessages } from "./immutable-message-changes.js";
 import { immutableStorageError } from "./immutable-object-store.js";
 import { appendImmutableEvent } from "./immutable-event-changes.js";
 import { immutableLifecycleCommandKey, writeImmutableCommand } from "./immutable-command-index.js";
 
 export async function prepareImmutableTurnCommit({
   store,
-  get,
-  getMetadata,
+  plan,
   event,
   messages = [],
   now,
@@ -24,11 +24,6 @@ export async function prepareImmutableTurnCommit({
 }) {
   if (event.sessionId !== store.sessionId)
     throw new TypeError("Lifecycle session ownership mismatch");
-  const plan = new ImmutableSessionChanges(get, {
-    getMetadata,
-    readContent: (reference) => store.objects.readValue(reference),
-    readContentMetadata: (reference) => store.objects.readValueMetadata(reference),
-  });
   const metadata = await plan.get("metadata", "session");
   const header = await plan.get("metadata", "lifecycle");
   const events = await plan.get("metadata", "events");
@@ -62,41 +57,23 @@ export async function prepareImmutableTurnCommit({
       });
     },
   });
-  if (!result.applied) return { abort: true, changes: [], result };
+  if (!result.applied) return result;
   for (const turn of result.changedTurns) plan.set("lifecycle", turn.turnScopeId, turn);
   const updatedAt = result.turn.updatedAt;
   if (messages.length) {
-    const prepared = await prepareImmutableMessages({
-      store,
-      get: (collection, key) => plan.get(collection, key),
-      getMetadata: (collection, key) => plan.getMetadata(collection, key),
-      messages,
-      updatedAt,
-    });
-    for (const change of prepared.changes) await plan.apply(change);
+    await prepareImmutableMessages({ store, plan, messages, updatedAt });
   } else {
     plan.set("metadata", "session", { ...metadata, updatedAt });
   }
-  if (
-    event.eventType === "turn.action_accepted" &&
-    messages.some(
-      (message) => message.role === "user" && message.turnCommit?.commandId === event.causationId,
-    )
-  ) {
+  if (decideTurnAcceptanceVersionAdvance(event, messages)) {
     const current = await plan.get("metadata", "session");
-    const concurrency = decideAggregateConcurrency({
-      expectedAggregateVersion: null,
-      aggregateVersion: current.aggregateVersion,
-    });
-    if (!concurrency.allowed)
-      throw new TypeError(`Turn acceptance rejected: ${concurrency.reason}`);
     plan.set("metadata", "session", {
       ...current,
-      aggregateVersion: concurrency.nextAggregateVersion,
+      aggregateVersion: requireNextTurnAcceptanceVersion(current.aggregateVersion),
     });
   }
   await writeImmutableCommand(store, plan, result.commandReceipt);
   plan.set("metadata", "lifecycle", { ...header, ...result.header });
   await appendImmutableEvent(store, plan, { ...result.committedEvent, deliveries: {} });
-  return { changes: plan.changes(), result };
+  return result;
 }

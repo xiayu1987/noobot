@@ -173,3 +173,42 @@ test("display merge keeps the same resourceRefs the live tool_call_end carried",
   );
   assert.equal("attachments" in presentation.toolTimeline[0].resultEvent, false);
 });
+
+test("display merge visits candidates once and preserves turn and dialog ownership", () => {
+  const resourceRefs = [workspaceResource()];
+  const turnIds = [TURN_SCOPE_ID, "client-turn:ambiguous", "client-turn:missing"];
+  const session = {
+    sessionId: SESSION_ID,
+    messages: turnIds.map((turnScopeId) =>
+      normalizeMessageEntity(toolResultMessage({ turnScopeId, resourceRefs })),
+    ),
+  };
+  let visits = 0;
+  const candidate = (turnScopeId, dialogProcessId) => ({
+    get role() {
+      visits += 1;
+      return "assistant";
+    },
+    turnScopeId,
+    dialogProcessId,
+  });
+  const owner = candidate(TURN_SCOPE_ID, DIALOG_PROCESS_ID);
+  const nonOwners = [
+    candidate(TURN_SCOPE_ID, "foreign-dialog"),
+    candidate(turnIds[1], DIALOG_PROCESS_ID),
+    candidate(turnIds[1], ""),
+    candidate("client-turn:unrelated", DIALOG_PROCESS_ID),
+  ];
+  const presentations = [owner, ...nonOwners];
+  assert.deepEqual(attachSessionToolArtifacts(session, presentations, SESSION_ID), {
+    assignedToolArtifactCount: 1,
+    unassignedToolArtifactCount: 2,
+    conflictedToolArtifactCount: 0,
+  });
+  assert.equal(visits, presentations.length);
+  assert.deepEqual(
+    owner.toolTimeline[0].resultEvent.resourceRefs,
+    resourceRefs.map(projectResourceRef),
+  );
+  assert.ok(nonOwners.every((message) => !Object.hasOwn(message, "toolTimeline")));
+});

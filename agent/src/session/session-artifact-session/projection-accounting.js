@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { recordStorageWork } from "./storage-transaction.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 
 const messageBytes = new WeakMap();
 const projectionSizes = new WeakMap();

@@ -3,19 +3,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createSessionFacade, createSessionServices } from "../session/index.js";
+import { createSessionFacade } from "../session/index.js";
 import { MemoryManager } from "../memory/index.js";
 import { AttachmentService } from "../artifacts/index.js";
 import { SkillService } from "../skills/index.js";
-import { ConfigService, WORKSPACE_SANDBOX_PATHS } from "../config/index.js";
+import { ConfigService } from "../config/index.js";
 import { SystemErrorLogger } from "../observability/index.js";
 import { SessionExecutionEngine } from "./session/session-execution-engine.js";
 import { runAgentTurn } from "../runtime/index.js";
 import { WorkspaceService } from "./workspace-infra/workspace-service.js";
-import { filePath as path } from "@noobot/path-resolver";
-import { rm } from "node:fs/promises";
 import { resolveAttachments } from "../context/providers/attachment-resolver.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 export * as hook from "./hook/index.js";
 
@@ -27,9 +25,12 @@ export class BotManager {
       startupContext,
       pluginRuntimeBundle,
       connectorAccessPort = null,
+      createSessionRuntime,
       now,
     } = {},
   ) {
+    if (!isFunction(createSessionRuntime))
+      throw new TypeError("BotManager requires createSessionRuntime");
     this.globalConfig = globalConfig;
 
     this.globalConfigRaw = globalConfigRaw;
@@ -42,12 +43,23 @@ export class BotManager {
     }
 
     this.attach = new AttachmentService(globalConfig);
-    this.sessionRuntime = createSessionServices(globalConfig, {
+    this.sessionRuntime = createSessionRuntime(globalConfig, {
       now,
       attachmentService: this.attach,
       scopedSessionRoots,
     });
-    this.session = createSessionFacade(this.sessionRuntime);
+    const { workspaceAdmission } = this.sessionRuntime;
+    const { readServerNow, ...workspaceMethods } = createSessionFacade(this.sessionRuntime);
+    this.session = {
+      readServerNow,
+      ...Object.fromEntries(
+        Object.entries(workspaceMethods).map(([name, operation]) => [
+          name,
+          (selection, ...args) =>
+            workspaceAdmission.run(selection?.userId, () => operation(selection, ...args)),
+        ]),
+      ),
+    };
     this.memory = new MemoryManager(globalConfig);
     this.skill = new SkillService(globalConfig);
 
@@ -56,6 +68,7 @@ export class BotManager {
       globalConfigRaw: this.globalConfigRaw,
       scopedSessionRoots,
       storageService: this.sessionRuntime.storageService,
+      workspaceAdmission,
     });
     this.configService = new ConfigService();
     this.errorLogger = new SystemErrorLogger({
@@ -70,6 +83,7 @@ export class BotManager {
       skill: this.skill,
       configService: this.configService,
       workspaceService: this.workspaceService,
+      workspaceAdmission,
       errorLogger: this.errorLogger,
       botManager: this,
       agentRunner: runAgentTurn,
@@ -78,8 +92,17 @@ export class BotManager {
     });
   }
 
+  async close() {
+    await this.sessionRunner.close();
+    await this.sessionRuntime.close();
+  }
+
   getWorkspacePath(userId) {
     return this.workspaceService.getWorkspacePath(userId);
+  }
+
+  runWorkspaceOperation(userId, operation) {
+    return this.sessionRuntime.workspaceAdmission.run(userId, operation);
   }
 
   async ensureUserWorkspace(userId) {
@@ -102,17 +125,19 @@ export class BotManager {
     const userId = text(payload?.userId);
     const sessionId = text(payload?.sessionId);
     const { attachments } = payload;
-    let canonicalAttachments = attachments;
-    if (attachments.length) {
-      await this.ensureUserWorkspace(userId);
-      canonicalAttachments = await resolveAttachments({
-        attachmentService: this.attach,
-        userMessageAttachments: attachments,
-        userId,
-        sessionId,
-      });
-    }
-    return this.session.replaceTurn({ ...payload, attachments: canonicalAttachments });
+    return this.runWorkspaceOperation(userId, async () => {
+      let canonicalAttachments = attachments;
+      if (attachments.length) {
+        await this.ensureUserWorkspace(userId);
+        canonicalAttachments = await resolveAttachments({
+          attachmentService: this.attach,
+          userMessageAttachments: attachments,
+          userId,
+          sessionId,
+        });
+      }
+      return this.session.replaceTurn({ ...payload, attachments: canonicalAttachments });
+    });
   }
 
   getAttachmentById({ userId, attachmentId, sessionId = "", attachmentSource = "" }) {
@@ -135,42 +160,8 @@ export class BotManager {
     });
   }
 
-  pruneOrphanScopedAttachments({ userId, keepSessionIds = [], attachmentSources = [] } = {}) {
-    return this.attach.pruneOrphanScopedAttachments({
-      userId,
-      keepSessionIds,
-      attachmentSources,
-    });
-  }
-
   deleteSessionMemoryBySessionIds({ userId, sessionIds = [] } = {}) {
     return this.memory.deleteSessionMemoryBySessionIds({ userId, sessionIds });
-  }
-
-  async deleteSemanticTransferBySessionIds({ userId, sessionIds = [] } = {}) {
-    const basePath = text(this.getWorkspacePath(userId));
-    const normalizedIds = [
-      ...new Set(
-        (Array.isArray(sessionIds) ? sessionIds : []).map((sid) => text(sid)).filter(Boolean),
-      ),
-    ];
-    if (!basePath || !normalizedIds.length) {
-      return { deletedSessionIds: [], deletedCount: 0 };
-    }
-
-    const semanticTransferRoot = path.join(
-      basePath,
-      ...WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE.split("/"),
-      ".semantic-transfer",
-    );
-    const deletedSessionIds = [];
-    for (const sessionId of normalizedIds) {
-      const safeSessionDir = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_");
-      if (!safeSessionDir) continue;
-      await rm(path.join(semanticTransferRoot, safeSessionDir), { recursive: true, force: true });
-      deletedSessionIds.push(sessionId);
-    }
-    return { deletedSessionIds, deletedCount: deletedSessionIds.length };
   }
 
   async loadUserConfig(basePath) {

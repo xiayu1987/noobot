@@ -94,6 +94,15 @@ export function assertTurnTimingOwnership(timing, ownerDialogProcessId) {
   );
 }
 
+export function requireTurnTimingOwnership(timing, ownerDialogProcessId) {
+  if (!normalizeDialogProcessId(ownerDialogProcessId))
+    throw timingError(
+      SESSION_ERROR_CODE.TURN_TIMING_CONFLICT,
+      `Turn timing requires a recorded owner: ${timing.turnScopeId}`,
+    );
+  assertTurnTimingOwnership(timing, ownerDialogProcessId);
+}
+
 export function normalizeTurnTimingRecords(timings) {
   if (!Array.isArray(timings)) {
     throw timingError(SESSION_ERROR_CODE.TURN_TIMING_INVALID, "turn timings must be an array");

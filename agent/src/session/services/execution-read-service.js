@@ -9,78 +9,77 @@ import {
   queryAuthoritativeExecutionChildren,
   queryAuthoritativeExecutionTree,
 } from "@noobot/authoritative-state/application";
-import { SESSION_SUMMARY_AVAILABILITY } from "@noobot/session-protocol/sessions-summary";
-
-function withReadDiagnostics(readModel, result) {
-  return readModel.unreadableSessions
-    ? { ...result, unreadableSessions: readModel.unreadableSessions }
-    : result;
-}
-
-function summaryEntryFingerprint(entry) {
-  const revisionFact =
-    entry.availability === SESSION_SUMMARY_AVAILABILITY.AVAILABLE
-      ? entry.updatedAt
-      : entry.unavailableReason.code;
-  return [entry.sessionId, entry.parentSessionId, entry.availability, revisionFact];
-}
-
-function summaryFingerprint(payload) {
-  return JSON.stringify(
-    payload.sessions
-      .map(summaryEntryFingerprint)
-      .sort((left, right) => left[0].localeCompare(right[0])),
-  );
-}
+import {
+  EXECUTION_QUERY_COMMAND,
+  EXECUTION_QUERY_INCOMPLETE,
+  EXECUTION_QUERY_MISSING_TARGET,
+  isExecutionQueryTargetValid,
+} from "@noobot/session-protocol/execution-lifecycle";
+import { createSessionUnavailableReason } from "@noobot/session-protocol/sessions-summary";
 
 export class ExecutionReadService {
-  constructor({ sessionCrudService, now }) {
-    this.sessionCrudService = sessionCrudService;
+  constructor({ sessionRepo, scopedSessionRoots, now }) {
+    this.sessionRepo = sessionRepo;
+    this.scopedSessionRoots = scopedSessionRoots;
     this.now = now;
-    this.readIndexByUser = new Map();
   }
 
-  async _scanAuthoritative(userId) {
-    const failures = [];
-    const sessions = await this.sessionCrudService.getAllSessionsData({ userId, failures });
-    const readModel = buildAuthoritativeExecutionReadModel(sessions);
-    return failures.length ? { ...readModel, unreadableSessions: failures } : readModel;
+  async _query(userId, command, query, target) {
+    if (!isExecutionQueryTargetValid(command, target))
+      return { found: false, reason: EXECUTION_QUERY_MISSING_TARGET };
+    const sources = [];
+    const unreadableSessions = [];
+    let scopes;
+    try {
+      scopes = await this.sessionRepo.listExecutionSessionScopes(userId, this.scopedSessionRoots);
+    } catch (error) {
+      return {
+        found: false,
+        reason: EXECUTION_QUERY_INCOMPLETE,
+        scopeDiscoveryFailure: createSessionUnavailableReason(error),
+      };
+    }
+    for (const { sessionId, persistenceContext } of scopes) {
+      try {
+        sources.push(await this._readSession(userId, sessionId, persistenceContext));
+      } catch (error) {
+        unreadableSessions.push({ sessionId, ...createSessionUnavailableReason(error) });
+      }
+    }
+    if (unreadableSessions.length)
+      return { found: false, reason: EXECUTION_QUERY_INCOMPLETE, unreadableSessions };
+    return query(buildAuthoritativeExecutionReadModel(sources), {
+      ...target,
+      generatedAt: this.now(),
+    });
   }
 
-  async _readAll(userId) {
-    const fingerprint = summaryFingerprint(
-      await this.sessionCrudService.getAllSessionSummaries({ userId }),
-    );
-    const indexed = this.readIndexByUser.get(userId);
-    if (indexed !== undefined && indexed.fingerprint === fingerprint) return indexed.readModel;
-    const readModel = await this._scanAuthoritative(userId);
-    this.readIndexByUser.set(userId, { fingerprint, readModel });
-    return readModel;
+  async _readSession(userId, sessionId, persistenceContext) {
+    await using reader = await this.sessionRepo.requireSessionReader(userId, sessionId, {
+      persistenceContext,
+    });
+    return await reader.readExecutionSource();
   }
 
   async getExecution({ userId, executionId }) {
-    const readModel = await this._readAll(userId);
-    return withReadDiagnostics(
-      readModel,
-      queryAuthoritativeExecution(readModel, { executionId, generatedAt: this.now() }),
-    );
+    return this._query(userId, EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, queryAuthoritativeExecution, {
+      executionId,
+    });
   }
 
   async getExecutionChildren({ userId, executionId }) {
-    const readModel = await this._readAll(userId);
-    return withReadDiagnostics(
-      readModel,
-      queryAuthoritativeExecutionChildren(readModel, { executionId, generatedAt: this.now() }),
+    return this._query(
+      userId,
+      EXECUTION_QUERY_COMMAND.CHILDREN_GET,
+      queryAuthoritativeExecutionChildren,
+      { executionId },
     );
   }
 
   async getExecutionTree({ userId, executionId, rootExecutionId }) {
-    const readModel = await this._readAll(userId);
-    const result = queryAuthoritativeExecutionTree(readModel, {
+    return this._query(userId, EXECUTION_QUERY_COMMAND.TREE_GET, queryAuthoritativeExecutionTree, {
       executionId,
       rootExecutionId,
-      generatedAt: this.now(),
     });
-    return withReadDiagnostics(readModel, result);
   }
 }

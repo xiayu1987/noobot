@@ -10,21 +10,12 @@ import {
   collectTurnReplacementTombstoneErrors,
   collectTurnContinuationRelationErrors,
 } from "@noobot/session-protocol";
+import { requireTurnLifecycleHeader } from "@noobot/session-protocol/turn-lifecycle";
 import { isCanonicalText, isFunction } from "@noobot/shared/value";
 import { transitionPreparedTurnLifecycle } from "./turn-lifecycle-entity.js";
 
 function invalidRecord(message) {
   return Object.assign(new TypeError(message), { code: "TURN_LIFECYCLE_RECORD_INVALID" });
-}
-
-function validateHeader(header) {
-  if (
-    !header ||
-    !Number.isSafeInteger(header.sequence) ||
-    header.sequence < 0 ||
-    (header.activeTurnScopeId !== "" && !isCanonicalText(header.activeTurnScopeId))
-  )
-    throw invalidRecord("Invalid indexed lifecycle header");
 }
 
 async function readSelectedTurn(turns, readTurn, key, sequence) {
@@ -52,7 +43,7 @@ export async function readIndexedTurnLifecycle({
   for (const callback of [readTurn, readReplacement, readCommand])
     if (!isFunction(callback))
       throw new TypeError("Indexed lifecycle requires readers and a clock");
-  validateHeader(header);
+  requireTurnLifecycleHeader(header);
   const reason = validateTurnLifecycleRequest(input);
   if (reason) return { reason };
   const turns = Object.create(null);
@@ -111,7 +102,7 @@ export function projectIndexedLifecycleResult(lifecycle, transition) {
 }
 
 export async function readIndexedTurnRemoval({ header, turnScopeIds, readTurn }) {
-  validateHeader(header);
+  requireTurnLifecycleHeader(header);
   if (!isFunction(readTurn)) throw new TypeError("Indexed removal requires a turn reader");
   if (!Array.isArray(turnScopeIds) || turnScopeIds.some((key) => !isCanonicalText(key)))
     throw new TypeError("Indexed removal requires canonical turn scope IDs");

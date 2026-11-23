@@ -17,6 +17,7 @@ import { appendJsonLine, flushJsonLineBatches } from "./transports/jsonl.js";
 import { isSessionLogDebugEvent, shouldRecordSessionLog } from "./session-log-protocol.js";
 import { resolveWorkspaceSessionLocation } from "./session-location.js";
 import { reportRuntimeEventFailure } from "./failure-report.js";
+import { withSessionEventPublications } from "./session-publication.js";
 
 const pendingWrites = new Set();
 const flushBarriers = new Set();
@@ -85,6 +86,15 @@ async function prepareAndWriteRuntimeEvents(
   const config = resolveRuntimeEventsConfig({ desktopRoot });
   if (projection !== undefined) requireExecutionProjectionDeliveryContext(projection);
   const records = events.map((event) => prepareRecord(event, config));
+  const sessionRecords = records
+    .filter(({ record, skipped }) => !skipped && record.scope === RUNTIME_EVENT_SCOPES.SESSION)
+    .map(({ record }) => record);
+  return withSessionEventPublications(config.workspaceRoot, sessionRecords, () =>
+    writePreparedRuntimeEvents(records, { config, locationResolver, projection }),
+  );
+}
+
+async function writePreparedRuntimeEvents(records, { config, locationResolver, projection }) {
   const locations = new Map();
   const prepared = [];
   for (const item of records)

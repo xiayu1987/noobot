@@ -22,14 +22,14 @@ export function buildLoopResult({
   modelMessages,
 }) {
   const messages = requireStore(turnMessageStore, "currentTurnMessages", [
-    "toArray",
+    "readResultMessages",
     "updateWhere",
   ]);
   return createAgentTurnResult({
     output,
     modelMessageId,
     traces,
-    turnMessages: messages.toArray(),
+    turnMessages: messages.readResultMessages(),
     modelMessages,
     modelLoopRound: loopState.systemRuntime.modelLoopRound,
   });

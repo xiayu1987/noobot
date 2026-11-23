@@ -20,6 +20,8 @@ export function buildAppShellDrawerPanels({
   thinkingDetailsMessageItem,
   thinkingDetailsAllMessages,
   thinkingDetailsRuntime,
+  thinkingDetailsFetcher,
+  thinkingDetailsReleaser,
   getThinkingDetailsTitle,
   handleWorkspaceReset,
 }) {
@@ -59,6 +61,8 @@ export function buildAppShellDrawerPanels({
         messageItem: thinkingDetailsMessageItem,
         allMessages: thinkingDetailsAllMessages,
         runtime: thinkingDetailsRuntime,
+        fetchThinkingDetail: thinkingDetailsFetcher,
+        releaseThinkingDetail: thinkingDetailsReleaser,
         variant: "details",
         userId,
       },

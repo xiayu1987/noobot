@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { buildSessionSummary } from "../../session-summary-builders.js";
-import { requireSessionTreeNode } from "@noobot/workspace-protocol/session-tree";
 import {
   SESSIONS_SUMMARY_SCHEMA_VERSION,
   createUnavailableSessionSummary,
@@ -21,16 +20,9 @@ class SessionSummaryMethods {
   }
 
   async readSessionsSummary(userId) {
-    const sessionTree = await this.sessionTreeRepository.getTree(userId);
-    const sessionIds = await this.listSessionIds(userId);
     const summaries = [];
-    for (const sessionId of sessionIds) {
-      summaries.push(
-        await this._projectSessionSummaryFromSource(
-          userId,
-          requireSessionTreeNode(sessionTree, sessionId),
-        ),
-      );
+    for (const node of await this.listLiveSessionTreeNodes(userId)) {
+      summaries.push(await this._projectSessionSummaryFromSource(userId, node));
     }
     return requireSessionsSummaryPayload({
       schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION,
@@ -53,7 +45,7 @@ class SessionSummaryMethods {
 
   async _buildSessionSummaryFromReader(reader) {
     const [metadata, listFacts, turnLifecycle] = await Promise.all([
-      reader.readMetadata(),
+      reader.readMetadata({ includeAutoTitle: true }),
       reader.readListProjection(),
       reader.readLifecycleHead(),
     ]);

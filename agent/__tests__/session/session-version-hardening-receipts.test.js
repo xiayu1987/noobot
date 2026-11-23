@@ -237,7 +237,7 @@ test("user_meta parsed results attach only to an existing user source message", 
       userId: "u1",
       sessionId: "s1",
       userMetaSourceMessageUid,
-      result: { attachmentId: "att-1", content: "parsed" },
+      result: { sourceAttachmentRef: "attach://source", content: "parsed" },
     });
   await assert.rejects(
     record("sm_missing"),

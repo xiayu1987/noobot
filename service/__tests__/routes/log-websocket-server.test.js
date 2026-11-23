@@ -10,6 +10,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { WebSocket } from "ws";
 import { registerChatWebSocketServer } from "../../ws/chat-websocket-server.js";
+import { createServiceBotAccess } from "../../services/service-bot-access.js";
 import { flushJsonLineBatches } from "@noobot/runtime-events";
 import { registerLogWebSocketServer, writeSessionLogEvent } from "../../ws/log-websocket-server.js";
 import {
@@ -460,7 +461,7 @@ test("log-websocket-server: works when chat websocket server is registered first
       res.end("not-found");
     });
     registerChatWebSocketServer(server, {
-      getBot: () => ({ runSession: async () => ({}) }),
+      serviceBotAccess: createServiceBotAccess({ getBot: () => ({}) }),
       resolveRequestLocale: () => "zh-CN",
       resolveAuthByApiKey: () => ({ userId: "u1" }),
       normalizeRunConfig: (config = {}) => config || {},

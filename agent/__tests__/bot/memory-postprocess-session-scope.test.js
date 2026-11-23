@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createWorkspaceAdmission } from "../../src/workspace-lifecycle/workspace-admission.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -13,7 +14,12 @@ const TEST_NOW = () => "2026-01-01T00:00:00.000Z";
 
 function createHarness({ maybeSummarize = async () => {}, captureDialogToShortMemory } = {}) {
   const persistenceScope = { scopeId: "scope-1" };
-  const messages = [{ role: "user", content: "hi", dialogProcessId: "d1" }];
+  const messageRecords = [
+    {
+      ordinal: 1,
+      message: { sessionId: "s1", role: "user", content: "hi", dialogProcessId: "d1" },
+    },
+  ];
   const turnReads = [];
   const captures = [];
   const executionLogs = [];
@@ -23,12 +29,13 @@ function createHarness({ maybeSummarize = async () => {}, captureDialogToShortMe
     resolveSummarized = resolve;
   });
   const service = new MemoryPostProcessService({
+    workspaceAdmission: createWorkspaceAdmission(async () => {}),
     now: TEST_NOW,
     globalConfig: {},
     session: {
-      async getSessionTurns(payload) {
+      async withSessionDialogMessageRecords(payload, consume) {
         turnReads.push(payload);
-        return messages;
+        return consume(messageRecords);
       },
       async appendExecutionLogs({ records, persistenceScope }) {
         for (const record of records) {
@@ -53,7 +60,7 @@ function createHarness({ maybeSummarize = async () => {}, captureDialogToShortMe
   return {
     service,
     persistenceScope,
-    messages,
+    messageRecords,
     turnReads,
     captures,
     executionLogs,
@@ -71,7 +78,7 @@ const RUN = Object.freeze({
   mode: "sync",
 });
 
-test("memory-postprocess reads turns through the session facade with the run persistence scope", async () => {
+test("memory-postprocess streams only the dialog through the facade with the run persistence scope", async () => {
   const harness = createHarness();
   await harness.service.runMemoryPostProcessFlow({
     ...RUN,
@@ -80,7 +87,12 @@ test("memory-postprocess reads turns through the session facade with the run per
   await harness.summarized;
 
   assert.deepEqual(harness.turnReads, [
-    { userId: "u1", sessionId: "s1", persistenceScope: harness.persistenceScope },
+    {
+      userId: "u1",
+      sessionId: "s1",
+      dialogProcessId: "d1",
+      persistenceScope: harness.persistenceScope,
+    },
   ]);
   assert.deepEqual(harness.captures, [
     {
@@ -88,7 +100,7 @@ test("memory-postprocess reads turns through the session facade with the run per
       sessionId: "s1",
       parentSessionId: "p1",
       dialogProcessId: "d1",
-      messages: harness.messages,
+      messageRecords: harness.messageRecords,
     },
   ]);
 });

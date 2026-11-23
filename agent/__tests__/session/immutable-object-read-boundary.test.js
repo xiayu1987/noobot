@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { ImmutableObjectStore } from "../../src/session/session-artifact-session/immutable-object-store.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { resetFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { restoreImmutableObjects } from "../../src/session/session-artifact-session/immutable-object-repair.js";

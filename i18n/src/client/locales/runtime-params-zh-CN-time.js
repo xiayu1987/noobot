@@ -4,6 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  sessionPageSnapshots: {
+    idleMs: {
+      name: "会话分页快照空闲超时",
+      description: "会话分页快照在两次页面读取之间可空闲的最长时间。",
+    },
+    maxAgeMs: {
+      name: "会话分页快照最长寿命",
+      description: "会话分页快照自创建起的最长有效时间，持续读取不会延长此时限。",
+    },
+  },
   installers: {
     versionCheckTimeoutMs: {
       name: "OpenVSCode 版本检查超时",
@@ -407,10 +417,6 @@ export default {
       name: "Harness清理宽限",
       description: "Harness清理宽限使用的等待时长。",
     },
-    runWriteLockStaleMs: {
-      name: "Harness运行写入锁过期",
-      description: "Harness运行写入锁过期使用的持续时长。",
-    },
     maxRunAgeDays: {
       name: "Harness最大运行时长天",
       description: "Harness最大运行时长天使用的持续时长。",
@@ -486,10 +492,6 @@ export default {
     panelResizeThrottleMs: {
       name: "客户端面板调整尺寸节流",
       description: "客户端面板调整尺寸节流使用的执行间隔。",
-    },
-    thinkingDetailRetryDelayMs: {
-      name: "客户端思考详情重试延迟",
-      description: "客户端思考详情重试延迟使用的等待时长。",
     },
     micMaxDurationSeconds: {
       name: "客户端麦克风最大持续时间秒",

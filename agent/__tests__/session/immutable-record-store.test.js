@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { ImmutableRecordStore } from "../../src/session/session-artifact-session/immutable-record-store.js";
 import { ImmutableRadixIndex } from "../../src/session/session-artifact-session/immutable-radix-index.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { corruptRecord } from "./helpers/immutable-record-reads.js";
 import { IMMUTABLE_TRANSACTION_READ_CACHE } from "@noobot/session-protocol/immutable-storage-graph";
 import { IMMUTABLE_SEGMENT } from "@noobot/session-protocol/immutable-segment";

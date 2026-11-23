@@ -20,6 +20,7 @@ export const SESSION_TREE_SHAPE = Object.freeze({
 });
 
 export const SESSION_TREE_REJECTION = Object.freeze({
+  REPOSITORY_MISSING: "repository-missing",
   DOCUMENT_INVALID: "document-invalid",
   IDENTITY_MISMATCH: "identity-mismatch",
   DUPLICATE_SESSION: "duplicate-session",

@@ -5,367 +5,93 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { access, open, readFile, readdir, rename, stat, utimes, writeFile } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { SessionMutationCoordinator } from "../../src/session/session-mutation-coordinator.js";
-import { resetFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
-import { readConfiguredLockTiming } from "@noobot/shared/file-mutation-coordinator";
+import { holdSessionLock } from "../helpers/session-lock-process.js";
 import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
 
-function fixedLockTiming(timing) {
-  return { readTiming: () => timing };
+function coordinator(timeoutMs = 2000) {
+  return new SessionMutationCoordinator({ readTiming: () => ({ timeoutMs, pollMs: 2 }) });
 }
 
 test("mutation coordinator distinguishes nested re-entry from concurrent callers", async () =>
   withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator(
-      fixedLockTiming({ timeoutMs: 2000, staleMs: 60000, pollMs: 2 }),
-    );
+    const owner = coordinator();
     const lockPath = path.join(root, ".lock");
     const order = [];
-    let signalFirstEntered;
-    const firstEntered = new Promise((resolve) => {
-      signalFirstEntered = resolve;
-    });
-    const first = coordinator.run(lockPath, async () => {
+    const firstEntered = Promise.withResolvers();
+    const releaseFirst = Promise.withResolvers();
+    const first = owner.run(lockPath, async () => {
       order.push("a-start");
-      signalFirstEntered();
-      await coordinator.run(lockPath, async () => order.push("a-nested"));
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      firstEntered.resolve();
+      await owner.run(lockPath, async () => order.push("a-nested"));
+      await releaseFirst.promise;
       order.push("a-end");
     });
-    await firstEntered;
-    await Promise.all([first, coordinator.run(lockPath, async () => order.push("b"))]);
+    await firstEntered.promise;
+    const second = owner.run(lockPath, async () => order.push("b"));
+    releaseFirst.resolve();
+    await Promise.all([first, second]);
     assert.deepEqual(order, ["a-start", "a-nested", "a-end", "b"]);
   }));
 
-test("mutation coordinator does not treat work escaping a released lock as re-entry", async () =>
+test("work escaping a released lock cannot re-enter a later operation", async () =>
   withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator(
-      fixedLockTiming({ timeoutMs: 2000, staleMs: 60000, pollMs: 2 }),
-    );
+    const owner = coordinator();
     const lockPath = path.join(root, ".lock");
-    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-    let inside = 0;
-    let maxInside = 0;
-    const critical = async () => {
-      inside += 1;
-      maxInside = Math.max(maxInside, inside);
-      await sleep(40);
-      inside -= 1;
-    };
+    const resumeEscaped = Promise.withResolvers();
+    const escapedQueued = Promise.withResolvers();
+    const order = [];
+    function queueEscapedOperation() {
+      const operation = owner.run(lockPath, () => order.push("escaped"));
+      escapedQueued.resolve();
+      return operation;
+    }
     let escaped;
-    await coordinator.run(lockPath, async () => {
-      escaped = (async () => {
-        await sleep(20);
-        await coordinator.run(lockPath, critical);
-      })();
+    await owner.run(lockPath, async () => {
+      escaped = resumeEscaped.promise.then(queueEscapedOperation);
     });
-    await Promise.all([escaped, coordinator.run(lockPath, critical)]);
-    assert.equal(maxInside, 1);
+    await owner.run(lockPath, async () => {
+      order.push("start");
+      resumeEscaped.resolve();
+      await escapedQueued.promise;
+      order.push("end");
+    });
+    await escaped;
+    assert.deepEqual(order, ["start", "end", "escaped"]);
   }));
 
-test("mutation coordinator uses an atomic lock file and removes it after release", async () =>
+test("live process excludes another writer; death releases the same inode", async () =>
   withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator();
     const lockPath = path.join(root, ".lock");
-    await coordinator.run(lockPath, async () => {
-      assert.match(await readFile(lockPath, "utf8"), /^[0-9a-f-]{36}$/i);
-    });
-    await assert.rejects(access(lockPath), { code: "ENOENT" });
-  }));
-
-test("mutation coordinator replaces stale file locks", async () =>
-  withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator(
-      fixedLockTiming({ timeoutMs: 30000, staleMs: 10, pollMs: 2 }),
-    );
-    const staleTime = new Date(Date.now() - 1000);
-    const fileLock = path.join(root, "file.lock");
-    await writeFile(fileLock, "stale-owner", "utf8");
-    await utimes(fileLock, staleTime, staleTime);
-    await coordinator.run(fileLock, async () => {
-      assert.notEqual(await readFile(fileLock, "utf8"), "stale-owner");
-    });
-  }));
-
-test("mutation coordinator treats Windows EPERM for an existing file as lock contention", async () =>
-  withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator(
-      fixedLockTiming({ timeoutMs: 30000, staleMs: 10, pollMs: 2 }),
-    );
-    const lockPath = path.join(root, "windows-existing.lock");
-    await writeFile(lockPath, "999999999:abandoned", "utf8");
-    const staleTime = new Date(Date.now() - 1000);
-    await utimes(lockPath, staleTime, staleTime);
-
-    setFsAdapter({
-      open: async (target, flags, ...args) => {
-        if (target === lockPath && flags === "wx") {
-          const targetStat = await stat(target).catch(() => null);
-          if (targetStat?.isFile()) {
-            const error = new Error("operation not permitted");
-            error.code = "EPERM";
-            throw error;
-          }
-        }
-        return open(target, flags, ...args);
-      },
-    });
+    const stop = await holdSessionLock(lockPath);
     try {
-      let entered = false;
-      await coordinator.run(lockPath, async () => {
-        entered = true;
-      });
-      assert.equal(entered, true);
-      await assert.rejects(access(lockPath), { code: "ENOENT" });
-    } finally {
-      resetFsAdapter();
-    }
-  }));
-
-test("mutation coordinator preserves EPERM when no competing lock exists", async () =>
-  withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator(
-      fixedLockTiming({ timeoutMs: 30000, staleMs: 10, pollMs: 2 }),
-    );
-    const lockPath = path.join(root, "forbidden.lock");
-    setFsAdapter({
-      open: async (target, flags, ...args) => {
-        if (target === lockPath && flags === "wx") {
-          const error = new Error("operation not permitted");
-          error.code = "EPERM";
-          throw error;
-        }
-        return open(target, flags, ...args);
-      },
-    });
-    try {
+      const before = await stat(lockPath);
       await assert.rejects(
-        coordinator.run(lockPath, async () => {}),
-        { code: "EPERM" },
+        coordinator(75).run(lockPath, () => assert.fail("concurrent writer entered")),
+        { code: "SESSION_MUTATION_BUSY", statusCode: 409 },
       );
+      assert.deepEqual(await stop(), [null, "SIGKILL"]);
+      const after = await coordinator().run(lockPath, () => stat(lockPath));
+      assert.equal(after.dev, before.dev);
+      assert.equal(after.ino, before.ino);
+      assert.deepEqual(await readdir(root), [".lock"]);
     } finally {
-      resetFsAdapter();
+      await stop();
     }
   }));
 
-test("mutation coordinator retries a transient EPERM when the lock file is not visible", async () =>
+test("failure inside a mutation releases its descriptor", async () =>
   withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator(
-      fixedLockTiming({ timeoutMs: 3000, staleMs: 5000, pollMs: 2 }),
+    const lockPath = path.join(root, ".lock");
+    const failure = new Error("operation failed");
+    await assert.rejects(
+      coordinator().run(lockPath, () => {
+        throw failure;
+      }),
+      failure,
     );
-    const lockPath = path.join(root, "delete-pending.lock");
-    let deniedAttempts = 0;
-    setFsAdapter({
-      open: async (target, flags, ...args) => {
-        if (target === lockPath && flags === "wx" && deniedAttempts < 3) {
-          deniedAttempts += 1;
-          const error = new Error("operation not permitted");
-          error.code = "EPERM";
-          throw error;
-        }
-        return open(target, flags, ...args);
-      },
-    });
-    try {
-      let entered = false;
-      await coordinator.run(lockPath, async () => {
-        entered = true;
-      });
-      assert.equal(entered, true);
-      assert.equal(deniedAttempts, 3);
-      await assert.rejects(access(lockPath), { code: "ENOENT" });
-    } finally {
-      resetFsAdapter();
-    }
-  }));
-
-test("mutation coordinator heartbeat prevents stale takeover by another coordinator", async () =>
-  withTemp(async (root) => {
-    const options = fixedLockTiming({ timeoutMs: 3000, staleMs: 1200, pollMs: 10 });
-    const firstCoordinator = new SessionMutationCoordinator(options);
-    const secondCoordinator = new SessionMutationCoordinator(options);
-    const lockPath = path.join(root, "heartbeat.lock");
-    const order = [];
-    let signalFirstEntered;
-    const firstEntered = new Promise((resolve) => {
-      signalFirstEntered = resolve;
-    });
-    const first = firstCoordinator.run(lockPath, async () => {
-      order.push("first-start");
-      signalFirstEntered();
-      await new Promise((resolve) => setTimeout(resolve, 1400));
-      order.push("first-end");
-    });
-    await firstEntered;
-    await Promise.all([first, secondCoordinator.run(lockPath, async () => order.push("second"))]);
-    assert.deepEqual(order, ["first-start", "first-end", "second"]);
-  }));
-
-test("mutation coordinator heartbeat remains ahead of a short stale threshold", async () =>
-  withTemp(async (root) => {
-    const options = fixedLockTiming({ timeoutMs: 2000, staleMs: 30, pollMs: 2 });
-    const firstCoordinator = new SessionMutationCoordinator(options);
-    const secondCoordinator = new SessionMutationCoordinator(options);
-    const lockPath = path.join(root, "short-heartbeat.lock");
-    const order = [];
-    let active = 0;
-    let overlap = false;
-    let signalFirstEntered;
-    const firstEntered = new Promise((resolve) => {
-      signalFirstEntered = resolve;
-    });
-    const criticalSection = async (name, holdMs) => {
-      active += 1;
-      overlap ||= active > 1;
-      order.push(`${name}-start`);
-      if (name === "first") signalFirstEntered();
-      await new Promise((resolve) => setTimeout(resolve, holdMs));
-      order.push(`${name}-end`);
-      active -= 1;
-    };
-
-    const first = firstCoordinator.run(lockPath, () => criticalSection("first", 120));
-    await firstEntered;
-    await Promise.all([first, secondCoordinator.run(lockPath, () => criticalSection("second", 5))]);
-
-    assert.equal(overlap, false);
-    assert.deepEqual(order, ["first-start", "first-end", "second-start", "second-end"]);
-  }));
-
-test("mutation coordinator keeps a registering waiter alive during slow filesystem work", async () =>
-  withTemp(async (root) => {
-    const options = fixedLockTiming({ timeoutMs: 1500, staleMs: 90, pollMs: 2 });
-    const lockPath = path.join(root, "registration.lock");
-    let signalPublished;
-    const published = new Promise((resolve) => {
-      signalPublished = resolve;
-    });
-    let delayed = false;
-    const delayPublication = async (target) => {
-      if (delayed || !/registration\.lock\.wait-\d+-/.test(target)) return;
-      delayed = true;
-      signalPublished();
-      await new Promise((resolve) => setTimeout(resolve, 450));
-    };
-    setFsAdapter({
-      open: async (target, ...args) => {
-        const handle = await open(target, ...args);
-        if (!/registration\.lock\.wait-\d+-/.test(target)) return handle;
-        return {
-          writeFile: async (...writeArgs) => {
-            await handle.writeFile(...writeArgs);
-            await delayPublication(target);
-          },
-          close: () => handle.close(),
-          utimes: (...timeArgs) => handle.utimes(...timeArgs),
-        };
-      },
-      rename: async (source, target) => {
-        await rename(source, target);
-        await delayPublication(target);
-      },
-    });
-    const entries = [];
-    try {
-      const first = new SessionMutationCoordinator(options).run(lockPath, async () => {
-        entries.push("first");
-      });
-      await published;
-      await new Promise((resolve) => setTimeout(resolve, 240));
-      const second = new SessionMutationCoordinator(options).run(lockPath, async () => {
-        entries.push("second");
-      });
-      const results = await Promise.allSettled([first, second]);
-      assert.deepEqual(
-        results.map((result) => result.status),
-        ["fulfilled", "fulfilled"],
-      );
-      assert.deepEqual(entries, ["first", "second"]);
-      assert.deepEqual(await readdir(root), []);
-    } finally {
-      resetFsAdapter();
-    }
-  }));
-
-for (const phase of ["write", "rename"]) {
-  test(`mutation coordinator cleans up failed waiter registration during ${phase}`, async () =>
-    withTemp(async (root) => {
-      const options = fixedLockTiming({ timeoutMs: 1500, staleMs: 90, pollMs: 2 });
-      const failure = new Error(`registration ${phase} failed`);
-      let closed = false;
-      let heartbeatAfterClose = false;
-      setFsAdapter({
-        open: async (target, ...args) => {
-          const handle = await open(target, ...args);
-          return {
-            writeFile: async (...writeArgs) => {
-              if (phase === "write") throw failure;
-              return handle.writeFile(...writeArgs);
-            },
-            close: async () => {
-              await handle.close();
-              closed = true;
-            },
-            utimes: async (...timeArgs) => {
-              heartbeatAfterClose ||= closed;
-              return handle.utimes(...timeArgs);
-            },
-          };
-        },
-        rename: async () => {
-          throw failure;
-        },
-      });
-      try {
-        await assert.rejects(
-          new SessionMutationCoordinator(options).run(path.join(root, "failure.lock"), () => {
-            assert.fail("failed registration must not enter the critical section");
-          }),
-          (error) => error === failure,
-        );
-        assert.equal(closed, true);
-        assert.deepEqual(await readdir(root), []);
-        await new Promise((resolve) => setTimeout(resolve, 120));
-        assert.equal(heartbeatAfterClose, false);
-      } finally {
-        resetFsAdapter();
-      }
-    }));
-}
-
-test("mutation coordinator elects one waiter to reclaim a stale lock", async () =>
-  withTemp(async (root) => {
-    const { staleMs } = readConfiguredLockTiming();
-    const options = fixedLockTiming({ timeoutMs: 2000, staleMs, pollMs: 1 });
-    const lockPath = path.join(root, "contended-stale.lock");
-    const staleTime = new Date(Date.now() - staleMs * 2);
-    await writeFile(lockPath, "999999999:abandoned", "utf8");
-    await utimes(lockPath, staleTime, staleTime);
-
-    let active = 0;
-    let overlap = false;
-    const entries = [];
-    const coordinators = Array.from({ length: 3 }, () => new SessionMutationCoordinator(options));
-    await Promise.all(
-      coordinators.map((coordinator, index) =>
-        coordinator.run(lockPath, async () => {
-          active += 1;
-          overlap ||= active > 1;
-          entries.push(index);
-          await new Promise((resolve) => setTimeout(resolve, 30));
-          active -= 1;
-        }),
-      ),
-    );
-
-    assert.equal(overlap, false);
-    assert.equal(new Set(entries).size, 3);
-    assert.equal(
-      (await readdir(root)).some((name) => name.startsWith("contended-stale.lock.wait-")),
-      false,
-    );
-    await assert.rejects(access(lockPath), { code: "ENOENT" });
+    assert.equal(await coordinator().run(lockPath, () => "recovered"), "recovered");
   }));

@@ -411,6 +411,9 @@ test("turn lifecycle envelope requires stable identity and monotonic coordinates
   });
   assert.deepEqual(validateTurnLifecycleEnvelope(envelope), { valid: true, errors: [] });
   assert.equal(envelope.presentationMessageId, "assistant-1");
+  for (const field of ["capabilities", "failure", "continuationSource"])
+    assert.equal(Object.hasOwn(envelope, field), false, field);
+  assert.deepEqual(JSON.parse(JSON.stringify(envelope)), envelope);
 });
 
 test("turn lifecycle envelope rejects storage locator fields", () => {

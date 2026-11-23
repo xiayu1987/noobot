@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { attachmentIdentityKey, projectAttachmentIdentity } from "@noobot/attachment-protocol";
+import {
+  attachmentIdentityKey,
+  projectAttachmentIdentity,
+  readRequiredAttachmentMetadata,
+} from "@noobot/attachment-protocol";
 
 function messageAttachments(messages) {
   return messages.flatMap((message) =>
@@ -16,30 +20,22 @@ export async function projectSessionAttachmentState({
   userId = "",
   session = {},
 } = {}) {
-  if (!attachmentService?.readAttachmentMetas) {
-    throw new TypeError("session attachment projection requires attachmentService");
-  }
   const { messages } = session;
   const attachments = messageAttachments(messages);
   if (!attachments.length) return session;
 
-  const scopes = new Map();
+  const requested = new Map();
   for (const attachment of attachments) {
     const identity = projectAttachmentIdentity(attachment);
-    scopes.set(JSON.stringify([identity.sessionId, identity.attachmentSource]), identity);
+    requested.set(attachmentIdentityKey(identity), identity);
   }
-
-  const canonicalByIdentity = new Map();
-  for (const scope of scopes.values()) {
-    const records = await attachmentService.readAttachmentMetas({
-      userId,
-      sessionId: scope.sessionId,
-      attachmentSource: scope.attachmentSource,
-    });
-    for (const record of records) {
-      canonicalByIdentity.set(attachmentIdentityKey(projectAttachmentIdentity(record)), record);
-    }
-  }
+  const records = await readRequiredAttachmentMetadata(attachmentService, {
+    userId,
+    identities: [...requested.values()],
+  });
+  const canonicalByIdentity = new Map(
+    [...requested.keys()].map((key, index) => [key, records[index]]),
+  );
 
   return {
     ...session,
@@ -47,12 +43,9 @@ export async function projectSessionAttachmentState({
       if (!Array.isArray(message?.attachments) || !message.attachments.length) return message;
       return {
         ...message,
-        attachments: message.attachments.map((attachment) => {
-          const canonical = canonicalByIdentity.get(
-            attachmentIdentityKey(projectAttachmentIdentity(attachment)),
-          );
-          return canonical ? { ...attachment, ...canonical } : attachment;
-        }),
+        attachments: message.attachments.map((attachment) =>
+          canonicalByIdentity.get(attachmentIdentityKey(projectAttachmentIdentity(attachment))),
+        ),
       };
     }),
   };

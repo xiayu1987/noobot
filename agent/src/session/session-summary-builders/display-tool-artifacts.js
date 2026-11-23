@@ -11,12 +11,22 @@ import {
 } from "@noobot/semantic-transfer-protocol";
 import { text } from "@noobot/shared/value";
 
-function selectArtifactPresentation(displayMessages, sessionId, routeKey, toolTimeline) {
-  const candidates = displayMessages.filter(
-    (message) =>
-      text(message?.role) === "assistant" &&
-      `${sessionId}::${text(message?.turnScopeId)}` === routeKey,
-  );
+function indexArtifactPresentations(displayMessages, sessionId, timelineByRoute) {
+  const presentations = new Map();
+  if (timelineByRoute.size === 0) return presentations;
+  for (const message of displayMessages) {
+    if (text(message?.role) !== "assistant") continue;
+    const routeKey = `${sessionId}::${text(message?.turnScopeId)}`;
+    if (!timelineByRoute.has(routeKey)) continue;
+    const candidates = presentations.get(routeKey);
+    if (candidates) candidates.push(message);
+    else presentations.set(routeKey, [message]);
+  }
+  return presentations;
+}
+
+function selectArtifactPresentation(candidates, toolTimeline) {
+  if (!candidates) return null;
   const dialogProcessIds = new Set(
     toolTimeline
       .map((item) => text(item?.resultEvent?.dialogProcessId || item?.call?.dialogProcessId))
@@ -53,11 +63,15 @@ function mergeArtifactTimeline(presentation, toolTimeline) {
       canonicalTimeline.push(compactArtifact);
       continue;
     }
+    const canonical = canonicalTimeline[index];
     canonicalTimeline[index] = {
-      ...canonicalTimeline[index],
+      ...canonical,
+      ...(!canonical.resultEvent
+        ? { status: compactArtifact.status, success: compactArtifact.success }
+        : {}),
       resultEvent: {
-        ...(canonicalTimeline[index]?.resultEvent || {}),
-        ...compactArtifact?.resultEvent,
+        ...compactArtifact.resultEvent,
+        ...canonical.resultEvent,
       },
     };
   }
@@ -65,18 +79,13 @@ function mergeArtifactTimeline(presentation, toolTimeline) {
 }
 
 export function attachSessionToolArtifacts(session, displayMessages, sessionId) {
-  const { timelineByRoute, totalCount: toolLogCount } =
-    buildToolArtifactTimelineProjection(session);
+  const { timelineByRoute } = buildToolArtifactTimelineProjection(session);
+  const presentations = indexArtifactPresentations(displayMessages, sessionId, timelineByRoute);
   let assignedToolArtifactCount = 0;
   let unassignedToolArtifactCount = 0;
   let conflictedToolArtifactCount = 0;
   for (const [routeKey, toolTimeline] of timelineByRoute) {
-    const presentation = selectArtifactPresentation(
-      displayMessages,
-      sessionId,
-      routeKey,
-      toolTimeline,
-    );
+    const presentation = selectArtifactPresentation(presentations.get(routeKey), toolTimeline);
     if (!presentation) {
       unassignedToolArtifactCount += toolTimeline.length;
       continue;
@@ -92,7 +101,6 @@ export function attachSessionToolArtifacts(session, displayMessages, sessionId) 
     assignedToolArtifactCount += toolTimeline.length;
   }
   return {
-    toolLogCount,
     assignedToolArtifactCount,
     unassignedToolArtifactCount,
     conflictedToolArtifactCount,

@@ -6,6 +6,7 @@
 import { TRANSFER_SOURCE } from "../constants.js";
 import { TRANSFER_REASON, TRANSFER_REASON_ALIAS } from "../vocabulary.js";
 import { text } from "@noobot/shared/value";
+import { TransferEnvelopeInputError } from "../errors.js";
 
 const KNOWN_SOURCES = new Set(Object.values(TRANSFER_SOURCE));
 const KNOWN_REASONS = new Set(Object.values(TRANSFER_REASON));
@@ -42,7 +43,7 @@ export function resolveTransferIntent({
 
 export function assertTransferIntentVocabulary({ source, reason } = {}) {
   if (!KNOWN_SOURCES.has(text(source).toLowerCase()))
-    throw new Error(`unknown_transfer_source:${text(source)}`);
+    throw new TransferEnvelopeInputError(`unknown_transfer_source:${text(source)}`);
   if (!KNOWN_REASONS.has(text(reason).toLowerCase()))
-    throw new Error(`unknown_transfer_reason:${text(reason)}`);
+    throw new TransferEnvelopeInputError(`unknown_transfer_reason:${text(reason)}`);
 }

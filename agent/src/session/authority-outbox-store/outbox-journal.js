@@ -33,7 +33,7 @@ import {
 } from "@noobot/event-protocol/turn-outbox";
 import { readFileIdentity } from "../session-artifact-session/verified-snapshot-cache.js";
 import { readSessionArtifactEvents } from "../session-artifact-session/artifact-event-journal.js";
-import { recordStorageWork } from "../session-artifact-session/storage-transaction.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 
 export const AUTHORITY_OUTBOX_DIR = "authority-outbox";
 const AUTHORITY_OUTBOX_JOURNAL_FILE = "outbox.jsonl";

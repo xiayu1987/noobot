@@ -32,6 +32,7 @@ test("immutable JSON reuse reads the source every time and rejects corruption an
   });
   for (const [code, expected] of [
     ["ENOENT", "PERSISTED_JSON_MISSING"],
+    ["ENOTDIR", "PERSISTENCE_IO_FAILED"],
     ["EACCES", "PERSISTENCE_PERMISSION_DENIED"],
     ["EIO", "PERSISTENCE_IO_FAILED"],
   ]) {

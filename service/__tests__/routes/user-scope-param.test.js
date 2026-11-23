@@ -66,6 +66,7 @@ async function withScopedApp(run) {
     ports: {},
     translateText: (key) => key,
     enforceUserScopeParam,
+    runBotOperation: (operation) => operation(),
   });
   const server = await new Promise((resolve) => {
     const listening = app.listen(0, "127.0.0.1", () => resolve(listening));

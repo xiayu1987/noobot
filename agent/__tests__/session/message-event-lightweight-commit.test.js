@@ -10,7 +10,7 @@ import { SessionMessageService } from "../../src/session/services/session-messag
 import { createToolRiskAssessment } from "../../src/tools/execution/tool-risk.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { buildHarness } from "./scoped-session-repositories.fixtures.js";
-import { testWallClock } from "../helpers/session-services.js";
+import { testWallClock, submitTestSessionRequest } from "../helpers/session-services.js";
 
 const ts = "2026-11-01T00:00:00.000Z";
 
@@ -70,29 +70,33 @@ test("message event commit has constant snapshot IO and preserves durable starts
               },
             ]
           : [];
-      await sessionRepo.commitChanges(userId, sessionId, {
+      await submitTestSessionRequest(
+        sessionRepo,
+        userId,
+        sessionId,
+        await reader.prepareRequest({
+          operationId: `checkpoint-${revision + 1}`,
+          committedAt: ts,
+          changes: {
+            messages,
+            summaryCheckpoints: [
+              {
+                userId,
+                sessionId,
+                dialogProcessId: "dialog-active",
+                turnScopeId: "active",
+                checkpointId: `checkpoint-${revision + 1}`,
+                expectedCheckpointRevision: revision,
+                persistedMessageUids: ["m1"],
+                summarizedMessageUids: ["m1"],
+                retainedMessageUids: [],
+                messages,
+              },
+            ],
+          },
+        }),
         persistenceContext,
-        expectedGeneration: reader.generation,
-        operationId: `checkpoint-${revision + 1}`,
-        committedAt: ts,
-        changes: {
-          messages,
-          summaryCheckpoints: [
-            {
-              userId,
-              sessionId,
-              dialogProcessId: "dialog-active",
-              turnScopeId: "active",
-              checkpointId: `checkpoint-${revision + 1}`,
-              expectedCheckpointRevision: revision,
-              persistedMessageUids: ["m1"],
-              summarizedMessageUids: ["m1"],
-              retainedMessageUids: [],
-              messages,
-            },
-          ],
-        },
-      });
+      );
       reader = await sessionRepo.requireSessionReader(userId, sessionId, { persistenceContext });
       revision += 1;
     }

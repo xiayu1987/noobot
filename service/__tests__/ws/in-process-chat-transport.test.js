@@ -11,6 +11,7 @@ import {
 } from "../../bootstrap/create-in-process-chat-transport.js";
 import { TURN_EVENT } from "@noobot/session-protocol";
 import { createChatRunService } from "../../services/chat-run-service.js";
+import { createServiceBotAccess } from "../../services/service-bot-access.js";
 import { createProtocolTestCommand } from "../routes/chat-websocket-server.test-helpers.js";
 import {
   createAuthoritativeBot,
@@ -25,7 +26,7 @@ useProvisionedRuntimeEventsWorkspace(["primary-user"], {
 function createTransport() {
   return createInProcessChatTransport({
     appDependencies: {
-      getBot: () => ({}),
+      serviceBotAccess: createServiceBotAccess({ getBot: () => ({}) }),
       normalizeLocale: (value) => String(value || "en-US"),
       defaultLocale: "en-US",
       translateText: (key) => key,
@@ -109,6 +110,7 @@ test("in-process close aborts the running turn and releases the session", async 
     });
   };
   const { bot } = authoritative;
+  const serviceBotAccess = createServiceBotAccess({ getBot: () => bot });
   const { mapAgentRunCommand } = createChatRunService({
     getBot: () => bot,
     normalizeLocale: (locale = "") => String(locale || "en-US"),
@@ -117,7 +119,7 @@ test("in-process close aborts the running turn and releases the session", async 
   });
   const transport = createInProcessChatTransport({
     appDependencies: {
-      getBot: () => bot,
+      serviceBotAccess,
       normalizeLocale: (value) => String(value || "en-US"),
       defaultLocale: "en-US",
       translateText: (key) => key,

@@ -24,6 +24,7 @@ function bind(appendAgentMessages, commitSummaryCheckpoint) {
           { ...message, sessionId: "s1", dialogProcessId: "d1", turnScopeId: "t1" },
           1,
           `test-content-${message.messageUid}-1`,
+          1,
         ),
       ),
     sessionId: "s1",

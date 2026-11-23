@@ -4,12 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { RoleEnum } from "../../../chat/model/chatConstants.js";
-import {
-  flattenSessionMessages,
-  mergeAttachments,
-  buildDialogProcessParentMap,
-  resolveRootDialogProcessIdByChain,
-} from "../../../chat/model/dialogProcessChain.js";
+import { mergeAttachments } from "../../../chat/model/dialogProcessChain.js";
+import { selectBranchDialogMessages } from "@noobot/session-protocol/session-detail";
 import {
   clearTurnScopedAssets,
   getMessageDialogProcessId,
@@ -18,7 +14,6 @@ import {
   isAssistantWithoutTurnScope,
 } from "../../../chat/model/messageIdentity.js";
 import { getMessageAttachments } from "../../../chat/model/messageModel.js";
-import { text } from "@noobot/shared/value";
 
 export function buildNormalizedDetailMessages({
   detailMessages = [],
@@ -56,30 +51,21 @@ export function buildChildAttachmentsByParentDialogProcessId({
       .filter(Boolean),
   );
   if (!rootDialogProcessIdSet.size) return output;
-  const parentByDialogProcessId = buildDialogProcessParentMap(flattenSessionMessages(sessionDocs));
-  for (const sessionDoc of Array.isArray(sessionDocs) ? sessionDocs : []) {
-    const sessionId = text(sessionDoc?.sessionId);
-    if (!sessionId || sessionId === text(rootSessionId)) continue;
-    const messageList = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
-    for (const messageItem of messageList) {
-      const normalizedAttachments = getMessageAttachments(
-        makeViewMessage(messageItem, { sessionId }),
-      );
-      if (!normalizedAttachments.length) continue;
-      const parentDialogProcessId = text(messageItem?.parentDialogProcessId);
-      if (!parentDialogProcessId) continue;
-      const rootDialogProcessId = resolveRootDialogProcessIdByChain({
-        startDialogProcessId: parentDialogProcessId,
-        rootDialogProcessIdSet,
-        parentByDialogProcessId,
-      });
-      if (!rootDialogProcessId) continue;
-      const mergedAttachments = mergeAttachments(
-        output.get(rootDialogProcessId) || [],
-        normalizedAttachments,
-      );
-      output.set(rootDialogProcessId, mergedAttachments);
-    }
+  const branchMessages = selectBranchDialogMessages({
+    sessionId: rootSessionId,
+    rootDialogProcessIds: rootDialogProcessIdSet,
+    sessions: sessionDocs,
+  });
+  for (const [dialogProcessId, messages] of branchMessages) {
+    const attachments = mergeAttachments(
+      [],
+      messages
+        .filter(({ message }) => getMessageAttachments(message).length)
+        .flatMap(({ sessionId, message }) =>
+          getMessageAttachments(makeViewMessage(message, { sessionId })),
+        ),
+    );
+    if (attachments.length) output.set(dialogProcessId, attachments);
   }
   return output;
 }

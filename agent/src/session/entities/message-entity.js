@@ -13,6 +13,7 @@ import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { projectResourceRef } from "@noobot/path-resolver";
 import { assertMutationRef } from "@noobot/file-mutation-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
+import { SessionCommitInputError } from "@noobot/session-protocol/session-changes";
 import {
   assertSessionMessageEntity,
   assertSessionMessageMetadata,
@@ -21,7 +22,7 @@ import {
   resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
 import { deepFreeze, isDeepFrozen } from "@noobot/shared/deep-freeze";
-import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
+import { isObjectLike, isPlainObject, text } from "@noobot/shared/value";
 
 function normalizeTransferEnvelopesFromMessage(message) {
   return normalizeTransferEnvelopes(compactTransferEnvelopes(message.transferEnvelopes));
@@ -52,7 +53,7 @@ function applyMessageArtifacts(target, message, attachments) {
   applyMessageMutationRefs(target, message);
   if (message?.resourceRefs === undefined) return;
   if (!Array.isArray(message.resourceRefs)) {
-    throw new TypeError("session message resourceRefs must be an array");
+    throw new SessionCommitInputError("session message resourceRefs must be an array");
   }
   if (message.resourceRefs.length) {
     target.resourceRefs = message.resourceRefs.map((item) => projectResourceRef(item));
@@ -62,7 +63,7 @@ function applyMessageArtifacts(target, message, attachments) {
 function applyMessageMutationRefs(target, message) {
   if (message?.mutationRefs === undefined) return;
   if (!Array.isArray(message.mutationRefs)) {
-    throw new TypeError("session message mutationRefs must be an array");
+    throw new SessionCommitInputError("session message mutationRefs must be an array");
   }
   if (message.mutationRefs.length) {
     target.mutationRefs = message.mutationRefs.map((item) => assertMutationRef(item));
@@ -82,7 +83,7 @@ function applyMessageInjection(target, message) {
   const { interjectionSequence } = message;
   if (interjectionSequence === undefined) return;
   if (!Number.isInteger(interjectionSequence) || interjectionSequence <= 0) {
-    throw new TypeError("interjectionSequence must be a positive integer");
+    throw new SessionCommitInputError("interjectionSequence must be a positive integer");
   }
   target.interjectionSequence = interjectionSequence;
 }
@@ -109,19 +110,6 @@ function applyChatPresentation(target, message) {
   }
 }
 
-function applyWorkspaceRootDirectory(target, message) {
-  if (message?.workspaceRootDirectory === undefined) return;
-  if (!isCanonicalText(message.workspaceRootDirectory)) {
-    throw new TypeError("session message workspaceRootDirectory must be canonical text");
-  }
-  if (target.role !== "assistant" || target.chatPresentation !== true) {
-    throw new TypeError(
-      "workspaceRootDirectory is only allowed on assistant presentation messages",
-    );
-  }
-  target.workspaceRootDirectory = message.workspaceRootDirectory;
-}
-
 function applyMessageTimelines(target, message) {
   if (Array.isArray(message?.activityTimeline)) target.activityTimeline = message.activityTimeline;
   if (Array.isArray(message?.toolTimeline)) target.toolTimeline = message.toolTimeline;
@@ -136,7 +124,8 @@ function applyMessagePresentation(target, message) {
   applyUserMetaParsedResults(target, message);
   applyPresentationIdentity(target, message);
   applyChatPresentation(target, message);
-  applyWorkspaceRootDirectory(target, message);
+  if (message.workspaceRootDirectory !== undefined)
+    target.workspaceRootDirectory = message.workspaceRootDirectory;
   applyMessageTimelines(target, message);
   applyMessageMonotonicity(target, message);
 }
@@ -151,7 +140,7 @@ function applyMessagePluginFields(target, message) {
 function applyAnthropicMessageContent(target, message) {
   if (target.role === "assistant" && Array.isArray(message?.rawModelContent)) {
     target.rawModelContent = message.rawModelContent.map((block) =>
-      block && typeof block === "object" ? { ...block } : block,
+      isObjectLike(block) ? { ...block } : block,
     );
   }
 }
@@ -170,7 +159,7 @@ function applyOpenAiMessageMetadata(target, message) {
     target.role === "assistant" &&
     Array.isArray(message?.modelResponseMetadata?.output) &&
     message.modelResponseMetadata.output.every(
-      (item) => item && typeof item === "object" && typeof item.type === "string",
+      (item) => isObjectLike(item) && typeof item.type === "string",
     )
   ) {
     target.modelResponseMetadata = {

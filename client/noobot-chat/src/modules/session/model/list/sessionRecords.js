@@ -28,7 +28,7 @@ export function createLocalSessionItem({ id, title, createConnectorPanelState })
     isLocal: true,
     loaded: true,
     aggregateVersion: 0,
-    generation: null,
+    knownGeneration: null,
     messageCount: 0,
     messages: [],
     sessionDocs: [],
@@ -47,7 +47,7 @@ function createRemoteSessionItem(entry, createConnectorPanelState) {
     isUnavailable: entry.availability === SESSION_SUMMARY_AVAILABILITY.UNAVAILABLE,
     isLocal: false,
     loaded: false,
-    generation: null,
+    knownGeneration: null,
     messages: [],
     sessionDocs: [],
     connectorPanelState: createConnectorPanelState(),
@@ -85,11 +85,11 @@ export function mapSummaryEntryToSession(entry, { createConnectorPanelState }) {
 export function mapDetailEntryToSession(entry, { createConnectorPanelState }) {
   const detailEntry = requireSessionDetailEntry(entry);
   if (!isAvailableSessionDetailEntry(detailEntry)) {
-    return createUnavailableSessionItem(detailEntry, createConnectorPanelState);
+    throw new TypeError("available detail required to create a session item");
   }
   return {
     ...createAvailableSessionItem(detailEntry, createConnectorPanelState),
-    generation: detailEntry.generation,
+    knownGeneration: detailEntry.generation,
   };
 }
 
@@ -105,12 +105,7 @@ function mergeExistingSessionState(mappedSession, existingSession) {
       ? mappedSession.aggregateVersion
       : existingSession.aggregateVersion,
     loaded,
-    generation:
-      mappedSession.generation === null
-        ? existingSession.generation
-        : existingSession.generation === null
-          ? mappedSession.generation
-          : Math.max(mappedSession.generation, existingSession.generation),
+    knownGeneration: existingSession.knownGeneration,
     messages: existingSession.messages,
     sessionDocs: existingSession.sessionDocs,
     connectorPanelState: existingSession.connectorPanelState,
@@ -129,13 +124,18 @@ export function isLoadedRemoteSession(sessionItem) {
   return sessionItem.isLocal !== true && sessionItem.loaded === true;
 }
 
-export function hasCurrentSessionDetail(sessionItem) {
-  if (!isLoadedRemoteSession(sessionItem)) return false;
+export function findAppliedSessionDetailEntry(sessionItem) {
   if (!Array.isArray(sessionItem.sessionDocs)) {
-    throw new TypeError(`remote session requires sessionDocs: ${sessionItem.sessionId}`);
+    throw new TypeError(`session requires sessionDocs: ${sessionItem.sessionId}`);
   }
-  const main = sessionItem.sessionDocs.find((entry) => entry.sessionId === sessionItem.sessionId);
-  return isSessionDetailEntryCurrent(main, sessionItem);
+  return sessionItem.sessionDocs.find((entry) => entry.sessionId === sessionItem.sessionId);
+}
+
+export function hasCurrentSessionDetail(sessionItem) {
+  return (
+    isLoadedRemoteSession(sessionItem) &&
+    isSessionDetailEntryCurrent(findAppliedSessionDetailEntry(sessionItem), sessionItem)
+  );
 }
 
 export function requireLoadedSessionDetail(sessionItem) {

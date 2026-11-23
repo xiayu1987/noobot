@@ -23,10 +23,25 @@ import {
   mergeTransferEnvelopes,
   transferIdentityKey,
   TRANSFER_REASON,
+  TransferEnvelopeInputError,
   TRANSFER_ERROR_CODE,
   isTransferIdentityConflict,
 } from "../src/index.js";
 import { decideTransfer } from "../src/policy.js";
+
+test("transfer validation propagates unexpected exceptions in both modes", () => {
+  const failure = new TypeError("unexpected transfer failure");
+  const value = {
+    get payload() {
+      throw failure;
+    },
+  };
+  for (const strict of [false, true])
+    assert.throws(
+      () => validateTransferEnvelope(value, { strict }),
+      (error) => error === failure,
+    );
+});
 
 const identity = createTransferIdentity({
   sessionId: "s1",
@@ -112,6 +127,40 @@ test("creates strict direct V3 envelope", () => {
   });
   assert.equal(envelope.version, 3);
   assert.equal(validateTransferEnvelope(envelope).ok, true);
+});
+
+test("malformed envelope values retain typed protocol errors", () => {
+  const envelope = directTransfer({
+    transferId: "tr-input",
+    presentationMessageId: "m-input",
+    identity,
+    direction: "output",
+    intent: {
+      source: "tool",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+      scenario: "tool",
+      strategy: "tool_output",
+    },
+    content: "ok",
+  });
+  const cases = [
+    [{ identity: {} }, "invalid_transfer_producer"],
+    [{ payload: { mode: "attachment", attachments: [null] } }, "invalid_transfer_attachment"],
+    [{ payload: { mode: "attachment", attachments: new Array(1) } }, "invalid_transfer_attachment"],
+    [
+      { intent: { ...envelope.intent, strategy: "unregistered" } },
+      "semantic_transfer_strategy_not_registered:tool:unregistered",
+    ],
+    [{ intent: { ...envelope.intent, source: "unknown" } }, "unknown_transfer_source:unknown"],
+  ];
+  for (const [change, message] of cases) {
+    const value = { ...envelope, ...change };
+    assert.deepEqual(validateTransferEnvelope(value), { ok: false, errors: [message] });
+    assert.throws(() => assertTransferEnvelope(value), {
+      constructor: TransferEnvelopeInputError,
+      message: `invalid_transfer_envelope:${message}`,
+    });
+  }
 });
 
 test("rejects payload modes outside the protocol, including Object.prototype names", () => {

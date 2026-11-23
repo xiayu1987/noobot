@@ -59,10 +59,12 @@ async function readCaptureRecord(directory, file, allowAbsent = false) {
   return decodeImmutableCleanupBytes(await readHandlePrefix(handle, PLAN.recordBytes + 1));
 }
 
-async function readOwnership({ store, directory, id, signal }, allowAbsent) {
+async function readOwnership({ store, directory, id, signal, publishSessionState }, allowAbsent) {
   const record = await readCaptureRecord(directory, PLAN.preparation, allowAbsent);
   if (record === undefined)
-    return captureImmutablePreparationRetention(store, { directory, id, signal });
+    return publishSessionState(() =>
+      captureImmutablePreparationRetention(store, { directory, id, signal }),
+    );
   const ownership = requireImmutableCleanupPreparation(record, id);
   const current = await store.snapshot();
   for (const head of ownership.heads) requireImmutableRetainedSnapshot(head, current);

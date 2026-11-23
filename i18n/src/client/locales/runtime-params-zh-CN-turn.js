@@ -20,8 +20,16 @@ export default {
       description: "接近工具循环轮次上限时保留的缓冲轮次。",
     },
     phaseSummaryLoopTurns: {
-      name: "智能体阶段摘要循环轮次",
-      description: "智能体阶段摘要循环轮次使用的轮次或尝试次数阈值。",
+      name: "全量场景阶段小结轮次",
+      description: "全量和自定义场景的智能体阶段小结循环阈值。",
+    },
+    phaseSummaryTextLoopTurns: {
+      name: "文本场景阶段小结轮次",
+      description: "文本场景的智能体阶段小结循环阈值。",
+    },
+    phaseSummaryProgrammingLoopTurns: {
+      name: "编程场景阶段小结轮次",
+      description: "编程场景的智能体阶段小结循环阈值。",
     },
     taskCheckLoopTurns: {
       name: "智能体任务检查循环轮次",

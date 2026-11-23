@@ -3,105 +3,84 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { projectThinkingEventTimeline } from "../thinking-timeline-projection.js";
 import { buildDisplayMessageSummary } from "./message-summary-projection.js";
 import {
   compactThinkingTimeline,
   selectMessageToolTimeline,
 } from "@noobot/event-protocol/tool-timeline";
+import { selectMessageActivityTimeline } from "@noobot/event-protocol/activity-timeline";
+import { projectThinkingEventTimeline } from "@noobot/event-protocol/thinking-detail-projection";
 import { buildLifecycleTurnPresentations } from "./turn-artifact-projection.js";
-import { text } from "@noobot/shared/value";
+import { planSessionDisplayRows } from "@noobot/session-protocol/session-reader";
 
 function projectPersistedMessages(messages) {
   return messages.map((message) => buildDisplayMessageSummary(message)).filter(Boolean);
 }
 
-function findPresentation(messages, presentationMessageId) {
-  return messages.find(
-    (message) =>
-      text(message?.role) === "assistant" &&
-      text(message?.presentationMessageId) === presentationMessageId,
+function planDisplayRows(messages, lifecycle) {
+  return planSessionDisplayRows(
+    projectPersistedMessages(messages),
+    buildLifecycleTurnPresentations(lifecycle),
   );
 }
 
-function insertLifecyclePresentation(messages, presentation) {
-  const existing = findPresentation(messages, presentation.presentationMessageId);
-  if (existing && text(existing.turnScopeId) !== presentation.turnScopeId) {
-    throw new TypeError(
-      "active Turn presentation invariant failed: presentation_turn_scope_conflict",
-    );
-  }
-  if (existing) return;
-  const owningUserIndex = messages.findLastIndex(
-    (message) =>
-      text(message?.role) === "user" && text(message?.turnScopeId) === presentation.turnScopeId,
+export function contributesDisplayThinkingDetails(message) {
+  return (
+    selectMessageToolTimeline(message).length > 0 ||
+    selectMessageActivityTimeline(message).length > 0
   );
-  messages.splice(owningUserIndex >= 0 ? owningUserIndex + 1 : messages.length, 0, presentation);
 }
 
-function mergeAssistantPresentation(existing, incoming) {
-  const existingIsPlaceholder = Boolean(text(existing?.sourceMessageType));
-  const incomingIsPlaceholder = Boolean(text(incoming?.sourceMessageType));
-  if (!existingIsPlaceholder && !incomingIsPlaceholder) {
-    throw new TypeError("session summary contains multiple canonical assistant presentations");
-  }
-  return !incomingIsPlaceholder || existingIsPlaceholder ? incoming : existing;
+function selectThinkingTurns(messages) {
+  return new Set(
+    messages.filter(contributesDisplayThinkingDetails).map(({ turnScopeId }) => turnScopeId),
+  );
 }
 
-function dedupeDisplayMessages(messages) {
-  const byIdentity = new Map();
+function buildThinkingByTurn(messages, thinkingTurns, selectToolTimeline) {
+  const thinkingByTurn = new Map();
   for (const message of messages) {
-    if (message?.role !== "assistant") {
-      byIdentity.set(`${message.role}:${byIdentity.size}`, message);
-      continue;
-    }
-    const identity = message.presentationMessageId;
-    const existing = byIdentity.get(identity);
-    byIdentity.set(identity, existing ? mergeAssistantPresentation(existing, message) : message);
+    if (!thinkingTurns.has(message.turnScopeId)) continue;
+    const members = thinkingByTurn.get(message.turnScopeId);
+    if (members) members.push(message);
+    else thinkingByTurn.set(message.turnScopeId, [message]);
   }
-  return [...byIdentity.values()];
-}
-
-function attachThinkingTimeline(messagesByTurn, displayMessage, selectToolTimeline) {
-  if (text(displayMessage?.role) !== "assistant") return;
-  const turnScopeId = text(displayMessage?.turnScopeId);
-  if (!turnScopeId) return;
-  const thinkingTimeline = projectThinkingEventTimeline(
-    messagesByTurn.get(turnScopeId) ?? [],
-    selectToolTimeline,
-  );
-  if (!thinkingTimeline.toolTimeline.length && !thinkingTimeline.activityTimeline.length) return;
-  displayMessage.toolTimeline = thinkingTimeline.toolTimeline;
-  if (thinkingTimeline.activityTimeline.length) {
-    displayMessage.activityTimeline = thinkingTimeline.activityTimeline;
-  } else {
-    delete displayMessage.activityTimeline;
+  for (const [scope, members] of thinkingByTurn) {
+    thinkingByTurn.set(scope, projectThinkingEventTimeline(members, selectToolTimeline));
   }
-  displayMessage.hasThinkingDetails = true;
+  return thinkingByTurn;
 }
 
-function selectDisplayToolTimeline(message) {
-  return compactThinkingTimeline(selectMessageToolTimeline(message));
+function assignDisplaySourceOrdinal(message, selectSourceOrdinal) {
+  const ordinal = selectSourceOrdinal(message);
+  if (!Number.isSafeInteger(ordinal) || ordinal < 1)
+    throw new TypeError("Display row requires a valid source message ordinal");
+  message.sessionOrdinal = ordinal;
 }
 
-export function buildSessionDisplayMessages({
+export function buildSessionDisplayEntries({
   messages,
   lifecycle,
-  selectToolTimeline = selectDisplayToolTimeline,
+  thinkingTurns = selectThinkingTurns(messages),
+  selectSourceOrdinal,
+  includeThinkingTimeline = false,
+  selectToolTimeline = (message) => compactThinkingTimeline(selectMessageToolTimeline(message)),
 }) {
-  const projectedMessages = projectPersistedMessages(messages);
-  for (const presentation of buildLifecycleTurnPresentations(lifecycle)) {
-    insertLifecyclePresentation(projectedMessages, presentation);
+  const entries = planDisplayRows(messages, lifecycle);
+  const thinkingByTurn = includeThinkingTimeline
+    ? buildThinkingByTurn(messages, thinkingTurns, selectToolTimeline)
+    : new Map();
+  for (const { row: displayMessage } of entries) {
+    if (selectSourceOrdinal && displayMessage.turnPlaceholder !== true)
+      assignDisplaySourceOrdinal(displayMessage, selectSourceOrdinal);
+    if (displayMessage.role !== "assistant" || !thinkingTurns.has(displayMessage.turnScopeId))
+      continue;
+    displayMessage.hasThinkingDetails = true;
+    const timeline = thinkingByTurn.get(displayMessage.turnScopeId);
+    if (!timeline) continue;
+    if (timeline.toolTimeline.length) displayMessage.toolTimeline = [...timeline.toolTimeline];
+    if (timeline.activityTimeline.length)
+      displayMessage.activityTimeline = timeline.activityTimeline;
   }
-  const displayMessages = dedupeDisplayMessages(projectedMessages);
-  const messagesByTurn = new Map();
-  for (const message of messages) {
-    const scope = message.turnScopeId;
-    if (!messagesByTurn.has(scope)) messagesByTurn.set(scope, []);
-    messagesByTurn.get(scope).push(message);
-  }
-  for (const displayMessage of displayMessages) {
-    attachThinkingTimeline(messagesByTurn, displayMessage, selectToolTimeline);
-  }
-  return displayMessages;
+  return entries;
 }

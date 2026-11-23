@@ -8,12 +8,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises";
 
 import { AttachmentService } from "../../src/artifacts/service/attachment-service.js";
 import { resolveCanonicalSourceAttachment } from "../../src/artifacts/source-attachment-resolver.js";
 import { BUILTIN_ATTACHMENT_POLICY, resolveAttachmentPolicy } from "@noobot/agent-config-protocol";
-import { readAttachIndex, writeAttachIndex } from "../../src/artifacts/index-manager.js";
+import { listAttachmentRecords } from "../../src/artifacts/index-manager.js";
+
 import {
   isMimeTypeAllowed,
   isExtensionAllowed,
@@ -33,6 +34,13 @@ import {
 } from "../helpers/session-message-facts.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
+
+async function readFixtureRecords(basePath, scope) {
+  const records = await listAttachmentRecords(basePath, scope);
+  return {
+    attachments: Object.fromEntries(records.map((record) => [record.attachmentId, record])),
+  };
+}
 
 async function withTempDir(fn) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "noobot-attach-test-"));
@@ -192,35 +200,6 @@ test("attachment storage encodes logical scope identities before filesystem proj
   });
 });
 
-test("attachment index rejects storage references outside their declared scope", async () => {
-  await withTempDir(async (workspaceRoot) => {
-    const basePath = path.join(workspaceRoot, "u1");
-    const scope = { sessionId: "s1", attachmentSource: "user" };
-
-    await assert.rejects(
-      writeAttachIndex(
-        basePath,
-        {
-          attachments: {
-            a1: {
-              attachmentId: "a1",
-              sessionId: scope.sessionId,
-              attachmentSource: scope.attachmentSource,
-              name: "secret.txt",
-              mimeType: "text/plain",
-              path: path.join(basePath, "../secret.txt"),
-              createdAt: "2026-01-01T00:00:00.000Z",
-              updatedAt: "2026-01-01T00:00:00.000Z",
-            },
-          },
-        },
-        scope,
-      ),
-      /attachment_storage_ref_scope_mismatch/,
-    );
-  });
-});
-
 test("attachment query rejects symbolic links that escape the canonical scope", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
@@ -314,7 +293,7 @@ test("AttachmentService concurrent model artifact writes preserve one canonical 
     );
     const saved = (await Promise.all(batches)).flat();
     assert.equal(saved.length, 8);
-    const index = await readAttachIndex(path.join(workspaceRoot, "u1"), {
+    const index = await readFixtureRecords(path.join(workspaceRoot, "u1"), {
       sessionId: "concurrent-session",
       attachmentSource: "model",
     });
@@ -454,15 +433,10 @@ test("AttachmentService links parsed results to one attachment identity only", a
         sessionId: "s1",
         attachmentSource: "user",
       },
-      targetDescriptor: {
-        identity: {
-          attachmentId: parsed.attachmentId,
-          sessionId: parsed.sessionId,
-          attachmentSource: parsed.attachmentSource,
-        },
-        name: parsed.name,
-        mimeType: parsed.mimeType,
-        size: parsed.size,
+      targetIdentity: {
+        attachmentId: parsed.attachmentId,
+        sessionId: parsed.sessionId,
+        attachmentSource: parsed.attachmentSource,
       },
       producerId: "multimodal_parse",
     });
@@ -563,7 +537,7 @@ test("AttachmentService rejects a malformed generated batch before persisting an
       }),
       /artifacts\[1\]\.contentBase64 must be a string/,
     );
-    const index = await readAttachIndex(path.join(workspaceRoot, "u1"), {
+    const index = await readFixtureRecords(path.join(workspaceRoot, "u1"), {
       sessionId: "atomic-session",
       attachmentSource: "model",
     });
@@ -632,7 +606,7 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
       aggregateVersion: 0,
       messages: [
         {
-          messageUid: "sm_attachment_source",
+          messageUid: "sm_attachmentSource",
           ts: TEST_MESSAGE_TS,
           sessionId: rootSessionId,
           role: "user",
@@ -680,15 +654,10 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
         sessionId: rootSessionId,
         attachmentSource: "user",
       },
-      targetDescriptor: {
-        identity: {
-          attachmentId: parsedAttachment.attachmentId,
-          sessionId: parsedAttachment.sessionId,
-          attachmentSource: parsedAttachment.attachmentSource,
-        },
-        name: parsedAttachment.name,
-        mimeType: parsedAttachment.mimeType,
-        size: parsedAttachment.size,
+      targetIdentity: {
+        attachmentId: parsedAttachment.attachmentId,
+        sessionId: parsedAttachment.sessionId,
+        attachmentSource: parsedAttachment.attachmentSource,
       },
       producerId: "multimodal_parse",
     });
@@ -723,103 +692,6 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
       attachmentSource: "user",
     });
     assert.deepEqual(stored.relations, linked.relations);
-  });
-});
-
-test("index-manager persists only versioned protocol records and isolates every attachment scope", async () => {
-  await withTempDir(async (workspaceRoot) => {
-    const basePath = path.join(workspaceRoot, "u1");
-    const scope = { sessionId: "s1", attachmentSource: "user" };
-
-    const empty = await readAttachIndex(basePath, scope);
-    assert.deepEqual(empty.attachments, {});
-
-    await assert.rejects(
-      writeAttachIndex(
-        basePath,
-        { attachments: { a1: { attachmentId: "a1", name: "x.txt" } } },
-        scope,
-      ),
-      /attachment_storage_ref_required/,
-    );
-
-    await writeAttachIndex(
-      basePath,
-      {
-        attachments: {
-          a2: {
-            attachmentId: "a2",
-            sessionId: "s1",
-            attachmentSource: "user",
-            name: "x.txt",
-            mimeType: "text/plain",
-            path: path.join(basePath, "runtime/attach/scoped/s1/user/a2/x.txt"),
-            createdAt: "2026-01-01T00:00:00.000Z",
-            updatedAt: "2026-01-01T00:00:00.000Z",
-            relations: [],
-            sandboxPath: "/workspace/sandbox/runtime/attach/scoped/s1/user/a2/x.txt",
-            previewUrl: "/preview/a2",
-          },
-        },
-      },
-      scope,
-    );
-    const canonicalLoaded = await readAttachIndex(basePath, scope);
-    assert.equal(canonicalLoaded.attachments.a2?.name, "x.txt");
-    assert.equal(canonicalLoaded.attachments.a2?.sandboxPath, undefined);
-    assert.equal(canonicalLoaded.attachments.a2?.previewUrl, undefined);
-
-    const otherScope = { sessionId: "s2", attachmentSource: "user" };
-    await writeAttachIndex(
-      basePath,
-      {
-        attachments: {
-          a2: {
-            attachmentId: "a2",
-            sessionId: "s2",
-            attachmentSource: "user",
-            name: "other.txt",
-            relations: [],
-            mimeType: "text/plain",
-            path: path.join(basePath, "runtime/attach/scoped/s2/user/a2/other.txt"),
-            createdAt: "2026-01-01T00:00:00.000Z",
-            updatedAt: "2026-01-01T00:00:00.000Z",
-          },
-        },
-      },
-      otherScope,
-    );
-    const isolated = await readAttachIndex(basePath, otherScope);
-    assert.equal(isolated.attachments.a2?.sessionId, "s2");
-    assert.equal(isolated.attachments.a2?.attachmentSource, "user");
-    assert.equal(isolated.attachments.a2?.name, "other.txt");
-
-    const migratedIndexFile = path.join(basePath, "runtime/attach/scoped/s1/user/attachments.json");
-    const migratedPayload = JSON.parse(await readFile(migratedIndexFile, "utf8"));
-    assert.equal(migratedPayload.attachments.a2?.identity?.attachmentId, "a2");
-    assert.equal(migratedPayload.attachments.a2?.identity?.sessionId, "s1");
-    assert.equal(migratedPayload.attachments.a2?.identity?.attachmentSource, "user");
-  });
-});
-
-test("index-manager rejects malformed entries without replacing the persisted index", async () => {
-  await withTempDir(async (basePath) => {
-    const scope = { sessionId: "s1", attachmentSource: "user" };
-    await writeAttachIndex(basePath, { attachments: {} }, scope);
-    const file = path.join(basePath, "runtime/attach/scoped/s1/user/attachments.json");
-    const original = await readFile(file, "utf8");
-    for (const attachments of [undefined, null, [], "invalid"]) {
-      await assert.rejects(
-        writeAttachIndex(basePath, { attachments }, scope),
-        /invalid_attachment_index_entries/,
-      );
-      assert.equal(await readFile(file, "utf8"), original);
-      await writeFile(file, JSON.stringify({ ...JSON.parse(original), attachments }));
-      await assert.rejects(readAttachIndex(basePath, scope), /invalid_attachment_index_entries/);
-      await writeFile(file, original);
-    }
-    await writeFile(file, JSON.stringify({ ...JSON.parse(original), updatedAt: null }));
-    await assert.rejects(readAttachIndex(basePath, scope), /invalid_attachment_index_updated_at/);
   });
 });
 

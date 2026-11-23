@@ -29,7 +29,7 @@ are navigation aids; the PBE IDs in test titles identify scenarios. See the [run
 - `053`: execution reports (PBE-053/054) and model usage persistence after reload (PBE-057).
 - `054`: recoverable tool errors reach the durable journal (PBE-055).
 - `055`: refresh, reconnect, and click navigation land precisely on the URL `turn` or the latest turn (PBE-056).
-- `056`: mixed-session performance with character and Harness, twenty measured turns and two stop/continue cycles (PBE-058). The workload is defined in `scripts/mock-model-service/performance-contract.mjs`; see [performance operation](../../../../../../scripts/e2e-docker/PERFORMANCE.md).
+- `056`: mixed-session performance with character and Harness, twenty measured turns and two stop/continue cycles (PBE-058). The workload is defined in `scripts/mock-model-service/performance-contract.mjs`; see [storage performance criteria](../../../../../../docs/session-storage-architecture.md#5-性能与容量不变量).
 
 PBE-018, PBE-019, and PBE-020 are strict subsets of PBE-033, PBE-032, and PBE-028. PBE-047 covers
 connector creation, persisted-Session selection write ordering, database access, model context, and
@@ -92,7 +92,7 @@ the final answer.
 - `053`：执行报告使用权威 `dialogProcessId`（PBE-053、PBE-054），以及模型用量持久化和刷新恢复（PBE-057）。
 - `054`：可恢复工具错误的 tool_result 进入 durable journal（PBE-055）。
 - `055`：刷新、重连与点击导航按 URL `turn`、最新轮次精确落位（PBE-056）。
-- `056`：启用角色与 Harness 的混合会话性能测试，二十个测量轮次及两次停止继续（PBE-058）。负载以 `scripts/mock-model-service/performance-contract.mjs` 为准，见[性能运行说明](../../../../../../scripts/e2e-docker/PERFORMANCE.md)。
+- `056`：启用角色与 Harness 的混合会话性能测试，二十个测量轮次及两次停止继续（PBE-058）。负载以 `scripts/mock-model-service/performance-contract.mjs` 为准，见[存储性能约束](../../../../../../docs/session-storage-architecture.md#5-性能与容量不变量)。
 - PBE-018、PBE-019、PBE-020 已分别合并到 PBE-033、PBE-032、PBE-028；PBE-099 的重复组合审计已删除。
 - 当前场景均已落地；禁止提交永久 `skip` 或无业务断言的占位场景。
 

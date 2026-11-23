@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-
 export async function readImmutableTurnMutationSource(reader, event) {
   const metadata = await reader.readMetadata();
   const header = await reader.readLifecycleHead();
@@ -19,19 +17,11 @@ export async function readImmutableTurnMutationSource(reader, event) {
   ]) {
     if (scope && !selected.has(scope)) selected.set(scope, await reader.readTurnState(scope));
   }
-  const descriptor = current ?? (await reader.readTurnDescriptor(event.turnScopeId));
-  const dialog = descriptor ? await reader.readDialog(descriptor.dialogProcessId) : null;
-
-  const firstPage = await reader.readTurnPage({
-    turnScopeId: event.turnScopeId,
-    limit: QUANTITY_THRESHOLDS.immutableStorage.turnAcceptancePageSize,
-  });
-  const accepted = firstPage?.records[0]?.message;
+  const accepted = await reader.readFirstTurnMessage(event.turnScopeId);
   const timing = await reader.readTurnTiming(event.turnScopeId);
   return {
     ...metadata,
     messages: accepted?.role === "user" ? [accepted] : [],
-    dialogOrder: dialog ? [dialog] : [],
     turnTimings: timing ? [timing] : [],
     sessionArtifactEvents: [],
     turnLifecycle: {

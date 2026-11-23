@@ -5,15 +5,14 @@
  */
 import { getEventFamily } from "@noobot/event-protocol";
 import { assertAuthorityOutboxRequest } from "@noobot/event-protocol/outbox";
-import { locateOutboxSessionDir } from "./outbox-scope.js";
 import { isCanonicalText, isObjectLike } from "@noobot/shared/value";
-import { SESSION_NOT_FOUND_REASON } from "@noobot/session-protocol";
-import { commitImmutableAuthorityEvent } from "./immutable-authority-event.js";
+import { resolveDeletedSessionAs } from "./session-deleted-result.js";
+import { planAuthorityEventCommit } from "./immutable-authority-event.js";
 import {
   withImmutableOutbox,
-  readImmutablePending,
-  recordImmutableAttempts,
-  acknowledgeImmutableEvents,
+  planPendingOutbox,
+  planOutboxDelivery,
+  planOutboxAcknowledgement,
   commitImmutableOutbox,
 } from "./immutable-authority-outbox.js";
 
@@ -40,96 +39,67 @@ export async function commitAuthorityEvent({
   ) {
     throw new TypeError("authority event commit requires canonical ordering domain and scope");
   }
-  return withImmutableOutbox(this, { userId, sessionId, persistenceContext }, (reader, commit) =>
-    commitImmutableAuthorityEvent(
-      this,
-      reader,
-      {
-        userId,
-        sessionId,
-        family,
-        identity,
-        causality,
-        ordering,
-        producer,
-        payload,
-        persistenceContext,
-      },
-      descriptor,
-      commit,
-    ),
+  return this.sessionRepo.withSessionOutboxMutation(
+    userId,
+    sessionId,
+    (reader) =>
+      planAuthorityEventCommit(
+        this,
+        reader,
+        {
+          userId,
+          sessionId,
+          family,
+          identity,
+          causality,
+          ordering,
+          producer,
+          payload,
+        },
+        descriptor,
+      ),
+    { persistenceContext },
+  );
+}
+
+function planDelivery(service, request, operation, plan) {
+  const input = assertAuthorityOutboxRequest(request, operation);
+  const { userId, sessionId, persistenceContext } = input;
+  return service.sessionRepo.withSessionOutboxMutation(
+    userId,
+    sessionId,
+    (reader) => plan(service, input, reader),
+    { persistenceContext },
   );
 }
 
 export async function getPendingAuthorityEvents(request) {
-  const { userId, sessionId, persistenceContext, consumerId } = assertAuthorityOutboxRequest(
-    request,
-    "pending",
-  );
-  const sessionDir = await locateOutboxSessionDir(this, userId, sessionId, persistenceContext);
-  if (!sessionDir) return { found: false, reason: SESSION_NOT_FOUND_REASON, events: [] };
-  return withImmutableOutbox(this, { userId, sessionId, persistenceContext }, (reader, commit) =>
-    readImmutablePending(
-      this,
-      { userId, sessionId, persistenceContext, consumerId },
-      reader,
-      commit,
-    ),
-  );
+  return resolveDeletedSessionAs(planDelivery(this, request, "pending", planPendingOutbox), {
+    found: false,
+    events: [],
+  });
 }
 
-export async function recordAuthorityEventAttempts(request) {
-  const {
-    userId,
-    sessionId,
-    persistenceContext,
-    consumerId,
-    eventIds: requested,
-  } = assertAuthorityOutboxRequest(request, "attempt");
-  const sessionDir = await locateOutboxSessionDir(this, userId, sessionId, persistenceContext);
-  if (!sessionDir) return { recorded: false, reason: SESSION_NOT_FOUND_REASON, events: [] };
-  return withImmutableOutbox(this, { userId, sessionId, persistenceContext }, (reader, commit) =>
-    recordImmutableAttempts(
-      this,
-      { userId, sessionId, persistenceContext, consumerId, eventIds: requested },
-      reader,
-      commit,
-    ),
+export async function prepareAuthorityEventDelivery(request) {
+  return resolveDeletedSessionAs(
+    planDelivery(this, request, "prepareDelivery", planOutboxDelivery),
+    { found: false, events: [] },
   );
 }
 
 export async function acknowledgeAuthorityEvents(request) {
-  const {
-    userId,
-    sessionId,
-    persistenceContext,
-    consumerId,
-    acknowledgements: requested,
-  } = assertAuthorityOutboxRequest(request, "ack");
-  const sessionDir = await locateOutboxSessionDir(this, userId, sessionId, persistenceContext);
-  if (!sessionDir) {
-    return { acknowledged: false, reason: SESSION_NOT_FOUND_REASON, delivered: 0, deduplicated: 0 };
-  }
-  return withImmutableOutbox(this, { userId, sessionId, persistenceContext }, (reader, commit) =>
-    acknowledgeImmutableEvents(
-      this,
-      { userId, sessionId, persistenceContext, consumerId, acknowledgements: requested },
-      reader,
-      commit,
-    ),
-  );
+  return resolveDeletedSessionAs(planDelivery(this, request, "ack", planOutboxAcknowledgement), {
+    acknowledged: false,
+    delivered: 0,
+    deduplicated: 0,
+  });
 }
 
 export async function compactAuthorityEvents(request) {
   const { userId, sessionId, persistenceContext, retainDeliveredAfter } =
     assertAuthorityOutboxRequest(request, "compact");
-  const sessionDir = await locateOutboxSessionDir(this, userId, sessionId, persistenceContext);
-  if (!sessionDir)
-    return { compacted: false, reason: SESSION_NOT_FOUND_REASON, nextRetainedDeliveryAt: null };
-  return withImmutableOutbox(
-    this,
-    { userId, sessionId, persistenceContext },
-    async (reader, commit) => {
+  return resolveDeletedSessionAs(
+    withImmutableOutbox(this, { userId, sessionId, persistenceContext }, async (reader, commit) => {
       const committed = await commitImmutableOutbox(
         this,
         reader,
@@ -139,6 +109,7 @@ export async function compactAuthorityEvents(request) {
         commit,
       );
       return committed.result.outboxMaintenance;
-    },
+    }),
+    { compacted: false, nextRetainedDeliveryAt: null },
   );
 }

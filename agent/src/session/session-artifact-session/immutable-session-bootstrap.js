@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeSessionEntity } from "../entities/session-entity.js";
+import { withImmutableAuthorityMutation } from "../session-storage-authority.js";
+import { randomUUID } from "node:crypto";
+import { requireSessionInitialization } from "@noobot/session-protocol/session-initialization";
+import { requireImmutableSessionChanges } from "@noobot/session-protocol/session-changes";
+import { prepareImmutableTurnCommit } from "./immutable-lifecycle-changes.js";
 import {
   seedImmutableArtifactEventIndex,
   indexImmutableArtifactEvent,
@@ -13,6 +18,8 @@ import { IMMUTABLE_SESSION_FORMAT_FILE } from "@noobot/session-protocol/immutabl
 import {
   TURN_EVENT_VALUES,
   projectTurnMessage,
+  deriveSessionAutoTitle,
+  projectStoredSessionMetadata,
   createScopedSessionMetadataRecord,
   readScopedSessionMetadataRecord,
 } from "@noobot/session-protocol";
@@ -34,6 +41,7 @@ import { indexImmutableOutboxEvent } from "./immutable-outbox-turn-index.js";
 import { writeImmutableCommand } from "./immutable-command-index.js";
 import { seedImmutableMessageTails } from "./immutable-message-tail-index.js";
 import { seedImmutableTitleIndex } from "./immutable-title-index.js";
+import { seedImmutableContextDirectory } from "./immutable-context-directory.js";
 import { prepareImmutableLifecycleIndex } from "./immutable-lifecycle-index.js";
 
 const STRUCTURAL_FIELDS = new Set([
@@ -51,13 +59,16 @@ const STRUCTURAL_FIELDS = new Set([
   "sessionArtifacts",
 ]);
 
+function readImportMetadata(session) {
+  return projectStoredSessionMetadata(
+    Object.fromEntries(Object.entries(session).filter(([key]) => !STRUCTURAL_FIELDS.has(key))),
+  );
+}
+
 export function immutableSessionImportProjection(source) {
   const session = normalizeSessionEntity(source);
-  const metadata = Object.fromEntries(
-    Object.entries(session).filter(([key]) => !STRUCTURAL_FIELDS.has(key)),
-  );
   return {
-    ...metadata,
+    ...readImportMetadata(session),
     messages: session.messages.map((message) =>
       projectTurnMessage(message, session.turnLifecycle.turns[message.turnScopeId]),
     ),
@@ -79,11 +90,7 @@ export function immutableSessionImportProjection(source) {
 }
 
 async function seedMetadata(store, plan, session) {
-  plan.set(
-    "metadata",
-    "session",
-    Object.fromEntries(Object.entries(session).filter(([key]) => !STRUCTURAL_FIELDS.has(key))),
-  );
+  plan.set("metadata", "session", readImportMetadata(session));
   plan.set("metadata", "facts", {
     contextIndexVersion: IMMUTABLE_CONTEXT_INDEX_VERSION,
     messageCount: 0,
@@ -103,8 +110,10 @@ async function seedMetadata(store, plan, session) {
   plan.set("metadata", "checkpointIndex", { version: 1 });
   seedImmutableMessageTails(plan, session.dialogOrder);
   seedImmutableTitleIndex(plan);
+  seedImmutableContextDirectory(plan);
   for (const entry of session.dialogOrder) {
     plan.set("dialogs", entry.dialogProcessId, entry);
+    plan.set("contextTurns", entry.dialogProcessId, { count: 0, root: null });
     plan.set("dialogOrder", immutableOrderKey(entry.dialogOrdinal), entry.dialogProcessId);
   }
   for (const [key, turn] of Object.entries(session.turnLifecycle.turns))
@@ -181,6 +190,7 @@ async function seedEvents({ store, plan, session, authorityEvents, outbox }) {
 async function prepareImmutableSessionImport({
   store,
   get,
+  getMany,
   getMetadata,
   session: source,
   authorityEvents = [],
@@ -193,32 +203,77 @@ async function prepareImmutableSessionImport({
   if (session.sessionId !== store.sessionId)
     throw new TypeError("Imported session identity mismatch");
   const plan = new ImmutableSessionChanges(get, {
+    getMany,
     getMetadata,
     readContent: (reference) => store.objects.readValue(reference),
-    readContentMetadata: (reference) => store.objects.readValueMetadata(reference),
   });
   await seedMetadata(store, plan, session);
   plan.set("metadata", "scoped", createScopedSessionMetadataRecord(scopedMetadata));
   await seedCheckpoints(store, plan, session);
   await seedEvents({ store, plan, session, authorityEvents, outbox });
-  const messages = await prepareImmutableMessages({
+  await prepareImmutableMessages({
     store,
-    get: (collection, key) => plan.get(collection, key),
-    getMetadata: (collection, key) => plan.getMetadata(collection, key),
+    plan,
     messages: session.messages,
     updatedAt: session.updatedAt,
   });
-  for (const change of messages.changes) await plan.apply(change);
-
-  const metadata = Object.fromEntries(
-    Object.entries(session).filter(([key]) => !STRUCTURAL_FIELDS.has(key)),
-  );
-  plan.set("metadata", "session", metadata);
   await prepareImmutableLifecycleIndex(plan, { initialize: true });
   return {
     changes: plan.changes(),
     result: { sessionId: session.sessionId, messageCount: session.messages.length },
   };
+}
+
+export async function createImmutableSession({
+  scope,
+  session,
+  operationId,
+  scopedMetadata,
+  initialTurn,
+}) {
+  requireSessionInitialization({ session, initialTurn }, scope);
+  if (initialTurn !== null) requireImmutableSessionChanges(initialTurn.changes);
+  const store = new ImmutableSessionStore({
+    sessionDir: scope.sessionDir,
+    sessionId: scope.sessionId,
+    allowCreate: true,
+  });
+  const outcome = await store.transact({
+    expectedGeneration: 0,
+    operationId,
+    input: { session, scopedMetadata, initialTurn },
+    prepare: async ({ get, getMany, getManyMetadata, getMetadata, input }) => {
+      if (await get("metadata", "session"))
+        throw new TypeError("Immutable session is already initialized");
+      const plan = new ImmutableSessionChanges(get, {
+        getMany,
+        getManyMetadata,
+        getMetadata,
+        readContent: (reference) => store.objects.readValue(reference),
+      });
+      await seedMetadata(store, plan, input.session);
+      plan.set("metadata", "scoped", createScopedSessionMetadataRecord(input.scopedMetadata));
+      await seedEvents({ store, plan, session: input.session, authorityEvents: [], outbox: [] });
+      const result = {};
+      if (input.initialTurn !== null) {
+        const { changes, committedAt } = input.initialTurn;
+        result.turnTransition = await prepareImmutableTurnCommit({
+          store,
+          plan,
+          event: changes.turnTransition,
+          messages: changes.messages,
+          now: () => committedAt,
+          createEventId: randomUUID,
+        });
+        if (!result.turnTransition.applied) return { abort: true, changes: [], result };
+      }
+      await prepareImmutableLifecycleIndex(plan, { initialize: true });
+      result.metadata = await plan.get("metadata", "session");
+      return { changes: plan.changes(), result };
+    },
+  });
+  if (!outcome.aborted) await publishImmutableSessionFormat(scope.sessionDir);
+  return outcome;
 }
 
 export async function initializeImmutableSession({
@@ -241,14 +296,17 @@ export async function initializeImmutableSession({
     expectedGeneration: 0,
     operationId,
     input: { session, authorityEvents, outbox, scopedMetadata },
-    prepare: ({ get, getMetadata, input }) =>
-      prepareImmutableSessionImport({ store, get, getMetadata, ...input }),
+    prepare: ({ get, getMany, getMetadata, input }) =>
+      prepareImmutableSessionImport({ store, get, getMany, getMetadata, ...input }),
     validate: async (snapshot) => {
-      const actual = immutableSessionImportProjection(
-        await exportImmutableSession({ store, snapshot }),
-      );
+      const exported = await exportImmutableSession({ store, snapshot });
+      const actual = immutableSessionImportProjection(exported);
       if (JSON.stringify(stableValue(actual)) !== JSON.stringify(stableValue(expected)))
         throw immutableStorageError("Imported session graph differs from its source");
+      if ((exported.autoTitle ?? "") !== deriveSessionAutoTitle(expected.messages))
+        throw immutableStorageError(
+          "Imported automatic title differs from committed message order",
+        );
       const actualMetadata = readScopedSessionMetadataRecord(
         await store.get(snapshot, "metadata", "scoped"),
       );
@@ -263,10 +321,12 @@ export async function initializeImmutableSession({
   return result;
 }
 
-export async function publishImmutableSessionFormat(sessionDir) {
-  const store = await ImmutableSessionStore.open({ sessionDir });
-  await writeDurableReplacement(
-    path.join(sessionDir, IMMUTABLE_SESSION_FORMAT_FILE),
-    Buffer.from(`${store.format}\n`),
-  );
+export function publishImmutableSessionFormat(sessionDir) {
+  return withImmutableAuthorityMutation(sessionDir, async () => {
+    const store = await ImmutableSessionStore.open({ sessionDir });
+    await writeDurableReplacement(
+      path.join(sessionDir, IMMUTABLE_SESSION_FORMAT_FILE),
+      Buffer.from(`${store.format}\n`),
+    );
+  });
 }

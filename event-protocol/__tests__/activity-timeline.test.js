@@ -13,6 +13,7 @@ import {
   projectCanonicalActivityTimelineEvent,
   reduceCanonicalActivityTimeline,
 } from "../src/activity-timeline.js";
+import { projectThinkingEventTimeline } from "../src/thinking-detail-projection.js";
 import { createEventEnvelope, validateEventEnvelope } from "../src/envelope.js";
 import { EVENT_FAMILY, getEventFamily, validateProtocolEvent } from "../src/event-registry.js";
 import {
@@ -53,6 +54,24 @@ function activityEnvelope(overrides = {}, envelopeOverrides = {}) {
     },
   });
 }
+
+test("long-turn activity projection keeps canonical versions and order without argument expansion", () => {
+  const current = projectCanonicalActivityTimelineEvent(
+    activityEnvelope({ text: "current" }, { ordering: { sequence: 3 } }),
+  );
+  const stale = projectCanonicalActivityTimelineEvent(activityEnvelope());
+  const other = projectCanonicalActivityTimelineEvent(
+    activityEnvelope({ activityId: "other" }, { ordering: { sequence: 2 } }),
+  );
+  const messages = Array(200000).fill({});
+  messages[0] = { activityTimeline: [current] };
+  messages[messages.length - 1] = { activityTimeline: [stale, other] };
+
+  assert.deepEqual(projectThinkingEventTimeline(messages), {
+    toolTimeline: [],
+    activityTimeline: [other, current],
+  });
+});
 
 test("projects one exact canonical activity fact from an authoritative envelope", () => {
   const fact = projectCanonicalActivityTimelineEvent(activityEnvelope());

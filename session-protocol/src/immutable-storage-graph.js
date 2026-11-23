@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { Buffer } from "node:buffer";
-import { createHash } from "node:crypto";
+import { sessionRequestDigest } from "./session-request-digest.js";
 import { isPlainObject } from "@noobot/shared/value";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { IMMUTABLE_VALUE_BLOCK_BYTES } from "./immutable-value-limits.js";
@@ -12,8 +12,9 @@ export {
   IMMUTABLE_VALUE_BLOCK_BYTES,
   IMMUTABLE_VALUE_MAX_DEPTH,
 } from "./immutable-value-limits.js";
-import { requireSessionAggregateVersion } from "./command/session-command.js";
-import { requireImmutableContentDigest } from "./immutable-segment.js";
+import { immutableStorageContextDirectory } from "./immutable-context-directory-adapter.js";
+import { requireSessionOperationId } from "./session-changes.js";
+import { requireImmutableOperationReceipt } from "./immutable-operation-receipt.js";
 import {
   immutableStorageError,
   requireImmutableCollection,
@@ -21,8 +22,16 @@ import {
 } from "./immutable-storage.js";
 
 export const IMMUTABLE_COMMIT_INDEX_VERSION = 4;
-export const IMMUTABLE_CONTEXT_INDEX_VERSION = 2;
+export const IMMUTABLE_CONTEXT_INDEX_VERSION = 6;
 export const IMMUTABLE_ARTIFACT_EVENT_INDEX_VERSION = 1;
+
+export function requireImmutableContextIndex(facts) {
+  if (facts?.contextIndexVersion !== IMMUTABLE_CONTEXT_INDEX_VERSION)
+    throw Object.assign(new Error("Immutable context indexes require an offline upgrade"), {
+      code: "SESSION_IMMUTABLE_INDEX_UPGRADE_REQUIRED",
+    });
+  return facts;
+}
 
 export function requireImmutableArtifactEventIndex(
   value,
@@ -75,6 +84,20 @@ export function requireImmutableCommitOrigin(origin, generation) {
   )
     throw immutableStorageError("Invalid indexed commit origin");
   return origin;
+}
+
+export function requireImmutableCheckpointOriginGeneration(originGeneration, maximumGeneration) {
+  if (originGeneration === undefined)
+    throw Object.assign(new Error("Immutable checkpoint receipts require an offline upgrade"), {
+      code: "SESSION_IMMUTABLE_INDEX_UPGRADE_REQUIRED",
+    });
+  if (
+    !Number.isSafeInteger(originGeneration) ||
+    originGeneration < 1 ||
+    originGeneration > maximumGeneration
+  )
+    throw immutableStorageError("Invalid immutable checkpoint origin generation");
+  return originGeneration;
 }
 
 export const IMMUTABLE_TRANSACTION_BUDGET = Object.freeze({
@@ -221,9 +244,7 @@ export function requireImmutableMessageContentPart(parts) {
   return part;
 }
 
-export function immutableTransactionInputDigest(expectedGeneration, input) {
-  return createHash("sha256").update(JSON.stringify({ expectedGeneration, input })).digest("hex");
-}
+export { sessionRequestDigest as immutableTransactionInputDigest };
 
 export function requireImmutableOperationInputEvidence(receipt, evidence) {
   if (
@@ -232,7 +253,7 @@ export function requireImmutableOperationInputEvidence(receipt, evidence) {
     !Object.hasOwn(evidence, "input") ||
     !Number.isSafeInteger(evidence.expectedGeneration) ||
     evidence.expectedGeneration < 0 ||
-    immutableTransactionInputDigest(evidence.expectedGeneration, evidence.input) !== receipt.digest
+    sessionRequestDigest(evidence.expectedGeneration, evidence.input) !== receipt.digest
   )
     throw immutableStorageError("Operation input evidence disagrees with its persisted digest");
   return evidence.input;
@@ -280,20 +301,6 @@ export function migrateImmutableMessageResult(result, sessionId, mutations) {
   if (identities.some((uid) => !committed.has(uid)))
     throw immutableStorageError("Message receipt identity is absent from its original commit");
   return identities;
-}
-
-export function requireImmutableAttachmentBindingResult(result) {
-  if (
-    !isPlainObject(result) ||
-    Object.keys(result).length !== 3 ||
-    typeof result.messageUid !== "string" ||
-    !result.messageUid.trim() ||
-    result.messageUid.trim() !== result.messageUid ||
-    typeof result.deduplicated !== "boolean"
-  )
-    throw immutableStorageError("Invalid immutable attachment binding result");
-  requireSessionAggregateVersion(result.aggregateVersion);
-  return result;
 }
 
 export function requireImmutableListFacts(facts) {
@@ -441,6 +448,7 @@ export function immutablePageReferences(page, requireReference = requireObjectRe
 
 const MEMBER_COLLECTIONS = new Set([
   "dialogTurns",
+  "contextTurns",
   "turnCheckpoints",
   "messageCheckpoints",
   "turnOutbox",
@@ -480,63 +488,31 @@ export function immutableValueIndexLayout(collection, key) {
   return [];
 }
 
+function requireValueIndexLayout(collection, key, value) {
+  const layout = immutableValueIndexLayout(collection, key);
+  if (collection === "contextSources") {
+    const directory = immutableStorageContextDirectory.requirePage(value?.directory, "");
+    if (
+      !isPlainObject(value) ||
+      Object.keys(value).length !== 3 ||
+      (Object.hasOwn(directory, "ordinals")
+        ? value.count !== directory.ordinals.length
+        : value.count < directory.slots.length)
+    )
+      throw immutableStorageError("Invalid immutable context source descriptor");
+  }
+  return layout;
+}
+
 export function immutableValueIndexReferences(
   collection,
   key,
   value,
   requireReference = requireObjectReference,
 ) {
-  return immutableValueIndexLayout(collection, key).map((layout) =>
+  return requireValueIndexLayout(collection, key, value).map((layout) =>
     indexReference(value, layout, requireReference),
   );
-}
-
-export const IMMUTABLE_OPERATION_RETRY_UNAVAILABLE = "original-input-unavailable";
-
-export function assertImmutableOperationRetryAvailable(receipt, operationId) {
-  if (receipt.retryUnavailable === IMMUTABLE_OPERATION_RETRY_UNAVAILABLE)
-    throw Object.assign(
-      new Error("Historical operation retry is unavailable; operation was not re-executed"),
-      {
-        code: "SESSION_OPERATION_RETRY_UNAVAILABLE",
-        operationId,
-        generation: receipt.generation,
-        reason: receipt.retryUnavailable,
-      },
-    );
-}
-
-export function requireImmutableOperationReceipt(
-  receipt,
-  generation,
-  requireReference = requireObjectReference,
-) {
-  if (
-    !isPlainObject(receipt) ||
-    Object.keys(receipt).some(
-      (key) => !["generation", "commit", "digest", "result", "retryUnavailable"].includes(key),
-    ) ||
-    (Object.hasOwn(receipt, "retryUnavailable") &&
-      (receipt.retryUnavailable !== IMMUTABLE_OPERATION_RETRY_UNAVAILABLE ||
-        !Object.hasOwn(receipt, "result"))) ||
-    !Number.isSafeInteger(receipt.generation) ||
-    receipt.generation < 1 ||
-    receipt.generation > generation
-  )
-    throw immutableStorageError("Invalid immutable operation receipt");
-  requireImmutableContentDigest(receipt.digest);
-  requireReference(receipt.commit);
-  return receipt;
-}
-
-export function requireImmutableOperationId(operationId) {
-  if (
-    typeof operationId !== "string" ||
-    !operationId ||
-    new TextEncoder().encode(operationId).length > 1024
-  )
-    throw new TypeError("Immutable session operationId must be a bounded non-empty string");
-  return operationId;
 }
 
 function requireCommitMutations(mutations, requireReference) {
@@ -570,7 +546,7 @@ export function requireImmutableCommitRecord(
   )
     throw immutableStorageError("Invalid indexed session commit");
   try {
-    requireImmutableOperationId(record.operationId);
+    requireSessionOperationId(record.operationId);
     if (record.previous !== null) requireReference(record.previous);
     requireCommitMutations(record.mutations, requireReference);
   } catch (cause) {
@@ -610,7 +586,7 @@ export function immutableCollectionValueReferenceEdges(
   requireImmutableCollection(collection);
 
   if (collection === "commitOrder") return immutableCommitReferenceEdges(value, requireReference);
-  return immutableValueIndexLayout(collection, key).map((layout) => ({
+  return requireValueIndexLayout(collection, key, value).map((layout) => ({
     path: [layout.field],
     kind: "index",
     ...indexReference(value, layout, requireReference),

@@ -4,6 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  sessionPageSnapshots: {
+    idleMs: {
+      name: "Session page snapshot idle timeout",
+      description: "How long a session page snapshot can wait unused between page reads.",
+    },
+    maxAgeMs: {
+      name: "Session page snapshot lifetime",
+      description: "Maximum age of a session page snapshot, even when it is used regularly.",
+    },
+  },
   installers: {
     versionCheckTimeoutMs: {
       name: "OpenVSCode version check timeout",
@@ -408,10 +418,6 @@ export default {
       name: "Harness cleanup grace",
       description: "Waiting period used by harness cleanup grace.",
     },
-    runWriteLockStaleMs: {
-      name: "Harness run write lock stale",
-      description: "Duration used by harness run write lock stale.",
-    },
     maxRunAgeDays: {
       name: "Harness max run age days",
       description: "Duration used by harness max run age days.",
@@ -487,10 +493,6 @@ export default {
     panelResizeThrottleMs: {
       name: "Client panel resize throttle",
       description: "Execution interval for client panel resize throttle.",
-    },
-    thinkingDetailRetryDelayMs: {
-      name: "Client thinking detail retry delay",
-      description: "Waiting period used by client thinking detail retry delay.",
     },
     micMaxDurationSeconds: {
       name: "Client mic max duration seconds",

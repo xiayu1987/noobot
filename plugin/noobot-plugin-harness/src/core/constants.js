@@ -45,5 +45,4 @@ export const HARNESS_FLUSH_REASONS = Object.freeze({
 
 export const HARNESS_FILES = Object.freeze({
   RUN_MANIFEST: "harness-run.json",
-  RUN_WRITE_LOCK: ".harness-write.lock",
 });

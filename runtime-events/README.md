@@ -65,8 +65,10 @@ whose tree chain contains a tombstone return `{ ok: true, skipped: true, deleted
 An unregistered session returns `{ ok: false, error }`, with
 `error.code === RUNTIME_EVENT_ERROR_CODE.SESSION_NOT_REGISTERED`. Missing registration is not a
 delivery acknowledgement: source projection cursors must remain pending until registration is restored.
-Neither outcome creates a session directory. Registered sessions must have a valid immutable head;
-an unreadable or invalid head rejects preparation. Placement uses the location authority, not caller-supplied
+Neither outcome creates a session directory. For a registered session, the Session protocol resolves
+the storage authority. The head for that authority (partition journal or Immutable store) must be
+readable, valid, and match the session ID. An invalid authoritative head rejects preparation; the
+writer does not switch stores. Placement uses the location authority, not caller-supplied
 `parentSessionId`. Disabled log controls and authoritative tombstones intentionally skip delivery.
 
 ## Storage

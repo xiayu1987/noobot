@@ -5,10 +5,10 @@
  */
 import express from "express";
 import {
-  collectSessionDeletionHookResult,
   createHookManager,
   HOOK_POINT,
-  mergeSessionDeletionIds,
+  requireSessionDeletionHookContext,
+  requireSessionDeletionHookCompletion,
 } from "@noobot/hook-protocol";
 import {
   PLUGIN_HOST_PORT,
@@ -51,6 +51,8 @@ function reportPluginEvent(record = {}) {
 function createRouteGeneration({ context = {} } = {}) {
   if (!isFunction(context?.enforceUserScopeParam))
     throw new TypeError("service plugin routes require an enforceUserScopeParam guard");
+  if (!isFunction(context.runBotOperation))
+    throw new TypeError("service plugin routes require runBotOperation");
   const router = express.Router();
   router.param("userId", context.enforceUserScopeParam);
   const jsonRoute = createJsonRouteWrapper({ translateText: context?.translateText });
@@ -76,7 +78,12 @@ function createRouteGeneration({ context = {} } = {}) {
         const register = router[String(route.method || "").toLowerCase()];
         if (!isFunction(register))
           throw new Error(`service does not support route method ${route.method}`);
-        for (const routePath of route.paths) register.call(router, routePath, jsonRoute(handler));
+        for (const routePath of route.paths)
+          register.call(
+            router,
+            routePath,
+            jsonRoute((req, res) => context.runBotOperation(() => handler(req, res))),
+          );
       }
       return router;
     },
@@ -213,7 +220,7 @@ export function createServicePluginHost({
               },
               [PLUGIN_HOST_PORT.SERVICE_SESSIONS_READ]: {
                 path: ["ports", "sessions"],
-                value: context?.ports?.sessions?.forPlugin?.(entry.pluginId),
+                value: context?.ports?.sessions?.forPlugin?.(entry.manifest),
               },
               [PLUGIN_HOST_PORT.SERVICE_WORKSPACE_ASSETS]: {
                 path: ["ports", "workspaceAssets"],
@@ -269,23 +276,32 @@ export function createServicePluginHost({
       return buildNoobotPluginDiagnostics(runtime);
     },
 
+    listSessionDeletionHandlers() {
+      if (!activeScope) throw new Error("service plugins must be activated during HTTP startup");
+      return activeHookManager.list(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE).map(({ id }) => id);
+    },
+
     async emitAfterSessionDelete({
-      bot = null,
-      userId = "",
-      deletedSessionIds = [],
-      remainingSessionIds = [],
-    } = {}) {
+      bot,
+      userId,
+      deletionKey,
+      deletedSessionIds,
+      pluginHandlerIds,
+    }) {
       if (!activeScope) throw new Error("service plugins must be activated during HTTP startup");
       const basePath = text(bot.getWorkspacePath(userId));
-      if (!basePath) throw new Error("session deletion hook requires a workspace basePath");
-      const hookResult = await activeHookManager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {
-        userId: text(userId),
-        deletedSessionIds: mergeSessionDeletionIds(deletedSessionIds),
-        remainingSessionIds: mergeSessionDeletionIds(remainingSessionIds),
-        basePath,
-        executionScope: "primary",
-      });
-      return collectSessionDeletionHookResult(hookResult);
+      const result = await activeHookManager.emit(
+        HOOK_POINT.SERVICE.AFTER_SESSION_DELETE,
+        requireSessionDeletionHookContext({
+          userId,
+          deletionKey,
+          deletedSessionIds,
+          basePath,
+          executionScope: "primary",
+        }),
+        { handlerIds: pluginHandlerIds },
+      );
+      requireSessionDeletionHookCompletion(result);
     },
 
     async dispose() {

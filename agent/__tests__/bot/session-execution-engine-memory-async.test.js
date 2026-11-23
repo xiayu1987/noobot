@@ -38,6 +38,9 @@ function createEngine({
     async getSessionTurns() {
       return [];
     },
+    async withSessionDialogMessageRecords(_payload, consume) {
+      return consume([]);
+    },
   };
   const memory = { captureDialogToShortMemory, maybeSummarize };
   return createTestSessionExecutionEngine({
@@ -137,7 +140,7 @@ test("_finalizeRunSession persists only thinking finish facts to turn timing", a
   });
   input.turnPersistence = {
     flush: () => runtime.persistCurrentTurnMessages(),
-    readResultMessages: async () => appendTurnPayloads,
+    readResultTransfers: async () => [],
   };
   await engine._finalizeRunSession(input);
 

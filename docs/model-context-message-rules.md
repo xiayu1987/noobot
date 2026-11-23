@@ -36,6 +36,7 @@ finalMessages = systemMessages + historyMessages + incrementalMessages
 - 裁剪：按 dialog 组首次出现顺序，只保留最近 5 个 dialog 组。
 - 顺序：dialog 组之间按首次出现顺序；组内保持原始自然顺序。
 - 执行顺序：先筛选，再裁剪。
+- 索引读取先用元数据选定完整对话组，再读取消息正文。读取超预算时拒绝整个窗口，不跳过或截断已选对话来凑预算。
 
 ### 1.3 incrementalMessages
 

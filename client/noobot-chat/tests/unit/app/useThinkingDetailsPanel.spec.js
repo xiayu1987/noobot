@@ -5,9 +5,8 @@
  */
 import { buildViewMessage } from "../../../src/modules/chat/model/messageModel.js";
 import { ref, nextTick } from "vue";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { useThinkingDetailsPanel } from "../../../src/app/composables/useThinkingDetailsPanel.js";
-import { __resetThinkingDetailCacheForTests } from "../../../src/modules/chat/model/thinkingDetailCache.js";
 import { canonicalActivityFact } from "../modules/chat/helpers/messageEventFixture.js";
 
 function deferred() {
@@ -20,6 +19,7 @@ function deferred() {
 
 function createPanel(fetchThinkingDetail = vi.fn(), activeSession = ref({ messages: [] })) {
   const dependencies = {
+    releaseThinkingDetail: vi.fn(),
     notify: vi.fn(),
     closeAllDrawers: vi.fn(),
     closeMobileSidebar: vi.fn(),
@@ -67,9 +67,28 @@ function detailFor(message) {
 }
 
 describe("useThinkingDetailsPanel request isolation", () => {
-  afterEach(() => __resetThinkingDetailCacheForTests());
+  it("publishes the selected page reader and clears it on close", async () => {
+    const normalFetcher = vi.fn(async () => detailFor(normalMessage));
+    const workflowFetcher = vi.fn(async () => detailFor(workflowMessage));
+    const workflowReleaser = vi.fn();
+    const panel = createPanel(normalFetcher);
+    await panel.openThinkingDetailsPanel({
+      messageItem: workflowMessage,
+      fetchThinkingDetail: workflowFetcher,
+      releaseThinkingDetail: workflowReleaser,
+    });
+    expect(panel.thinkingDetailsFetcher.value).toBe(workflowFetcher);
+    expect(panel.thinkingDetailsReleaser.value).toBe(workflowReleaser);
+    expect(workflowFetcher).not.toHaveBeenCalled();
+    await panel.openThinkingDetailsPanel({ messageItem: normalMessage });
+    expect(panel.thinkingDetailsFetcher.value).toBe(normalFetcher);
+    expect(panel.thinkingDetailsReleaser.value).toBe(panel.dependencies.releaseThinkingDetail);
+    panel.closeThinkingDetailsPanel();
+    expect(panel.thinkingDetailsFetcher.value).toBeNull();
+    expect(panel.thinkingDetailsReleaser.value).toBeNull();
+  });
 
-  it("does not let a late workflow request overwrite a normal message opened afterwards", async () => {
+  it("switches readers without starting a competing drawer request", async () => {
     const workflowRequest = deferred();
     const normalRequest = deferred();
     const workflowFetcher = vi.fn(() => workflowRequest.promise);
@@ -79,10 +98,12 @@ describe("useThinkingDetailsPanel request isolation", () => {
     const openingWorkflow = panel.openThinkingDetailsPanel({
       messageItem: workflowMessage,
       fetchThinkingDetail: workflowFetcher,
+      releaseThinkingDetail: vi.fn(),
     });
     const openingNormal = panel.openThinkingDetailsPanel({
       messageItem: normalMessage,
       fetchThinkingDetail: normalFetcher,
+      releaseThinkingDetail: vi.fn(),
     });
 
     expect(panel.thinkingDetailsVisible.value).toBe(true);
@@ -95,25 +116,18 @@ describe("useThinkingDetailsPanel request isolation", () => {
     normalRequest.resolve(detailFor(normalMessage));
     await openingNormal;
     expect(panel.thinkingDetailsMessageItem.value.dialogProcessId).toBe("normal-message");
-    expect(workflowFetcher).toHaveBeenCalledWith({
-      sessionId: "session-1",
-      dialogProcessId: "workflow-node",
-      turnScopeId: "workflow-turn",
-    });
-    expect(normalFetcher).toHaveBeenCalledWith({
-      sessionId: "session-1",
-      dialogProcessId: "normal-message",
-      turnScopeId: "normal-turn",
-    });
+    expect(workflowFetcher).not.toHaveBeenCalled();
+    expect(normalFetcher).not.toHaveBeenCalled();
   });
 
-  it("invalidates an in-flight request when the panel is closed", async () => {
+  it("clears the selection on close without issuing a drawer request", async () => {
     const request = deferred();
     const fetcher = vi.fn(() => request.promise);
     const panel = createPanel();
     const opening = panel.openThinkingDetailsPanel({
       messageItem: workflowMessage,
       fetchThinkingDetail: fetcher,
+      releaseThinkingDetail: vi.fn(),
     });
 
     panel.closeThinkingDetailsPanel();
@@ -123,6 +137,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
 
     expect(panel.thinkingDetailsVisible.value).toBe(false);
     expect(panel.thinkingDetailsMessageItem.value).toBe(null);
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("closes drawers and pushes the pseudo route when opening the panel", async () => {
@@ -146,7 +161,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     expect(panel.dependencies.pushPseudoRoute).not.toHaveBeenCalled();
   });
 
-  it("shows the cached Turn detail on reopen and replaces it with the turn-journal response", async () => {
+  it("reopens without retaining the previous response or its snapshot", async () => {
     const activeSession = ref({ sessionId: "session-1", messages: [normalMessage] });
     const refresh = deferred();
     const fetcher = vi
@@ -163,7 +178,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     const reopening = panel.openThinkingDetailsPanel({ messageItem: normalMessage });
 
     expect(panel.thinkingDetailsVisible.value).toBe(true);
-    expect(panel.thinkingDetailsMessageItem.value.detailGeneration).toBe(1);
+    expect(panel.thinkingDetailsMessageItem.value.detailGeneration).toBeUndefined();
 
     refresh.resolve({
       revision: "turn-journal:normal-turn:200",
@@ -171,13 +186,8 @@ describe("useThinkingDetailsPanel request isolation", () => {
     });
     await reopening;
 
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(fetcher).toHaveBeenLastCalledWith({
-      sessionId: "session-1",
-      dialogProcessId: "normal-message",
-      turnScopeId: "normal-turn",
-    });
-    expect(panel.thinkingDetailsMessageItem.value.detailGeneration).toBe(2);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(panel.thinkingDetailsMessageItem.value.detailGeneration).toBeUndefined();
   });
 
   it("does not show the cached detail of another Turn lookup key", async () => {
@@ -208,8 +218,8 @@ describe("useThinkingDetailsPanel request isolation", () => {
     });
     await openingWorkflow;
 
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(panel.thinkingDetailsMessageItem.value.detailGeneration).toBe(7);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(panel.thinkingDetailsMessageItem.value.detailGeneration).toBeUndefined();
   });
 
   it("binds the drawer to the active canonical turn instead of a stale click payload", async () => {
@@ -297,7 +307,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("keeps the complete detail response authoritative for a completed turn", async () => {
+  it("synchronizes local summaries while leaving detail ownership to the page reader", async () => {
     const summaryMessage = buildViewMessage(
       {
         role: "assistant",
@@ -333,11 +343,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
 
     await panel.openThinkingDetailsPanel({ messageItem: summaryMessage });
 
-    expect(panel.thinkingDetailsMessageItem.value.toolTimeline).toHaveLength(13);
-    expect(panel.thinkingDetailsMessageItem.value.activityTimeline).toHaveLength(7);
-    expect(Object.hasOwn(panel.thinkingDetailsMessageItem.value, "thinkingDetailCount")).toBe(
-      false,
-    );
+    expect(panel.thinkingDetailsMessageItem.value).toEqual(summaryMessage);
     expect(panel.thinkingDetailsAllMessages.value).toHaveLength(0);
 
     activeSession.value = {
@@ -357,10 +363,9 @@ describe("useThinkingDetailsPanel request isolation", () => {
     await nextTick();
     await nextTick();
 
-    expect(panel.thinkingDetailsMessageItem.value.toolTimeline).toHaveLength(13);
-    expect(panel.thinkingDetailsMessageItem.value.activityTimeline).toHaveLength(7);
+    expect(panel.thinkingDetailsMessageItem.value.toolTimeline[0].key).toBe("summary:updated");
     expect(panel.thinkingDetailsAllMessages.value).toHaveLength(0);
-    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("does not bind the drawer to a different presentation in the same turn", async () => {
@@ -397,7 +402,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     expect(panel.thinkingDetailsMessageItem.value).not.toBe(canonicalMessage);
   });
 
-  it("refreshes a previously cached empty running detail", async () => {
+  it("reopens with the local summary and delegates refresh to the page reader", async () => {
     const emptyDetail = detailFor(normalMessage);
     const completeDetail = {
       ...detailFor(normalMessage),
@@ -416,7 +421,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     panel.closeThinkingDetailsPanel();
     await panel.openThinkingDetailsPanel({ messageItem: normalMessage });
 
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(panel.thinkingDetailsMessageItem.value.toolTimeline).toHaveLength(1);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(panel.thinkingDetailsMessageItem.value).toEqual(normalMessage);
   });
 });

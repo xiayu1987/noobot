@@ -11,7 +11,7 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import path from "node:path";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
 import { withImmutableSessionReader } from "../../src/session/session-artifact-session/immutable-session-reader.js";
 import { FileSystemExecutionRepository } from "../../src/session/repositories/file-system-execution-repository.js";
 import { ExecutionLogRepository } from "../../src/observability/execution-log/execution-log-repository.js";
@@ -88,7 +88,7 @@ function repositories(sessionDir, parentSessionId = "") {
   const sessionRepository = {
     withSessionReader: (_userId, _sessionId, run) =>
       withImmutableSessionReader({ sessionDir, sessionId: "s1", parentSessionId }, (reader) =>
-        run(reader, { sessionDir, resolvedParentSessionId: parentSessionId }),
+        run({ reader, scope: { sessionDir, resolvedParentSessionId: parentSessionId } }),
       ),
     withSessionMutation: (_userId, _sessionId, run) =>
       run({ sessionDir, resolvedParentSessionId: parentSessionId }),
@@ -99,6 +99,55 @@ function repositories(sessionDir, parentSessionId = "") {
   });
   return { executionRepository, repository: new ExecutionLogRepository({ executionRepository }) };
 }
+
+test("cold checkpoint retry does not duplicate diagnostics and mixed work emits only new sources", async () => {
+  await withTemp(async (sessionDir) => {
+    await initialize(sessionDir);
+    const delta = changes(1);
+    const message = delta.messages[0];
+    delta.summaryCheckpoints = [
+      {
+        sessionId: "s1",
+        userId: "u1",
+        dialogProcessId: message.dialogProcessId,
+        turnScopeId: message.turnScopeId,
+        checkpointId: "checkpoint",
+        expectedCheckpointRevision: 0,
+        messages: [message],
+        persistedMessageUids: [message.messageUid],
+        summarizedMessageUids: [message.messageUid],
+        retainedMessageUids: [],
+      },
+    ];
+    await commit(sessionDir, delta, "checkpoint");
+    const store = await ImmutableSessionStore.open({ sessionDir, sessionId: "s1" });
+    const before = await readFile(store.headPath);
+    const replay = await commit(sessionDir, delta, "checkpoint-new-operation");
+    assert.equal(replay.result.summaryCheckpoints[0].deduplicated, true);
+    assert.deepEqual(await readFile(store.headPath), before);
+    const fresh = changes(1, "d2", 1);
+    await commit(
+      sessionDir,
+      {
+        messages: [...delta.messages, ...fresh.messages],
+        messageDiagnostics: [...delta.messageDiagnostics, ...fresh.messageDiagnostics],
+        summaryCheckpoints: delta.summaryCheckpoints,
+      },
+      "mixed",
+    );
+    await withImmutableSessionReader(
+      { sessionDir, sessionId: "s1", parentSessionId: "" },
+      async (reader) => {
+        const page = await reader.readMessageDiagnosticPage({ after: 0, limit: 8 });
+        assert.deepEqual(
+          page.entries.map(({ record }) => record.data.artifactRef.messageUid),
+          ["message-0", "message-1"],
+        );
+        assert.equal(page.sequence, 2);
+      },
+    );
+  });
+});
 
 test("messages and diagnostics publish atomically, replay once and query only the selected turn", async () => {
   await withTemp(async (sessionDir) => {

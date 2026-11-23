@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_DATA_SCOPE } from "../core/constants.js";
+import { sendRetainedSessionPage } from "@noobot/session-protocol/retained-session-page-http";
+import {
+  decodeThinkingDetailPageQuery,
+  decodeThinkingDetailReleaseQuery,
+} from "@noobot/session-protocol/message-read-budget";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -87,6 +92,7 @@ function logDetail({ userId, sessionId, dialogProcessId, traceId, event, level, 
 function createThinkingDetailHandler(sessions) {
   return async (req, res) => {
     const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
+    const { cursor, limit } = decodeThinkingDetailPageQuery(req.query);
     requireWorkflowSessionRequest(
       {
         userId,
@@ -94,23 +100,64 @@ function createThinkingDetailHandler(sessions) {
         routeDialogProcessId,
         dialogProcessId: req.query.dialogProcessId,
         turnScopeId: req.query.turnScopeId,
+        nodeSessionId: req.query.nodeSessionId,
+        cursor,
+        limit,
       },
       "thinking-detail",
     );
-    const detail = await sessions.readThinkingDetail({
+    const scope = {
       userId,
+      authoritySessionId: sessionId,
+      sessionId: req.query.nodeSessionId,
       segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, routeDialogProcessId],
       dialogProcessId: req.query.dialogProcessId,
       turnScopeId: req.query.turnScopeId,
       locale: req.locale,
+    };
+    await sendRetainedSessionPage(res, {
+      cursor,
+      read: () => sessions.readThinkingDetail({ ...scope, cursor, limit }),
+      send: (detail) =>
+        res.json({
+          ok: true,
+          userId,
+          rootSessionId: sessionId,
+          dialogProcessId: routeDialogProcessId,
+          ...detail,
+        }),
+      release: (cursor) => sessions.releaseThinkingDetail({ ...scope, cursor }),
     });
-    res.json({
-      ok: true,
+  };
+}
+
+function createThinkingDetailReleaseHandler(sessions) {
+  return async (req, res) => {
+    const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
+    const selection = decodeThinkingDetailReleaseQuery({
+      ...req.query,
+      sessionId: req.query.nodeSessionId,
+    });
+    requireWorkflowSessionRequest(
+      {
+        userId,
+        sessionId,
+        routeDialogProcessId,
+        nodeSessionId: selection.sessionId,
+        dialogProcessId: selection.dialogProcessId,
+        turnScopeId: selection.turnScopeId,
+        cursor: selection.cursor,
+      },
+      "thinking-detail-release",
+    );
+    const result = await sessions.releaseThinkingDetail({
       userId,
-      rootSessionId: sessionId,
-      dialogProcessId: routeDialogProcessId,
-      ...detail,
+      authoritySessionId: sessionId,
+      ...selection,
+      segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, routeDialogProcessId],
+      locale: req.locale,
     });
+    res.json({ ok: true, ...result });
   };
 }
 
@@ -124,6 +171,7 @@ function createExecutionReportHandler(sessions, httpStatus) {
     );
     const report = await sessions.readExecutionReport({
       userId,
+      authoritySessionId: sessionId,
       segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, routeDialogProcessId],
       dialogProcessId,
       locale: req.locale,
@@ -146,6 +194,7 @@ export function createWorkflowServiceRouteHandlers(context) {
     !isPlainObject(sessions) ||
     !isFunction(sessions.readSnapshot) ||
     !isFunction(sessions.readThinkingDetail) ||
+    !isFunction(sessions.releaseThinkingDetail) ||
     !isFunction(sessions.readExecutionReport)
   ) {
     throw new Error("workflow service session ports are required");
@@ -162,6 +211,7 @@ export function createWorkflowServiceRouteHandlers(context) {
     try {
       snapshot = await sessions.readSnapshot({
         userId,
+        authoritySessionId: sessionId,
         segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, dialogProcessId],
         locale: req.locale,
       });
@@ -223,6 +273,7 @@ export function createWorkflowServiceRouteHandlers(context) {
   return {
     "workflow.detail": sessionDetailHandler,
     "workflow.thinking-detail": thinkingDetailHandler,
+    "workflow.thinking-detail-release": createThinkingDetailReleaseHandler(sessions),
     "workflow.execution-report": executionReportHandler,
   };
 }

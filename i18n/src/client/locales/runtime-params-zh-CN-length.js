@@ -4,7 +4,41 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  sessionStorage: {
+    messageReadBytes: {
+      name: "消息读取预算",
+      description: "单次有界会话消息请求允许读取的最大字节数。",
+    },
+    messageWriteBatchBytes: {
+      name: "消息写入批次预算",
+      description: "单批会话消息持久化数据编码后的最大字节数。",
+    },
+    listMessagePreviewChars: {
+      name: "列表消息预览长度",
+      description: "会话列表消息预览保留的最大 UTF-16 代码单元数。",
+    },
+    journalControlBytes: {
+      name: "日志控制记录预算",
+      description: "分区日志控制记录编码后的最大字节数。",
+    },
+    journalDirectoryBytes: {
+      name: "日志目录条目预算",
+      description: "分区日志目录条目编码后的最大字节数。",
+    },
+  },
   immutableStorage: {
+    partitionContentChunkBytes: {
+      name: "分区正文块字节上限",
+      description: "单个独立校验消息正文块中规范 JSON 正文字节数的协议上限。",
+    },
+    entityPageKeyBytes: {
+      name: "实体分页键字节上限",
+      description: "实体目录键转义后 JSON 字节数的协议上限。",
+    },
+    historicalDirectoryChecksumBytes: {
+      name: "历史实体目录校验和宽度",
+      description: "历史实体目录磁盘格式规定的固定校验和字节数。",
+    },
     valueInlineBytes: {
       name: "值内联上限",
       description: "使用内容图之前允许内联存储的值编码最大字节数。",
@@ -28,6 +62,10 @@ export default {
     executionProjectionOutputRecordBytes: {
       name: "执行投影输出记录上限",
       description: "执行投影输出记录编码后的最大字节数。",
+    },
+    migrationAuthorityRecordBytes: {
+      name: "迁移权威记录上限",
+      description: "分区迁移权威记录编码后的最大字节数。",
     },
     readerRetentionRecordBytes: {
       name: "读者保留记录上限",

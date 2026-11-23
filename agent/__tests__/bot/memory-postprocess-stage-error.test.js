@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createWorkspaceAdmission } from "../../src/workspace-lifecycle/workspace-admission.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -16,6 +17,7 @@ function createHarness(maybeSummarize) {
   const logs = [];
   let flushCount = 0;
   const service = new MemoryPostProcessService({
+    workspaceAdmission: createWorkspaceAdmission(async () => {}),
     now: TEST_NOW,
     globalConfig: {},
     session: {},

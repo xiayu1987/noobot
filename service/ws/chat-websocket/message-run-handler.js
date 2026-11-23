@@ -90,7 +90,7 @@ function createFailureCommitter(context) {
       eventType: TURN_EVENT.FAILED,
       phase: failureContext.phase,
       failure,
-      terminalStatus: { command: terminalCommand, description: failure.message, error },
+      terminalStatus: { command: terminalCommand, description: failure.message, error: failure },
     });
   };
 }
@@ -140,11 +140,17 @@ async function executeAcceptedRun(context, run, accepted, active) {
   await finalizeRunResult(context, run, accepted);
 }
 
+export function createRunBusyError() {
+  return Object.assign(new Error("Session is already running"), {
+    code: "session_already_running",
+  });
+}
+
 function createRunHandler(context) {
-  return async function handleRun(command, { onRunBound = null }) {
+  return async function handleRun(command, onRunBound) {
     const run = await mapRunCommand(context, command);
     validateRunIdentity(context, run);
-    if (await bindExistingRun(context, run, onRunBound)) return { rebound: true };
+    if (context.state.isRunning) throw createRunBusyError();
     reserveRun(context, run, onRunBound);
     const accepted = await acceptRunCommand(context, command, run);
     const active = await activateRun(context, command, run);
@@ -162,6 +168,7 @@ export function createMessageRunHandler(dependencies) {
   context.recordRunTransportDiagnostic = createRunTransportDiagnostic();
   return {
     handleRun: createRunHandler(context),
+    rebindRun: (run) => bindExistingRun(context, run),
     commitCurrentFailure: createFailureCommitter(context),
   };
 }

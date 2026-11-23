@@ -39,22 +39,27 @@ test("engine persistence carries acknowledged versions through metadata, append 
   const session = createSessionFacade(services);
   const engine = createTestSessionExecutionEngine({ session });
   const commits = [];
-  const withSessionReader = repository.withSessionReader.bind(repository);
-  t.mock.method(repository, "withSessionReader", (userId, sessionId, run, options) =>
-    withSessionReader(
+  const withSessionCommit = repository.withSessionCommit.bind(repository);
+  const scoped = t.mock.method(repository, "withSessionCommit", (userId, sessionId, run, options) =>
+    withSessionCommit(
       userId,
       sessionId,
-      (reader, scope, commit) =>
-        run(reader, scope, (request) => {
-          commits.push(request);
-          return commit(request);
+      ({ commitChanges, ...capabilities }) =>
+        run({
+          ...capabilities,
+          commitChanges: (request) => {
+            commits.push(request.input);
+            return commitChanges(request);
+          },
         }),
       options,
     ),
   );
-  t.mock.method(repository, "commitChanges", () => {
-    assert.fail("A scoped message commit must not reopen the repository");
-  });
+  const persist = async () => {
+    const count = scoped.mock.callCount();
+    await runtime.persistCurrentTurnMessages();
+    assert.equal(scoped.mock.callCount() - count, 1, "persistence must use one mutation scope");
+  };
   const store = createCurrentTurnMessagesStore([
     {
       messageUid: "m1",
@@ -76,12 +81,12 @@ test("engine persistence carries acknowledged versions through metadata, append 
     dispatchRuntime: runtime,
     appendAgentMessages: engine.runner.appendAgentMessages,
   });
-  await runtime.persistCurrentTurnMessages();
+  await persist();
   const modelResponseMetadata = {
     output: [{ type: "reasoning", id: "reasoning-1", encrypted_content: "opaque" }],
   };
   store.updateByUid("m1", { modelResponseMetadata });
-  await runtime.persistCurrentTurnMessages();
+  await persist();
   assert.equal(
     commits[1].changes.messages.length,
     0,
@@ -92,7 +97,7 @@ test("engine persistence carries acknowledged versions through metadata, append 
   });
   const metadataVersion = commits[1].changes.messageMetadataUpdates[0].expectedContentReference;
   store.appendContentByUid("m1", " fragment");
-  await runtime.persistCurrentTurnMessages();
+  await persist();
   assert.equal(commits[2].changes.messages.length, 0);
   assert.deepEqual(commits[2].changes.messageContentAppends, [
     {
@@ -100,15 +105,16 @@ test("engine persistence carries acknowledged versions through metadata, append 
       dialogProcessId: "d1",
       turnScopeId: "t1",
       expectedContentReference: metadataVersion,
+      owner: 1,
       content: " fragment",
     },
   ]);
   store.updateByUid("m1", { content: "explicit replacement" });
-  await runtime.persistCurrentTurnMessages();
+  await persist();
   assert.equal(commits[3].changes.messages[0].content, "explicit replacement");
   assert.equal(commits[3].changes.messageContentAppends.length, 0);
   assert.equal(store.demoteAssistantPresentation(identity.turnScopeId), 1);
-  await runtime.persistCurrentTurnMessages();
+  await persist();
   assert.equal(commits[4].changes.messages.length, 0);
   assert.deepEqual(commits[4].changes.messageMetadataUpdates[0].metadata, {
     chatPresentation: false,

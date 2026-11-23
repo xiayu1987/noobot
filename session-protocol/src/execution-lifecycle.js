@@ -23,6 +23,18 @@ export const EXECUTION_QUERY_COMMAND = Object.freeze({
   TREE_GET: "execution.tree.get",
 });
 
+export const EXECUTION_QUERY_INCOMPLETE = "execution_query_incomplete";
+export const EXECUTION_QUERY_IDENTITY_CONFLICT = "execution_identity_conflict";
+export const EXECUTION_QUERY_MISSING_TARGET = "missing_execution";
+
+export function isDirectExecutionChild(execution, parentExecutionId) {
+  return execution.parentExecutionId === parentExecutionId;
+}
+
+export function isExecutionInRoot(execution, rootExecutionId) {
+  return execution.executionId === rootExecutionId || execution.rootExecutionId === rootExecutionId;
+}
+
 export const EXECUTION_QUERY_CONTRACT = Object.freeze({
   [EXECUTION_QUERY_COMMAND.SNAPSHOT_GET]: Object.freeze({
     wireEvent: EXECUTION_SNAPSHOT_WIRE_EVENT,
@@ -38,12 +50,17 @@ export const EXECUTION_QUERY_CONTRACT = Object.freeze({
   }),
 });
 
+export function isExecutionQueryId(value) {
+  return value === "" || isCanonicalText(value);
+}
+
 export function isExecutionQueryTargetValid(
   commandType,
   { executionId = "", rootExecutionId = "" } = {},
 ) {
   const contract = EXECUTION_QUERY_CONTRACT[commandType];
-  if (!contract) return false;
+  if (!contract || !isExecutionQueryId(executionId) || !isExecutionQueryId(rootExecutionId))
+    return false;
   return contract.requiresExecutionId
     ? Boolean(executionId)
     : Boolean(executionId || rootExecutionId);

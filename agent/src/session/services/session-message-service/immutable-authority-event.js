@@ -10,23 +10,22 @@ import {
   decidePluginArtifactCommit,
   createPluginArtifactCommitRejection,
 } from "@noobot/event-protocol/plugin-artifact-event";
-import { commitImmutableOutbox } from "./immutable-authority-outbox.js";
+import { prepareOutboxChanges } from "./immutable-authority-outbox.js";
 
-export async function commitImmutableAuthorityEvent(service, reader, request, descriptor, commit) {
+export async function planAuthorityEventCommit(service, reader, request, descriptor) {
   const { sessionId, family, identity, causality, ordering, producer, payload } = request;
-  const metadata = await reader.readMetadata();
   const eventPayload = { ...payload };
   const isArtifact = descriptor.sessionArtifact === true && family === PLUGIN_ARTIFACT_FAMILY;
   if (isArtifact) {
     const decision = decidePluginArtifactCommit(await reader.readPluginArtifact(payload), payload);
-    if (!decision.allowed) return createPluginArtifactCommitRejection(decision);
+    if (!decision.allowed) return () => createPluginArtifactCommitRejection(decision);
     eventPayload.revision = decision.revision;
   }
   const concurrency =
     descriptor.sessionArtifact === true
       ? decideAggregateConcurrency({
           expectedAggregateVersion: null,
-          aggregateVersion: metadata.aggregateVersion,
+          aggregateVersion: (await reader.readMetadata()).aggregateVersion,
         })
       : null;
   if (concurrency && !concurrency.allowed)
@@ -53,19 +52,17 @@ export async function commitImmutableAuthorityEvent(service, reader, request, de
   const validation = validateProtocolEvent(envelope);
   if (!validation.valid)
     throw new TypeError(`invalid committed authority event: ${validation.errors.join(",")}`);
-  await commitImmutableOutbox(
-    service,
-    reader,
-    {
-      artifactEvents: [
-        { eventId: envelope.identity.eventId, envelope, committedAt: occurredAt, deliveries: {} },
-      ],
-    },
-    commit,
-  );
-  return {
-    committed: true,
-    envelope,
-    ...(concurrency ? { aggregateVersion: concurrency.nextAggregateVersion } : {}),
+  const prepared = await prepareOutboxChanges(service, reader, {
+    artifactEvents: [
+      { eventId: envelope.identity.eventId, envelope, committedAt: occurredAt, deliveries: {} },
+    ],
+  });
+  return async (commit) => {
+    await commit(prepared);
+    return {
+      committed: true,
+      envelope,
+      ...(concurrency ? { aggregateVersion: concurrency.nextAggregateVersion } : {}),
+    };
   };
 }

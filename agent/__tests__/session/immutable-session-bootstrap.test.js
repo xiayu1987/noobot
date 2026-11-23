@@ -21,6 +21,7 @@ import {
 } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { exportImmutableSession } from "../../src/session/session-artifact-session/immutable-session-export.js";
 import { prepareImmutableTurnCommit } from "../../src/session/session-artifact-session/immutable-lifecycle-changes.js";
+import { ImmutableSessionChanges } from "../../src/session/session-artifact-session/immutable-message-changes.js";
 import { turnRecord } from "../helpers/turn-record.js";
 
 const ts = "2026-01-01T00:00:00.000Z";
@@ -212,13 +213,14 @@ test("one-shot import separates metadata, preserves dialog ordinals, messages, t
       ],
     },
   };
-  const expected = normalizeSessionEntity(source);
+  const expected = normalizeSessionEntity({ ...source, autoTitle: "m1" });
   await initializeImmutableSession({ sessionDir, session: source, operationId: "import" });
   const store = openStore(sessionDir);
   assert.deepEqual(await exported(store), expected);
   const head = await store.snapshot();
   const metadata = await store.get(head, "metadata", "session");
   for (const key of [
+    "autoTitle",
     "messages",
     "dialogOrder",
     "turnTimings",
@@ -283,15 +285,17 @@ test("migration imports command replay events and consumer delivery state in the
     expectedGeneration: 1,
     operationId: "accept",
     input: { event },
-    prepare: ({ get, getMetadata, input }) =>
-      prepareImmutableTurnCommit({
+    prepare: async ({ get, getMetadata, input }) => {
+      const plan = new ImmutableSessionChanges(get, { getMetadata });
+      const result = await prepareImmutableTurnCommit({
         store,
-        get,
-        getMetadata,
+        plan,
         event: input.event,
         now: () => ts,
         createEventId: () => "accepted-event",
-      }),
+      });
+      return { abort: !result.applied, changes: plan.changes(), result };
+    },
   });
   const source = await exported(store);
   const record = await store.get(await store.snapshot(), "events", "accepted-event");
@@ -332,11 +336,15 @@ test("migration imports command replay events and consumer delivery state in the
 test("bulk import flushes multiple segments before publishing a validated head and retries head failure", async (t) => {
   const sessionDir = await fixture(t);
   const source = emptySession();
+  const title = "first committed user";
+  source.autoTitle = "stale stored title";
   source.messages = [
-    { ...message("m1", "d1", "t1"), content: randomBytes(3 * 1024 * 1024).toString("hex") },
+    { ...message("m1", "d1", "t1"), content: title + randomBytes(3 * 1024 * 1024).toString("hex") },
+    message("m2", "d2", "t2"),
   ];
   source.dialogOrder = [
     { dialogProcessId: "d1", dialogOrdinal: 1, turnScopeId: "t1", userMessageUid: "m1" },
+    { dialogProcessId: "d2", dialogOrdinal: 2, turnScopeId: "t2", userMessageUid: "m2" },
   ];
   const before = structuredClone(source);
   const headPath = path.join(sessionDir, "head.json");
@@ -360,7 +368,9 @@ test("bulk import flushes multiple segments before publishing a validated head a
   await assert.rejects(readFile(headPath), { code: "ENOENT" });
   assert.ok((await readdir(path.join(sessionDir, "segments"))).length > 1);
   const result = await initializeImmutableSession(input);
-  assert.deepEqual(await exported(openStore(sessionDir)), normalizeSessionEntity(source));
+  const projection = await exported(openStore(sessionDir));
+  assert.equal(projection.autoTitle, title);
+  assert.deepEqual(projection, normalizeSessionEntity({ ...source, autoTitle: title }));
   assert.deepEqual(await initializeImmutableSession(input), { ...result, replayed: true });
   assert.deepEqual(source, before);
 });

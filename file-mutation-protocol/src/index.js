@@ -294,8 +294,10 @@ export function isMutationRef(value) {
   );
 }
 
+export class MutationRefInputError extends TypeError {}
+
 export function assertMutationRef(value) {
-  if (!isMutationRef(value)) throw new TypeError("invalid file mutation reference");
+  if (!isMutationRef(value)) throw new MutationRefInputError("invalid file mutation reference");
   return value;
 }
 

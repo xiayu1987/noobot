@@ -11,7 +11,7 @@ import {
   committedProjection,
   retainedBytes,
 } from "../../src/session/session-artifact-session/projection-accounting.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 
 function difference(messages, previousEntries = []) {
   return diffTurnEntries(

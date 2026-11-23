@@ -22,11 +22,13 @@ test("harness plugin rejects illegal FSM transitions and audits state commits", 
     { planningGuidanceMode: "inject", basePath, promptPolicy: false, manifestDebounceMs: 0 },
   );
 
-  await hookManager.emit("agent.before_tool_calls", {
+  const identity = {
     userId: "u-fsm",
     sessionId: "s-fsm",
     dialogProcessId: "dp-fsm",
-  });
+  };
+  await hookManager.emit("agent.before_context_build", { ...identity });
+  await hookManager.emit("agent.before_tool_calls", { ...identity });
   await hookManager.emit("agent.on_error", {
     userId: "u-fsm",
     sessionId: "s-fsm",
@@ -62,6 +64,8 @@ test("harness plugin can resume FSM from manifest checkpoint", async () => {
       {
         status: "running",
         fsmStatus: "planning",
+        sessionId: "s-resume",
+        parentSessionId: null,
         startedAt: new Date().toISOString(),
       },
       null,
@@ -131,7 +135,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
   const cases = [
     {
       name: "idle -> planning",
-      point: "agent.before_turn",
+      point: "agent.before_context_build",
       ctx: {},
       expectedState: "planning",
       expectedAccepted: true,
@@ -230,7 +234,7 @@ test("harness FSM remains planning when checklist is absent", async () => {
   const runId = "dp-fsm-stay";
   const runDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs", runId);
 
-  await hookManager.emit("agent.before_turn", {
+  await hookManager.emit("agent.before_context_build", {
     userId: "u-fsm-stay",
     sessionId: "s-fsm-stay",
     dialogProcessId: runId,

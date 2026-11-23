@@ -16,10 +16,9 @@ import {
 } from "@noobot/attachment-protocol";
 import { resolveAttachmentPolicy } from "@noobot/agent-config-protocol";
 
-import { fsMkdir, fsWriteFile } from "../../shared/storage/fs-adapter.js";
 import { DEFAULT_MIME_TYPE } from "../constants.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
-import { readAttachIndex, withAttachIndexLock, writeAttachIndex } from "../index-manager.js";
+import { withAttachmentSessionWrite } from "../index-manager.js";
 import { isMimeTypeAllowed, isExtensionAllowed } from "../policy/policy-validator.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
@@ -42,9 +41,8 @@ function requireArtifactEntries(items, label) {
   });
 }
 
-export async function saveAttachmentRecord({
+function prepareAttachment({
   basePath,
-  attachmentIndex,
   scope,
   name,
   mimeType = DEFAULT_MIME_TYPE,
@@ -63,9 +61,6 @@ export async function saveAttachmentRecord({
   const extension = normalizeExtension(name, mimeType);
   const fileName = `${attachmentId}${extension}`;
   const savePath = path.join(attachScopeRoot(basePath, scope), fileName);
-
-  await fsMkdir(path.dirname(savePath), { recursive: true });
-  await fsWriteFile(savePath, contentBytes);
 
   const createdAt = new Date().toISOString();
   const record = buildPublicRecord(basePath, {
@@ -90,20 +85,7 @@ export async function saveAttachmentRecord({
     origin,
   });
 
-  attachmentIndex.attachments[attachmentId] = record;
-  return record;
-}
-
-function indexRecordsByClientAttachmentId(attachments) {
-  const byClientId = new Map();
-  for (const record of Object.values(attachments)) {
-    const clientAttachmentId = safeStr(record?.clientAttachmentId);
-
-    if (clientAttachmentId && !byClientId.has(clientAttachmentId)) {
-      byClientId.set(clientAttachmentId, record);
-    }
-  }
-  return byClientId;
+  return { record, contentBytes };
 }
 
 function assertReusableContent(existing, contentSha256) {
@@ -190,24 +172,25 @@ export async function ingestAttachments(
     );
   }
 
-  return withAttachIndexLock(basePath, scope, async () => {
-    const index = await readAttachIndex(basePath, scope);
-    const byClientId = indexRecordsByClientAttachmentId(index.attachments);
+  return withAttachmentSessionWrite({ basePath, userId, scope }, async (catalog) => {
+    const byClientId = new Map();
+    const newEntries = [];
     const saved = [];
 
     for (const { item, name, normalizedMime, bytes } of prepared) {
       const clientAttachmentId = safeStr(item?.clientAttachmentId);
       const contentSha256 = createHash("sha256").update(bytes).digest("hex");
-      const existing = clientAttachmentId ? byClientId.get(clientAttachmentId) : undefined;
+      const existing = clientAttachmentId
+        ? (byClientId.get(clientAttachmentId) ?? catalog.readClient(clientAttachmentId))
+        : null;
       if (existing) {
         assertReusableContent(existing, contentSha256);
         saved.push(existing);
         continue;
       }
 
-      const record = await saveAttachmentRecord({
+      const entry = prepareAttachment({
         basePath,
-        attachmentIndex: index,
         scope,
         name,
         mimeType: normalizedMime,
@@ -215,12 +198,13 @@ export async function ingestAttachments(
         clientAttachmentId,
         contentSha256,
       });
-      if (clientAttachmentId) byClientId.set(clientAttachmentId, record);
-      saved.push(record);
+      newEntries.push(entry);
+      if (clientAttachmentId) byClientId.set(clientAttachmentId, entry.record);
+      saved.push(entry.record);
     }
 
     assertAttachmentIngestResult(attachments, saved);
-    await writeAttachIndex(basePath, index, scope);
+    await catalog.publish(newEntries);
     return saved;
   });
 }
@@ -245,32 +229,27 @@ export async function ingestGeneratedArtifacts(
   const entries = requireArtifactEntries(list, "artifacts");
 
   const scope = resolveAttachmentScope({ sessionId, attachmentSource });
-  return withAttachIndexLock(basePath, scope, async () => {
-    const index = await readAttachIndex(basePath, scope);
-    const saved = [];
-
-    for (const { item, name: artifactName, contentBase64: artifactContent } of entries) {
-      const record = await saveAttachmentRecord({
+  return withAttachmentSessionWrite({ basePath, userId, scope }, async (catalog) => {
+    const newEntries = entries.map(({ item, name: artifactName, contentBase64: artifactContent }) =>
+      prepareAttachment({
         basePath,
-        attachmentIndex: index,
         scope,
         name: artifactName,
-        mimeType: safeStr(item?.mimeType, DEFAULT_MIME_TYPE).toLowerCase(),
+        mimeType: safeStr(item.mimeType, DEFAULT_MIME_TYPE).toLowerCase(),
         contentBytes: Buffer.from(artifactContent, "base64"),
         generatedByModel: true,
         generationSource,
-        owner: isPlainObject(item?.owner) ? item.owner : owner,
-        turnScope: isPlainObject(item?.turnScope) ? item.turnScope : turnScope,
-        turnScopeId: safeStr(item?.turnScopeId || turnScopeId),
-        dialogProcessId: safeStr(item?.dialogProcessId || dialogProcessId),
-        origin: item?.origin,
-      });
-      saved.push(record);
-    }
-
-    assertAttachmentIngestResult(list, saved);
-    await writeAttachIndex(basePath, index, scope);
-    return saved;
+        owner: isPlainObject(item.owner) ? item.owner : owner,
+        turnScope: isPlainObject(item.turnScope) ? item.turnScope : turnScope,
+        turnScopeId: safeStr(item.turnScopeId || turnScopeId),
+        dialogProcessId: safeStr(item.dialogProcessId || dialogProcessId),
+        origin: item.origin,
+      }),
+    );
+    const records = newEntries.map(({ record }) => record);
+    assertAttachmentIngestResult(list, records);
+    await catalog.publish(newEntries);
+    return records;
   });
 }
 

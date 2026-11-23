@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isPlainObject } from "@noobot/shared/value";
+import { messageReadJsonBytes } from "@noobot/session-protocol/message-read-budget";
 import { contentDigest } from "./immutable-storage-io.js";
 import { replaceImmutableValueSuffix } from "./immutable-value-suffix.js";
 import { runStorageBatch } from "./storage-batch-results.js";
@@ -193,6 +194,17 @@ async function putCapturedValueBytes(objects, bytes, previousReference) {
 }
 
 export class ImmutableValueStore {
+  #objectRead;
+
+  constructor(objectRead) {
+    this.#objectRead = objectRead;
+  }
+
+  readObject(reference, load, ...args) {
+    if (this.#objectRead === undefined) return load.call(this, ...args);
+    return this.#objectRead(reference, () => load.call(this, ...args));
+  }
+
   async valueLeaf(bytes, standalone) {
     return standalone && bytes.length <= IMMUTABLE_VALUE_INLINE_BYTES
       ? { kind: "value-inline", data: bytes.toString("base64"), bytes: bytes.length }
@@ -218,24 +230,24 @@ export class ImmutableValueStore {
     return records;
   }
 
-  async readValues(references) {
-    return this.readDecodedValues(references, false);
+  async readValues(references, { budget } = {}) {
+    return this.readDecodedValues(references, false, budget);
   }
 
-  async readValuesMetadata(references) {
-    return this.readDecodedValues(references, true);
+  async readValuesMetadata(references, { budget } = {}) {
+    return this.readDecodedValues(references, true, budget);
   }
 
-  async readDecodedValues(references, metadata) {
+  async readDecodedValues(references, metadata, budget) {
     const values = [];
     for (let offset = 0; offset < references.length; offset += IMMUTABLE_VALUE_READ_BATCH_RECORDS) {
       const selected = references.slice(offset, offset + IMMUTABLE_VALUE_READ_BATCH_RECORDS);
-      values.push(...(await this.readDecodedValueBatch(selected, metadata)));
+      values.push(...(await this.readDecodedValueBatch(selected, metadata, budget)));
     }
     return values;
   }
 
-  async readDecodedValueBatch(selected, metadata) {
+  async readDecodedValueBatch(selected, metadata, budget) {
     const records = await this.readMany(selected);
     const pages = selected.map((reference) =>
       decodeImmutableJsonBytes(records.get(reference), reference),
@@ -258,6 +270,13 @@ export class ImmutableValueStore {
         throw immutableStorageError("Composite value templates must be plain JSON values");
       return [{ reference: page.template, page: template, position }];
     });
+    for (const { page } of byteRoots) {
+      requireImmutableValueBytePage(page);
+      budget?.consume("bytes", page.bytes);
+    }
+    for (const page of pages)
+      if (page.kind === "value-parts-inline")
+        budget?.consume("bytes", messageReadJsonBytes(page.value));
     const bytes = await readByteTrees(this, byteRoots);
     const values = pages.map((page) =>
       page?.kind === "value-parts-inline" ? page.value : undefined,
@@ -272,7 +291,9 @@ export class ImmutableValueStore {
       selected.map((reference, position) => ({ reference, position })),
       async ({ position }) => {
         const decoded = valueMetadata(pages[position], values[position]);
-        decodedValues[position] = metadata ? decoded : await this.materializeValue(decoded);
+        decodedValues[position] = metadata
+          ? decoded
+          : await this.materializeValue(decoded, { budget });
       },
     );
     return decodedValues;
@@ -409,15 +430,20 @@ export class ImmutableValueStore {
     return root.reference;
   }
 
-  async readValueBytes(reference, expectedBytes = null, rootPage) {
+  async readValueBytes(reference, { expectedBytes = null, rootPage, signal } = {}) {
+    signal?.throwIfAborted();
     const page = rootPage === undefined ? await this.readPage(reference) : rootPage;
     if (isImmutableValuePartsPage(page)) {
       if (expectedBytes !== null)
         throw immutableStorageError("Composite values cannot appear inside a byte tree");
-      return Buffer.from(JSON.stringify(await this.readValue(reference, page)));
+      return Buffer.from(JSON.stringify(await this.readValue(reference, page, { signal })));
     }
     const chunks = [];
-    for await (const bytes of this.readValueChunks(reference, { expectedBytes, rootPage: page }))
+    for await (const bytes of this.readValueChunks(reference, {
+      expectedBytes,
+      rootPage: page,
+      signal,
+    }))
       chunks.push(bytes);
     return chunks.length === 1 ? chunks[0] : Buffer.concat(chunks);
   }
@@ -469,49 +495,59 @@ export class ImmutableValueStore {
     }
   }
 
-  async readValueMetadata(reference, rootPage) {
+  async readValueMetadata(reference, rootPage, { signal } = {}) {
+    signal?.throwIfAborted();
     const page = rootPage === undefined ? await this.readPage(reference) : rootPage;
+    signal?.throwIfAborted();
     if (page?.kind === "value-parts-inline") {
       requireImmutableValueParts(page, this.requireReference.bind(this));
       return valueMetadata(page, page.value);
     }
     if (page?.kind === "value-parts") {
       requireImmutableValueParts(page, this.requireReference.bind(this));
-      return this.decodeValueMetadata(reference, page, await this.readPage(page.template));
+      return this.decodeValueMetadata(reference, page, await this.readPage(page.template), signal);
     }
-    return this.decodeValueMetadata(reference, page, null);
+    return this.decodeValueMetadata(reference, page, null, signal);
   }
 
-  async decodeValueMetadata(reference, page, template) {
+  async decodeValueMetadata(reference, page, template, signal) {
     if (page?.kind !== "value-parts")
       return valueMetadata(
         page,
-        decodeImmutableJsonBytes(await this.readValueBytes(reference, null, page), reference),
+        decodeImmutableJsonBytes(
+          await this.readValueBytes(reference, { rootPage: page, signal }),
+          reference,
+        ),
       );
     if (isImmutableValuePartsPage(template))
       throw immutableStorageError("Composite value templates must be plain JSON values");
     const value = decodeImmutableJsonBytes(
-      await this.readValueBytes(page.template, null, template),
+      await this.readValueBytes(page.template, { rootPage: template, signal }),
       page.template,
     );
     return valueMetadata(page, value);
   }
 
-  async readValue(reference, rootPage) {
-    return this.materializeValue(await this.readValueMetadata(reference, rootPage));
+  async readValue(reference, rootPage, options) {
+    return this.materializeValue(await this.readValueMetadata(reference, rootPage, options));
   }
 
-  async materializeValue({ value, parts }) {
-    return (await this.materializeValues([{ value, parts }]))[0];
+  async materializeValue({ value, parts }, { budget } = {}) {
+    return (await this.materializeValues([{ value, parts }], { budget }))[0];
   }
 
-  async materializeValues(records) {
+  async materializeValues(records, { budget } = {}) {
     for (let offset = 0; offset < records.length; offset += IMMUTABLE_VALUE_READ_BATCH_RECORDS) {
       const selected = records.slice(offset, offset + IMMUTABLE_VALUE_READ_BATCH_RECORDS);
       const slots = selected.flatMap(({ value, parts }) =>
         parts.map(({ path, reference }) => ({ value, path, reference })),
       );
-      const values = slots.length ? await this.readValues(slots.map((slot) => slot.reference)) : [];
+      const values = slots.length
+        ? await this.readValues(
+            slots.map((slot) => slot.reference),
+            { budget },
+          )
+        : [];
       for (let position = 0; position < slots.length; position += 1) {
         const { value, path } = slots[position];
         value[path[0]][path[1]] = values[position];

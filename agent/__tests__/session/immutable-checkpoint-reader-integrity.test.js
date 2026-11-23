@@ -67,7 +67,14 @@ for (const [name, invalid] of [
     const { store, snapshot } = await fixture(t, { receipts: [invalid] });
     await assert.rejects(readImmutableCheckpoint(store, snapshot, "t1", "cp1"), INVALID);
     await assert.rejects(
-      readImmutableCheckpointPage({ store, snapshot, turnScopeId: "t1", limit: 1 }),
+      readImmutableCheckpointPage({
+        store,
+        snapshot,
+        turnScopeId: "t1",
+        cursor: null,
+        limit: 3,
+        maxBytes: 4096,
+      }),
       INVALID,
     );
     await assert.rejects(readImmutableCheckpointState(store, snapshot, "t1"), INVALID);
@@ -79,7 +86,14 @@ test("all checkpoint read entries reject a header without protocol ownership", a
   const { store, snapshot } = await fixture(t, { head: { ...header, dialogProcessId: "" } });
   await assert.rejects(readImmutableCheckpoint(store, snapshot, "t1", "cp1"), INVALID);
   await assert.rejects(
-    readImmutableCheckpointPage({ store, snapshot, turnScopeId: "t1" }),
+    readImmutableCheckpointPage({
+      store,
+      snapshot,
+      turnScopeId: "t1",
+      cursor: null,
+      limit: 3,
+      maxBytes: 4096,
+    }),
     INVALID,
   );
   await assert.rejects(readImmutableCheckpointState(store, snapshot, "t1"), INVALID);
@@ -126,14 +140,15 @@ test("page and state reads load their pinned header once and only access request
     store,
     snapshot,
     turnScopeId: "t1",
-    after: 1,
+    cursor: null,
     limit: 2,
+    maxBytes: 4096,
   });
-  assert.deepEqual(page.receipts, [receipt(2), receipt(3)]);
+  assert.deepEqual(page.receipts, [receipt(3), receipt(2)]);
   assert.equal(calls.filter(([collection]) => collection === "checkpointHeads").length, 1);
   assert.deepEqual(batches.find(([collection]) => collection === "checkpoints")[1], [
-    immutableCheckpointKey("t1", "cp2"),
     immutableCheckpointKey("t1", "cp3"),
+    immutableCheckpointKey("t1", "cp2"),
   ]);
   assert.equal(calls.length, 1);
   assert.equal(batches.length, 2);
@@ -172,28 +187,33 @@ test("batched pages preserve sparse revision order and pinned snapshots", async 
     store,
     snapshot: current,
     turnScopeId: "t1",
+    cursor: null,
     limit: 2,
+    maxBytes: 4096,
   });
-  assert.deepEqual(page.receipts, [receipt(1)]);
-  assert.equal(page.cursor, 2);
-  assert.equal(page.hasMore, true);
+  assert.deepEqual(page.receipts, [receipt(3)]);
+  assert.equal(page.nextCursor.revision, 1);
   const last = await readImmutableCheckpointPage({
     store,
     snapshot: current,
     turnScopeId: "t1",
-    after: 2,
+    cursor: page.nextCursor,
     limit: 2,
+    maxBytes: 4096,
   });
-  assert.deepEqual(last.receipts, [receipt(3)]);
-  assert.equal(last.hasMore, false);
-  const empty = await readImmutableCheckpointPage({
-    store,
-    snapshot: current,
-    turnScopeId: "t1",
-    after: 9,
-  });
-  assert.deepEqual(empty.receipts, []);
-  assert.equal(empty.cursor, 9);
+  assert.deepEqual(last.receipts, [receipt(1)]);
+  assert.equal(last.nextCursor, null);
+  await assert.rejects(
+    readImmutableCheckpointPage({
+      store,
+      snapshot: current,
+      turnScopeId: "t1",
+      cursor: { ...page.nextCursor, revision: 9 },
+      limit: 2,
+      maxBytes: 4096,
+    }),
+    TypeError,
+  );
 });
 
 for (const corruption of ["missing-receipt", "wrong-revision", "wrong-identity"]) {
@@ -221,7 +241,14 @@ for (const corruption of ["missing-receipt", "wrong-revision", "wrong-identity"]
     });
     const current = await store.snapshot();
     await assert.rejects(
-      readImmutableCheckpointPage({ store, snapshot: current, turnScopeId: "t1" }),
+      readImmutableCheckpointPage({
+        store,
+        snapshot: current,
+        turnScopeId: "t1",
+        cursor: null,
+        limit: 3,
+        maxBytes: 4096,
+      }),
       INVALID,
     );
     await assert.rejects(readImmutableCheckpointState(store, current, "t1"), INVALID);

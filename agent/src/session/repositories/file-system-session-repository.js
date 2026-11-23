@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { SessionMutationCoordinator } from "../session-mutation-coordinator.js";
+import { SessionPageSnapshots } from "../session-page-snapshots.js";
 import { sessionAccessMethods } from "./file-system-session-repository/access-methods.js";
 import { agentSessionMethods } from "./file-system-session-repository/agent-session-methods.js";
 import { sessionArtifactMethods } from "./file-system-session-repository/artifact-methods.js";
@@ -11,7 +12,8 @@ import { sessionCrudMethods } from "./file-system-session-repository/crud-method
 import { installRepositoryMethods } from "./file-system-session-repository/install-methods.js";
 import { sessionLifecycleMethods } from "./file-system-session-repository/lifecycle-methods.js";
 import { sessionSummaryMethods } from "./file-system-session-repository/summary-methods.js";
-import { immutableSessionMethods } from "./file-system-session-repository/immutable-methods.js";
+import { sessionReaderMethods } from "./file-system-session-repository/reader-methods.js";
+import { createSessionReaderAccess } from "@noobot/session-protocol/session-reader";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { isFunction } from "@noobot/shared/value";
 
@@ -21,6 +23,7 @@ export class FileSystemSessionRepository {
     sessionPathResolver,
     sessionTreeRepository,
     storageService,
+    sessionReaderAccess,
     now,
   } = {}) {
     if (!sessionTreeRepository) {
@@ -31,9 +34,15 @@ export class FileSystemSessionRepository {
     this.sessionPathResolver = sessionPathResolver;
     this.sessionTreeRepository = sessionTreeRepository;
     this.storageService = storageService;
+    this.sessionReaderAccess = createSessionReaderAccess(sessionReaderAccess);
     this.normalizeSelectedConnectorIds = normalizeSelectedConnectorIds;
     this.now = now;
     this.mutationCoordinator = new SessionMutationCoordinator();
+    this.pageSnapshots = new SessionPageSnapshots();
+  }
+
+  close() {
+    return this.pageSnapshots.close();
   }
 }
 
@@ -45,5 +54,5 @@ installRepositoryMethods(
   sessionAccessMethods,
   sessionArtifactMethods,
   sessionCrudMethods,
-  immutableSessionMethods,
+  sessionReaderMethods,
 );

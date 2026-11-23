@@ -6,6 +6,7 @@
 import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
+import { holdSessionLock } from "../../../../../../agent/__tests__/helpers/session-lock-process.js";
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import {
   deleteLatestUserMessage,
@@ -170,81 +171,28 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
     })
     .toEqual({ assistant: true, user: true });
 
-  await expect
-    .poll(async () => {
-      try {
-        await fs.writeFile(lockPath, `${process.pid}:e2e-lock-failure`, {
-          encoding: "utf8",
-          flag: "wx",
-        });
-        return true;
-      } catch (error) {
-        if (error?.code === "EEXIST") return false;
-        throw error;
-      }
-    })
-    .toBe(true);
-  const lockDirectory = path.dirname(lockPath);
-  const settledWaiterPattern = new RegExp(
-    `^${path.basename(lockPath).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.wait-\\d+-`,
-  );
+  const releaseLock = await holdSessionLock(lockPath);
   try {
-    const earlierWaiters = new Set(
-      (await fs.readdir(lockDirectory)).filter((name) => settledWaiterPattern.test(name)),
-    );
     await expect
       .poll(() => fs.readFile(toolFinishedMarker, "utf8").catch(() => ""))
       .toBe("finished");
-    const observedWaiters = new Set(earlierWaiters);
-    const timeoutWaiters = [];
-    for (let timeoutIndex = 0; timeoutIndex < 2; timeoutIndex += 1) {
-      await expect
-        .poll(
-          async () => {
-            const names = await fs.readdir(lockDirectory);
-            for (const name of names) {
-              if (!settledWaiterPattern.test(name) || observedWaiters.has(name)) continue;
-              observedWaiters.add(name);
-              timeoutWaiters.push(name);
-            }
-            return timeoutWaiters.length > timeoutIndex;
-          },
-          { timeout: PROTOCOL_TIMEOUTS.model },
-        )
-        .toBe(true);
-      const observedWaiter = timeoutWaiters[timeoutIndex];
-      await expect
-        .poll(
-          () =>
-            fs
-              .access(path.join(lockDirectory, observedWaiter))
-              .then(() => true)
-              .catch(() => false),
-          { timeout: 60000 },
-        )
-        .toBe(false);
-    }
+    await waitForSessionExecutionEventTree(
+      noobot.userId,
+      noobot.sessionId,
+      (records) =>
+        records.some(
+          (record) =>
+            record.turnScopeId === secondSend.identity.turnScopeId &&
+            record.event === "turn_orchestrator_error" &&
+            record.data?.error?.code === "SESSION_MUTATION_BUSY",
+        ),
+      { timeoutMs: PROTOCOL_TIMEOUTS.model },
+    );
   } finally {
-    await fs.rm(lockPath, { force: true });
+    await releaseLock();
     await fs.rm(toolStartedMarker, { force: true });
     await fs.rm(toolFinishedMarker, { force: true });
   }
-
-  await waitForSessionExecutionEventTree(
-    noobot.userId,
-    noobot.sessionId,
-    (records) => {
-      const scoped = records.filter(
-        (record) => record.turnScopeId === secondSend.identity.turnScopeId,
-      );
-      return scoped.some(
-        (record) =>
-          record.event === "turn_orchestrator_error" &&
-          record.data?.error?.code === "SESSION_MUTATION_BUSY",
-      );
-    },
-    { timeoutMs: PROTOCOL_TIMEOUTS.model },
-  );
 
   await expect
     .poll(async () => {

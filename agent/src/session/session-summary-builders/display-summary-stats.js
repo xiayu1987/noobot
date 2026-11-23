@@ -3,41 +3,55 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isInjectedSessionMessageRecord } from "@noobot/session-protocol";
+import {
+  applySessionDisplayRowDelta,
+  applySessionDisplaySourceDelta,
+  createSessionDisplayStats,
+  emptySessionDisplayRowCounts,
+  emptySessionDisplaySourceCounts,
+  sessionDisplayMessageContribution,
+  sessionDisplayRowContribution,
+} from "@noobot/session-protocol/session-reader";
 import {
   collectAttachmentRefsFromTransferEnvelopes,
   dedupeSessionAttachmentRefs,
 } from "../transfer-attachment-refs.js";
 
-function countMessageAttachments(message) {
+export function countDisplayRowAttachments(message) {
   const sessionAttachments = dedupeSessionAttachmentRefs(message.attachments);
   const transferAttachments = collectAttachmentRefsFromTransferEnvelopes(message.transferEnvelopes);
   return sessionAttachments.length + transferAttachments.length;
 }
 
+export function countSessionDisplaySources(messages) {
+  const counts = messages.reduce(
+    (counts, message) =>
+      applySessionDisplaySourceDelta(counts, sessionDisplayMessageContribution(message)),
+    emptySessionDisplaySourceCounts(),
+  );
+  return { messageCount: messages.length, ...counts };
+}
+
 export function buildSessionDisplayStats({
-  messages,
+  sourceCounts,
   displayMessages,
-  toolLogCount,
   assignedToolArtifactCount,
   unassignedToolArtifactCount,
   conflictedToolArtifactCount,
 }) {
-  return {
-    messageCount: messages.length,
-    displayMessageCount: displayMessages.length,
-    injectedMessageCount: messages.filter((message) => isInjectedSessionMessageRecord(message))
-      .length,
-    thinkingMessageCount: displayMessages.filter((message) => message?.hasThinkingDetails === true)
-      .length,
-    toolLogCount,
+  const rowCounts = displayMessages.reduce(
+    (counts, row) =>
+      applySessionDisplayRowDelta(
+        counts,
+        sessionDisplayRowContribution(row, countDisplayRowAttachments(row)),
+      ),
+    emptySessionDisplayRowCounts(),
+  );
+  return createSessionDisplayStats({
+    ...sourceCounts,
+    ...rowCounts,
     displayToolLogCount: assignedToolArtifactCount,
     unassignedToolArtifactCount,
     conflictedToolArtifactCount,
-    hasToolDetails: toolLogCount > 0,
-    attachmentCount: displayMessages.reduce(
-      (count, message) => count + countMessageAttachments(message),
-      0,
-    ),
-  };
+  });
 }

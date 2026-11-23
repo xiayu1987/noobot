@@ -336,6 +336,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
   }
   const server = await startAuthoritativeServerWithWs({
     bot: {
+      runWorkspaceOperation: (_userId, operation) => operation(),
       resolveExecutionIntent: async ({ turnScopeId }) =>
         createAcceptedAgentExecutionIdentity({ turnScopeId }),
       runSession: async () => ({}),
@@ -379,21 +380,22 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
           }
           return result;
         },
-        getPendingAuthorityEvents: async ({ consumerId } = {}) => ({
-          found: true,
-          events: listPendingAuthorityEvents(authorityEventOutbox, { consumerId }),
-        }),
-        recordAuthorityEventAttempts: async ({ consumerId, eventIds = [] } = {}) => {
-          for (const eventId of eventIds) {
+        async prepareAuthorityEventDelivery({ consumerId }) {
+          const events = listPendingAuthorityEvents(authorityEventOutbox, { consumerId });
+          for (const { eventId } of events) {
             const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, {
               eventId,
               consumerId,
               attemptedAt: new Date().toISOString(),
             });
-            if (!result.found) return { recorded: false, reason: result.reason };
+            assert.equal(result.found, true);
             authorityEventOutbox = result.outbox;
           }
-          return { recorded: true };
+          return {
+            found: true,
+            events: listPendingAuthorityEvents(authorityEventOutbox, { consumerId }),
+            hasMore: false,
+          };
         },
         compactAuthorityEvents: async ({ retainDeliveredAfter }) => {
           const result = compactAuthorityEventOutbox(
@@ -422,7 +424,10 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
             if (!result.found) return { acknowledged: false, reason: result.reason };
             authorityEventOutbox = result.outbox;
           }
-          return { acknowledged: true };
+          return {
+            acknowledged: true,
+            drained: listPendingAuthorityEvents(authorityEventOutbox, { consumerId }).length === 0,
+          };
         },
       },
     },

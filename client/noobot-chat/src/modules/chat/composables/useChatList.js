@@ -63,14 +63,14 @@ export function useChatList({
     onSessionDetailApplied,
   });
 
-  const { fetchSessionDetail, fetchThinkingDetail } = createSessionDetailRequests({
-    sessions,
-    activeSessionId,
-    userId,
-    authFetch,
-    getSessionDetailApi,
-    isSameSessionIdentity,
-  });
+  const { fetchSessionDetail, fetchThinkingDetail, releaseThinkingDetail } =
+    createSessionDetailRequests({
+      sessions,
+      userId,
+      authFetch,
+      getSessionDetailApi,
+      isSameSessionIdentity,
+    });
 
   const { fetchSessions, selectSession, deleteSession, renameSession } = createSessionListActions({
     sessions,
@@ -122,6 +122,7 @@ export function useChatList({
     selectSession,
     fetchSessionDetail,
     fetchThinkingDetail,
+    releaseThinkingDetail,
     applySessionDetail,
     releaseAllPreviewUrls,
     applySessionMutation,

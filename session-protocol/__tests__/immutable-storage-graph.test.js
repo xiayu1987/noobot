@@ -10,15 +10,17 @@ import {
   immutableCommitReferences,
   immutableOperationReceiptReferences,
   requireImmutableCommitRecord,
-  requireImmutableOperationId,
   IMMUTABLE_VALUE_BLOCK_BYTES as BLOCK_BYTES,
   immutableValueSplitOffset,
   requireImmutableValueBytePage,
   requireImmutableMessageResult,
-  requireImmutableOperationReceipt,
-  assertImmutableOperationRetryAvailable,
-  IMMUTABLE_OPERATION_RETRY_UNAVAILABLE,
 } from "../src/immutable-storage-graph.js";
+import {
+  requireImmutableOperationReceipt,
+  assertImmutableOperationRetryMatches,
+  createImmutableMigrationOperation,
+  IMMUTABLE_OPERATION_RETRY_UNAVAILABLE,
+} from "../src/immutable-operation-receipt.js";
 
 const first = "a".repeat(64);
 const second = "b".repeat(64);
@@ -34,10 +36,13 @@ const commit = () => ({
 test("historical retry unavailability is explicit, bounded and retains receipt evidence", () => {
   const receipt = { generation: 1, commit: first, digest: second, result: { legacy: true } };
   assert.equal(requireImmutableOperationReceipt(receipt, 1), receipt);
-  assert.doesNotThrow(() => assertImmutableOperationRetryAvailable(receipt, "op"));
+  assert.doesNotThrow(() => assertImmutableOperationRetryMatches(receipt, "op", second));
+  assert.throws(() => assertImmutableOperationRetryMatches(receipt, "op", first), {
+    code: "SESSION_OPERATION_CONFLICT",
+  });
   const unavailable = { ...receipt, retryUnavailable: IMMUTABLE_OPERATION_RETRY_UNAVAILABLE };
   assert.equal(requireImmutableOperationReceipt(unavailable, 1), unavailable);
-  assert.throws(() => assertImmutableOperationRetryAvailable(unavailable, "op"), {
+  assert.throws(() => assertImmutableOperationRetryMatches(unavailable, "op", first), {
     code: "SESSION_OPERATION_RETRY_UNAVAILABLE",
     operationId: "op",
     generation: 1,
@@ -51,6 +56,35 @@ test("historical retry unavailability is explicit, bounded and retains receipt e
   const { result, ...missingEvidence } = unavailable;
   assert.ok(result);
   assert.throws(() => requireImmutableOperationReceipt(missingEvidence, 1), invalid);
+});
+
+test("migration preserves source receipts without constructing a partition request position", () => {
+  const identity = { generation: 2, operationId: first };
+  const record = commit();
+  const receipt = { generation: 2, commit: first, digest: second };
+  const unavailable = {
+    ...receipt,
+    retryUnavailable: IMMUTABLE_OPERATION_RETRY_UNAVAILABLE,
+    result: null,
+  };
+  for (const evidence of [receipt, unavailable]) {
+    const operation = createImmutableMigrationOperation(identity, { record, receipt: evidence });
+    assert.deepEqual(operation, {
+      format: "noobot.immutable-migration-operation/1",
+      operationId: first,
+      receipt: evidence,
+    });
+    assert.equal(operation.receipt, evidence);
+  }
+  for (const operation of [
+    null,
+    { record: { ...record, operationId: second }, receipt },
+    { record: { ...record, generation: 1 }, receipt },
+    { record, receipt: { ...receipt, generation: 1 } },
+  ])
+    assert.throws(() => createImmutableMigrationOperation(identity, operation), {
+      code: "SESSION_STORAGE_CORRUPT",
+    });
 });
 
 test("message result receipts contain canonical identities and never message bodies", () => {
@@ -126,13 +160,6 @@ test("commit identity, predecessor, collection and duplicate mutation corruption
   assert.throws(() => requireImmutableCommitRecord(record, 1), invalid);
 });
 
-test("operation identity uses UTF-8 byte limits across runtimes", () => {
-  assert.equal(requireImmutableOperationId("a".repeat(1024)).length, 1024);
-  assert.equal(requireImmutableOperationId("中".repeat(341)).length, 341);
-  for (const value of [null, 1, "", "a".repeat(1025), "中".repeat(342)])
-    assert.throws(() => requireImmutableOperationId(value), TypeError);
-});
-
 test("receipt results and digests cannot be inferred as storage edges", () => {
   const receipt = {
     generation: 2,
@@ -149,6 +176,25 @@ test("receipt results and digests cannot be inferred as storage edges", () => {
     () => immutableOperationReceiptReferences({ ...receipt, digest: "invalid" }),
     invalid,
   );
+});
+
+test("context source counts follow the validated leaf or branch directory contract", () => {
+  const references = (value) => immutableCollectionValueReferences("contextSources", "turn", value);
+  assert.deepEqual(references({ root: null, count: 0, directory: { ordinals: [] } }), [null]);
+  assert.deepEqual(references({ root: first, count: 2, directory: { ordinals: [1, 3] } }), [first]);
+  assert.deepEqual(references({ root: first, count: 2, directory: { slots: [0, 1] } }), [first]);
+  assert.deepEqual(references({ root: first, count: 257, directory: { slots: [0, 1] } }), [first]);
+  for (const value of [
+    { root: first, count: 1, directory: { ordinals: [1, 3] } },
+    { root: first, count: 3, directory: { ordinals: [1, 3] } },
+    { root: first, count: 1, directory: { slots: [0, 1] } },
+    { root: first, count: 0, directory: { ordinals: [] } },
+    { root: null, count: 2, directory: { ordinals: [1, 3] } },
+    { root: first, count: 2, directory: { ordinals: [1, 3], slots: [0, 1] } },
+    { root: first, count: 2, directory: {} },
+    { root: first, count: 2, directory: { ordinals: null } },
+  ])
+    assert.throws(() => references(value), invalid);
 });
 
 test("collection contracts distinguish commit references from opaque message content", () => {

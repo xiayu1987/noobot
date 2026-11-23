@@ -11,7 +11,7 @@ function requireFound(value, userId, sessionId) {
 }
 
 export const requiredSessionReads = {
-  async findImmutableSessionReader() {
+  async findSessionReader() {
     return null;
   },
   async requireById(userId, sessionId, options) {

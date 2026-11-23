@@ -8,7 +8,6 @@ import test from "node:test";
 import {
   createUserMetaBackwrite,
   isSameUserMetaBackwrite,
-  mergeUserMetaParsedResults,
   normalizeUserMetaBackwrites,
 } from "../src/policy/user-meta-backwrite.js";
 
@@ -24,8 +23,16 @@ test("user_meta backwrite targets the source user message per attachment", () =>
   assert.equal(record.status, "pending");
   assert.equal("backwriteId" in record, false);
   assert.deepEqual(normalizeUserMetaBackwrites([record]), [record]);
-  assert.equal(isSameUserMetaBackwrite(record, { ...record, result: {} }), true);
-  assert.equal(isSameUserMetaBackwrite(record, { ...record, attachmentRef: "other" }), false);
+  assert.equal(
+    isSameUserMetaBackwrite(record, { ...record, result: { ...record.result, v: 2 } }),
+    true,
+  );
+  const other = createUserMetaBackwrite({
+    userMetaSourceMessageUid: record.userMetaSourceMessageUid,
+    attachmentRef: "other",
+    result: { sourceAttachmentRef: "other" },
+  });
+  assert.equal(isSameUserMetaBackwrite(record, other), false);
 });
 
 test("user_meta backwrite requires a source message and attachment", () => {
@@ -38,6 +45,23 @@ test("user_meta backwrite requires a source message and attachment", () => {
       createUserMetaBackwrite({ userMetaSourceMessageUid: "sm_user", attachmentRef, result: [] }),
     /result must be an object/,
   );
+});
+
+test("queued and restored backwrites reject missing or conflicting result attachment identity", () => {
+  const record = {
+    userMetaSourceMessageUid: "sm_user",
+    attachmentRef,
+    status: "pending",
+    createdAt: "2026-10-21T00:00:00.000Z",
+  };
+  for (const [result, error] of [
+    [{}, /requires sourceAttachmentRef/],
+    [{ sourceAttachmentRef: ` ${attachmentRef}` }, /requires sourceAttachmentRef/],
+    [{ sourceAttachmentRef: "other" }, /must match result.sourceAttachmentRef/],
+  ]) {
+    assert.throws(() => createUserMetaBackwrite({ ...record, result }), error);
+    assert.throws(() => normalizeUserMetaBackwrites([{ ...record, result }]), error);
+  }
 });
 
 test("user_meta backwrite rejects duplicate attachment relations", () => {
@@ -54,22 +78,11 @@ test("user_meta backwrite rejects duplicate attachment relations", () => {
   );
 });
 
-test("parsed results replace the entry for the same attachment", () => {
-  const first = mergeUserMetaParsedResults([], { sourceAttachmentRef: attachmentRef, v: 1 });
-  const other = mergeUserMetaParsedResults(first, { sourceAttachmentRef: "attachment:b", v: 1 });
-  const replaced = mergeUserMetaParsedResults(other, { sourceAttachmentRef: attachmentRef, v: 2 });
-  assert.deepEqual(replaced, [
-    { sourceAttachmentRef: "attachment:b", v: 1 },
-    { sourceAttachmentRef: attachmentRef, v: 2 },
-  ]);
-  assert.throws(() => mergeUserMetaParsedResults([], { v: 1 }), /requires sourceAttachmentRef/);
-});
-
 test("stored backwrites reject missing timestamps and invalid pending state", () => {
   const record = createUserMetaBackwrite({
     userMetaSourceMessageUid: "sm_user",
     attachmentRef,
-    result: {},
+    result: { sourceAttachmentRef: attachmentRef },
   });
   for (const createdAt of [undefined, null, "", "2026-01-01", 1]) {
     assert.throws(

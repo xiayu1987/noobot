@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  createExecutionResult,
   createMockBotHookManager,
   createSemanticTransferTool,
   getBeforeDispatch,
@@ -74,18 +75,14 @@ test("workflow hook injects upstream node result attachments into downstream sub
           },
           sessionId: `session-${nodeName}`,
           dialogProcessId: `dialog-${nodeName}`,
-          result: {
-            answer: `answer-${nodeName}`,
-            traces: [],
-            dialogProcessId: `dialog-${nodeName}`,
-            messages: [
-              {
-                messageUid: `message-${nodeName}`,
-                role: "assistant",
-                content: `result-${nodeName}`,
-              },
-            ],
-          },
+          result: createExecutionResult(
+            {
+              sessionId: `session-${nodeName}`,
+              dialogProcessId: `dialog-${nodeName}`,
+              turnScopeId: payload.strategy.turnScopeId,
+            },
+            `answer-${nodeName}`,
+          ),
         };
       },
     },
@@ -191,18 +188,14 @@ test("workflow hook injects one upstream action attachments into multiple direct
           },
           sessionId: `session-${nodeName}`,
           dialogProcessId: `dialog-${nodeName}`,
-          result: {
-            answer: `answer-${nodeName}`,
-            traces: [],
-            dialogProcessId: `dialog-${nodeName}`,
-            messages: [
-              {
-                messageUid: `message-${nodeName}`,
-                role: "assistant",
-                content: `result-${nodeName}`,
-              },
-            ],
-          },
+          result: createExecutionResult(
+            {
+              sessionId: `session-${nodeName}`,
+              dialogProcessId: `dialog-${nodeName}`,
+              turnScopeId: payload.strategy.turnScopeId,
+            },
+            `answer-${nodeName}`,
+          ),
         };
       },
     },

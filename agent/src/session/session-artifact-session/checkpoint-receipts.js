@@ -11,17 +11,14 @@ import {
 } from "@noobot/session-protocol/summary-checkpoint-storage";
 import { readVerifiedCheckpointIdentity } from "./turn-materializer.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import {
-  artifactReadToken,
-  memoizeArtifactRead,
-  recordStorageWork,
-} from "./storage-transaction.js";
+import { sessionReadToken, memoizeSessionRead } from "../session-read-cache.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 import { filePath as path } from "@noobot/path-resolver";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { assertStorageBatchSucceeded } from "./storage-batch-results.js";
 
 function readCheckpointIdentity(options, index, previousCheckpointHash) {
-  return memoizeArtifactRead(
+  return memoizeSessionRead(
     JSON.stringify([
       "checkpointIdentity",
       options.session.sessionId,
@@ -74,13 +71,13 @@ function identitySourceSignature(session) {
 
 async function readCheckpointIdentitySource(options) {
   const { session } = options;
-  const cached = await memoizeArtifactRead(
+  const cached = await memoizeSessionRead(
     JSON.stringify(["checkpointIdentitySource", session.sessionId]),
     path.join(options.sessionDir, SESSION_ARTIFACT_FILE_NAMES.session),
     () => ({}),
   );
   const signature = identitySourceSignature(session);
-  const token = artifactReadToken();
+  const token = sessionReadToken();
   if (token !== undefined && cached.token === token && cached.signature === signature) {
     recordStorageWork("checkpointIdentitySourceReuses");
     const resolve = cached.resolve;

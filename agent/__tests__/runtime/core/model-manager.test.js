@@ -8,8 +8,10 @@ import assert from "node:assert/strict";
 
 import {
   resolveLlmForTurn,
+  createModelActivity,
   createStreamingCallbacks,
 } from "../../../src/models/runtime/model-manager.js";
+import { ACTIVITY_KIND, MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { resolveCurrentModelInfo } from "../../../src/models/runtime/current-model-info.js";
 import {
   beginAssistantMessageEventStream,
@@ -100,6 +102,21 @@ test("streaming callbacks require an active model message stream", () => {
   const runtime = createBoundModelRuntime("model-draft");
   const [callback] = createStreamingCallbacks({ onEvent() {} }, runtime);
   assert.throws(() => callback.handleLLMNewToken("hello"), /active model message stream/);
+});
+
+test("model activity commits a JSON payload with only the supplied metadata", async () => {
+  const runtime = createBoundModelRuntime("model-activity");
+  beginAssistantMessageEventStream(runtime, { turn: 0 });
+  const activity = createModelActivity({ onEvent() {} }, runtime, {
+    activityKind: ACTIVITY_KIND.MAIN_MODEL_ANALYSIS,
+    activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
+    purpose: "with_tools",
+  });
+
+  const { payload } = await activity.complete("Analysis complete");
+  assert.equal(payload.text, "Analysis complete");
+  assert.equal(payload.purpose, "with_tools");
+  assert.deepEqual(payload, JSON.parse(JSON.stringify(payload)));
 });
 
 test("resolveLlmForTurn should switch model by runtimeModel and emit model_switched", () => {

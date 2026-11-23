@@ -99,8 +99,32 @@ export function createTurnReplacementCommit({
   });
 }
 
+const REPLACEMENT_FACT_FIELDS = [
+  "commandId",
+  "committedAggregateVersion",
+  "replacedTurnScopeIds",
+  "replacementDialogProcessId",
+  "replacementTurnScopeId",
+  "replacementUserMessageUid",
+  "requestHash",
+  "committedAt",
+];
+const TOMBSTONE_FIELDS = new Set([...REPLACEMENT_FACT_FIELDS, "turnScopeId", "sequence"]);
+
+export function projectTurnReplacementTombstone(commit, { turnScopeId, sequence }) {
+  return {
+    ...Object.fromEntries(REPLACEMENT_FACT_FIELDS.map((field) => [field, commit[field]])),
+    replacedTurnScopeIds: [...commit.replacedTurnScopeIds],
+    turnScopeId,
+    sequence,
+  };
+}
+
 export function collectTurnReplacementTombstoneErrors(replacement, lifecycleSequence) {
-  const errors = [];
+  if (!isPlainObject(replacement)) return ["invalid_replacement_tombstone"];
+  const errors = Object.keys(replacement)
+    .filter((field) => !TOMBSTONE_FIELDS.has(field))
+    .map((field) => `unknown_replacement_field:${field}`);
   const turnScopeId = replacement?.turnScopeId;
   const replacementTurnScopeId = replacement?.replacementTurnScopeId;
   const replacedTurnScopeIds = Array.isArray(replacement?.replacedTurnScopeIds)

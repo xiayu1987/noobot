@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { executeEmptySessionCleanup } from "../helpers/session-services.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -69,7 +70,10 @@ test("a session deleted during a running turn rejects later lifecycle commits wi
     assert.equal(target.applied, true);
     assert.equal(sibling.applied, true);
 
-    await session.deleteSessionBranch({ userId: USER_ID, sessionIds: [TARGET_SESSION_ID] });
+    await session.deleteSessionBranch(
+      { userId: USER_ID, sessionIds: [TARGET_SESSION_ID] },
+      executeEmptySessionCleanup,
+    );
 
     const rejected = await session.applyTurnLifecycleEvent(
       processingEvent(TARGET_SESSION_ID, target.dialogProcessId),
@@ -77,9 +81,13 @@ test("a session deleted during a running turn rejects later lifecycle commits wi
     assert.deepEqual(rejected, { applied: false, reason: SESSION_DELETED_REASON });
     assert.equal(await pathExists(scopes[TARGET_SESSION_ID].sessionDir), false);
     await assert.rejects(
-      session.getSessionTurns({
+      session.getSessionTurnMessagePage({
         userId: USER_ID,
         sessionId: TARGET_SESSION_ID,
+        dialogProcessId: target.dialogProcessId,
+        turnScopeId: TURN_SCOPE_ID,
+        cursor: null,
+        limit: 1,
         persistenceScope: null,
       }),
       { code: "SESSION_DELETED" },

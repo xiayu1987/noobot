@@ -13,6 +13,7 @@ import {
   readImmutableListProjection,
   upgradeImmutableListProjection,
 } from "../../src/session/session-artifact-session/immutable-list-projection.js";
+import { immutableListProjectionSource } from "../../src/session/session-artifact-session/immutable-message-preview.js";
 import { resetFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 
 async function fixture(t) {
@@ -43,7 +44,7 @@ test("retiring a duplicate list projection preserves facts and old snapshots and
   assert.deepEqual(await store.get(current, "metadata", "facts"), facts);
   assert.deepEqual(await store.get(previous, "metadata", "listProjection"), projection);
   assert.deepEqual(
-    await readImmutableListProjection((collection, key) => store.get(current, collection, key)),
+    await readImmutableListProjection(immutableListProjectionSource(store, current)),
     { messageCount: 0, lastMessage: null },
   );
   const head = await readFile(store.headPath);

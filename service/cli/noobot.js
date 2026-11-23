@@ -12,6 +12,7 @@ import {
 } from "@noobot/session-protocol/sessions-summary";
 import { resolveConfiguredSuperUserId, SUPER_ADMIN_ROLE } from "#agent/utils";
 import { createHeadlessRuntime } from "../bootstrap/create-headless-runtime.js";
+import { acquireWorkspaceStorageLock } from "noobot-agent/workspace-session-storage";
 import { createInProcessChatTransport } from "../bootstrap/create-in-process-chat-transport.js";
 import { readCliAttachments } from "./attachments.js";
 import { CLI_ACTION, CLI_USAGE, CliUsageError, parseCliArgs } from "./cli-args.js";
@@ -150,8 +151,9 @@ export async function runCli({
     cwd: serviceRoot,
     startupSource: "cli",
   });
+  const { appDependencies, connectorAccessPort } = runtime;
+  const workspaceLock = await acquireWorkspaceStorageLock(appDependencies.workspaceRootPath());
   try {
-    const { appDependencies, connectorAccessPort } = runtime;
     const authInfo = resolveCliAuthInfo({
       userId: invocation.userId,
       superUserId: resolveConfiguredSuperUserId(appDependencies.getGlobalConfig()),
@@ -181,7 +183,15 @@ export async function runCli({
     streams.stderr.write(`noobot: ${error.message}\n`);
     return CLI_EXIT_CODE.USAGE;
   } finally {
-    await runtime.releaseConnectors();
-    await flushJsonLineBatches();
+    try {
+      await appDependencies.getBot().close();
+    } finally {
+      try {
+        await runtime.releaseConnectors();
+        await flushJsonLineBatches();
+      } finally {
+        await workspaceLock.close();
+      }
+    }
   }
 }

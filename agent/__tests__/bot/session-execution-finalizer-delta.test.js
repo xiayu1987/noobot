@@ -109,6 +109,7 @@ function harness({ durableMessages = [], retainedMessages = [], promotionSources
           scoped(message),
           writes.length,
           `test-content-${message.messageUid}-${writes.length}`,
+          1,
         ),
       );
     },
@@ -155,8 +156,7 @@ function harness({ durableMessages = [], retainedMessages = [], promotionSources
       dispatchRuntime: runtime,
       userMessageUid: "sm_user",
       async getSessionTurns() {
-        effects.push("result");
-        return Array.from(durable.values());
+        assert.fail("finalization must not read the complete durable message history");
       },
       finalizeRunSession: (payload) => finalizer.finalizeRunSession(payload),
       userId: "u1",
@@ -177,7 +177,7 @@ function harness({ durableMessages = [], retainedMessages = [], promotionSources
   return { runtime, durable, writes, effects, finish, listener };
 }
 
-test("finalization flushes only the active tail before reading the complete durable result", async () => {
+test("finalization flushes only the active tail and returns its scope without reading history", async () => {
   const prefix = Array.from({ length: 1024 }, (_, index) =>
     scoped({
       messageUid: `sm_prefix_${index}`,
@@ -204,12 +204,10 @@ test("finalization flushes only the active tail before reading the complete dura
     h.writes.map((message) => message.messageUid),
     ["sm_final"],
   );
-  assert.deepEqual(
-    result.messages.map((message) => message.messageUid),
-    [...prefix.map((message) => message.messageUid), "sm_final"],
-  );
-  assert.ok(h.effects.indexOf("messages") < h.effects.indexOf("result"));
-  assert.ok(h.effects.indexOf("result") < h.effects.indexOf("memory"));
+  assert.deepEqual(result.messageSource, identity);
+  assert.equal(Object.hasOwn(result, "messages"), false);
+  assert.equal(h.durable.size, prefix.length + 2);
+  assert.ok(h.effects.indexOf("messages") < h.effects.indexOf("memory"));
   assert.deepEqual(h.runtime.currentTurnMessages.readPendingChanges().entries, []);
 });
 
@@ -232,10 +230,8 @@ test("retained messages keep durable ordering and only changed summary marks are
     ["sm_retained", "sm_final"],
   );
   assert.equal(h.durable.get("sm_retained").summarized, true);
-  assert.deepEqual(
-    result.messages.map((message) => message.messageUid),
-    ["sm_old", "sm_retained", "sm_final"],
-  );
+  assert.deepEqual(result.messageSource, identity);
+  assert.deepEqual(Array.from(h.durable.keys()), ["sm_old", "sm_retained", "sm_final"]);
 });
 
 test("completed tool summary marks are durably written through the canonical store", async () => {
@@ -278,7 +274,8 @@ test("an existing durable UID can change summary state without a final assistant
     h.writes.map((item) => [item.messageUid, item.summarized]),
     [["sm_existing", true]],
   );
-  assert.equal(result.messages[0].summarized, true);
+  assert.deepEqual(result.messageSource, identity);
+  assert.equal(h.durable.get("sm_existing").summarized, true);
 });
 
 test("unchanged retained messages are not rewritten when the final assistant is added", async () => {
@@ -295,10 +292,8 @@ test("unchanged retained messages are not rewritten when the final assistant is 
     h.writes.map((item) => item.messageUid),
     ["sm_final"],
   );
-  assert.deepEqual(
-    result.messages.map((item) => item.messageUid),
-    ["sm_retained", "sm_final"],
-  );
+  assert.deepEqual(Array.from(h.durable.keys()), ["sm_retained", "sm_final"]);
+  assert.deepEqual(result.messageSource, identity);
 });
 
 for (const checkpoint of [false, true]) {
@@ -316,7 +311,8 @@ for (const checkpoint of [false, true]) {
     if (!checkpoint) h.runtime.currentTurnMessages.push(source);
     h.runtime.currentTurnMessages.push(finalMessage());
     const result = await h.finish();
-    const final = result.messages.find((message) => message.messageUid === "sm_final");
+    const final = h.durable.get("sm_final");
+    assert.deepEqual(result.transferEnvelopes, final.transferEnvelopes);
     assert.equal(
       final.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
       "att-generated",
@@ -356,8 +352,8 @@ for (const checkpoint of [false, true]) {
     });
     if (!checkpoint) h.runtime.currentTurnMessages.push(source);
     h.runtime.currentTurnMessages.push(finalMessage());
-    const result = await h.finish();
-    const final = result.messages.find((message) => message.messageUid === "sm_final");
+    await h.finish();
+    const final = h.durable.get("sm_final");
     assert.equal(final.attachments[0].attachmentId, "att-ordinary");
     assert.equal(final.attachments[0].owner.type, "plugin");
     assert.equal("raw" in final.attachments[0], false);
@@ -386,11 +382,9 @@ test("transferred attachment identities are removed while independent attachment
       mimeType: "image/png",
     })),
   });
-  const result = await h.finish();
+  await h.finish();
   assert.deepEqual(
-    result.messages
-      .find((item) => item.messageUid === "sm_final")
-      .attachments.map((item) => item.attachmentId),
+    h.durable.get("sm_final").attachments.map((item) => item.attachmentId),
     ["independent"],
   );
 });

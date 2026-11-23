@@ -86,9 +86,26 @@ test("message delta refreshes the display projection with live activity timeline
     assert.equal(display.messages.length, 1);
     assert.equal(display.messages[0].presentationMessageId, "presentation-live");
     assert.equal(Object.hasOwn(display.messages[0], "thinkingDetailCount"), false);
-    assert.equal(countCanonicalThinkingDetailEvents(display.messages[0]), 1);
-    assert.equal(display.messages[0].activityTimeline.length, 1);
-    assert.equal(display.messages[0].activityTimeline[0].eventId, "guidance-analysis:live");
+    assert.equal(display.messages[0].hasThinkingDetails, true);
+    assert.equal(Object.hasOwn(display.messages[0], "activityTimeline"), false);
+    const { turnScopeId, dialogProcessId } = messages[0];
+    const detail = await runtime.sessionCrudService.getSessionThinkingDetail({
+      userId,
+      sessionId: "live",
+      turnScopeId,
+      dialogProcessId,
+      cursor: null,
+      limit: 1,
+    });
+    assert.equal(detail.exists, true);
+    assert.equal(detail.messageCount, 1);
+    assert.equal(detail.nextCursor, null);
+    assert.equal(detail.messages[0].presentationMessageId, "presentation-live");
+    assert.equal(countCanonicalThinkingDetailEvents(detail.messages[0]), 1);
+    assert.deepEqual(
+      detail.messages[0].activityTimeline.map(({ eventId, text }) => ({ eventId, text })),
+      [{ eventId: "guidance-analysis:live", text: "analysis in progress" }],
+    );
   });
 });
 

@@ -5,7 +5,11 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readCommittedIndex, forbidRecordReads } from "./helpers/immutable-record-reads.js";
+import {
+  readCommittedIndex,
+  forbidRecordReads,
+  forbidMutationBodyReads,
+} from "./helpers/immutable-record-reads.js";
 import { mkdtemp, rm, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -19,7 +23,7 @@ import {
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { openImmutableSessionReader } from "../../src/session/session-artifact-session/immutable-session-reader.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
 import { registerDialogOrderMessage } from "../../src/session/entities/dialog-order-entity.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import { upgradeImmutableMessageTailIndex } from "../../src/session/session-artifact-session/immutable-message-tail-index-upgrade.js";
@@ -79,6 +83,23 @@ async function fixture(t, messages, { aggregateVersion = 0, commandReceipts = []
 }
 const deletion = (scope, commandId = "delete") => ({
   messageDeletion: { anchor: { turnScopeId: scope }, commandId, expectedAggregateVersion: 0 },
+});
+
+test("deleting the tail reads only the retained title prefix and no removed body", async (t) => {
+  const title = "12345678901234567890";
+  const { store, open, commit } = await fixture(t, [
+    { ...message("keep"), content: title + "body".repeat(50000) },
+    { ...message("drop"), content: "removed ".repeat(25000) },
+  ]);
+  setFsAdapter(await forbidMutationBodyReads(store, "keep", "drop"));
+  try {
+    await commit(deletion("drop"), "delete");
+    const reader = await open();
+    assert.equal((await reader.readMetadata({ includeAutoTitle: true })).autoTitle, title);
+    assert.equal(await reader.readMessage("drop"), null);
+  } finally {
+    resetFsAdapter();
+  }
 });
 
 test("deletion protocol rejects ambiguous anchors and unknown fields", () => {
@@ -481,6 +502,48 @@ test("interleaved deletion reports affected scopes in their first occurrence ord
   assert.deepEqual(result.result.messageDeletion.receipt.result.deletedTurnScopeIds, ["a", "b"]);
 });
 
+test("suffix deletion preserves only bindings whose messages survive", async (t) => {
+  const { commit, open } = await fixture(t, [
+    message("retained", "a", "d"),
+    message("anchor", "b", "d"),
+    message("removed", "a", "d"),
+  ]);
+  const bind = (messageUid, expectedAggregateVersion) => ({
+    attachmentBinding: {
+      userId: "u1",
+      sessionId: "s1",
+      turnScopeId: "a",
+      messageUid,
+      commandId: `bind-${messageUid}`,
+      expectedAggregateVersion,
+      attachments: [
+        {
+          attachmentId: messageUid,
+          sessionId: "s1",
+          attachmentSource: "user",
+          name: "input.txt",
+          mimeType: "text/plain",
+        },
+      ],
+    },
+  });
+  await commit(bind("retained", 0), "keep-binding");
+  await commit(bind("removed", 1), "drop-binding");
+  await using oldReader = await open();
+  await commit(
+    { messageDeletion: { ...deletion("b").messageDeletion, expectedAggregateVersion: 2 } },
+    "delete",
+  );
+  await using reader = await open();
+  assert.ok(await oldReader.readCommand("bind-removed"));
+  assert.equal(await reader.readCommand("bind-removed"), null);
+  assert.ok(await reader.readCommand("bind-retained"));
+  assert.equal(
+    (await commit(bind("retained", 0), "retry-binding")).result.attachmentBinding.deduplicated,
+    true,
+  );
+});
+
 test("interleaved dialogs preserve display tail ordering through deletion and append", async (t) => {
   const { store, commit } = await fixture(t, [
     message("a1", "a1", "a"),
@@ -650,7 +713,7 @@ test("mutation projection preserves the precise removed suffix of a partially re
   assert.equal(projection.generation, reader.generation);
   assert.equal(projection.baseAggregateVersion, 0);
   assert.equal(projection.metadata.aggregateVersion, 1);
-  assert.deepEqual(new Set(projection.deletedMessageUids), new Set(["b1", "a2"]));
+  assert.deepEqual(projection.messageSuffix, { firstOrdinal: 2, previousMessageCount: 3 });
   assert.deepEqual(projection.messages, []);
   assert.deepEqual(new Set(projection.turns.map((entry) => entry.key)), new Set(["a", "b"]));
   assert.ok(projection.turns.every((entry) => entry.value === null));

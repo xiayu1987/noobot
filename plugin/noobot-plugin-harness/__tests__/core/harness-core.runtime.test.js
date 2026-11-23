@@ -14,6 +14,7 @@ import { createAgentContextEnvelope } from "@noobot/context-protocol";
 import {
   createTestHookContext,
   createTestHookManager as createAgentHookManager,
+  createTestResolveModelMessages,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
 
@@ -65,6 +66,11 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
     },
   };
 
+  await hookManager.emit("agent.before_context_build", {
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp1",
+  });
   await hookManager.emit(
     "agent.after_context_build",
     createTestHookContext(
@@ -112,6 +118,46 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
   );
   assert.equal(snapshot.userId, "u1");
   assert.equal(snapshot.payload.historyMessageCount, 1);
+});
+
+test("harness admits a stopped-snapshot continuation without context-build hooks", async (t) => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
+  t.after(() => fs.rm(basePath, { recursive: true, force: true }));
+  const hookManager = createAgentHookManager();
+  registerHarnessCore(
+    { hookManager },
+    {
+      planningGuidanceMode: "inject",
+      basePath,
+      resolveModelMessages: createTestResolveModelMessages(),
+    },
+  );
+  const ctx = {
+    userId: "u-resume",
+    sessionId: "s-resume",
+    parentSessionId: "s-parent",
+    dialogProcessId: "dp-continuation",
+    resumeFromStoppedSnapshot: true,
+  };
+  await hookManager.emit("agent.before_turn", { ...ctx });
+  await hookManager.emit("agent.before_llm_call", { ...ctx });
+  await hookManager.emit("agent.on_abort", { ...ctx, error: new Error("stopped") });
+  const runDir = path.join(
+    basePath,
+    "runtime",
+    "plugin-data",
+    "harness",
+    "runs",
+    ctx.dialogProcessId,
+  );
+  const manifest = JSON.parse(await fs.readFile(path.join(runDir, "harness-run.json"), "utf8"));
+  assert.equal(manifest.status, "abort");
+  assert.equal(manifest.sessionId, ctx.sessionId);
+  assert.equal(manifest.parentSessionId, ctx.parentSessionId);
+  assert.match(
+    await fs.readFile(path.join(runDir, "events.jsonl"), "utf8"),
+    /agent\.before_llm_call/,
+  );
 });
 
 test("harness plugin emits hook summary via client emitter by default", async () => {
@@ -214,6 +260,7 @@ test("harness plugin deletes related run records on after_session_delete", async
     { planningGuidanceMode: "inject", basePath, trace: false, promptPolicy: false },
   );
   await hookManager.emit("service.after_session_delete", {
+    deletionKey: '["s-delete"]',
     userId: "u-cleanup",
     sessionId: "s-delete",
     deletedSessionIds: ["s-delete"],
@@ -264,6 +311,7 @@ test("harness plugin deletes workflow child run records by manifest.parentSessio
     { planningGuidanceMode: "inject", basePath, trace: false, promptPolicy: false },
   );
   await hookManager.emit("service.after_session_delete", {
+    deletionKey: '["s-delete"]',
     userId: "u-cleanup-parent",
     sessionId: "root-session-delete",
     deletedSessionIds: ["root-session-delete"],

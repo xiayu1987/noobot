@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdtemp, open, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
@@ -296,11 +296,6 @@ for (const stage of ["before-head", "after-head", "before-response"]) {
         committed ? "after" : "before",
       );
       assert.equal(await reopened.get(initial, "messages", "message"), "before");
-      if (stage === "before-response") {
-        await assert.rejects(readFile(store.lockPath), { code: "ENOENT" });
-      } else {
-        await utimes(store.lockPath, new Date(0), new Date(0));
-      }
       const recovered = await reopened.commit(request);
       assert.equal(recovered.generation, 2);
       assert.equal(recovered.replayed, committed);

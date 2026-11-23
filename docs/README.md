@@ -31,12 +31,11 @@ Superseded task records, audits, and measurements are available in Git history.
 - [上下文协议 / Context protocol](../context-protocol/README.md)
 - [插件协议 / Plugin protocol](../plugin-protocol/README.md)
 - [工作区协议 / Workspace protocol](../workspace-protocol/README.md)
-- [不可变会话维护 / Immutable Session maintenance](../agent/docs/immutable-session-maintenance.md)
+- [会话存储架构 / Session storage architecture](session-storage-architecture.md)
 - [前端架构 / Frontend architecture](../client/noobot-chat/src/README.md)
 
 ## 测试 / Testing
 
 - [浏览器协议 E2E 运行 / Browser protocol E2E](../client/noobot-chat/tests/e2e/protocol/README.md)
 - [浏览器场景索引 / Browser scenario index](../client/noobot-chat/tests/e2e/protocol/specs/README.md)
-- [混合会话性能验收 / Mixed-session performance](../scripts/e2e-docker/PERFORMANCE.md)
 - [模型访问测试 / Model access tester](../agent/scripts/model-access-test/README.md)

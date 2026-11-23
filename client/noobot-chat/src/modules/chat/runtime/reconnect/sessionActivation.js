@@ -6,7 +6,7 @@
 import { findSessionByAnyId as findSessionByAnyIdInList } from "../../model/sessionIdentity.js";
 
 export function isCurrentActiveSession(activeSession, sessionId) {
-  return activeSession !== undefined && activeSession.sessionId === sessionId;
+  return activeSession != null && activeSession.sessionId === sessionId;
 }
 
 export async function ensureReconnectSessionActive({

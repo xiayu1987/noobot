@@ -82,6 +82,7 @@ function createRejectingHandler() {
   const { sent, sendEvent } = createRecorder();
   const closed = [];
   const handler = createMessageHandler({
+    runNewOperation: (operation) => operation(),
     state: {},
     authInfo: { userId: "receipt-owner" },
     webSocket: { close: (...args) => closed.push(args) },

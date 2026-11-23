@@ -8,6 +8,18 @@ import {
   decodeImmutableSessionHead,
   immutableStorageError,
 } from "@noobot/session-protocol/immutable-storage";
+import {
+  PARTITION_JOURNAL_FRAME,
+  PARTITION_JOURNAL_HEAD_FILE,
+  decodePartitionJournalHead,
+  partitionJournalError,
+} from "@noobot/session-protocol/partition-journal";
+import {
+  readPartitionAuthorityPublication,
+  readSessionStorageAuthorityFacts,
+  resolveSessionStorageAuthority,
+} from "@noobot/session-protocol/session-reader";
+import { lstat } from "node:fs/promises";
 import { requireSessionLocationResolver } from "@noobot/session-protocol";
 import path from "node:path";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
@@ -24,15 +36,7 @@ import { text } from "@noobot/shared/value";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { readFilePrefix } from "@noobot/shared/read-file-prefix";
 import { readSessionStore } from "./session-store-reader.js";
-
-function userRootOf({ workspaceRoot, userId }) {
-  const normalizedWorkspaceRoot = text(workspaceRoot);
-  const normalizedUserId = text(userId);
-  if (!normalizedWorkspaceRoot || !normalizedUserId) {
-    throw new TypeError("workspace session location requires workspaceRoot and userId");
-  }
-  return path.join(path.resolve(normalizedWorkspaceRoot), normalizedUserId);
-}
+import { resolveSessionEventWorkspace } from "./session-publication.js";
 
 export async function readWorkspaceSessionTree(userRoot) {
   const file = path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
@@ -52,7 +56,7 @@ export async function resolveWorkspaceSessionLocation({
 }) {
   const normalizedSessionId = text(sessionId);
   if (!normalizedSessionId) throw new TypeError("workspace session location requires sessionId");
-  const userRoot = userRootOf({ workspaceRoot, userId });
+  const userRoot = resolveSessionEventWorkspace({ workspaceRoot, userId });
   const tombstones = await readWorkspaceSessionTombstones(userRoot);
   if (Object.hasOwn(tombstones, normalizedSessionId)) return { deleted: true };
   const location =
@@ -91,6 +95,26 @@ async function locateTreeSession(userRoot, normalizedSessionId, tombstones) {
 }
 
 async function requirePersistedSessionDir(sessionDir, sessionId) {
+  const facts = await readSessionStorageAuthorityFacts({
+    stat: (file) => lstat(path.join(sessionDir, file)),
+    readPrefix: (file, max) => readFilePrefix(path.join(sessionDir, file), max),
+  });
+  if (resolveSessionStorageAuthority(facts) === "partition") {
+    const { head } = await readPartitionAuthorityPublication(facts.migration, async (directory) =>
+      decodePartitionJournalHead(
+        await readFilePrefix(
+          path.join(sessionDir, ...directory, PARTITION_JOURNAL_HEAD_FILE),
+          PARTITION_JOURNAL_FRAME.controlBytes + 1,
+        ),
+      ),
+    );
+    if (head.sessionId !== sessionId)
+      throw partitionJournalError(
+        "SESSION_STORAGE_CORRUPT",
+        "Published partition head has the wrong session identity",
+      );
+    return;
+  }
   let raw;
   try {
     raw = (

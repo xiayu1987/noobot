@@ -55,7 +55,8 @@ function requireParentAbortReason(signal = null) {
   return error;
 }
 
-async function invokeHandler({ registration, point, context, parentSignal }) {
+async function invokeHandler({ registration, descriptor, context, parentSignal }) {
+  const { point, drainOnAbort } = descriptor;
   const startedAt = Date.now();
   const timeoutMs = registration.timeoutMs;
   const abortScope = createLinkedAbortScope({
@@ -64,17 +65,17 @@ async function invokeHandler({ registration, point, context, parentSignal }) {
     createTimeoutReason: () =>
       createHookAbortError({ point, handlerId: registration.id, timeoutMs }),
   });
+  const pending = Promise.resolve().then(() => {
+    if (drainOnAbort) abortScope.signal.throwIfAborted();
+    return registration.handler(context, {
+      protocolVersion: HOOK_PROTOCOL_VERSION,
+      point,
+      handlerId: registration.id,
+      signal: abortScope.signal,
+    });
+  });
   try {
-    const value = await abortScope.race(
-      Promise.resolve().then(() =>
-        registration.handler(context, {
-          protocolVersion: HOOK_PROTOCOL_VERSION,
-          point,
-          handlerId: registration.id,
-          signal: abortScope.signal,
-        }),
-      ),
-    );
+    const value = await abortScope.race(pending);
     return Object.freeze({
       protocolVersion: HOOK_PROTOCOL_VERSION,
       point,
@@ -85,6 +86,7 @@ async function invokeHandler({ registration, point, context, parentSignal }) {
       error: null,
     });
   } catch (error) {
+    if (drainOnAbort && abortScope.signal.aborted) await Promise.allSettled([pending]);
     const status =
       error?.code === "HOOK_TIMEOUT"
         ? HOOK_OUTCOME_STATUS.TIMED_OUT
@@ -125,6 +127,10 @@ export function createHookManager({
     if (!isFunction(handler)) throw new TypeError("hook handler is required");
     const id = text(options?.id);
     if (!id) throw new TypeError(`hook handler id is required: ${descriptor.point}`);
+    const once = options?.once === true;
+    if (once && descriptor.requiresReplayableHandlers) {
+      throw new TypeError(`hook point requires replayable handlers: ${descriptor.point}`);
+    }
     const handlers = registry.get(descriptor.point) || [];
     if (handlers.some((registration) => registration.id === id)) {
       throw new Error(`duplicate hook handler id: ${descriptor.point}#${id}`);
@@ -135,7 +141,7 @@ export function createHookManager({
       id,
       point: descriptor.point,
       handler,
-      once: options?.once === true,
+      once,
       priority: Number.isFinite(Number(options?.priority)) ? Number(options.priority) : 0,
       timeoutMs:
         Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
@@ -173,16 +179,32 @@ export function createHookManager({
     registry.delete(requireHookPointDescriptor(point).point);
   }
 
-  async function emit(point, context = {}, { signal = null } = {}) {
+  async function emit(point, context = {}, { signal = null, handlerIds } = {}) {
     const descriptor = requireHookPointDescriptor(point);
-    const registrations = (registry.get(descriptor.point) || []).slice();
+    const available = list(descriptor.point);
+    const registrations =
+      handlerIds === undefined
+        ? available
+        : handlerIds.map((id) => {
+            const registration = available.find((candidate) => candidate.id === id);
+            if (!registration) {
+              throw Object.assign(
+                new Error(`Required hook handler is unavailable: ${point}#${id}`),
+                {
+                  code: "HOOK_HANDLER_UNAVAILABLE",
+                  statusCode: 503,
+                },
+              );
+            }
+            return registration;
+          });
     for (const registration of registrations) {
       if (registration.once) off(descriptor.point, registration.id);
     }
     const runRegistration = async (registration) => {
       const outcome = await invokeHandler({
         registration,
-        point: descriptor.point,
+        descriptor,
         context,
         parentSignal: signal,
       });

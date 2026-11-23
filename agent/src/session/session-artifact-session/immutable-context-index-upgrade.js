@@ -10,8 +10,12 @@ import { immutableStorageError } from "./immutable-object-store.js";
 import { isContextSourceMessageCandidate } from "@noobot/context-protocol/assembly/source";
 import { IMMUTABLE_CONTEXT_INDEX_VERSION } from "@noobot/session-protocol/immutable-storage-graph";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { updateImmutableContextSource } from "./immutable-context-source-index.js";
+import {
+  seedImmutableContextCandidates,
+  updateImmutableContextSource,
+} from "./immutable-context-source-index.js";
 import { isDeepStrictEqual } from "node:util";
+import { seedImmutableContextDirectory } from "./immutable-context-directory.js";
 
 async function changedIndexEntries(plan, get) {
   const changes = [];
@@ -46,7 +50,11 @@ async function indexContextSourceBatch({ store, plan, turn, entries }) {
       message.sessionId !== store.sessionId
     )
       throw immutableStorageError("Context index upgrade message ownership mismatch");
-    if (isContextSourceMessageCandidate(message)) candidates.push(entries[position]);
+    if (isContextSourceMessageCandidate(message))
+      candidates.push([
+        immutableOrderKey(values[position].value.turnOrdinal),
+        entries[position][1],
+      ]);
   }
   if (candidates.length)
     await updateImmutableContextSource(store, plan, turn.turnScopeId, candidates);
@@ -59,15 +67,24 @@ export async function upgradeImmutableContextIndexes({ sessionDir, sessionId }) 
     expectedGeneration: snapshot.generation,
     operationId: `upgrade-context-indexes:${snapshot.generation}`,
     input: {},
-    prepare: async ({ snapshot: pinned, get }) => {
+    prepare: async ({ snapshot: pinned, get, getMany }) => {
       const facts = await get("metadata", "facts");
       if (!facts) throw immutableStorageError("Missing session facts during index upgrade");
-      const plan = new ImmutableSessionChanges(get);
-      for (const collection of ["contextSources", "dialogTurns", "dialogOrder"])
+      const plan = new ImmutableSessionChanges(get, { getMany });
+      for (const collection of [
+        "contextSources",
+        "contextTurns",
+        "contextDialogRanges",
+        "contextCandidateRanges",
+        "dialogTurns",
+        "dialogOrder",
+      ])
         for await (const [key] of store.entries(pinned, collection)) plan.remove(collection, key);
+      seedImmutableContextDirectory(plan);
       for await (const [, dialog] of store.entries(pinned, "dialogs")) {
         plan.set("dialogOrder", immutableOrderKey(dialog.dialogOrdinal), dialog.dialogProcessId);
         plan.set("dialogTurns", dialog.dialogProcessId, { count: 0, root: null });
+        plan.set("contextTurns", dialog.dialogProcessId, { count: 0, root: null });
       }
       const turns = [];
       for await (const [, turn] of store.entries(pinned, "turns")) turns.push(turn);
@@ -83,7 +100,7 @@ export async function upgradeImmutableContextIndexes({ sessionDir, sessionId }) 
           await store.objects.putValue(turn.turnScopeId),
         );
         plan.set("dialogTurns", turn.dialogProcessId, { count, root });
-        plan.set("contextSources", turn.turnScopeId, { count: 0, root: null });
+        seedImmutableContextCandidates(plan, turn.turnScopeId);
         await rebuildTurnContextSources(store, plan, turn);
       }
       plan.set("metadata", "facts", {

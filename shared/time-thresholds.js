@@ -103,6 +103,10 @@ export const DEFAULT_TIME_THRESHOLDS = deepFreeze({
     terminalResolutionRetryDelayMs: 250,
   },
 
+  sessionPageSnapshots: {
+    idleMs: MINUTE_MS,
+    maxAgeMs: TIME_TIERS.fiveMinutesMs,
+  },
   memory: {
     summaryTimeoutMs: TIME_TIERS.fiveMinutesMs,
   },
@@ -167,7 +171,6 @@ export const DEFAULT_TIME_THRESHOLDS = deepFreeze({
     tmpFileMaxAgeMs: TIME_TIERS.oneDayMs,
     tmpCleanupMinIntervalMs: TIME_TIERS.fiveMinutesMs,
     cleanupGraceMs: 10 * MINUTE_MS,
-    runWriteLockStaleMs: 10 * MINUTE_MS,
     maxRunAgeDays: TIME_TIERS.thirtyDays,
     fsmCacheMaxAgeMs: 30 * MINUTE_MS,
     fsmCacheCleanupIntervalMs: TIME_TIERS.fiveMinutesMs,
@@ -192,7 +195,6 @@ export const DEFAULT_TIME_THRESHOLDS = deepFreeze({
     monotonicActionStopTimeoutMs: TIME_TIERS.hookMs,
     monotonicActionStopPollIntervalMs: 50,
     panelResizeThrottleMs: TIME_TIERS.uiThrottleMs,
-    thinkingDetailRetryDelayMs: TIME_TIERS.shortDelayMs,
     micMaxDurationSeconds: TIME_TIERS.micDurationSeconds,
     terminalTurnRetentionMs: TIME_TIERS.oneDayMs,
     admissionRetryMinDelayMs: 250,

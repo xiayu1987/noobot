@@ -42,6 +42,7 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
       bindings: { runtime: { basePath } },
     },
   };
+  await hookManager.emit("agent.before_context_build", { ...ctx });
   await hookManager.emit("agent.before_llm_call", ctx);
 
   const runDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs", "dp7");

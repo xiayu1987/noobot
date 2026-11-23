@@ -74,15 +74,15 @@ export function isTerminalHistorySourceCandidate(message) {
 }
 
 function latestInjectedMessages(messages = []) {
-  const latestByType = new Map();
+  const latestByOwnerAndType = new Map();
   (Array.isArray(messages) ? messages : []).forEach((message, index) => {
     if (isContextControlMessage(message)) return;
     const type = resolveContextInjectedMessageType(message);
     if (!type) return;
     const owner = readContextMessageField(message, "injectedBy");
-    latestByType.set(`${owner}:${type}`, { message, index });
+    latestByOwnerAndType.set(JSON.stringify([owner, type]), { message, index });
   });
-  return [...latestByType.values()]
+  return [...latestByOwnerAndType.values()]
     .sort((left, right) => left.index - right.index)
     .map(({ message }) => message);
 }

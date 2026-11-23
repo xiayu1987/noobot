@@ -5,16 +5,18 @@
  */
 import { test as base } from "@playwright/test";
 import { sanitizeUrl } from "@noobot/sanitize";
+import { createCapturedFrameLog } from "../helpers/websocket-capture.js";
 
 export const captureTest = base.extend({
   protocolCapture: async ({ page, context }, use) => {
+    const received = createCapturedFrameLog();
     const evidence = {
       console: [],
       httpRequests: [],
       httpResponses: [],
       websockets: [],
       websocketSent: [],
-      websocketReceived: [],
+      websocketReceived: received.records,
     };
     const bindPage = (target) => {
       target.on("console", (message) =>
@@ -41,24 +43,16 @@ export const captureTest = base.extend({
         evidence.httpResponses.push(record);
       });
       target.on("websocket", (socket) => {
-        evidence.websockets.push({ url: sanitizeUrl(socket.url()) });
-        socket.on("framesent", ({ payload }) =>
-          evidence.websocketSent.push({
-            atMs: performance.now(),
-            url: sanitizeUrl(socket.url()),
-            payload,
-          }),
-        );
-        socket.on("framereceived", ({ payload }) =>
-          evidence.websocketReceived.push({
-            atMs: performance.now(),
-            url: sanitizeUrl(socket.url()),
-            payload,
-          }),
-        );
+        const url = sanitizeUrl(socket.url());
+        evidence.websockets.push({ url });
+        const captureFrame = ({ payload }) =>
+          Object.freeze({ atMs: performance.now(), url, payload });
+        socket.on("framesent", (frame) => evidence.websocketSent.push(captureFrame(frame)));
+        socket.on("framereceived", (frame) => received.append(captureFrame(frame)));
       });
     };
     Object.defineProperty(evidence, "bindPage", { value: bindPage, enumerable: false });
+    Object.defineProperty(evidence, "waitForReceivedFrame", { value: received.waitForMatch });
     bindPage(page);
     context.on("page", bindPage);
     await use(evidence);

@@ -14,7 +14,7 @@ import {
   DETACHED_REQUEST_METADATA,
 } from "./detached-subsession-runner.test-helpers.js";
 
-test("detached sub-session projects finalizer messages and their transfer envelopes", async () => {
+test("detached sub-session projects the scoped result and its transfer envelopes", async () => {
   const { deps } = createDeps();
   const envelope = sourceReferenceTransfer({
     transferId: "tr-1",
@@ -33,20 +33,11 @@ test("detached sub-session projects finalizer messages and their transfer envelo
       strategy: "tool_output",
     },
   });
-  const messages = [
-    {
-      messageUid: "assistant-result",
-      role: "assistant",
-      content: "done",
-      transferEnvelopes: [envelope],
-    },
-    { messageUid: "tool-result", role: "tool", content: "dup", transferEnvelopes: [envelope] },
-  ];
   const baseRunSession = deps.sessionRunner.runSession;
   deps.sessionRunner.runSession = async (payload) => ({
     ...(await baseRunSession(payload)),
     answer: "final answer",
-    messages,
+    transferEnvelopes: [envelope],
   });
   const runner = createDetachedSubSessionRunner(deps);
 
@@ -60,6 +51,11 @@ test("detached sub-session projects finalizer messages and their transfer envelo
   });
 
   assert.equal(result.result.answer, "final answer");
-  assert.deepEqual(result.result.messages, messages);
+  assert.equal(Object.hasOwn(result.result, "messages"), false);
+  assert.deepEqual(result.result.messageSource, {
+    sessionId: "sub1",
+    dialogProcessId: "sub-dialog",
+    turnScopeId: "turn-1",
+  });
   assert.deepEqual(result.result.transferEnvelopes, [envelope]);
 });

@@ -14,7 +14,6 @@ import {
 } from "../../mock-model-service/performance-contract.mjs";
 import { PERF_ALL_TOOLS } from "../../mock-model-service/scenario.mjs";
 import { DEFAULT_TURN_THRESHOLDS } from "../../../shared/turn-thresholds.js";
-import { IMMUTABLE_CHECKPOINT_FORBIDDEN_WORK } from "@noobot/session-protocol/immutable-storage";
 import {
   HARNESS_MAIN_RELAYS,
   HARNESS_REQUIRED_EVENTS,
@@ -58,15 +57,14 @@ function sample(plan) {
       verificationMs: 1,
       queueWaitMs: 0,
       storageWork: {
-        ...Object.fromEntries(IMMUTABLE_CHECKPOINT_FORBIDDEN_WORK.map((name) => [name, 0])),
-        immutableHeadReadBytes: 800,
-        immutableHeadWriteBytes: 400,
-        immutableIndexPageReads: 20,
-        immutableObjectReads: 30,
-        immutableSegmentWrites: 1,
-        immutableSegmentSyncs: 1,
-        immutableReadBytes: 12000,
-        immutableWriteBytes: 8000,
+        partitionJournal: {
+          readBytes: 12000,
+          writeBytes: 8000,
+          controlWriteBytes: 400,
+          dataSyncs: 1,
+          publications: 1,
+          partitionOpens: 4,
+        },
       },
     })),
   };

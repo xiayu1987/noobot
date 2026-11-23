@@ -16,7 +16,7 @@ import {
 } from "@noobot/event-protocol/plugin-artifact-event";
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
 import { openImmutableSessionReader } from "../../src/session/session-artifact-session/immutable-session-reader.js";
 
 const ts = "2026-01-01T00:00:00.000Z";
@@ -80,6 +80,25 @@ async function fixture(t) {
 }
 
 const corruptions = [
+  [
+    "forged data",
+    (value) => {
+      value.data = { title: "forged" };
+    },
+  ],
+  [
+    "forged revision",
+    (value) => {
+      value.revision = 2;
+      value.operation = "replaced";
+    },
+  ],
+  [
+    "foreign event reference",
+    (value) => {
+      value.eventId = "evt_missing";
+    },
+  ],
   [
     "plugin owner",
     (value) => {
@@ -193,9 +212,82 @@ test("plugin artifact lookup is local and keeps explicit missing semantics", asy
     return get.apply(this, args);
   });
   assert.equal((await reader.readPluginArtifact(identity)).data.title, "original");
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 5);
   assert.deepEqual(calls[0].slice(1), ["pluginArtifacts", key]);
+  assert.equal(calls[1][1], "events");
+  assert.deepEqual(calls[2].slice(1), ["metadata", "session"]);
+  assert.deepEqual(calls[3].slice(1), ["metadata", "events"]);
+  assert.deepEqual(calls[4].slice(1), ["metadata", "artifactRetirement:t1"]);
   assert.equal(await reader.readPluginArtifact({ ...identity, artifactId: "missing" }), null);
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0][0], calls[1][0]);
+  assert.deepEqual(
+    calls.slice(5).map(([, collection]) => collection),
+    ["pluginArtifacts"],
+  );
+  assert.ok(calls.every(([snapshot]) => snapshot === calls[0][0]));
 });
+
+for (const [label, corrupt] of [
+  ["missing authority", () => null],
+  [
+    "foreign session",
+    (event) => {
+      event.envelope.identity.sessionId = "foreign";
+      return event;
+    },
+  ],
+  [
+    "foreign parent",
+    (event) => {
+      event.envelope.payload.parentSessionId = "foreign";
+      return event;
+    },
+  ],
+  [
+    "invalid authority ordinal",
+    (event) => {
+      event.ordinal = 0;
+      return event;
+    },
+  ],
+  [
+    "non-artifact authority",
+    (event) => {
+      event.artifact = false;
+      return event;
+    },
+  ],
+]) {
+  test(`plugin artifact read and write reject ${label} without overwriting evidence`, async (t) => {
+    const store = await fixture(t);
+    await using old = await openReader(store);
+    const projection = await old.readPluginArtifact(identity);
+    const snapshot = await store.snapshot();
+    const value = corrupt(structuredClone(await store.get(snapshot, "events", projection.eventId)));
+    await store.transact({
+      expectedGeneration: snapshot.generation,
+      operationId: "corrupt-authority",
+      input: {},
+      prepare: async () => ({
+        changes: [{ collection: "events", key: projection.eventId, value }],
+      }),
+    });
+    const before = await store.snapshot();
+    await using reader = await openReader(store);
+    await assert.rejects(reader.readPluginArtifact(identity), {
+      code: "SESSION_IMMUTABLE_STORAGE_INVALID",
+    });
+    await assert.rejects(
+      commitSessionChanges({
+        sessionDir: store.sessionDir,
+        sessionId: store.sessionId,
+        expectedGeneration: before.generation,
+        operationId: "replacement",
+        committedAt: ts,
+        changes: { artifactEvents: [artifactEvent(true)] },
+      }),
+      { code: "SESSION_IMMUTABLE_STORAGE_INVALID" },
+    );
+    assert.deepEqual(await store.snapshot(), before);
+    assert.deepEqual(await old.readPluginArtifact(identity), projection);
+  });
+}

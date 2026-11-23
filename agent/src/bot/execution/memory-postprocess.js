@@ -12,6 +12,7 @@ import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../config/constants
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { isAbortError } from "../../shared/utils/error-utils.js";
 import { isFunction } from "@noobot/shared/value";
+import { PendingOperations } from "../../shared/pending-operations.js";
 
 async function flushMemoryFailure(listener, error) {
   try {
@@ -24,8 +25,17 @@ async function flushMemoryFailure(listener, error) {
   throw error;
 }
 
+async function handleSummaryFailure(error, timedOut, recordFailure) {
+  if (isAbortError(error) && timedOut) return;
+  await recordFailure("", error);
+  throw error;
+}
+
 export class MemoryPostProcessService {
-  constructor({ globalConfig, session, memory, errorLogger, now }) {
+  constructor({ globalConfig, session, memory, errorLogger, workspaceAdmission, now }) {
+    if (!isFunction(workspaceAdmission?.run)) {
+      throw new TypeError("MemoryPostProcessService requires workspace admission");
+    }
     if (!isFunction(now)) {
       throw new TypeError("MemoryPostProcessService requires now function");
     }
@@ -33,7 +43,9 @@ export class MemoryPostProcessService {
     this.session = session;
     this.memory = memory;
     this.errorLogger = errorLogger;
+    this.workspaceAdmission = workspaceAdmission;
     this.now = now;
+    this.operations = new PendingOperations();
   }
 
   resolveMemorySummaryTimeoutMs(userConfig = {}) {
@@ -96,7 +108,16 @@ export class MemoryPostProcessService {
     });
   }
 
-  async runMemorySummarizeFlow({
+  runMemorySummarizeFlow(payload) {
+    return this.runInWorkspace(payload.userId, () => this.summarize(payload));
+  }
+
+  async drain() {
+    await this.operations.drain();
+    await this.operations.close();
+  }
+
+  async summarize({
     userId,
     sessionId,
     parentSessionId,
@@ -134,10 +155,7 @@ export class MemoryPostProcessService {
           onStageError: ({ stage, error }) => recordFailure(stage, error),
         });
       } catch (error) {
-        if (!isAbortError(error) || !memorySummaryTimedOut) {
-          await recordFailure("", error);
-          throw error;
-        }
+        await handleSummaryFailure(error, memorySummaryTimedOut, recordFailure);
       } finally {
         clearTimeout(memorySummaryTimer);
       }
@@ -162,7 +180,15 @@ export class MemoryPostProcessService {
     });
   }
 
-  async runMemoryPostProcessFlow({
+  runMemoryPostProcessFlow(payload) {
+    return this.runInWorkspace(payload.userId, () => this.capture(payload));
+  }
+
+  runInWorkspace(userId, operation) {
+    return this.operations.run(() => this.workspaceAdmission.run(userId, operation));
+  }
+
+  async capture({
     userId,
     sessionId,
     parentSessionId,
@@ -183,18 +209,17 @@ export class MemoryPostProcessService {
       persistenceScope,
     });
     try {
-      const messages = await this.session.getSessionTurns({
-        userId,
-        sessionId,
-        persistenceScope,
-      });
-      await this.memory.captureDialogToShortMemory({
-        userId,
-        sessionId,
-        parentSessionId,
-        dialogProcessId,
-        messages,
-      });
+      await this.session.withSessionDialogMessageRecords(
+        { userId, sessionId, dialogProcessId, persistenceScope },
+        (messageRecords) =>
+          this.memory.captureDialogToShortMemory({
+            userId,
+            sessionId,
+            parentSessionId,
+            dialogProcessId,
+            messageRecords,
+          }),
+      );
       emitEvent(memoryEventListener, "short_memory_captured", { sessionId, mode });
       emitEvent(memoryEventListener, "memory_summary_scheduled", { sessionId, mode: "async" });
     } catch (error) {

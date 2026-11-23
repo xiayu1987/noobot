@@ -21,6 +21,7 @@ import { WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
 import { getWorkflowDefaultSemanticPrompt } from "../../src/core/i18n.js";
 import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";
 import {
+  createExecutionResult,
   installTurnMessageEventRuntimeFixture,
   createTestHookInvocation,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
@@ -513,12 +514,7 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
             revision: 4,
             sequence: 4,
           },
-          result: {
-            answer: "done",
-            traces: [],
-            dialogProcessId: payload.strategy.dialogProcessId,
-            messages: [{ messageUid: "message-done", role: "assistant", content: "done" }],
-          },
+          result: createExecutionResult(payload.strategy),
         };
       },
     },
@@ -586,14 +582,13 @@ test("workflow plugin cleans workflow runtime dirs when session is deleted", asy
   );
   try {
     const cleanupResult = await cleanupHook.handler({
-      sessionId: "s-delete",
+      userId: "u1",
+      deletionKey: '["s-delete"]',
       deletedSessionIds: ["s-delete"],
-      remainingSessionIds: ["s-keep"],
       basePath: tempRoot,
     });
 
-    assert.deepEqual(cleanupResult.deletedRelatedSessionIds, []);
-    assert.deepEqual(cleanupResult.retainedRelatedSessionIds, []);
+    assert.equal(cleanupResult, undefined);
     await assert.rejects(
       fs.stat(path.join(tempRoot, "runtime/plugin-data/workflow/session/s-delete")),
     );

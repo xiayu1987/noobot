@@ -6,21 +6,26 @@
 import {
   createAggregateVersionConflictError,
   createMessageDeleteFingerprint,
+  createMessageDeleteResult,
   decideAggregateConcurrency,
   parseMessageDeleteRequest,
+  resolveSessionMessageSuffix,
   SESSION_COMMAND,
 } from "@noobot/session-protocol";
 import { commitIndexedTurnDeletion } from "@noobot/authoritative-state/application";
+import { artifactRetirementKey } from "@noobot/event-protocol/plugin-artifact-event";
+import { readOutboxTail } from "./immutable-outbox.js";
 import { immutableOrderKey } from "./immutable-order-key.js";
 import { immutableStorageError } from "./immutable-object-store.js";
-import { updateImmutableContextSource } from "./immutable-context-source-index.js";
 import {
-  updateImmutableTitleCandidate,
-  readImmutableIndexedTitle,
-} from "./immutable-title-index.js";
+  removeImmutableContextCandidates,
+  updateImmutableContextSource,
+} from "./immutable-context-source-index.js";
+import { requireImmutableContextIndex } from "@noobot/session-protocol/immutable-storage-graph";
+import { updateImmutableTitleCandidate } from "./immutable-title-index.js";
 import { updateImmutableToolPairs } from "./immutable-tool-pairs.js";
 import {
-  removeImmutableTurnCommands,
+  retireImmutableSuffixCommands,
   decideImmutableCommandReplay,
   writeImmutableCommand,
 } from "./immutable-command-index.js";
@@ -36,10 +41,11 @@ import {
 
 async function readPosition(plan, ordinal) {
   const uid = await plan.get("messageOrder", immutableOrderKey(ordinal));
-  const record = uid && (await plan.get("messages", uid));
+  const stored = uid && (await plan.getMetadata("messages", uid));
+  const record = stored?.value;
   if (!record || record.ordinal !== ordinal || record.message?.messageUid !== uid)
     throw immutableStorageError("Message deletion encountered an invalid committed position");
-  return record;
+  return stored;
 }
 
 export async function readFirstImmutableTurnMessage(store, plan, turnScopeId) {
@@ -48,7 +54,7 @@ export async function readFirstImmutableTurnMessage(store, plan, turnScopeId) {
     throw Object.assign(new Error("message anchor not found"), { statusCode: 404 });
   const reference = await store.index.get(turn.messageOrderRoot, immutableOrderKey(1));
   const uid = reference && (await store.objects.readValue(reference));
-  const record = uid && (await plan.get("messages", uid));
+  const record = uid && (await plan.getMetadata("messages", uid))?.value;
   if (
     !record ||
     record.turnOrdinal !== 1 ||
@@ -60,7 +66,8 @@ export async function readFirstImmutableTurnMessage(store, plan, turnScopeId) {
   return record;
 }
 
-async function removeRecord(store, plan, record) {
+async function removeRecord(store, plan, stored) {
+  const record = stored.value;
   const { message, turnOrdinal } = record;
   const turn = await plan.get("turns", message.turnScopeId);
   if (
@@ -72,7 +79,7 @@ async function removeRecord(store, plan, record) {
   const reference = await store.index.get(turn.messagesRoot, message.messageUid);
   if (
     !reference ||
-    JSON.stringify(await store.objects.readValue(reference)) !== JSON.stringify(record)
+    JSON.stringify(await store.objects.readValueMetadata(reference)) !== JSON.stringify(stored)
   )
     throw immutableStorageError("Message deletion turn and UID indexes disagree");
   const orderReference = await store.index.get(
@@ -84,7 +91,7 @@ async function removeRecord(store, plan, record) {
   await updateImmutableToolPairs(store, plan, message, null);
   await updateImmutableTitleCandidate(store, plan, record, null);
   await updateImmutableContextSource(store, plan, message.turnScopeId, [
-    [message.messageUid, null],
+    [immutableOrderKey(turnOrdinal), null],
   ]);
   const next = {
     ...turn,
@@ -106,7 +113,7 @@ async function removeRecord(store, plan, record) {
     if (next.messagesRoot !== null || next.messageOrderRoot !== null)
       throw immutableStorageError("Empty turn retains message indexes");
     plan.remove("turns", message.turnScopeId);
-    plan.remove("contextSources", message.turnScopeId);
+    await removeImmutableContextCandidates(plan, message.turnScopeId);
     plan.remove("turnOrder", immutableOrderKey(turn.turnOrdinal));
     await removeDialogTurn(store, plan, turn);
   }
@@ -131,34 +138,43 @@ async function removeDialogTurn(store, plan, turn) {
   const dialog = await plan.get("dialogs", turn.dialogProcessId);
   if (!dialog) throw immutableStorageError("Deleted dialog metadata is missing");
   plan.remove("dialogTurns", turn.dialogProcessId);
+  const context = await plan.get("contextTurns", turn.dialogProcessId);
+  if (context?.count !== 0 || context.root !== null)
+    throw immutableStorageError("Deleted dialog retains context turn memberships");
+  plan.remove("contextTurns", turn.dialogProcessId);
   plan.remove("dialogs", turn.dialogProcessId);
   plan.remove("dialogOrder", immutableOrderKey(dialog.dialogOrdinal));
 }
 
 export async function removeImmutableMessageSuffix({ store, plan, facts, anchor }) {
-  const anchorIndex = anchor.ordinal - 1;
-  if (!Number.isSafeInteger(anchorIndex) || anchorIndex < 0 || anchorIndex >= facts.messageSequence)
+  requireImmutableContextIndex(facts);
+  const suffix = resolveSessionMessageSuffix(anchor.ordinal, facts.messageSequence);
+  if (suffix === null)
     throw immutableStorageError("Message deletion anchor position is outside the session");
+  const { retainedMessageCount: anchorIndex, messageSuffix } = suffix;
   await requireImmutableMessageTailIndex(plan);
   const nextFacts = { ...facts, messageCount: anchorIndex, messageSequence: anchorIndex };
   const scopes = new Set();
   const uids = [];
   for (let ordinal = facts.messageSequence; ordinal > anchorIndex; ordinal -= 1) {
-    const record = await readPosition(plan, ordinal);
+    const stored = await readPosition(plan, ordinal);
+    const record = stored.value;
     if (ordinal === anchor.ordinal && record.message.messageUid !== anchor.message.messageUid)
       throw immutableStorageError("Message deletion anchor disagrees with global order");
     scopes.delete(record.message.turnScopeId);
     scopes.add(record.message.turnScopeId);
     uids.push(record.message.messageUid);
     await removeImmutableMessageTail(plan, nextFacts, record);
-    await removeRecord(store, plan, record);
+    await removeRecord(store, plan, stored);
   }
-  return { anchorIndex, nextFacts, turnScopeIds: [...scopes].reverse(), uids };
+  return { messageSuffix, nextFacts, turnScopeIds: [...scopes].reverse(), uids };
 }
 
 export async function removeImmutableSuffixFacts(store, plan, { turnScopeIds, uids }) {
+  const through = await readOutboxTail((...args) => plan.get(...args));
   const removedTurnScopeIds = [];
   for (const scope of turnScopeIds) {
+    plan.set("metadata", artifactRetirementKey(scope), through);
     plan.remove("lifecycle", scope);
     if ((await plan.get("turns", scope)) === null) {
       removedTurnScopeIds.push(scope);
@@ -167,7 +183,7 @@ export async function removeImmutableSuffixFacts(store, plan, { turnScopeIds, ui
   }
   await removeImmutableMessageCheckpoints(store, plan, uids);
   await removeImmutableTurnCheckpoints(store, plan, removedTurnScopeIds);
-  await removeImmutableTurnCommands(store, plan, turnScopeIds);
+  await retireImmutableSuffixCommands(store, plan, { turnScopeIds, uids });
   await prepareImmutableOutboxTurnRemoval(store, plan, { turnScopeIds });
 }
 
@@ -207,7 +223,7 @@ export async function prepareImmutableMessageDeletion({ store, plan, request, co
     command.expectedAggregateVersion,
   );
   const anchor = await readFirstImmutableTurnMessage(store, plan, command.anchor.turnScopeId);
-  const { anchorIndex, nextFacts, turnScopeIds, uids } = await removeImmutableMessageSuffix({
+  const { messageSuffix, nextFacts, turnScopeIds, uids } = await removeImmutableMessageSuffix({
     store,
     plan,
     facts,
@@ -223,26 +239,18 @@ export async function prepareImmutableMessageDeletion({ store, plan, request, co
   plan.set("metadata", "lifecycle", lifecycle.header);
   await removeImmutableSuffixFacts(store, plan, { turnScopeIds, uids });
   plan.set("metadata", "facts", nextFacts);
-  const nextMetadata = {
+  plan.set("metadata", "session", {
     ...metadata,
     aggregateVersion: concurrency.nextAggregateVersion,
     updatedAt: committedAt,
-  };
-  const autoTitle = await readImmutableIndexedTitle(store, plan);
-  if (autoTitle) nextMetadata.autoTitle = autoTitle;
-  else delete nextMetadata.autoTitle;
-  plan.set("metadata", "session", nextMetadata);
+  });
   const receipt = {
     type,
     commandId: command.commandId,
     requestHash,
     aggregateVersion: concurrency.nextAggregateVersion,
     committedAt,
-    result: {
-      deletedCount: facts.messageSequence - anchorIndex,
-      anchorIndex,
-      deletedTurnScopeIds: turnScopeIds,
-    },
+    result: createMessageDeleteResult(messageSuffix, turnScopeIds),
   };
   await writeImmutableCommand(store, plan, receipt);
   return { receipt, deduplicated: false };

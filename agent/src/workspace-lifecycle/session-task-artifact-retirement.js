@@ -28,6 +28,17 @@ async function retireTaskArtifact({ base, backupBase, sessionDir }) {
   return { path: relativePath, backupPath };
 }
 
+async function retireRootTaskArtifacts({ base, backupBase, root, retired, onSessionProcessed }) {
+  for await (const sessionDir of walkSessionManifestDirectories(path.join(base, root))) {
+    const result = await sessionMutationCoordinator.run(
+      resolveSessionArtifactMutationLock(sessionDir),
+      () => retireTaskArtifact({ base, backupBase, sessionDir }),
+    );
+    if (result) retired.push(result);
+    onSessionProcessed();
+  }
+}
+
 export async function retireSessionTaskArtifacts({
   base,
   backupBase,
@@ -39,14 +50,7 @@ export async function retireSessionTaskArtifacts({
   }
   const retired = [];
   for (const root of [WORKSPACE_LAYOUT.SESSION_DIR, ...scopedSessionRoots]) {
-    for await (const sessionDir of walkSessionManifestDirectories(path.join(base, root))) {
-      const result = await sessionMutationCoordinator.run(
-        resolveSessionArtifactMutationLock(sessionDir),
-        () => retireTaskArtifact({ base, backupBase, sessionDir }),
-      );
-      if (result) retired.push(result);
-      onSessionProcessed();
-    }
+    await retireRootTaskArtifacts({ base, backupBase, root, retired, onSessionProcessed });
   }
   return { retired };
 }

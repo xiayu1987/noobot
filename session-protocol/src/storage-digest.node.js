@@ -5,9 +5,11 @@
  */
 import { createHash, hash } from "node:crypto";
 
-export function storageDigest(serialized) {
-  return hash("sha256", serialized, "hex");
+export function storageBytesDigest(bytes) {
+  return hash("sha256", bytes, "hex");
 }
+
+export const storageDigest = storageBytesDigest;
 
 export function createStorageDigest() {
   return createHash("sha256");

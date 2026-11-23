@@ -13,10 +13,28 @@ import {
   fsStat,
 } from "../../shared/storage/fs-adapter.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
-import { readAttachIndex } from "../index-manager.js";
+import {
+  ATTACHMENT_BODY_ERROR_CODE,
+  AttachmentProtocolError,
+  assertAttachmentBelongsToScope,
+  parseAttachmentIdentity,
+} from "@noobot/attachment-protocol";
+import { listAttachmentRecords, readAttachmentRecords } from "../index-manager.js";
 import { resolveAttachmentScope, resolveBasePath } from "./attachment-scope-resolver.js";
 import { attachScopeRoot } from "./attachment-storage-layout.js";
 import { buildPublicRecord } from "./record-builder.js";
+
+function unavailableBody(record, cause) {
+  return new AttachmentProtocolError(
+    ATTACHMENT_BODY_ERROR_CODE.UNAVAILABLE,
+    {
+      attachmentId: record.attachmentId,
+      sessionId: record.sessionId,
+      attachmentSource: record.attachmentSource,
+    },
+    { cause },
+  );
+}
 
 export async function getAttachmentById(
   service,
@@ -32,7 +50,10 @@ export async function getAttachmentById(
     sessionId: normalizedSessionId,
     attachmentSource: normalizedAttachmentSource,
   });
-  const record = (await readAttachIndex(basePath, scope))?.attachments?.[id] || null;
+  const [record] = await readAttachmentMetadata(service, {
+    userId,
+    identities: [{ ...scope, attachmentId: id }],
+  });
 
   if (!record) return null;
 
@@ -42,7 +63,7 @@ export async function getAttachmentById(
   try {
     realStoredPath = await fsRealpath(storedPath);
   } catch (error) {
-    if (error?.code === "ENOENT") return null;
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") throw unavailableBody(record, error);
     throw error;
   }
   const realScopeRoot = await fsRealpath(attachScopeRoot(basePath, scope));
@@ -50,13 +71,43 @@ export async function getAttachmentById(
     throw new Error("attachment_real_path_scope_mismatch");
   }
   const resolvedPath = path.resolve(realStoredPath);
-  const fileStat = await fsStat(resolvedPath);
-  if (!fileStat.isFile()) throw new Error("attachment_path_not_file");
+  let fileStat;
+  try {
+    fileStat = await fsStat(resolvedPath);
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") throw unavailableBody(record, error);
+    throw error;
+  }
+  if (!fileStat.isFile() || (record.size !== undefined && record.size !== fileStat.size))
+    throw unavailableBody(record);
   return {
-    ...buildPublicRecord(basePath, record),
+    ...record,
     absolutePath: resolvedPath,
     size: fileStat.size,
   };
+}
+
+export async function readAttachmentMetadata(service, { userId, identities }) {
+  const basePath = resolveBasePath(service.globalConfig, userId);
+  const scopes = new Map();
+  const records = Array(identities.length);
+  for (const [index, value] of identities.entries()) {
+    const identity = parseAttachmentIdentity(value);
+    const scope = resolveAttachmentScope(identity);
+    assertAttachmentBelongsToScope(identity, scope);
+    const key = JSON.stringify([scope.sessionId, scope.attachmentSource]);
+    const selection = scopes.get(key) ?? { scope, ids: [], positions: [] };
+    selection.ids.push(identity.attachmentId);
+    selection.positions.push(index);
+    scopes.set(key, selection);
+  }
+  for (const { scope, ids, positions } of scopes.values()) {
+    const selected = await readAttachmentRecords(basePath, scope, ids);
+    for (const [index, record] of selected.entries()) {
+      records[positions[index]] = record === null ? null : buildPublicRecord(basePath, record);
+    }
+  }
+  return records;
 }
 
 export async function readAttachmentMetas(
@@ -65,8 +116,7 @@ export async function readAttachmentMetas(
 ) {
   const basePath = resolveBasePath(service.globalConfig, userId);
   const scope = resolveAttachmentScope({ sessionId, attachmentSource });
-  const index = await readAttachIndex(basePath, scope);
-  return Object.values(index?.attachments || {}).map((record) =>
+  return (await listAttachmentRecords(basePath, scope)).map((record) =>
     buildPublicRecord(basePath, record),
   );
 }
@@ -92,16 +142,16 @@ export async function openAttachmentStream(service, identity) {
   let handle;
   try {
     const pathStat = await fsLstat(record.absolutePath);
-    if (!pathStat?.isFile?.() || pathStat?.isSymbolicLink?.()) return null;
+    if (!pathStat.isFile() || pathStat.isSymbolicLink()) throw unavailableBody(record);
     handle = await fsOpen(record.absolutePath, "r");
     const openedStat = await handle.stat();
     if (
-      !openedStat?.isFile?.() ||
+      !openedStat.isFile() ||
       openedStat.dev !== pathStat.dev ||
-      openedStat.ino !== pathStat.ino
+      openedStat.ino !== pathStat.ino ||
+      openedStat.size !== record.size
     ) {
-      await handle.close();
-      return null;
+      throw unavailableBody(record);
     }
     const {
       absolutePath: _absolutePath,
@@ -121,7 +171,7 @@ export async function openAttachmentStream(service, identity) {
     } catch (closeError) {
       error.closeError = closeError;
     }
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") throw unavailableBody(record, error);
     throw error;
   }
 }

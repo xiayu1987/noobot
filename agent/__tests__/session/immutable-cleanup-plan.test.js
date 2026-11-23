@@ -22,7 +22,7 @@ import {
   discardSessionArtifactCleanup,
 } from "../../src/session/session-artifact-maintenance.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
 import { acquireImmutableReaderRetention } from "../../src/session/session-artifact-session/immutable-reader-retention.js";

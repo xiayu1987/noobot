@@ -3,32 +3,37 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { fsLstat, fsMkdir, fsRename, fsRm } from "../../../shared/storage/fs-adapter.js";
+import { syncStorageDirectory, withStorageCleanup } from "../../../shared/storage/durable-file.js";
 import { filePath as path } from "@noobot/path-resolver";
-import {
-  IMMUTABLE_SESSION_FORMAT_FILE,
-  IMMUTABLE_SESSION_HEAD_FILE,
-} from "@noobot/session-protocol/immutable-storage";
-import {
-  initializeImmutableSession,
-  publishImmutableSessionFormat,
-} from "../../session-artifact-session/immutable-session-bootstrap.js";
-import { openImmutableSessionReader } from "../../session-artifact-session/immutable-session-reader.js";
-import { fsMkdir, fsRm } from "../../../shared/storage/fs-adapter.js";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
-import {
-  assertSessionScopeIdentity,
-  createEmptyTurnLifecycle,
-  createSessionDeletedError,
-  createSessionNotFoundError,
-} from "@noobot/session-protocol";
+import { assertSessionScopeIdentity, createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { requireSessionCaller } from "@noobot/shared/session-caller";
+import { partitionJournalError } from "@noobot/session-protocol/partition-journal";
+import { sessionDeletionStagingName } from "@noobot/workspace-protocol/session-tombstone";
+import { withSessionEventRetirement } from "@noobot/runtime-events";
+
+async function deletionDirectoryExists(directory) {
+  try {
+    if (!(await fsLstat(directory)).isDirectory())
+      throw partitionJournalError("SESSION_STORAGE_CORRUPT", "Deletion path is not a directory");
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+}
 
 class SessionCrudMethods {
   async listSessionIds(userId) {
+    return (await this.listLiveSessionTreeNodes(userId)).map(({ sessionId }) => sessionId);
+  }
+
+  async listLiveSessionTreeNodes(userId) {
     const sessionTree = await this.sessionTreeRepository.getTree(userId);
     const deletedSessions = await this._readDeletedSessions(userId);
-    return Object.keys(sessionTree.nodes).filter(
-      (sessionId) => !Object.hasOwn(deletedSessions.sessions, sessionId),
+    return Object.values(sessionTree.nodes).filter(
+      ({ sessionId }) => !Object.hasOwn(deletedSessions.sessions, sessionId),
     );
   }
 
@@ -37,7 +42,7 @@ class SessionCrudMethods {
       userId,
       { sessionId, parentSessionId },
       async (scope) => {
-        await using recovered = await this.recoverImmutableSessionPlacement(userId, sessionId, {
+        await using recovered = await this.recoverSessionPlacement(userId, sessionId, {
           scope,
           persistenceContext,
         });
@@ -48,7 +53,7 @@ class SessionCrudMethods {
           parentSessionId: scope.resolvedParentSessionId,
           caller,
         });
-        await this.createImmutableSession(userId, payload, {
+        await this.createStoredSession(userId, payload, {
           sessionId,
           scope,
           persistenceContext,
@@ -59,58 +64,54 @@ class SessionCrudMethods {
     );
   }
 
-  async recoverImmutableSessionPlacement(userId, sessionId, { scope, persistenceContext }) {
-    const marked = await this.storageService.exists(
-      path.join(scope.sessionDir, IMMUTABLE_SESSION_FORMAT_FILE),
-    );
-    if (
-      !marked &&
-      !(await this.storageService.exists(path.join(scope.sessionDir, IMMUTABLE_SESSION_HEAD_FILE)))
-    ) {
-      if (await this.storageService.exists(scope.sessionFile)) {
-        throw Object.assign(new Error("Session storage requires an offline workspace upgrade"), {
-          code: "SESSION_IMMUTABLE_STORAGE_UPGRADE_REQUIRED",
-        });
-      }
-      return null;
-    }
-    const reader = await openImmutableSessionReader({
+  async recoverSessionPlacement(userId, sessionId, { scope, persistenceContext }) {
+    const reader = await this.sessionReaderAccess.recover({
       sessionDir: scope.sessionDir,
+      sessionFile: scope.sessionFile,
       sessionId,
       parentSessionId: scope.resolvedParentSessionId,
     });
+    if (reader === null) return null;
     try {
-      if (!marked) await publishImmutableSessionFormat(scope.sessionDir);
       if (!scope.registered) {
         const metadata = await reader.readMetadata();
         await this.commitSessionPlacement(userId, metadata, persistenceContext);
       }
       return reader;
     } catch (error) {
-      await reader.close();
-      throw error;
+      return withStorageCleanup(async () => {
+        throw error;
+      }, reader[Symbol.asyncDispose]);
     }
   }
 
-  async createImmutableSession(
+  async createStoredSession(
     userId,
     session,
-    { sessionId, scope, persistenceContext, authorityEvents = [], scopedMetadata = null },
+    { sessionId, scope, persistenceContext, initialTurn = null, scopedMetadata = null },
   ) {
     assertSessionScopeIdentity({
       session,
       sessionId,
       parentSessionId: scope.resolvedParentSessionId,
     });
-    await initializeImmutableSession({
-      sessionDir: scope.sessionDir,
-      session,
-      operationId: "create-session-immutable-v1",
-      authorityEvents,
-      outbox: authorityEvents,
-      scopedMetadata,
-    });
-    await this.commitSessionPlacement(userId, session, persistenceContext);
+    const committed = await this.sessionReaderAccess.create(
+      {
+        sessionDir: scope.sessionDir,
+        sessionFile: scope.sessionFile,
+        sessionId,
+        parentSessionId: scope.resolvedParentSessionId,
+      },
+      {
+        session,
+        operationId: "create-session-v1",
+        initialTurn,
+        scopedMetadata,
+      },
+    );
+    if (!committed.aborted)
+      await this.commitSessionPlacement(userId, committed.result.metadata, persistenceContext);
+    return committed;
   }
 
   createInitialSession({ sessionId, parentSessionId, caller }) {
@@ -134,73 +135,49 @@ class SessionCrudMethods {
   }
 
   async findById(userId, sessionId, { persistenceContext } = {}) {
-    return this._findCanonicalSession(userId, sessionId, {
-      persistenceContext,
-      read: (reader) => reader.exportSession(),
-    });
+    await using reader = await this.findSessionReader(userId, sessionId, { persistenceContext });
+    return reader ? await reader.exportSession() : null;
   }
 
   async requireById(userId, sessionId, { persistenceContext }) {
-    const session = await this.findById(userId, sessionId, { persistenceContext });
-    if (session) return session;
-    return this._throwSessionUnavailable(userId, sessionId);
-  }
-
-  async requireTurnView(userId, sessionId, { turnScopeIds, messageUids, persistenceContext }) {
-    const view = await this.findTurnView(userId, sessionId, {
-      turnScopeIds,
-      messageUids,
-      persistenceContext,
-    });
-    if (view) return view;
-    return this._throwSessionUnavailable(userId, sessionId);
-  }
-
-  async _throwSessionUnavailable(userId, sessionId) {
-    if (await this.isSessionDeleted(userId, sessionId)) {
-      throw createSessionDeletedError({ userId, sessionId });
-    }
-    throw createSessionNotFoundError({ userId, sessionId });
-  }
-
-  async findTurnView(userId, sessionId, { turnScopeIds, messageUids, persistenceContext }) {
-    return this._findCanonicalSession(userId, sessionId, {
-      persistenceContext,
-      read: (reader) => reader.readTurnView({ turnScopeIds, messageUids }),
-    });
-  }
-
-  async _findCanonicalSession(userId, sessionId, { persistenceContext, read }) {
-    if (await this.isSessionDeleted(userId, sessionId)) return null;
-    const scope = await this.locateSessionScope(userId, sessionId, persistenceContext);
-    if (!scope) return null;
-    await using reader = await openImmutableSessionReader({
-      sessionDir: scope.sessionDir,
-      sessionId,
-      parentSessionId: scope.resolvedParentSessionId,
-    });
-    return await read(reader);
+    await using reader = await this.requireSessionReader(userId, sessionId, { persistenceContext });
+    return await reader.exportSession();
   }
 
   async readSelectedConnectorIds(userId, sessionId, { persistenceContext } = {}) {
-    if (await this.isSessionDeleted(userId, sessionId)) {
-      throw createSessionDeletedError({ userId, sessionId });
-    }
-    const selected = await this._findCanonicalSession(userId, sessionId, {
-      persistenceContext,
-      read: async (reader) =>
-        this.normalizeSelectedConnectorIds((await reader.readMetadata()).selectedConnectorIds),
-    });
-    if (selected === null) throw createSessionNotFoundError({ userId, sessionId });
-    return selected;
+    await using reader = await this.requireSessionReader(userId, sessionId, { persistenceContext });
+    return this.normalizeSelectedConnectorIds((await reader.readMetadata()).selectedConnectorIds);
   }
 
-  async delete(userId, sessionId, { persistenceContext } = {}) {
-    const scope = await this.requireSessionScope(userId, sessionId, persistenceContext);
-    await fsRm(scope.sessionDir, { recursive: true, force: true });
-    if (scope.indexed) {
-      await this.removeSessionDisplaySummaries(userId, [sessionId]);
+  async removeDeletedSessionDirectory(userId, directory) {
+    const workspacePath = this._basePath(userId);
+    const sessionDir = path.join(workspacePath, ...directory);
+    const parent = path.dirname(sessionDir);
+    if (!(await deletionDirectoryExists(parent))) return;
+    const staged = path.join(parent, sessionDeletionStagingName(directory.at(-1)));
+    if (await deletionDirectoryExists(sessionDir)) {
+      if (await deletionDirectoryExists(staged))
+        throw partitionJournalError(
+          "SESSION_STORAGE_CORRUPT",
+          "Deletion has both live and staged directories",
+        );
+      await withSessionEventRetirement(workspacePath, () =>
+        this.sessionReaderAccess.withRemoval({ sessionDir }, () => fsRename(sessionDir, staged)),
+      );
     }
+    if (await deletionDirectoryExists(staged)) {
+      await syncStorageDirectory(parent);
+      await fsRm(staged, { recursive: true });
+    }
+    await syncStorageDirectory(parent);
+  }
+
+  async resolveSessionDeletionTarget(userId, sessionId, persistenceContext) {
+    const scope = await this.requireSessionScope(userId, sessionId, persistenceContext);
+    return {
+      sessionId,
+      directory: path.relative(this._basePath(userId), scope.sessionDir).split(path.sep),
+    };
   }
 }
 

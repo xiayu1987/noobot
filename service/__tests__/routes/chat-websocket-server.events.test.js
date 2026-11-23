@@ -45,16 +45,12 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
   const bot = {
     session: {
       readServerNow: () => new Date().toISOString(),
-      async getPendingAuthorityEvents(identity) {
+      async prepareAuthorityEventDelivery(identity) {
         identities.push(identity);
         return {
           found: true,
           events: delivered ? [] : [{ eventId: envelope.identity.eventId, envelope }],
         };
-      },
-      async recordAuthorityEventAttempts(identity) {
-        identities.push(identity);
-        return { recorded: identity.eventIds.includes(envelope.identity.eventId) };
       },
       async compactAuthorityEvents() {
         return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
@@ -64,12 +60,13 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
         delivered = identity.acknowledgements.some(
           (receipt) => receipt.eventId === envelope.identity.eventId,
         );
-        return { acknowledged: delivered };
+        return { acknowledged: delivered, drained: delivered };
       },
     },
   };
   const events = [];
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: (event, data) => {
@@ -107,7 +104,7 @@ test("authority outbox rejects an invalid lifecycle envelope before delivery sid
   const bot = {
     session: {
       readServerNow: () => new Date().toISOString(),
-      async getPendingAuthorityEvents({ consumerId }) {
+      async prepareAuthorityEventDelivery({ consumerId }) {
         return {
           found: true,
           events: listPendingAuthorityEvents(
@@ -116,17 +113,14 @@ test("authority outbox rejects an invalid lifecycle envelope before delivery sid
           ),
         };
       },
-      async recordAuthorityEventAttempts() {
-        calls.attempts += 1;
-        return { recorded: true };
-      },
       async acknowledgeAuthorityEvents() {
         calls.acknowledgements += 1;
-        return { acknowledged: true };
+        return { acknowledged: true, drained: true };
       },
     },
   };
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: () => {

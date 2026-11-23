@@ -37,6 +37,7 @@ export async function executeTransportRetry({
       baseDelayMs: policy.baseDelayMs,
       retryAfterMs: classification.retryAfterMs,
     });
+    if (delayMs === null) throw error;
     await observe(MODEL_INVOCATION_EVENT.RETRY_SCHEDULED, {
       attempt,
       nextAttempt: attempt + 1,

@@ -30,7 +30,8 @@ operation 初始化失败时，若尚未开始 provider attempt，发出 attempt
 传输、模式切换和空响应重试统一通过 `resolveModelRetryDelay` 指数退避；有效的
 `Retry-After` 作为最小等待时间，不另设重试预算。
 指数退避上限统一取 `TIME_THRESHOLDS.model.maxRetryDelayMs`（默认 60 秒）；上游最小等待
-超过上限时显式协议失败，不截短后提前请求。时钟端口契约为 `sleep(ms, { signal })`：
+超过上限时停止自动恢复并保留原始错误，不截短后提前请求。HTTP 524 归类为超时，也适用于
+通用网关。时钟端口契约为 `sleep(ms, { signal })`：
 取消立即拒绝等待并释放定时器与监听器，所有恢复等待都消费调用信号。
 执行控制只通过 `options.signal`、`options.callbacks` 和 `options.streaming` 传入；
 `options.invoke` 禁止携带 `signal`、`callbacks`、`stream` 和 `streaming`。

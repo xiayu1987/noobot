@@ -19,7 +19,7 @@ import {
   decodeImmutableRecordReference,
   encodeImmutableRecordReference,
 } from "@noobot/session-protocol/immutable-segment";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { IMMUTABLE_TRANSACTION_READ_CACHE } from "@noobot/session-protocol/immutable-storage-graph";
 
 async function fixture(t) {

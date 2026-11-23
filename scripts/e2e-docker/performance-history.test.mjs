@@ -5,14 +5,12 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createSessionServices, createSessionFacade } from "noobot-agent/session";
-import { AttachmentService } from "noobot-agent/attach";
-import { collectNoobotPluginScopedSessionRootDeclarations } from "@noobot/plugin-runtime";
-import { resolveScopedSessionRoots } from "@noobot/workspace-protocol";
-import { WORKSPACE_ROOT_ENV } from "@noobot/runtime-topology-protocol/workspace-root";
+import "@noobot/shared/testing/runtime-params";
+import { createSessionFacade } from "noobot-agent/session";
+import { createTestPartitionSessionServices } from "../../agent/__tests__/helpers/session-services.js";
 import { initializeUserWorkspace } from "../../agent/__tests__/helpers/user-workspace.js";
 import { seedPerformanceHistory } from "../../client/noobot-chat/tests/e2e/protocol/helpers/performance-history.js";
 import { PERF_HISTORY } from "../mock-model-service/performance-contract.mjs";
@@ -20,20 +18,16 @@ import { PERF_HISTORY } from "../mock-model-service/performance-contract.mjs";
 test("performance history seeds and verifies the full workload through public session contracts", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "noobot-performance-history-"));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const previousRoot = process.env[WORKSPACE_ROOT_ENV];
-  process.env[WORKSPACE_ROOT_ENV] = root;
-  t.after(() => {
-    if (previousRoot === undefined) delete process.env[WORKSPACE_ROOT_ENV];
-    else process.env[WORKSPACE_ROOT_ENV] = previousRoot;
-  });
-  const config = { workspaceRoot: root };
-  const runtime = createSessionServices(config, {
-    now: () => new Date().toISOString(),
-    attachmentService: new AttachmentService(config),
-    scopedSessionRoots: resolveScopedSessionRoots(
-      await collectNoobotPluginScopedSessionRootDeclarations(),
+  const config = JSON.parse(
+    await readFile(
+      new URL("../../service/config/global.config.example.json", import.meta.url),
+      "utf8",
     ),
-  });
+  );
+  await using runtime = createTestPartitionSessionServices(
+    { workspaceRoot: root },
+    config.partitionSessionStorage,
+  );
   const session = createSessionFacade(runtime);
   const identity = { userId: "performance-verification", sessionId: "history-verification" };
   await initializeUserWorkspace(root, identity.userId);
@@ -43,7 +37,7 @@ test("performance history seeds and verifies the full workload through public se
     caller: "user",
     persistenceScope: null,
   });
-  const report = await seedPerformanceHistory(identity);
+  const report = await seedPerformanceHistory(runtime, identity);
   const checkpoints = PERF_HISTORY.turns * PERF_HISTORY.checkpointsPerTurn;
   const messages = checkpoints * PERF_HISTORY.messagesPerCheckpoint;
   const { turnSamples, ...coverage } = report;

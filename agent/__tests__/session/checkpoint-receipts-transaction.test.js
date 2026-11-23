@@ -13,10 +13,10 @@ import {
   buildStoredCheckpointReceipts,
 } from "../../src/session/session-artifact-session/checkpoint-receipts.js";
 import {
-  withSessionStorageTransaction,
-  observeSessionStorageWork,
-  invalidateArtifactRead,
-} from "../../src/session/session-artifact-session/storage-transaction.js";
+  withSessionReadCache,
+  invalidateSessionRead,
+} from "../../src/session/session-read-cache.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
 import { withTemp, writeSessionArtifact } from "./session-artifact-store-v2.test-helpers.js";
 
@@ -65,7 +65,7 @@ test("a new turn without checkpoints shares the verified source inside one trans
   withTemp(async (sessionDir) => {
     const session = await createFixture(sessionDir);
     const observed = await observeSessionStorageWork(() =>
-      withSessionStorageTransaction(sessionDir, async () => {
+      withSessionReadCache(sessionDir, async () => {
         const original = await readCheckpointReceiptReferences({
           storageService,
           sessionDir,
@@ -92,7 +92,7 @@ test("a new turn without checkpoints shares the verified source inside one trans
     assert.equal(observed.work.checkpointIdentityVisits, 1);
     assert.equal(observed.work.checkpointIdentitySourceReuses, 2);
     const next = await observeSessionStorageWork(() =>
-      withSessionStorageTransaction(sessionDir, () =>
+      withSessionReadCache(sessionDir, () =>
         readCheckpointReceiptReferences({ storageService, sessionDir, session }),
       ),
     );
@@ -130,7 +130,7 @@ for (const [name, change] of Object.entries({
     withTemp(async (sessionDir) => {
       const session = await createFixture(sessionDir);
       const observed = await observeSessionStorageWork(() =>
-        withSessionStorageTransaction(sessionDir, async () => {
+        withSessionReadCache(sessionDir, async () => {
           await readCheckpointReceiptReferences({ storageService, sessionDir, session });
           const changed = structuredClone(session);
           change(changed);
@@ -152,7 +152,7 @@ test("snapshot removal and explicit invalidation cannot reuse a stale identity s
   withTemp(async (sessionDir) => {
     const session = await createFixture(sessionDir);
     const observed = await observeSessionStorageWork(() =>
-      withSessionStorageTransaction(sessionDir, async () => {
+      withSessionReadCache(sessionDir, async () => {
         await readCheckpointReceiptReferences({ storageService, sessionDir, session });
         const removed = structuredClone(session);
         removed.turnOrder[0].summarySnapshots = [];
@@ -161,7 +161,7 @@ test("snapshot removal and explicit invalidation cannot reuse a stale identity s
           { code: SESSION_ERROR_CODE.SUMMARY_CHECKPOINT_IDENTITY_INVALID },
         );
         const file = `${sessionDir}/${session.turnOrder[0].summarySnapshots[0].file}`;
-        invalidateArtifactRead(file);
+        invalidateSessionRead(file);
         await readCheckpointReceiptReferences({ storageService, sessionDir, session });
       }),
     );
@@ -171,7 +171,7 @@ test("snapshot removal and explicit invalidation cannot reuse a stale identity s
 test("receipt metadata edits never reuse a stale stored projection", async () =>
   withTemp(async (sessionDir) => {
     const session = await createFixture(sessionDir);
-    await withSessionStorageTransaction(sessionDir, async () => {
+    await withSessionReadCache(sessionDir, async () => {
       const options = { storageService, sessionDir, session };
       const first = await buildStoredCheckpointReceipts(options);
       const second = await buildStoredCheckpointReceipts(options);
@@ -189,14 +189,14 @@ test("receipt metadata edits never reuse a stale stored projection", async () =>
 test("source reuse still detects snapshot damage after explicit invalidation", async () =>
   withTemp(async (sessionDir) => {
     const session = await createFixture(sessionDir);
-    await withSessionStorageTransaction(sessionDir, async () => {
+    await withSessionReadCache(sessionDir, async () => {
       const options = { storageService, sessionDir, session };
       await readCheckpointReceiptReferences(options);
       const file = `${sessionDir}/${session.turnOrder[0].summarySnapshots[0].file}`;
       const snapshot = JSON.parse(await readFile(file, "utf8"));
       snapshot.persistedMessageUids.push("unexpected");
       await writeFile(file, JSON.stringify(snapshot));
-      invalidateArtifactRead(file);
+      invalidateSessionRead(file);
       await assert.rejects(buildStoredCheckpointReceipts(options), {
         code: SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_HASH_MISMATCH,
       });

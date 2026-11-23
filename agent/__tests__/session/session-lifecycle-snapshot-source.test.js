@@ -5,14 +5,81 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { assertTurnRecord, TURN_STATE } from "@noobot/session-protocol";
 import { corruptRecord } from "./helpers/immutable-record-reads.js";
 import { withProvisionedSessions } from "../helpers/provisioned-sessions.js";
-import { commitTestSessionChanges } from "../helpers/session-services.js";
+import {
+  persistSessionDeletionMarkers,
+  commitTestSessionChanges,
+} from "../helpers/session-services.js";
 import { turnRecord } from "../helpers/turn-record.js";
-import { createSessionTurnLifecycleSnapshot } from "../../src/session/session-turn-read-model.js";
+import {
+  createSessionTurnLifecycleSnapshot,
+  selectPresentedSessionLifecycleTurns,
+} from "../../src/session/session-turn-read-model.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { ImmutableSessionChanges } from "../../src/session/session-artifact-session/immutable-message-changes.js";
 import { prepareImmutableLifecycleIndex } from "../../src/session/session-artifact-session/immutable-lifecycle-index.js";
+
+test("presentation uses lifecycle state when terminal details are absent", () => {
+  const turns = Object.fromEntries(
+    Object.values(TURN_STATE).map((state, index) => {
+      const turnScopeId = `turn-${index}`;
+      return [
+        turnScopeId,
+        assertTurnRecord(
+          turnRecord({
+            turnScopeId,
+            state,
+            sequence: index + 1,
+            terminalStatus: null,
+            executionState: "completed",
+          }),
+        ),
+      ];
+    }),
+  );
+  const expected = [
+    "stop_completed",
+    "action_failed",
+    "processing_failed",
+    "completion_failed",
+    "stop_failed",
+  ];
+  assert.deepEqual(
+    selectPresentedSessionLifecycleTurns({ turns }).map((turn) => turn.state),
+    expected,
+  );
+  const active = Object.values(turns).find((turn) => turn.state === "processing");
+  assert.deepEqual(
+    selectPresentedSessionLifecycleTurns({ turns, activeTurnScopeId: active.turnScopeId }).map(
+      (turn) => turn.state,
+    ),
+    ["processing", ...expected],
+  );
+});
+
+test("retryable finalize failures remain visible before terminal details are committed", () => {
+  for (const [state, type] of [
+    ["completion_failed", "completion"],
+    ["stop_failed", "stop"],
+  ]) {
+    const turn = turnRecord({ state, terminalStatus: null, executionState: "completed" });
+    turn.failure.retryable = true;
+    turn.finalizeIntent = {
+      type,
+      commandId: turn.commandId,
+      retryable: true,
+      createdAt: turn.createdAt,
+      updatedAt: turn.updatedAt,
+    };
+    assertTurnRecord(turn);
+    assert.deepEqual(
+      selectPresentedSessionLifecycleTurns({ turns: { [turn.turnScopeId]: turn } }),
+      [turn],
+    );
+  }
+});
 
 test("immutable lifecycle snapshots preserve visible terminal scope, limits and unchanged responses", async (t) => {
   await withProvisionedSessions(
@@ -122,7 +189,7 @@ test("immutable lifecycle snapshots preserve visible terminal scope, limits and 
             );
         }
       }
-      await repo.markSessionsDeleted("u1", ["s1"]);
+      await persistSessionDeletionMarkers(repo, "u1", ["s1"]);
       const missing = await runtime.sessionMessageService.getTurnLifecycleSnapshot({
         userId: "u1",
         sessionId: "s1",

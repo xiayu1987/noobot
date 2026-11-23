@@ -14,12 +14,12 @@ import { initializeImmutableSession } from "../../src/session/session-artifact-s
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { registerDialogOrderMessage } from "../../src/session/entities/dialog-order-entity.js";
 import {
+  readImmutableFirstTurnMessage,
   readImmutableMessage,
-  readImmutableTurnAnchor,
+  readImmutableScopedTurnMessagePage,
   readImmutableTurnPage,
 } from "../../src/session/session-artifact-session/immutable-message-reader.js";
 import { readImmutableMessageTailPage } from "../../src/session/session-artifact-session/immutable-message-range.js";
-import { readImmutableTurnView } from "../../src/session/session-artifact-session/immutable-turn-view.js";
 
 const ts = "2026-01-01T00:00:00.000Z";
 async function fixture(t) {
@@ -62,15 +62,21 @@ async function fixture(t) {
 
 const readers = {
   uid: (store, snapshot) => readImmutableMessage(store, snapshot, "m1"),
-  anchor: (store, snapshot) => readImmutableTurnAnchor({ store, snapshot, turnScopeId: "t1" }),
+  first: async (store, snapshot) => ({
+    message: await readImmutableFirstTurnMessage({ store, snapshot, turnScopeId: "t1" }),
+  }),
   page: (store, snapshot) =>
     readImmutableTurnPage({ store, snapshot, turnScopeId: "t1", limit: 1 }),
   tail: (store, snapshot) =>
     readImmutableMessageTailPage({ store, snapshot, turnScopeId: "t1", limit: 1 }),
-  view: async (store, snapshot) => {
-    const view = await readImmutableTurnView({ store, snapshot, turnScopeIds: ["t1"] });
-    return { records: view.session.messages.map((message) => ({ message })) };
-  },
+  scopedPage: (store, snapshot) =>
+    readImmutableScopedTurnMessagePage({
+      store,
+      snapshot,
+      lookupKey: { turnScopeId: "t1", dialogProcessId: "d1" },
+      cursor: null,
+      limit: 1,
+    }),
 };
 const invalidMessages = {
   content: { content: null },
@@ -129,11 +135,24 @@ test("local message validation uses the supplied snapshot and performs no extra 
     calls.push([collection, key]);
     return get(head, collection, key);
   };
+  const getManyMetadata = store.getManyMetadata.bind(store);
+  store.getManyMetadata = async (head, collection, keys, options) => {
+    assert.strictEqual(head, snapshot);
+    assert.equal(typeof options.budget.consume, "function");
+    calls.push([collection, keys]);
+    return getManyMetadata(head, collection, keys, options);
+  };
+  const getMany = store.getMany.bind(store);
+  store.getMany = async (head, collection, keys) => {
+    assert.strictEqual(head, snapshot);
+    calls.push([collection, keys]);
+    return getMany(head, collection, keys);
+  };
   const record = await readImmutableMessage(store, snapshot, "m1");
   assert.equal(record.message.content, "hello");
   assert.deepEqual(calls, [
-    ["messages", "m1"],
-    ["lifecycle", "t1"],
+    ["messages", ["m1"]],
+    ["lifecycle", ["t1"]],
   ]);
   calls.length = 0;
   const page = await readers.page(store, snapshot);

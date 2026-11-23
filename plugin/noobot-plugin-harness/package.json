@@ -20,6 +20,7 @@
     "@noobot/model-protocol": "file:../../model-protocol",
     "@noobot/execution-isolation-protocol": "file:../../execution-isolation-protocol",
     "@noobot/path-resolver": "file:../../path-resolver",
+    "@noobot/platform-compatibility": "file:../../platform-compatibility",
     "@noobot/plugin-protocol": "file:../../plugin-protocol",
     "@noobot/semantic-transfer-protocol": "file:../../semantic-transfer-protocol",
     "@noobot/session-protocol": "file:../../session-protocol",

@@ -547,6 +547,17 @@ test("scoped session root declarations come from every installed manifest withou
       [],
     );
 
+    const obstructedRoot = path.join(root, "obstructed-root");
+    await writeFile(obstructedRoot, "obstruction");
+    for (const pluginRootDir of [obstructedRoot, path.join(obstructedRoot, "plugins")]) {
+      await assert.rejects(loadNoobotPlugins({ pluginRootDir, surface: "agent" }), {
+        code: "ENOTDIR",
+      });
+      await assert.rejects(collectNoobotPluginScopedSessionRootDeclarations({ pluginRootDir }), {
+        code: "ENOTDIR",
+      });
+    }
+
     const lockedRoot = path.join(root, "locked-root");
     await mkdir(lockedRoot);
     await chmod(lockedRoot, 0o000);

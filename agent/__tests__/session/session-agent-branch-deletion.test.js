@@ -11,7 +11,11 @@ import { access, mkdtemp, rm } from "node:fs/promises";
 import { AGENT_SCOPED_SESSION_ROOTS } from "@noobot/workspace-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { withRuntimeEventsEnv } from "@noobot/runtime-events/testing";
-import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
+import {
+  executeEmptySessionCleanup,
+  createTestSessionServices,
+  provisionTestSession,
+} from "../helpers/session-services.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import {
   ScopedSessionLocationResolver,
@@ -39,7 +43,6 @@ for (const concurrentPlacement of [false, true]) {
               userId,
               sessionId,
               parentSessionId,
-              scopeId: `agent:${sessionId}`,
               relativeDir: path.join(allowedRoot, sessionId),
               allowedRoot,
             }),
@@ -67,10 +70,13 @@ for (const concurrentPlacement of [false, true]) {
             return lock(lockedUserId, ids, operation);
           };
         }
-        const result = await runtime.sessionTreeService.deleteSessionBranch({
-          userId,
-          sessionIds: ["parent"],
-        });
+        const result = await runtime.sessionTreeService.deleteSessionBranch(
+          {
+            userId,
+            sessionIds: ["parent"],
+          },
+          executeEmptySessionCleanup,
+        );
         const expected = ["parent", "child", "grandchild"];
         if (concurrentPlacement) expected.push("late-child");
         assert.deepEqual(new Set(result.deletedSessionIds), new Set(expected));
@@ -107,7 +113,10 @@ test("branch deletion rejects a root without a persistence owner", async () => {
       await initializeUserWorkspace(workspaceRoot, userId);
       const runtime = createTestSessionServices({ workspaceRoot });
       await assert.rejects(
-        runtime.sessionTreeService.deleteSessionBranch({ userId, sessionIds: ["missing"] }),
+        runtime.sessionTreeService.deleteSessionBranch(
+          { userId, sessionIds: ["missing"] },
+          executeEmptySessionCleanup,
+        ),
         { code: "FATAL_SESSION_TREE_NODE_MISSING" },
       );
     });
@@ -147,14 +156,16 @@ test("branch deletion rejects a session owned by both the tree and an Agent scop
             userId,
             sessionId: "dual",
             parentSessionId: "parent",
-            scopeId: "agent:dual",
             relativeDir: path.join(allowedRoot, "dual"),
             allowedRoot,
           }),
         }),
       });
       await assert.rejects(
-        runtime.sessionTreeService.deleteSessionBranch({ userId, sessionIds: ["parent"] }),
+        runtime.sessionTreeService.deleteSessionBranch(
+          { userId, sessionIds: ["parent"] },
+          executeEmptySessionCleanup,
+        ),
         { code: "FATAL_SESSION_PERSISTENCE_OWNER_CONFLICT" },
       );
       assert.equal(await repo.isSessionDeleted(userId, "parent"), false);

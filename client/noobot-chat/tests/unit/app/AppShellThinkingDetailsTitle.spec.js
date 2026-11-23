@@ -27,15 +27,15 @@ const drawerPanelsStateSource = readFileSync(
 );
 
 describe("AppShell thinking details drawer title", () => {
-  it("injects count into the thinking details drawer title instead of rendering the raw placeholder", () => {
+  it("derives the drawer title from the selected message", () => {
     expect(useThinkingDetailsPanelSource).toContain(
       "getThinkingDetailsTitle as getThinkingDetailsTitleState",
     );
     expect(thinkingDetailsStateSource).toContain(
-      "export function getThinkingDetailsTitle(messageItem = {}, translate)",
+      "export function getThinkingDetailsTitle(messageItem, translate)",
     );
     expect(thinkingDetailsStateSource).toContain(
-      'translate("message.thinkingDetails", { count: getThinkingDetailsCount(messageItem) })',
+      "formatThinkingDetailLabel(translate, getThinkingDetailsCount(messageItem))",
     );
     expect(appShellSource).toContain("buildAppShellDrawerPanels");
     expect(appShellSource).toContain("getThinkingDetailsTitle,");

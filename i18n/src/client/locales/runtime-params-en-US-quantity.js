@@ -4,7 +4,35 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  sessionPageSnapshots: {
+    readers: {
+      name: "Session page snapshot reader limit",
+      description: "Maximum number of readers retained for session page snapshots at once.",
+    },
+  },
+  partitionStorage: {
+    entityPageWriteVectorLimit: {
+      name: "Entity page write vector limit",
+      description: "Maximum buffers written together when persisting partition entity pages.",
+    },
+    recordReadConcurrency: {
+      name: "Partition record read concurrency",
+      description: "Maximum simultaneous record reads in a partition collection batch.",
+    },
+  },
   immutableStorage: {
+    entityDirectoryMaxEntries: {
+      name: "Entity directory page entry limit",
+      description: "Protocol limit on entries in one partition entity directory page.",
+    },
+    journalJsonMaxDepth: {
+      name: "Journal JSON nesting limit",
+      description: "Protocol limit on nesting depth of partition journal JSON values.",
+    },
+    authorityOutboxPageSize: {
+      name: "Authority outbox page limit",
+      description: "Protocol limit on events read or acknowledged in one outbox page.",
+    },
     cleanupFilterMaxEntries: {
       name: "Cleanup filtering batch limit",
       description: "Maximum captured inventory entries inspected in one cleanup filtering batch.",
@@ -12,10 +40,6 @@ export default {
     recordIoConcurrency: {
       name: "Record I/O concurrency",
       description: "Maximum simultaneous record operations in an immutable storage batch.",
-    },
-    turnAcceptancePageSize: {
-      name: "Turn acceptance page size",
-      description: "Read the first message that establishes turn acceptance.",
     },
     messagePageSize: {
       name: "Maximum message page size",
@@ -315,10 +339,6 @@ export default {
     thinkingDetailVirtualOverscan: {
       name: "Client thinking detail virtual overscan",
       description: "Count threshold used by client thinking detail virtual overscan.",
-    },
-    thinkingDetailRetryLimit: {
-      name: "Client thinking detail retry limit",
-      description: "Count threshold used by client thinking detail retry limit.",
     },
     frameHealthTopScriptLimit: {
       name: "Client frame health top script limit",

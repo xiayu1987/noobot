@@ -11,7 +11,7 @@ import path from "node:path";
 import { encodeImmutableSessionHead } from "@noobot/session-protocol/immutable-storage";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { immutableOrderKey } from "../../src/session/session-artifact-session/immutable-order-key.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 
 async function fixture(context) {
   const sessionDir = await mkdtemp(path.join(tmpdir(), "immutable-replay-integrity-"));

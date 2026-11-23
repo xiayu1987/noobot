@@ -102,6 +102,8 @@ Session 日志 WebSocket：
 
 模型历史上下文由 agent 运行时固定处理：保留最新 5 个 `dialogProcessId/dialogId` 轮次。会话历史窗口不提供配置项。
 
+服务要求在全局配置中设置 `partitionSessionStorage`。`maxJournals` 限制同一会话运行时服务的所有工作区合计驻留日志数，不是磁盘配额。`journalLimits` 定义单个日志的预算。创建或迁移会话前，先用有代表性的工作区核定预算。已发布日志绑定这些限制。服务启动时会在开放 HTTP 和 WebSocket 前自动迁移旧会话。手动迁移计划须使用服务当前生效的 `journalLimits`。参见[示例配置](service/config/global.config.example.json)和[升级步骤](docs/session-storage-architecture.md#41-切换执行入口)。
+
 ### 3.3 附件策略
 
 仅全局配置生效，用户配置不能覆盖。未配置的键使用内置默认值，非法值直接报错。
@@ -180,7 +182,7 @@ Session 日志 WebSocket：
 
 大上下文长度阈值默认值：
 
-- 阶段小结字符阈值：220000
+- 阶段小结字符阈值：350000
 - semantic-transfer 直传阈值：40000 字符
 - semantic-transfer 工具结果 inline 阈值：40000 字符
 - semantic-transfer 工具输入 overflow 阈值：40000 字符

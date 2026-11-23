@@ -7,6 +7,21 @@ import { text as clean, isCanonicalText, isPlainObject } from "@noobot/shared/va
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { canonicalAttachmentIdentities, createCommandRequestHash } from "./command-fingerprint.js";
 import { parseMessageDeleteRequest } from "./message-delete-command.js";
+import { isNaturalDialogUserMessage } from "../message-entity-contract.js";
+
+export function matchesTurnReplacementAnchor({ first, indexedMessageUid, candidate }) {
+  return (
+    isCanonicalText(indexedMessageUid) &&
+    candidate?.message?.messageUid === indexedMessageUid &&
+    candidate.message.sessionId === first.message.sessionId &&
+    candidate.message.dialogProcessId === first.message.dialogProcessId &&
+    Number.isSafeInteger(candidate.ordinal) &&
+    candidate.ordinal > 0 &&
+    Number.isSafeInteger(first.ordinal) &&
+    candidate.ordinal <= first.ordinal &&
+    isNaturalDialogUserMessage(candidate.message)
+  );
+}
 
 export function parseTurnReplaceRequest(request) {
   if (!isPlainObject(request)) throw new TypeError("Turn replacement request must be an object");

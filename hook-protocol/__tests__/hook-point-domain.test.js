@@ -12,7 +12,7 @@ import {
   hookPointDomain,
   isHookPointInDomain,
   requireHookPointDomain,
-  resolveSessionDeletionTargets,
+  requireSessionDeletionHookContext,
 } from "../src/index.js";
 
 test("every declared hook point resolves to a known domain", () => {
@@ -67,21 +67,20 @@ test("service hook points are the only ones owned by the service surface", () =>
   assert.deepEqual(serviceOwned, [HOOK_POINT.SERVICE.AFTER_SESSION_DELETE]);
 });
 
-test("resolveSessionDeletionTargets normalizes and dedupes deleted ids", () => {
-  assert.deepEqual(
-    resolveSessionDeletionTargets({ deletedSessionIds: [" a ", "b", "a", "", null] }),
-    ["a", "b"],
-  );
-});
-
-test("resolveSessionDeletionTargets rejects contexts without deletedSessionIds", () => {
-  for (const context of [
-    undefined,
-    {},
-    { deletedSessionIds: [], sessionId: "s" },
-    { deletedSessionIds: ["  "], sessionId: "s" },
-    { deletedSessionIds: "not-an-array" },
-  ]) {
-    assert.throws(() => resolveSessionDeletionTargets(context), /non-empty deletedSessionIds/);
+test("deletion hook context requires the operation and its exact, unique targets", () => {
+  const context = { userId: "u1", deletionKey: '["a"]', basePath: "/workspace/u1" };
+  const accepted = requireSessionDeletionHookContext({ ...context, deletedSessionIds: ["a", "b"] });
+  assert.deepEqual(accepted.deletedSessionIds, ["a", "b"]);
+  assert.ok(Object.isFrozen(accepted.deletedSessionIds));
+  for (const ids of [undefined, [], [" a "], ["a", "a"], [null], "a"]) {
+    assert.throws(
+      () => requireSessionDeletionHookContext({ ...context, deletedSessionIds: ids }),
+      TypeError,
+    );
   }
+  assert.throws(
+    () =>
+      requireSessionDeletionHookContext({ ...context, deletionKey: "", deletedSessionIds: ["a"] }),
+    TypeError,
+  );
 });

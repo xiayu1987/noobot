@@ -6,9 +6,30 @@
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { validateEventEnvelope } from "./envelope.js";
-export { assertAuthorityOutboxRequest } from "./outbox-request.js";
+import { authorityOutboxPositionKey } from "./outbox-page.js";
+export {
+  assertAuthorityOutboxRequest,
+  assertAuthorityOutboxAcknowledgementResult,
+} from "./outbox-request.js";
 export { AUTHORITY_OUTBOX_ERROR_CODE } from "./outbox-delivery.js";
-export { parseAuthorityOutboxTurnRemoval } from "./outbox-turn-removal.js";
+export {
+  parseAuthorityOutboxTurnRemoval,
+  requireAuthorityOutboxTurnRange,
+  appendAuthorityOutboxTurnRange,
+  removeAuthorityOutboxTurnRange,
+  isAuthorityOutboxTurnEventVisible,
+  isAuthorityOutboxDeliveryVisible,
+} from "./outbox-turn-removal.js";
+export {
+  AUTHORITY_OUTBOX_PAGE_LIMIT,
+  authorityOutboxCommittedPageWindow,
+  authorityOutboxPositionKey,
+  decodeStoredAuthorityOutboxCursor,
+  requireAuthorityOutboxConsumer,
+  requireAuthorityOutboxCursorAdvances,
+  requireAuthorityOutboxMigrationPage,
+  requireAuthorityOutboxPagePosition,
+} from "./outbox-page.js";
 import { isPlainObject, text, stableValue } from "@noobot/shared/value";
 import {
   createPendingConsumerDelivery,
@@ -53,6 +74,71 @@ export function normalizeAuthorityEventOutbox(source) {
     });
   }
   return normalized;
+}
+
+export function decodeStoredAuthorityOutboxEvent(stored) {
+  requireOutbox(
+    isPlainObject(stored) &&
+      Object.keys(stored).length === 4 &&
+      ["ordinal", "envelope", "committedAt", "deliveries"].every((field) =>
+        Object.hasOwn(stored, field),
+      ),
+    "invalid stored outbox event fields",
+  );
+  const { ordinal, envelope, committedAt, deliveries } = stored;
+  authorityOutboxPositionKey(ordinal);
+  return {
+    ...normalizeAuthorityEventOutbox([
+      { eventId: envelope?.identity?.eventId, envelope, committedAt, deliveries },
+    ])[0],
+    ordinal,
+  };
+}
+
+export function encodeStoredAuthorityOutboxEvent({ ordinal, ...event }) {
+  const { envelope, committedAt, deliveries } = event;
+  const stored = { ordinal, envelope, committedAt, deliveries };
+  if (
+    JSON.stringify(stableValue(decodeStoredAuthorityOutboxEvent(stored))) !==
+    JSON.stringify(stableValue({ ...event, ordinal }))
+  )
+    throw new TypeError("Authority event cannot be stored losslessly");
+  return stored;
+}
+
+export function assertAuthorityEventScope(event, { sessionId, parentSessionId }) {
+  const { identity, payload } = event.envelope;
+  if (
+    identity.sessionId !== sessionId ||
+    (Object.hasOwn(payload, "parentSessionId") && payload.parentSessionId !== parentSessionId)
+  )
+    throw new TypeError("Authority event session ownership mismatch");
+}
+
+export function assertNewAuthorityEventScope(event, { sessionId, parentSessionId }) {
+  assertAuthorityEventScope(event, { sessionId, parentSessionId });
+  if (Object.keys(event.deliveries).length)
+    throw new TypeError("New authority events cannot contain delivery acknowledgements");
+}
+
+export function assertUncommittedAuthorityEvent(existing) {
+  if (existing !== null)
+    throw Object.assign(new Error("Authority event ID is already committed"), {
+      code: "SESSION_EVENT_CONFLICT",
+    });
+}
+
+export function requireAuthorityEventSequenceFloor(value) {
+  if (!Number.isSafeInteger(value) || value < 0)
+    throw new TypeError("Invalid authority event sequence floor");
+  return value;
+}
+
+export function assertAuthorityEventSequenceAdvance(envelope, floor) {
+  if (envelope.ordering.sequence <= floor)
+    throw Object.assign(new Error("Authority event sequence must advance its scope"), {
+      code: "SESSION_EVENT_SEQUENCE_CONFLICT",
+    });
 }
 
 export function projectAuthorityEventDeliveryResults(source, consumerId, results) {

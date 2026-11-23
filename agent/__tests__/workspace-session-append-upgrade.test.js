@@ -3,12 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestPartitionStorageBudget } from "./helpers/partition-journal-cases.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, readFile, rm, rename, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, rename, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_VERSION } from "@noobot/workspace-protocol";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   IMMUTABLE_SEALED_SEGMENT_SESSION_FORMAT,
   IMMUTABLE_CURRENT_SESSION_FORMAT,
@@ -16,6 +18,7 @@ import {
 } from "@noobot/session-protocol/immutable-storage";
 import { ImmutableSessionStore } from "../src/session/session-artifact-session/immutable-session-store.js";
 import { ImmutableRecordStore } from "../src/session/session-artifact-session/immutable-record-store.js";
+import { partitionMigrationAuthorityPath } from "../src/session/session-storage-authority.js";
 import { upgradeWorkspaceLayout } from "../src/workspace-lifecycle/sections.js";
 import { TEST_STORAGE_SERVICE as storageService } from "./helpers/storage-service.js";
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
@@ -25,7 +28,7 @@ import { wrapLegacyCommitIndex } from "./helpers/wrapped-commit-index.js";
 
 for (const installedVersion of [36, 37, 38]) {
   for (const failPublication of [false, true]) {
-    test(`v${installedVersion} upgrades detached sessions before normal reads (publication fault=${failPublication})`, async (t) => {
+    test(`v${installedVersion} upgrades detached records but v46 rejects missing lifecycle evidence (publication fault=${failPublication})`, async (t) => {
       const base = await mkdtemp(path.join(tmpdir(), "append-layout-upgrade-"));
       t.after(() => rm(base, { recursive: true, force: true }));
       const sessionDir = path.join(base, WORKSPACE_LAYOUT.AGENT_SESSION_DIR, "detached");
@@ -39,7 +42,14 @@ for (const installedVersion of [36, 37, 38]) {
         expectedGeneration: 0,
         operationId: "seed",
         changes: Object.entries({
-          session: { sessionId: "detached", parentSessionId: "missing-parent" },
+          session: {
+            sessionId: "detached",
+            parentSessionId: "missing-parent",
+            caller: SESSION_CALLER.USER,
+            aggregateVersion: 0,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
           facts: {
             contextIndexVersion: 1,
             messageCount: 0,
@@ -80,6 +90,7 @@ for (const installedVersion of [36, 37, 38]) {
         backupBase: path.join(base, "backup"),
         created: false,
         scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+        targetStorageBudget: createTestPartitionStorageBudget(),
         storageService,
       };
       if (failPublication) {
@@ -102,7 +113,11 @@ for (const installedVersion of [36, 37, 38]) {
       }
       const result = await upgradeWorkspaceLayout(options);
       assert.equal(result[0].id, upgradeId);
-      assert.equal(result[0].failed, undefined, JSON.stringify(result));
+      const failures = result.filter(({ failed }) => failed);
+      assert.deepEqual(
+        failures.map(({ id, failed }) => [id, failed.code]),
+        [["session-partition-storage-v46", "TURN_LIFECYCLE_RECORD_INVALID"]],
+      );
       const upgraded = await ImmutableSessionStore.open({ sessionDir });
       const snapshot = await upgraded.snapshot();
       assert.equal(snapshot.format, IMMUTABLE_CURRENT_SESSION_FORMAT);
@@ -110,8 +125,9 @@ for (const installedVersion of [36, 37, 38]) {
         text: "preserve detached history",
       });
       assert.equal((await upgraded.commit(request)).replayed, true);
-      assert.equal(JSON.parse(await readFile(layoutFile)).version, WORKSPACE_LAYOUT_VERSION);
-      assert.deepEqual(await upgradeWorkspaceLayout(options), []);
+      assert.equal(JSON.parse(await readFile(layoutFile)).version, 45);
+      assert.deepEqual(await upgradeWorkspaceLayout(options), failures);
+      await assert.rejects(stat(partitionMigrationAuthorityPath(sessionDir)), { code: "ENOENT" });
       assert.deepEqual(await upgraded.snapshot(), snapshot);
     });
   }

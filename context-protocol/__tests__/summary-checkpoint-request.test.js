@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import { captureSessionTransactionInput } from "@noobot/session-protocol/session-changes";
 import {
   assertSummaryCheckpointDisposition,
   assertSummaryCheckpointSource,
@@ -79,7 +80,59 @@ test("checkpoint identity binds ordered canonical facts to the predecessor revis
   );
 });
 
+test("checkpoint replacement cannot disappear from its request or retry identity", () => {
+  const replacement = {
+    messageUid: "message",
+    dialogProcessId: "dialog",
+    turnScopeId: "turn",
+    expectedContentReference: `sha256:${"a".repeat(64)}`,
+    owner: 1,
+    content: "",
+  };
+  const parse = (write) =>
+    parseTurnSummaryCheckpointRequest(request({ messageContentReplacements: [write] }));
+  const parsed = parse(replacement);
+  assert.deepEqual(parsed.messageContentReplacements, [replacement]);
+  assert.notEqual(parsed.requestHash, parseTurnSummaryCheckpointRequest(request()).requestHash);
+  assert.notEqual(parsed.requestHash, parse({ ...replacement, content: "different" }).requestHash);
+  assert.throws(() => parse({ ...replacement, turnScopeId: "other" }), invalidCode);
+  assert.throws(() => parse({ ...replacement, messageUid: "other" }), invalidCode);
+  assert.throws(
+    () =>
+      parseTurnSummaryCheckpointRequest(
+        request({
+          messageContentReplacements: [replacement],
+          messageContentAppends: [{ ...replacement, content: "suffix" }],
+        }),
+      ),
+    TypeError,
+  );
+});
+
+test("checkpoint facts are strict JSON and exclude runtime options without changing the historical digest", () => {
+  const parsed = parseTurnSummaryCheckpointRequest(request());
+  const withOptions = parseTurnSummaryCheckpointRequest(
+    request({ persistenceContext: { resolve: () => {} }, submission: { submit: () => {} } }),
+  );
+  assert.deepEqual(withOptions, parsed);
+  assert.ok(!Object.hasOwn(parsed, "persistenceContext"));
+  assert.ok(!Object.hasOwn(parsed, "submission"));
+  assert.equal(
+    parsed.requestHash,
+    "sha256:51d970f81f258b32736a5691db2b6c952e9388dabf32089010b6fe67e2c1cbc8",
+  );
+  assert.deepEqual(captureSessionTransactionInput({ summaryCheckpoints: [parsed] }), {
+    summaryCheckpoints: [parsed],
+  });
+});
+
 test("checkpoint requests reject missing payload, coercion, duplicate and malformed UIDs", () => {
+  assert.equal(
+    parseTurnSummaryCheckpointRequest(
+      request({ expectedCheckpointRevision: Number.MAX_SAFE_INTEGER - 1 }),
+    ).expectedCheckpointRevision,
+    Number.MAX_SAFE_INTEGER - 1,
+  );
   for (const payload of [null, undefined, [], 1]) {
     assert.throws(() => parseTurnSummaryCheckpointRequest(payload), invalidCode);
   }
@@ -89,6 +142,7 @@ test("checkpoint requests reject missing payload, coercion, duplicate and malfor
     "0",
     NaN,
     Infinity,
+    Number.MAX_SAFE_INTEGER,
     Number.MAX_SAFE_INTEGER + 1,
   ]) {
     assert.throws(

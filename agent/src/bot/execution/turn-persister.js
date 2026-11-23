@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { projectMessagePersistenceChanges } from "@noobot/session-protocol/session-changes";
 import { isFunction, isPlainObject, text } from "@noobot/shared/value";
 import {
   isCanonicalMessageTimestamp,
@@ -98,6 +97,8 @@ function normalizeSessionTurnInput(input = {}) {
     modelResponseMetadata: valueOrDefault(input.modelResponseMetadata, null),
     activityTimeline: runtimeMessageList(input, "activityTimeline"),
     toolTimeline: runtimeMessageList(input, "toolTimeline"),
+    resourceRefs: runtimeMessageList(input, "resourceRefs"),
+    mutationRefs: runtimeMessageList(input, "mutationRefs"),
     dialogProcessId,
     parentDialogProcessId: valueOrDefault(input.parentDialogProcessId, ""),
     turnScopeId: text(valueOrDefault(input.turnScopeId, "")),
@@ -212,6 +213,8 @@ function buildTurnPayload(input) {
     modelResponseMetadata: input.modelResponseMetadata,
     activityTimeline: input.activityTimeline,
     toolTimeline: input.toolTimeline,
+    ...optionalListField("resourceRefs", input.resourceRefs),
+    ...optionalListField("mutationRefs", input.mutationRefs),
     injectedMessage: input.injectedMessage,
     noobotInternalMessageType: input.noobotInternalMessageType,
     injectedBy: input.injectedBy,
@@ -233,7 +236,6 @@ function normalizeAgentMessagesInput(input = {}) {
     userId: input.userId,
     sessionId: input.sessionId,
     messages: valueOrDefault(input.messages, []),
-    persistedMessages: valueOrDefault(input.persistedMessages, []),
     submission: input.submission,
     dialogProcessId: valueOrDefault(input.dialogProcessId, ""),
     parentDialogProcessId: valueOrDefault(input.parentDialogProcessId, ""),
@@ -292,6 +294,8 @@ function buildAgentMessageTurnInput(messageItem, input) {
     modelResponseMetadata: normalizedOptionalObject(messageItem.modelResponseMetadata),
     activityTimeline: runtimeMessageList(messageItem, "activityTimeline"),
     toolTimeline: runtimeMessageList(messageItem, "toolTimeline"),
+    resourceRefs: runtimeMessageList(messageItem, "resourceRefs"),
+    mutationRefs: runtimeMessageList(messageItem, "mutationRefs"),
     turnScopeId: stringValue(firstTruthyValue([messageItem.turnScopeId, input.turnScopeId])).trim(),
     ...pickSourceTimestampField(messageItem),
     eventListener: input.eventListener,
@@ -319,16 +323,10 @@ export class SessionTurnPersister {
     return prepareAgentMessageInputs(input).map(buildTurnPayload);
   }
 
-  async appendAgentMessages(payload = {}) {
+  async appendAgentMessages({ changes, messages, ...payload }) {
     const input = normalizeAgentMessagesInput(payload);
-    const changes = projectMessagePersistenceChanges(
-      input.messages,
-      input.persistedMessages,
-      input,
-    );
     const prepared = prepareAgentMessageInputs({ ...input, messages: changes.messages });
     const turnPayloads = prepared.map(buildTurnPayload);
-    if (!input.messages.length) return [];
     const appendResult = await this.session.appendTurns({
       userId: input.userId,
       sessionId: input.sessionId,
@@ -339,8 +337,8 @@ export class SessionTurnPersister {
       submission: input.submission,
       persistenceScope: input.persistenceScope,
     });
-    for (const turnPayload of input.messages) {
-      emitEvent(input.eventListener, `${turnPayload.role}_message_saved`, {});
+    for (const message of messages) {
+      emitEvent(input.eventListener, `${message.role}_message_saved`, {});
     }
     return appendResult.messageReceipts;
   }

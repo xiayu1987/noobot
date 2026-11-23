@@ -8,19 +8,28 @@ import {
   assertTurnRecord,
   canonicalAssistantPresentationIdentity,
   isDialogAnchorMessageRecord,
+  matchesSessionScopeIdentity,
+  projectStoredSessionMetadata,
   requireTurnPartitionIdentity,
-  resolveSessionAutoTitle,
 } from "@noobot/session-protocol";
 import {
   normalizeMessageEntity,
   normalizeMessageMetadataEntity,
 } from "../entities/message-entity.js";
 import { isContextSourceMessageCandidate } from "@noobot/context-protocol/assembly/source";
-import { updateImmutableContextSource } from "./immutable-context-source-index.js";
+import {
+  seedImmutableContextCandidates,
+  updateImmutableContextSource,
+} from "./immutable-context-source-index.js";
 import { assertCommittedMessageIdentity } from "@noobot/session-protocol/message-identity";
+import { requireUnchangedUserMessageAttachments } from "@noobot/session-protocol/session-changes";
 import { immutableStorageError } from "./immutable-object-store.js";
 import { immutableOrderKey } from "./immutable-order-key.js";
-import { requireImmutableMessageContentPart } from "@noobot/session-protocol/immutable-storage-graph";
+import {
+  requireImmutableContextIndex,
+  requireImmutableMessageContentPart,
+  requireImmutableMessageDisplay,
+} from "@noobot/session-protocol/immutable-storage-graph";
 import { updateImmutableToolPairs } from "./immutable-tool-pairs.js";
 import { indexImmutableMessageDisplay } from "./immutable-message-display.js";
 import {
@@ -44,16 +53,12 @@ function nextOrdinal(value) {
 }
 
 export class ImmutableSessionChanges {
-  constructor(
-    get,
-    { getMany, getManyMetadata, getMetadata, readContent, readContentMetadata } = {},
-  ) {
+  constructor(get, { getMany, getManyMetadata, getMetadata, readContent } = {}) {
     this.read = get;
     this.readMany = getMany;
     this.readManyMetadata = getManyMetadata;
     this.readMetadata = getMetadata;
     this.readContent = readContent;
-    this.readContentMetadata = readContentMetadata;
     this.pending = new Map();
   }
 
@@ -109,7 +114,10 @@ export class ImmutableSessionChanges {
     this.pending.set(JSON.stringify([collection, key]), {
       collection,
       key,
-      value,
+      value:
+        collection === "metadata" && key === "session"
+          ? projectStoredSessionMetadata(value)
+          : value,
       ...(parts.length ? { parts } : {}),
     });
   }
@@ -124,15 +132,6 @@ export class ImmutableSessionChanges {
         ? { collection: change.collection, key: change.key, reference: change.reference }
         : change,
     );
-  }
-
-  async apply(change) {
-    if (change.remove === true) return this.remove(change.collection, change.key);
-    if (!Object.hasOwn(change, "reference"))
-      return this.set(change.collection, change.key, change.value, change.parts);
-    const { value, parts } = await this.readContentMetadata(change.reference);
-    this.set(change.collection, change.key, value, parts);
-    this.pending.get(JSON.stringify([change.collection, change.key])).reference = change.reference;
   }
 
   async encode(store, collection, key) {
@@ -163,6 +162,7 @@ async function registerDialog(plan, facts, message) {
       userMessageUid: anchorUid,
     };
     plan.set("dialogs", key, dialog);
+    plan.set("contextTurns", key, { count: 0, root: null });
     plan.set("dialogOrder", immutableOrderKey(dialog.dialogOrdinal), key);
   } else if (anchorUid && !dialog.userMessageUid) {
     dialog = { ...dialog, userMessageUid: anchorUid };
@@ -214,7 +214,7 @@ async function registerTurn({ plan, facts, message, dialog, dialogAdditions }) {
     canonicalAssistantUid: "",
   };
   plan.set("turnOrder", immutableOrderKey(turn.turnOrdinal), message.turnScopeId);
-  plan.set("contextSources", message.turnScopeId, { count: 0, root: null });
+  seedImmutableContextCandidates(plan, message.turnScopeId);
   if (!dialogAdditions.has(message.dialogProcessId))
     dialogAdditions.set(message.dialogProcessId, []);
   dialogAdditions.get(message.dialogProcessId).push(message.turnScopeId);
@@ -255,22 +255,20 @@ export async function demotePreviousPresentation(plan, turn, message) {
 function mergeStoredMessage(previous, message, parts) {
   if (!previous) return message;
   assertCommittedMessageIdentity(previous.message, message);
+  requireUnchangedUserMessageAttachments(previous.message, message);
   const merged = { ...previous.message, ...message, ts: previous.message.ts };
   if (merged.chatPresentation === false) delete merged.workspaceRootDirectory;
   return normalizeMessageMetadataEntity({ value: { message: merged }, parts }).message;
 }
 
 export async function publishMessageIndexes(store, plan, additions = new Map()) {
+  requireImmutableContextIndex(await plan.get("metadata", "facts"));
   const groups = new Map();
   for (const change of plan.changes()) {
-    if (change.collection !== "messages" || change.remove) continue;
-    const { value, parts } = await plan.getMetadata("messages", change.key);
-    plan.set(
-      "messages",
-      change.key,
-      await indexImmutableMessageDisplay(store.objects, value, parts),
-      parts,
-    );
+    if (change.collection !== "messages" || change.remove || Object.hasOwn(change, "reference"))
+      continue;
+    const { value } = await plan.getMetadata("messages", change.key);
+    requireImmutableMessageDisplay(value.display);
     const scope = value.message.turnScopeId;
     if (!groups.has(scope)) groups.set(scope, []);
     groups.get(scope).push([change.key, await plan.encode(store, "messages", change.key)]);
@@ -283,7 +281,10 @@ export async function publishMessageIndexes(store, plan, additions = new Map()) 
     const candidates = [];
     for (const [key, reference] of entries) {
       const { value } = await plan.getMetadata("messages", key);
-      candidates.push([key, isContextSourceMessageCandidate(value.message) ? reference : null]);
+      candidates.push([
+        immutableOrderKey(value.turnOrdinal),
+        isContextSourceMessageCandidate(value.message) ? reference : null,
+      ]);
     }
     await updateImmutableContextSource(store, plan, scope, candidates);
     plan.set("turns", scope, {
@@ -295,9 +296,10 @@ export async function publishMessageIndexes(store, plan, additions = new Map()) 
 }
 
 async function storePreparedMessage({ store, plan, record, parts, preserved }) {
+  const indexed = await indexImmutableMessageDisplay(store.objects, record, preserved);
   const { message } = record;
   if (!parts.length) {
-    plan.set("messages", message.messageUid, record);
+    plan.set("messages", message.messageUid, indexed);
     return;
   }
   const reference = await store.objects.putValueBytes(
@@ -306,7 +308,7 @@ async function storePreparedMessage({ store, plan, record, parts, preserved }) {
       previousReference: requireImmutableMessageContentPart(parts).reference,
     },
   );
-  plan.set("messages", message.messageUid, { ...record, message: { ...message, content: null } }, [
+  plan.set("messages", message.messageUid, { ...indexed, message: { ...message, content: null } }, [
     { path: requireImmutableMessageContentPart(parts).path, reference },
     ...preserved,
   ]);
@@ -327,12 +329,8 @@ async function allocateMessageOrdinals({ plan, facts, turn, message, additions, 
   return { ordinal, turnOrdinal };
 }
 
-export async function prepareImmutableMessages({ store, get, getMetadata, messages, updatedAt }) {
-  if (messages.length === 0) return { changes: [], result: { turns: [] } };
-  const plan = new ImmutableSessionChanges(get, {
-    getMetadata,
-    readContent: (reference) => store.objects.readValue(reference),
-  });
+export async function prepareImmutableMessages({ store, plan, messages, updatedAt }) {
+  if (messages.length === 0) return [];
   const metadata = await plan.get("metadata", "session");
   const storedFacts = await plan.get("metadata", "facts");
   if (!metadata || !storedFacts)
@@ -346,8 +344,10 @@ export async function prepareImmutableMessages({ store, get, getMetadata, messag
   for (const input of messages) {
     let message = normalizeMessageEntity(input);
     if (
-      message.sessionId !== store.sessionId ||
-      message.parentSessionId !== metadata.parentSessionId
+      !matchesSessionScopeIdentity(message, {
+        sessionId: store.sessionId,
+        parentSessionId: metadata.parentSessionId,
+      })
     )
       throw identityConflict("Message session ownership mismatch");
     const stored = await plan.getMetadata("messages", message.messageUid);
@@ -386,11 +386,10 @@ export async function prepareImmutableMessages({ store, get, getMetadata, messag
       facts.lastMessageUid = message.messageUid;
     }
     persisted.push(message.messageUid);
-    if (!metadata.autoTitle) metadata.autoTitle = resolveSessionAutoTitle(message) || "";
   }
   await publishDialogTurnIndexes(store, plan, dialogAdditions);
   await publishMessageIndexes(store, plan, additions);
   plan.set("metadata", "facts", facts);
   plan.set("metadata", "session", { ...metadata, updatedAt });
-  return { changes: plan.changes(), result: { turns: persisted } };
+  return persisted;
 }

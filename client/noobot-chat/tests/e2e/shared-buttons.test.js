@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import vue from "@vitejs/plugin-vue";
 import { chromium } from "@playwright/test";
 
 test(
@@ -122,6 +123,88 @@ test(
           }
           assert.deepEqual(clients[0], clients[1], `${theme} ${width}px shared contract`);
         }
+      }
+    } finally {
+      await browser?.close();
+      await server.close();
+    }
+  },
+);
+
+test(
+  "thinking detail pagination keeps both icon buttons inside the drawer",
+  { timeout: 60000 },
+  async () => {
+    const root = fileURLToPath(new URL("../..", import.meta.url));
+    const server = await createServer({
+      configFile: false,
+      appType: "custom",
+      root,
+      plugins: [vue()],
+      server: { host: "127.0.0.1", port: 0 },
+    });
+    server.middlewares.use("/__thinking-pagination", async (_req, res) => {
+      const html = await server.transformIndexHtml(
+        "/__thinking-pagination",
+        `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1">
+      <div id="app"></div><script type="module">
+      import { createApp, h, ref } from 'vue';
+      import { ElButton, ElDrawer, ElTabs, ElTabPane } from 'element-plus';
+      import 'element-plus/dist/index.css';
+      import '/src/shared/styles/style.css';
+      import ThinkingPanelDetails from '/src/modules/chat/components/thinking/ThinkingPanelDetails.vue';
+      import { useMobileViewport } from '/src/shared/composables/useMobileViewport.js';
+      import { activateRuntimeParams, createDefaultRuntimeParamsDocument } from '@noobot/shared/runtime-params';
+      import { translateMessageKey } from '/src/shared/i18n/messageCatalog.js';
+      activateRuntimeParams(createDefaultRuntimeParamsDocument());
+      const translate = (key, values) => translateMessageKey('en-US', key, values);
+      const noop = () => {};
+      const app = createApp({ setup() {
+        const { drawerSize } = useMobileViewport();
+        const lastPage = ref(false);
+        return () => h(ElDrawer, { modelValue: true, size: drawerSize.value, class: 'noobot-side-drawer' }, () =>
+          h(ThinkingPanelDetails, {
+            messageItem: {}, translate, getTreePrefix: noop, getDetailKey: noop,
+            isExpanded: () => false, toggleExpanded: noop,
+            page: lastPage.value
+              ? { after: 999999999, count: 1, messageCount: 1000000000, nextCursor: null }
+              : { after: 999999998, count: 1, messageCount: 1000000000, nextCursor: {} },
+            onNextPage: () => { lastPage.value = true; },
+            onRestartPages: () => { lastPage.value = false; },
+          }),
+        );
+      } });
+      app.component('ElButton', ElButton).component('ElTabs', ElTabs).component('ElTabPane', ElTabPane);
+      app.mount('#app');
+      </script>`,
+      );
+      res.setHeader("Content-Type", "text/html");
+      res.end(html);
+    });
+    let browser;
+    try {
+      await server.listen();
+      browser = await chromium.launch();
+      const page = await browser.newPage({ isMobile: true, hasTouch: true });
+      for (const width of [320, 390, 1200]) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto(`${server.resolvedUrls.local[0]}__thinking-pagination`);
+        const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+        const nextPage = page.getByRole("button", { name: "Next page", exact: true });
+        const drawerBody = page.locator(".el-drawer__body");
+        await nextPage.click({ trial: true });
+        const bounds = await drawerBody.boundingBox();
+        for (const button of [refresh, nextPage]) {
+          assert.equal(await button.textContent(), "");
+          assert.equal(await button.locator("svg").count(), 1);
+          const box = await button.boundingBox();
+          assert.ok(box.x >= bounds.x && box.x + box.width <= bounds.x + bounds.width);
+          assert.ok(box.x >= 0 && box.x + box.width <= width);
+        }
+        await nextPage.click();
+        assert.ok(await nextPage.isDisabled());
+        await refresh.click();
+        assert.ok(await nextPage.isEnabled());
       }
     } finally {
       await browser?.close();

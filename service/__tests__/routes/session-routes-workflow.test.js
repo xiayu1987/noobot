@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -13,14 +13,22 @@ import { createServicePluginHost } from "../../services/service-plugin-host.js";
 import {
   appendExecutionLogArtifact,
   createScopedSessionArtifactReader,
+  immutableSessionReaderAccess,
 } from "noobot-agent/session";
+import { SessionPageSnapshots } from "../../../agent/src/session/session-page-snapshots.js";
 import { initializeImmutableSession } from "../../../agent/src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TEST_STORAGE_SERVICE } from "../storage-service.test-helpers.js";
 
+const pageSnapshots = new SessionPageSnapshots();
+after(() => pageSnapshots.close());
 const SCOPED_SESSION_READER = createScopedSessionArtifactReader({
   storageService: TEST_STORAGE_SERVICE,
+  sessionReaderAccess: immutableSessionReaderAccess,
+  pageSnapshots,
+  assertAuthorityActive: async () => {},
+  withDeletionFence: (_userId, read) => read(),
 });
 import { buildExecutionReport } from "@noobot/session-protocol/execution-report";
 import { SESSION_ERROR_CODE, createEmptyTurnLifecycle } from "@noobot/session-protocol";
@@ -55,9 +63,13 @@ function appendTestExecutionLog({ sessionDir, executionLog }) {
   });
 }
 
-async function registerWorkflowPluginRoutes(app, { bot, translateText }) {
+async function registerWorkflowPluginRoutes(
+  app,
+  { bot, translateText, runBotOperation = (run) => run() },
+) {
   const pluginHost = createServicePluginHost();
   await pluginHost.registerServiceRoutes(app, {
+    runBotOperation,
     ports: createPluginServicePorts({ bot, translateText }),
     enforceUserScopeParam: (_req, _res, next) => next(),
     translateText,
@@ -92,12 +104,32 @@ test("workflow service reads child execution events only from the workflow scope
       turnLifecycle: createEmptyTurnLifecycle(),
     },
   });
+  await fs.cp(
+    workflowDir,
+    path.join(workspaceRoot, "runtime/plugin-data/workflow/session-other/node"),
+    {
+      recursive: true,
+    },
+  );
   const ports = createPluginServicePorts({
     bot: { session: SCOPED_SESSION_READER, getWorkspacePath: () => workspaceRoot },
     translateText: (key) => key,
   });
-  const { executionLogs: logs } = await ports.sessions.forPlugin("workflow").readSnapshot({
+  const sessions = ports.sessions.forPlugin({
+    id: "workflow",
+    contributes: { agent: { scopedSessionRoots: ["session"] } },
+  });
+  await assert.rejects(
+    sessions.readSnapshot({
+      userId: "u1",
+      authoritySessionId: "root-s",
+      segments: ["session-other", "node"],
+    }),
+    { code: "SESSION_NOT_FOUND" },
+  );
+  const { executionLogs: logs } = await sessions.readSnapshot({
     userId: "u1",
+    authoritySessionId: "root-s",
     segments: ["session", "root-s", "wf_node_1"],
   });
 
@@ -161,7 +193,6 @@ test("session-routes: workflow session returns the canonical snapshot and execut
       ...SCOPED_SESSION_READER,
       getRootSessionId: async () => "",
       deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-      getAllSessionsData: async () => [],
     },
     getWorkspacePath: () => workspaceRoot,
     getAttachmentById: async () => null,
@@ -372,7 +403,6 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
       ...SCOPED_SESSION_READER,
       getRootSessionId: async () => "",
       deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-      getAllSessionsData: async () => [],
     },
     getWorkspacePath: () => workspaceRoot,
     getAttachmentById: async () => null,
@@ -383,21 +413,63 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
     handleChat: (_req, res) => res.json({ ok: true }),
     translateText,
   });
-  await registerWorkflowPluginRoutes(app, { bot, translateText });
+  const completed = Promise.withResolvers();
+  let interruptedCursor;
+  let disconnect = true;
+  await registerWorkflowPluginRoutes(app, {
+    bot,
+    translateText,
+    runBotOperation(run) {
+      const operation = run();
+      if (disconnect) operation.then(() => completed.resolve(null), completed.resolve);
+      return operation;
+    },
+  });
+  const json = app.response.json;
+  app.response.json = function (body) {
+    if (!disconnect || !body.ok) return json.call(this, body);
+    interruptedCursor = body.nextCursor;
+    return this.destroy();
+  };
 
   await withTestServer(app, async (baseUrl) => {
     const detailUrl = `${baseUrl}/internal/workflow/session/u1/root-s/wf_node_1/thinking-detail`;
+    const query = `turnScopeId=${encodeURIComponent(turnScopeId)}&dialogProcessId=dp-1&nodeSessionId=node-s&limit=2`;
+    await assert.rejects(fetch(`${detailUrl}?${query}`), TypeError);
+    assert.equal(await completed.promise, null);
+    assert.ok(interruptedCursor);
+    disconnect = false;
+    const expired = await fetch(
+      `${detailUrl}?${query}&cursor=${encodeURIComponent(JSON.stringify(interruptedCursor))}`,
+    );
+    assert.equal(expired.status, 410);
+    assert.equal((await expired.json()).errorCode, "SESSION_PAGE_SNAPSHOT_EXPIRED");
     const response = await fetch(
-      `${detailUrl}?turnScopeId=${encodeURIComponent(turnScopeId)}&dialogProcessId=dp-1`,
+      `${detailUrl}?turnScopeId=${encodeURIComponent(turnScopeId)}&dialogProcessId=dp-1&nodeSessionId=node-s&limit=2`,
     );
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.equal(payload.exists, true);
     assert.equal(payload.sessionId, "node-s");
-    assert.equal(payload.messageItem.turnScopeId, turnScopeId);
-    assert.equal(payload.counts.executionLogCount, 3);
-    assert.equal(payload.counts.injectedMessageCount, 1);
+    assert.equal(payload.messageCount, 4);
+    assert.deepEqual(
+      payload.messages.map((message) => message.messageUid),
+      ["a1", "i1"],
+    );
+    assert.ok(payload.nextCursor);
+    const continuation = await fetch(
+      `${detailUrl}?turnScopeId=${encodeURIComponent(turnScopeId)}&dialogProcessId=dp-1&nodeSessionId=node-s&limit=2&cursor=${encodeURIComponent(JSON.stringify(payload.nextCursor))}`,
+    );
+    assert.equal(continuation.status, 200);
+    const page = await continuation.json();
+    assert.equal(page.generation, payload.generation);
+    assert.equal(page.messageCount, payload.messageCount);
+    assert.deepEqual(
+      page.messages.map((message) => message.messageUid),
+      ["t1", "t2"],
+    );
+    assert.equal(page.nextCursor, null);
     assert.equal(Object.hasOwn(payload, "allMessages"), false);
 
     for (const query of [
@@ -405,7 +477,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
       "dialogProcessId=dp-1",
       `turnScopeId=${encodeURIComponent(` ${turnScopeId}`)}&dialogProcessId=dp-1`,
     ]) {
-      const rejected = await fetch(`${detailUrl}?${query}`);
+      const rejected = await fetch(`${detailUrl}?nodeSessionId=node-s&limit=2&${query}`);
       const rejectedPayload = await rejected.json();
       assert.equal(rejected.status, 400, query);
       assert.equal(rejectedPayload.ok, false, query);
@@ -441,9 +513,27 @@ test("session-routes: workflow execution-report reads the scoped node report", a
   await registerWorkflowPluginRoutes(app, { bot, translateText });
 
   await withTestServer(app, async (baseUrl) => {
-    const found = await fetch(
-      `${baseUrl}/internal/workflow/session/u1/root-s/wf_node_1/execution-report?dialogProcessId=wf_node_1`,
-    );
+    const reportUrl = `${baseUrl}/internal/workflow/session/u1/root-s/wf_node_1/execution-report?dialogProcessId=wf_node_1`;
+    const orphan = await fetch(reportUrl);
+    assert.equal(orphan.status, 404);
+    assert.equal((await orphan.json()).errorCode, SESSION_ERROR_CODE.SESSION_NOT_FOUND);
+    await writeScopedSessionDir({
+      sessionDir: path.dirname(reportDir),
+      sessionPayload: {
+        sessionId: "node-s",
+        parentSessionId: "root-s",
+        caller: SESSION_CALLER.USER,
+        createdAt: WORKFLOW_SESSION_TS,
+        updatedAt: WORKFLOW_SESSION_TS,
+        aggregateVersion: 0,
+        sessionArtifactEvents: [],
+        messages: [],
+        dialogOrder: [],
+        turnTimings: [],
+        turnLifecycle: createEmptyTurnLifecycle(),
+      },
+    });
+    const found = await fetch(reportUrl);
     const payload = await found.json();
     assert.equal(found.status, 200);
     assert.equal(payload.ok, true);

@@ -60,6 +60,16 @@ test("v17 runs before write-time dialog facts so backfilled users stay dialog an
   );
 });
 
+test("v13 checks legacy metadata before v17 backfills the root user origin", () => {
+  const source = sessionWith([message("u1", { userMetaMaterialized: false })], {
+    schemaVersion: 11,
+  });
+  const result = migrateSessionDocument(source);
+  assert.equal(result.document.messages[0].messageOrigin, "natural");
+  assert.equal(Object.hasOwn(result.document.messages[0], "userMetaMaterialized"), false);
+  assert.equal(result.document.dialogOrder[0].userMessageUid, "u1");
+});
+
 test("v17 rejects child session dialog users without a recorded origin", () => {
   assert.throws(
     () => migrateSessionDocument(sessionWith([message("u1")], { parentSessionId: "parent-1" })),

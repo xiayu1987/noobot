@@ -41,7 +41,7 @@ describe("sessionRecords aggregate version reconciliation", () => {
       isLocal: false,
       loaded: true,
       aggregateVersion: 1,
-      generation: null,
+      knownGeneration: null,
     };
     for (const sessionDocs of [undefined, null, {}]) {
       expect(() => hasCurrentSessionDetail({ ...session, sessionDocs })).toThrow(

@@ -5,7 +5,7 @@
  */
 import { contentDigest } from "./immutable-storage-io.js";
 import { immutableStorageError } from "@noobot/session-protocol/immutable-storage";
-import { recordStorageWork } from "./storage-transaction.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 import { isFunction, isPlainObject } from "@noobot/shared/value";
 import { runStorageBatch } from "./storage-batch-results.js";
 

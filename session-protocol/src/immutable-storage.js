@@ -6,10 +6,7 @@
 import { storageDigest } from "#storage-digest";
 import { immutableStorageError } from "./immutable-storage-error.js";
 export { immutableStorageError } from "./immutable-storage-error.js";
-export {
-  IMMUTABLE_SESSION_COLLECTIONS,
-  requireImmutableCollection,
-} from "./immutable-collections.js";
+export { requireImmutableCollection } from "./immutable-collections.js";
 import {
   IMMUTABLE_SEGMENT,
   immutableSegmentFileId,
@@ -22,8 +19,8 @@ import {
 import { isFunction, isPlainObject, stableValue } from "@noobot/shared/value";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { isTerminalTurnState } from "./lifecycle/turn-state.js";
-import { isUnsuccessfulTurnTerminalStatus } from "./lifecycle/turn-terminal.js";
+import { lifecycleTerminalPosition } from "./lifecycle-terminal-index.js";
+export { isLifecycleTerminalCandidate as isImmutableTerminalCandidate } from "./lifecycle-terminal-index.js";
 import {
   IMMUTABLE_LOCATED_SESSION_FORMAT,
   isImmutableLocatedSessionFormat,
@@ -31,33 +28,25 @@ import {
 } from "./immutable-record-location.js";
 export { IMMUTABLE_LOCATED_SESSION_FORMAT } from "./immutable-record-location.js";
 
-export function immutableLifecyclePosition(turn) {
+export const IMMUTABLE_TITLE_INDEX_VERSION = 2;
+
+export function immutableTitleIndexRequiresUpgrade(descriptor) {
+  if (descriptor === null) return true;
   if (
-    !Number.isSafeInteger(turn?.sequence) ||
-    turn.sequence < 1 ||
-    typeof turn.turnScopeId !== "string" ||
-    !turn.turnScopeId
+    !isPlainObject(descriptor) ||
+    Object.keys(descriptor).length !== 2 ||
+    !Object.hasOwn(descriptor, "root") ||
+    !Object.hasOwn(descriptor, "version")
   )
-    throw immutableStorageError("Invalid lifecycle index identity");
-  return (
-    turn.sequence.toString(2).padStart(53, "0") +
-    [...storageDigest(turn.turnScopeId)]
-      .map((digit) => Number.parseInt(digit, 16).toString(2).padStart(4, "0"))
-      .join("")
-  );
+    throw immutableStorageError("Invalid title index descriptor");
+  if (descriptor.version === 1) return true;
+  if (descriptor.version !== IMMUTABLE_TITLE_INDEX_VERSION)
+    throw immutableStorageError("Unknown title index version");
+  return false;
 }
 
-export function isImmutableTerminalCandidate(turn, hasMessages) {
-  return Boolean(
-    turn &&
-    isTerminalTurnState(turn.state) &&
-    (hasMessages ||
-      isUnsuccessfulTurnTerminalStatus(
-        String(turn.terminalStatus?.status || turn.executionState || "")
-          .trim()
-          .toLowerCase(),
-      )),
-  );
+export function immutableLifecyclePosition(turn) {
+  return lifecycleTerminalPosition(turn, immutableStorageError);
 }
 
 export const IMMUTABLE_SESSION_FORMAT = "noobot.immutable-session/1";
@@ -209,49 +198,6 @@ export function requireImmutableRetainedSnapshot(snapshot, head) {
   if (snapshot.sessionId !== head.sessionId || snapshot.generation > head.generation)
     throw immutableStorageError("Retained reader does not belong to the committed history");
   return snapshot;
-}
-
-export function createImmutableReaderLifecycle({ generation, methods, release }) {
-  if (!Number.isSafeInteger(generation) || generation < 1 || !isFunction(release))
-    throw new TypeError("Immutable reader requires a generation and release operation");
-  let closing = false;
-  let closePromise;
-  let active = 0;
-  let drained;
-  const close = () => {
-    closing = true;
-    if (!closePromise)
-      closePromise = (async () => {
-        if (active)
-          await new Promise((resolve) => {
-            drained = resolve;
-          });
-        await release();
-      })().catch((error) => {
-        closePromise = undefined;
-        throw error;
-      });
-    return closePromise;
-  };
-  const reader = { generation, close, [Symbol.asyncDispose]: close };
-  for (const [name, method] of Object.entries(methods)) {
-    if (!isFunction(method) || Object.hasOwn(reader, name))
-      throw new TypeError("Invalid immutable reader operation");
-    reader[name] = async (...args) => {
-      if (closing)
-        throw Object.assign(new Error("Immutable session reader is closed"), {
-          code: "SESSION_READER_CLOSED",
-        });
-      active += 1;
-      try {
-        return await method(...args);
-      } finally {
-        active -= 1;
-        if (!active) drained?.();
-      }
-    };
-  }
-  return Object.freeze(reader);
 }
 
 export const IMMUTABLE_CLEANUP_PLAN = Object.freeze({
@@ -604,19 +550,6 @@ export function requireImmutableCleanupChunk(chunk, format) {
   return chunk;
 }
 
-export const IMMUTABLE_CHECKPOINT_FORBIDDEN_WORK = Object.freeze([
-  "optionalJsonReads",
-  "checkpointIdentityCollections",
-  "checkpointIdentityVisits",
-  "materializedMessages",
-  "projectionRebuiltMessages",
-  "projectionSizeMessages",
-  "foldedRecords",
-  "journalReadBytes",
-  "eventJournalReadBytes",
-  "pruneDirectoryScans",
-  "pruneSnapshotVisits",
-]);
 const HEAD_FIELDS = ["format", "sessionId", "generation", "root", "operations", "commit"];
 const REFERENCE_PATTERN = /^[a-f0-9]{64}$/;
 
@@ -661,6 +594,60 @@ export function requireImmutableSessionHead(head, sessionId, format = IMMUTABLE_
   if (format === IMMUTABLE_SEGMENT_SESSION_FORMAT) requireImmutableSegmentTail(head.segmentTail);
   if (isImmutableLocatedSessionFormat(format)) requireImmutableLocatedSnapshot(head);
   return head;
+}
+
+const MIGRATION_SOURCE_FIELDS = Object.freeze(["sessionId", "format", "generation", "commit"]);
+
+export function captureImmutableMigrationSourceIdentity(identity) {
+  if (
+    !isPlainObject(identity) ||
+    Reflect.ownKeys(identity).length !== MIGRATION_SOURCE_FIELDS.length ||
+    MIGRATION_SOURCE_FIELDS.some((field) => !Object.hasOwn(identity, field))
+  )
+    throw new TypeError(
+      "Migration requires an explicit source identity or null for initial capture",
+    );
+  const { sessionId, format, generation, commit } = identity;
+  if (
+    typeof sessionId !== "string" ||
+    !sessionId ||
+    !Number.isSafeInteger(generation) ||
+    generation < 1
+  )
+    throw new TypeError("Invalid immutable migration source identity");
+  immutableSessionReferenceContract(format)(commit);
+  return Object.freeze({ sessionId, format, generation, commit });
+}
+
+export function bindImmutableMigrationSource(head, expectedSource) {
+  const { sessionId, format, generation, commit } = head;
+  const identity = captureImmutableMigrationSourceIdentity({
+    sessionId,
+    format,
+    generation,
+    commit,
+  });
+  if (
+    expectedSource !== null &&
+    MIGRATION_SOURCE_FIELDS.some((field) => identity[field] !== expectedSource[field])
+  )
+    throw Object.assign(
+      new Error("Immutable migration source differs from its recorded identity"),
+      {
+        code: "SESSION_MIGRATION_SOURCE_CHANGED",
+      },
+    );
+  return identity;
+}
+
+export function assertCurrentImmutableMigrationPublication(current, captured) {
+  if (
+    encodeImmutableSessionHead(current, current.format) !==
+    encodeImmutableSessionHead(captured, captured.format)
+  )
+    throw Object.assign(new Error("Immutable migration source publication changed"), {
+      code: "SESSION_MIGRATION_SOURCE_CHANGED",
+    });
 }
 
 function requireHeadText(raw) {

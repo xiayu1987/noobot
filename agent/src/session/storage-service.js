@@ -5,12 +5,13 @@
  */
 import { fsReadFile, fsRm, fsRename, fsStat, fsWriteFile } from "../shared/storage/fs-adapter.js";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
+import { writeDurableJsonFile } from "../shared/storage/durable-file.js";
 import {
   isMissingPersistencePathError,
   readOptionalPersistedJsonFile,
   readPersistedJsonFile,
 } from "../shared/storage/json-file-reader.js";
-import { isFunction } from "@noobot/shared/value";
+import { isFunction, isObjectLike } from "@noobot/shared/value";
 
 const STORAGE_SERVICE_METHODS = Object.freeze([
   "exists",
@@ -24,8 +25,7 @@ const STORAGE_SERVICE_METHODS = Object.freeze([
 
 export function requireStorageService(storageService, owner) {
   if (
-    storageService === null ||
-    typeof storageService !== "object" ||
+    !isObjectLike(storageService) ||
     !STORAGE_SERVICE_METHODS.every((method) => isFunction(storageService[method]))
   ) {
     throw new TypeError(`${owner} requires storageService`);
@@ -95,8 +95,13 @@ export class StorageService {
     onWrite?.(Buffer.byteLength(content));
   }
 
-  async writeJsonAtomic(filePath, data, { onWrite } = {}) {
+  async writeJsonAtomic(filePath, data, { onWrite, durable = false } = {}) {
     const content = JSON.stringify(data, null, 2);
+    if (durable) {
+      await writeDurableJsonFile(filePath, content);
+      onWrite?.(Buffer.byteLength(content));
+      return;
+    }
     await writeFileAtomic({
       filePath,
       content,

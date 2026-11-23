@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import test from "node:test";
 import path from "node:path";
 import { readFile, rm, writeFile } from "node:fs/promises";
@@ -17,12 +19,18 @@ import { resolveSessionArtifactMutationLock } from "../../src/session/session-ar
 import { summarizeExecutionLogs } from "../../src/observability/execution-log/execution-log-summary.js";
 import { createSessionFacade } from "../../src/session/index.js";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
+import { createTestMessageCreationBatch } from "../helpers/message-persistence-receipts.js";
 import { readExecutionLogs } from "../../src/session/session-artifact-store.js";
-import { provisionTestSession, testWallClock } from "../helpers/session-services.js";
+import {
+  persistSessionDeletionMarkers,
+  provisionTestSession,
+  testWallClock,
+} from "../helpers/session-services.js";
 import { useRuntimeEventsEnv } from "../helpers/runtime-events-env.js";
 import { buildHarness, readJson } from "./scoped-session-repositories.fixtures.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createEmptySessionTree } from "@noobot/workspace-protocol/session-tree";
+const runChild = promisify(execFile);
 
 const SCOPED_ROOT = "runtime/plugin-data/workflow/session";
 
@@ -92,6 +100,8 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
     assert.equal(scope.sessionDir, path.join(root, `alice/${SCOPED_ROOT}/run-a/node-a`));
     assert.equal(scope.resolvedParentSessionId, "parent-a");
     const scopedSnapshot = await createSessionFacade(runtime).readScopedSessionSnapshot({
+      userId: "alice",
+      authoritySessionId: "parent-a",
       sessionDir: scope.sessionDir,
     });
     assert.equal(await sessionRepo.storageService.exists(scope.metadataFile), false);
@@ -111,7 +121,11 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
     assert.equal(await sessionRepo.storageService.exists(scope.sessionSummaryFile), false);
     assert.deepEqual(await readFile(headFile), headBefore);
     const facade = createSessionFacade(runtime);
-    const snapshotRequest = { sessionDir: scope.sessionDir };
+    const snapshotRequest = {
+      userId: "alice",
+      authoritySessionId: "parent-a",
+      sessionDir: scope.sessionDir,
+    };
     const snapshot = await facade.readScopedSessionSnapshot(snapshotRequest);
     const corruptCache = "{invalid-summary-json";
     await writeFile(scope.sessionSummaryFile, corruptCache);
@@ -142,7 +156,9 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
       createEmptySessionTree(),
     );
     assert.equal(
-      await storageService.exists(resolveSessionArtifactMutationLock(scope.sessionDir)),
+      await storageService.exists(
+        resolveSessionArtifactMutationLock(path.join(defaultRoot, "child-a")),
+      ),
       false,
     );
   } finally {
@@ -256,42 +272,44 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
         },
       ],
     });
-    await new SessionTurnPersister({ session, now: testWallClock }).appendAgentMessages({
-      ...turnIdentity,
-      messages: [
-        {
-          attachments: [],
-          transferEnvelopes: [],
-          messageUid: "sm_tool_call",
-          role: "assistant",
-          presentationMessageId: "pm_fx1",
-          modelMessageId: "mm_scoped_session_repositor_1",
-          type: "tool_call",
-          content: "",
-          tool_calls: [{ id: "call-1", function: { name: "read_file", arguments: "{}" } }],
-        },
-        {
-          attachments: [],
-          transferEnvelopes: [],
-          messageUid: "sm_tool_result",
-          role: "tool",
-          presentationMessageId: "pm_fx1",
-          type: "tool_result",
-          content: "body",
-          tool_call_id: "call-1",
-        },
-        {
-          attachments: [],
-          transferEnvelopes: [],
-          messageUid: "sm_done",
-          role: "assistant",
-          presentationMessageId: "pm_fx1",
-          modelMessageId: "mm_scoped_session_repositor_2",
-          type: "message",
-          content: "done",
-        },
-      ],
-    });
+    await new SessionTurnPersister({ session, now: testWallClock }).appendAgentMessages(
+      createTestMessageCreationBatch({
+        ...turnIdentity,
+        messages: [
+          {
+            attachments: [],
+            transferEnvelopes: [],
+            messageUid: "sm_tool_call",
+            role: "assistant",
+            presentationMessageId: "pm_fx1",
+            modelMessageId: "mm_scoped_session_repositor_1",
+            type: "tool_call",
+            content: "",
+            tool_calls: [{ id: "call-1", function: { name: "read_file", arguments: "{}" } }],
+          },
+          {
+            attachments: [],
+            transferEnvelopes: [],
+            messageUid: "sm_tool_result",
+            role: "tool",
+            presentationMessageId: "pm_fx1",
+            type: "tool_result",
+            content: "body",
+            tool_call_id: "call-1",
+          },
+          {
+            attachments: [],
+            transferEnvelopes: [],
+            messageUid: "sm_done",
+            role: "assistant",
+            presentationMessageId: "pm_fx1",
+            modelMessageId: "mm_scoped_session_repositor_2",
+            type: "message",
+            content: "done",
+          },
+        ],
+      }),
+    );
 
     const reader = await sessionRepo.requireSessionReader("alice", "child-agent", {
       persistenceContext: access.persistenceContext,
@@ -370,27 +388,63 @@ test("scoped repositories isolate concurrent contexts and mutation locks", async
     const facade = createSessionFacade(runtime);
     const snapshots = await Promise.all(
       [firstScope, secondScope].map(({ sessionDir }) =>
-        facade.readScopedSessionSnapshot({ sessionDir }),
+        facade.readScopedSessionSnapshot({
+          userId: "alice",
+          authoritySessionId: "parent",
+          sessionDir,
+        }),
       ),
     );
     assert.deepEqual(
       snapshots.map(({ meta }) => meta.node),
       ["node-1", "node-2"],
     );
-    for (const scope of [firstScope, secondScope]) {
-      assert.equal(
-        await sessionRepo.storageService.exists(
-          resolveSessionArtifactMutationLock(scope.sessionDir),
-        ),
-        false,
+    const firstLock = resolveSessionArtifactMutationLock(firstScope.sessionDir);
+    const secondLock = resolveSessionArtifactMutationLock(secondScope.sessionDir);
+    const coordinatorUrl = new URL(
+      "../../src/session/session-mutation-coordinator.js",
+      import.meta.url,
+    );
+    async function probe(lock, expected) {
+      const { stdout } = await runChild(
+        process.execPath,
+        [
+          "--input-type=module",
+          "--eval",
+          `
+        import { SessionMutationCoordinator } from ${JSON.stringify(coordinatorUrl.href)};
+        const coordinator = new SessionMutationCoordinator({
+          readTiming: () => ({ timeoutMs: 500, pollMs: 5 }),
+        });
+        try {
+          console.log(await coordinator.run(process.argv[1], () => "acquired"));
+        } catch (error) {
+          if (error.code !== "SESSION_MUTATION_BUSY") throw error;
+          console.log(error.code);
+        }
+      `,
+          lock,
+        ],
+        { timeout: 10000 },
       );
+      assert.equal(stdout.trim(), expected);
     }
+    await sessionRepo.withSessionReader(
+      "alice",
+      nodes[0].sessionId,
+      async () => {
+        await probe(secondLock, "acquired");
+        await probe(firstLock, "SESSION_MUTATION_BUSY");
+      },
+      { persistenceContext: nodes[0].access.persistenceContext },
+    );
+    await probe(firstLock, "acquired");
   } finally {
     await harness.cleanup();
   }
 });
 
-test("scoped metadata writes reject non-object metadata without leaving files or locks", async () => {
+test("scoped metadata writes reject non-object metadata without publishing a revision", async () => {
   const harness = buildHarness();
   const { runtime, sessionRepo } = await harness.setup();
   try {
@@ -404,6 +458,9 @@ test("scoped metadata writes reject non-object metadata without leaving files or
       parentSessionId: "parent",
       persistenceContext: access.persistenceContext,
     });
+    const scope = await access.locate();
+    const headFile = path.join(scope.sessionDir, "head.json");
+    const headBefore = await readFile(headFile);
     for (const metadata of [null, [], "boom"]) {
       await assert.rejects(
         sessionRepo.writeSessionMetadata("alice", "child", metadata, {
@@ -412,12 +469,8 @@ test("scoped metadata writes reject non-object metadata without leaving files or
         { name: "TypeError", message: /plain object/ },
       );
     }
-    const scope = await access.locate();
     assert.equal(await sessionRepo.storageService.exists(scope.metadataFile), false);
-    assert.equal(
-      await sessionRepo.storageService.exists(resolveSessionArtifactMutationLock(scope.sessionDir)),
-      false,
-    );
+    assert.deepEqual(await readFile(headFile), headBefore);
   } finally {
     await harness.cleanup();
   }
@@ -517,7 +570,7 @@ test("execution report writes reject deleted sessions and invalid turn keys", as
         caller: SESSION_CALLER.USER,
       });
     }
-    await sessionRepo.markSessionsDeleted("alice", ["gone"]);
+    await persistSessionDeletionMarkers(sessionRepo, "alice", ["gone"]);
     await assert.rejects(
       executionRepo.saveReport("alice", "gone", reportFor("gone", "dp-1"), treeOptions("gone")),
       { code: "SESSION_DELETED" },

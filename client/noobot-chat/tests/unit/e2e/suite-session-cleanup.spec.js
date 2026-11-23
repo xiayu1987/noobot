@@ -7,6 +7,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { afterEach, expect, it, vi } from "vitest";
+import Reporter, { registerSuiteSession } from "../../e2e/protocol/suite-session-cleanup.js";
 
 const { newContext, validateRequestLogOrder } = vi.hoisted(() => ({
   newContext: vi.fn(),
@@ -19,9 +20,11 @@ vi.mock("@playwright/test", () => ({ request: { newContext }, expect: vi.fn() })
 let directory;
 afterEach(async () => {
   vi.unstubAllEnvs();
-  vi.resetModules();
-  await import("@noobot/shared/testing/runtime-params");
-  if (directory) await fs.rm(directory, { recursive: true, force: true });
+  vi.resetAllMocks();
+  if (directory) {
+    await fs.rm(directory, { recursive: true, force: true });
+    directory = undefined;
+  }
 });
 
 async function setupSuite() {
@@ -51,8 +54,6 @@ async function setupSuite() {
     dispose: vi.fn(),
   };
   newContext.mockResolvedValue(context);
-  const { default: Reporter, registerSuiteSession } =
-    await import("../../e2e/protocol/suite-session-cleanup.js");
   const project = { outputDir, testDir, testMatch: /\.spec\.js$/, grep: /.*/, grepInvert: null };
   const createReporter = (overrides = {}) => {
     const reporter = new Reporter({ failureEvidenceRoot: evidenceRoot, requestLogsRoot });
@@ -75,9 +76,9 @@ async function setupSuite() {
 
 const fileTest = (file) => ({ location: { file } });
 
-it("requires an absolute failure evidence root", async () => {
-  const { default: Reporter } = await import("../../e2e/protocol/suite-session-cleanup.js");
+it("requires an absolute failure evidence root", () => {
   expect(() => new Reporter()).toThrow(/failureEvidenceRoot/);
+  expect(() => new Reporter({ failureEvidenceRoot: "relative" })).toThrow(/failureEvidenceRoot/);
 });
 
 it("rejects filtered full suite runs before touching evidence or sessions", async () => {

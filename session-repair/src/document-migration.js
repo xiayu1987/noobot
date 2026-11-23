@@ -796,9 +796,10 @@ const DOCUMENT_MIGRATION_STEPS = Object.freeze([
   migrateDocumentMessages,
   migrateMessageErrorText,
   migrateTurnTimingLifecycleStart,
-  migrateMessageEntityContract,
   migrateRetiredTaskFields,
+
   migrateMessageIdentity,
+  migrateMessageEntityContract,
   migrateReplacedTurns,
   dropLegacyTerminalCommits,
   migrateWriteTimeDialogFacts,

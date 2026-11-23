@@ -127,6 +127,8 @@ export const HOOK_POINT_DESCRIPTORS = Object.freeze(
         point,
         domain: requireHookPointDomain(point),
         execution: HOOK_EXECUTION.SEQUENTIAL,
+        drainOnAbort: point === HOOK_POINT.SERVICE.AFTER_SESSION_DELETE,
+        requiresReplayableHandlers: point === HOOK_POINT.SERVICE.AFTER_SESSION_DELETE,
         failureMode: failFlowPoints.has(point)
           ? HOOK_FAILURE_MODE.FAIL_FLOW
           : HOOK_FAILURE_MODE.CONTINUE,

@@ -72,12 +72,42 @@ function createWorkflowSessionService(authenticatedRequest) {
       );
     },
     getThinkingDetail(input) {
-      const { userId, sessionId, routeDialogProcessId, dialogProcessId, turnScopeId } =
-        requireWorkflowSessionRequest(input, "thinking-detail");
-      const query = new URLSearchParams({ dialogProcessId, turnScopeId });
+      const {
+        userId,
+        sessionId,
+        routeDialogProcessId,
+        dialogProcessId,
+        turnScopeId,
+        nodeSessionId,
+        cursor,
+        limit,
+      } = requireWorkflowSessionRequest(input, "thinking-detail");
+      const query = new URLSearchParams({ dialogProcessId, turnScopeId, nodeSessionId, limit });
+      if (cursor !== null) query.set("cursor", JSON.stringify(cursor));
       return request(
         `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(routeDialogProcessId)}/thinking-detail?${query.toString()}`,
         { method: "GET" },
+      );
+    },
+    releaseThinkingDetail(input) {
+      const {
+        userId,
+        sessionId,
+        routeDialogProcessId,
+        dialogProcessId,
+        turnScopeId,
+        nodeSessionId,
+        cursor,
+      } = requireWorkflowSessionRequest(input, "thinking-detail-release");
+      const query = new URLSearchParams({
+        dialogProcessId,
+        turnScopeId,
+        nodeSessionId,
+        cursor: JSON.stringify(cursor),
+      });
+      return request(
+        `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(routeDialogProcessId)}/thinking-detail?${query.toString()}`,
+        { method: "DELETE" },
       );
     },
   });

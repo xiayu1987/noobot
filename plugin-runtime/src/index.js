@@ -58,7 +58,7 @@ function resolveDefaultPluginRootDir() {
 }
 
 function isAbsentPathError(error) {
-  return error?.code === "ENOENT" || error?.code === "ENOTDIR";
+  return error?.code === "ENOENT";
 }
 
 async function readPluginRootEntries(root) {

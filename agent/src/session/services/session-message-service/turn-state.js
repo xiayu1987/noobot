@@ -8,10 +8,7 @@ import { isDeepStrictEqual } from "node:util";
 import { projectCanonicalAttachmentIdentities } from "../../../artifacts/index.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
-import {
-  commitTurnLifecycle,
-  selectAuthoritativeActiveTurn,
-} from "@noobot/authoritative-state/application";
+import { selectAuthoritativeActiveTurn } from "@noobot/authoritative-state/application";
 import {
   SESSION_ERROR_CODE,
   assertTurnAcceptanceUserMessage,
@@ -83,8 +80,7 @@ function resolveTurnAggregateConcurrency(session, expectedAggregateVersion) {
   };
 }
 
-function materializeAcceptedUserMessage({
-  session,
+function createAcceptedUserMessage({
   event,
   turn,
   input,
@@ -94,9 +90,7 @@ function materializeAcceptedUserMessage({
   nowValue,
 }) {
   if (!input) return null;
-  const existing = findTurnScopeUserMessage(session, event.turnScopeId);
-  if (existing) return existing;
-  const userMessage = normalizeMessageEntity({
+  return normalizeMessageEntity({
     messageUid: createMessageUid(),
     userMessageId: input.userMessageId,
     role: "user",
@@ -122,52 +116,6 @@ function materializeAcceptedUserMessage({
     },
     ts: nowValue,
   });
-  session.messages = [...session.messages, userMessage];
-  registerSessionMessageFacts(session, userMessage);
-  return userMessage;
-}
-
-function acceptCommittedTurn({
-  service,
-  result,
-  session,
-  rejectedSession,
-  lifecycleEvent,
-  acceptedUserMessageInput,
-  actualVersion,
-  nextAggregateVersion,
-  userId,
-  sessionId,
-  resolvedParentSessionId,
-}) {
-  if (!result.applied) {
-    const userMessage = acceptedUserMessageInput
-      ? findTurnScopeUserMessage(session, lifecycleEvent.turnScopeId)
-      : null;
-    return {
-      rejected: {
-        ...result,
-        session: rejectedSession === null ? null : copyCheckpointReceiptLists(rejectedSession),
-        userMessage,
-        dialogProcessId: text(result.turn?.dialogProcessId),
-        aggregateVersion: actualVersion,
-      },
-    };
-  }
-  session.turnLifecycle = result.lifecycle;
-  const nowValue = service.now();
-  const userMessage = materializeAcceptedUserMessage({
-    session,
-    event: lifecycleEvent,
-    turn: result.turn,
-    input: acceptedUserMessageInput,
-    userId,
-    sessionId,
-    parentSessionId: resolvedParentSessionId,
-    nowValue,
-  });
-  if (userMessage) session.aggregateVersion = nextAggregateVersion;
-  return { userMessage, nowValue };
 }
 
 async function commitImmutableTurnState(
@@ -190,28 +138,29 @@ async function commitImmutableTurnState(
   );
   if (conflict) return conflict;
   const existing = findTurnScopeUserMessage(session, event.turnScopeId);
-  const userMessage = materializeAcceptedUserMessage({
-    session,
-    event: lifecycleEvent,
-    turn: { dialogProcessId: lifecycleEvent.dialogProcessId },
-    input: acceptedUserMessageInput,
-    userId,
-    sessionId,
-    parentSessionId: scope.resolvedParentSessionId,
-    nowValue: service.now(),
-  });
-  const committed = await commitChanges({
-    expectedGeneration: reader.generation,
-    operationId: randomUUID(),
-    changes: {
-      turnTransition: { ...lifecycleEvent, userId, sessionId },
-      messages: userMessage && !existing ? [userMessage] : [],
-    },
-    committedAt: service.now(),
-  });
-  const transition = committed.aborted ? committed.result : committed.result.turnTransition;
+  const newMessage = existing
+    ? null
+    : createAcceptedUserMessage({
+        event: lifecycleEvent,
+        turn: { dialogProcessId: lifecycleEvent.dialogProcessId },
+        input: acceptedUserMessageInput,
+        userId,
+        sessionId,
+        parentSessionId: scope.resolvedParentSessionId,
+        nowValue: service.now(),
+      });
+  const committed = await commitChanges(
+    await reader.prepareRequest({
+      operationId: randomUUID(),
+      changes: {
+        turnTransition: { ...lifecycleEvent, userId, sessionId },
+        messages: newMessage ? [newMessage] : [],
+      },
+      committedAt: service.now(),
+    }),
+  );
+  const { turnTransition: transition } = committed.result;
   if (!transition.applied) {
-    if (!existing) session.messages = [];
     return {
       ...transition,
       session,
@@ -230,12 +179,15 @@ async function commitImmutableTurnState(
     commandReceipts: [transition.commandReceipt],
   };
   session.updatedAt = transition.turn.updatedAt;
-  if (userMessage && !existing) session.aggregateVersion = nextAggregateVersion;
+  if (newMessage) {
+    session.messages.push(newMessage);
+    session.aggregateVersion = nextAggregateVersion;
+  }
   return {
     ...transition,
     lifecycle: session.turnLifecycle,
     session,
-    userMessage,
+    userMessage: existing ?? newMessage,
     dialogProcessId: text(transition.turn?.dialogProcessId),
     turnStatus: transition.turn?.terminalStatus || null,
     aggregateVersion: session.aggregateVersion,
@@ -252,11 +204,11 @@ export async function getTurnLifecycleSnapshot({
   resolveRecovery,
 }) {
   if (!userId || !sessionId) return { found: false, reason: "missing_session" };
-  const session = await this.sessionRepo.findTurnTerminalSource(userId, sessionId, {
+  const session = await this.sessionRepo.findTurnLifecycleSource(userId, sessionId, {
     persistenceContext,
     terminalLimit,
   });
-  if (!session) return { found: false, reason: SESSION_NOT_FOUND_REASON };
+  if (session === null) return { found: false, reason: SESSION_NOT_FOUND_REASON };
   const recovery = await resolveRecovery(selectAuthoritativeActiveTurn(session.turnLifecycle));
   return {
     found: true,
@@ -309,7 +261,7 @@ export async function applyTurnLifecycleEvent({
   const mutation = this.sessionRepo.withSessionReader(
     userId,
     sessionId,
-    async (reader, scope, commitChanges) => {
+    async ({ reader, scope, commitChanges }) => {
       return await commitImmutableTurnState(
         this,
         reader,
@@ -338,34 +290,33 @@ async function provisionSessionWithInitialTurn({
     userId,
     { sessionId, parentSessionId },
     async (scope) => {
-      await using reader = await this.sessionRepo.recoverImmutableSessionPlacement(
-        userId,
-        sessionId,
-        {
-          scope,
-          persistenceContext,
-        },
-      );
-      if (reader) {
-        if (!isDeepStrictEqual(await reader.readScopedMetadata(), initialSessionMetadata)) {
-          return {
-            applied: false,
-            reason: "initial_session_metadata_conflict",
-            sessionCreated: false,
-          };
-        }
-        const result = await commitImmutableTurnState(
-          this,
-          reader,
-          scope,
-          { userId, sessionId, expectedAggregateVersion, sessionCaller, event },
-          (request) =>
-            this.sessionRepo.commitChanges(userId, sessionId, {
-              ...request,
-              persistenceContext,
-            }),
+      await using recovered = await this.sessionRepo.recoverSessionPlacement(userId, sessionId, {
+        scope,
+        persistenceContext,
+      });
+      if (recovered) {
+        return this.sessionRepo.withSessionReader(
+          userId,
+          sessionId,
+          async ({ reader, scope: recoveredScope, commitChanges }) => {
+            if (!isDeepStrictEqual(await reader.readScopedMetadata(), initialSessionMetadata)) {
+              return {
+                applied: false,
+                reason: "initial_session_metadata_conflict",
+                sessionCreated: false,
+              };
+            }
+            const result = await commitImmutableTurnState(
+              this,
+              reader,
+              recoveredScope,
+              { userId, sessionId, expectedAggregateVersion, sessionCaller, event },
+              commitChanges,
+            );
+            return { ...result, sessionCreated: false };
+          },
+          { persistenceContext },
         );
-        return { ...result, sessionCreated: false };
       }
       const resolvedParentSessionId = scope.resolvedParentSessionId;
       if (await this.sessionRepo.isSessionDeleted(userId, sessionId)) {
@@ -382,46 +333,55 @@ async function provisionSessionWithInitialTurn({
         event,
         sessionCaller,
       );
-      const { actualVersion, nextAggregateVersion, conflict } = resolveTurnAggregateConcurrency(
+      const { actualVersion, conflict } = resolveTurnAggregateConcurrency(
         session,
         expectedAggregateVersion,
       );
       if (conflict) return conflict;
-      const result = commitTurnLifecycle({
-        lifecycle: session.turnLifecycle,
-        event: { ...lifecycleEvent, userId, sessionId },
-        parentSessionId: resolvedParentSessionId,
-        isCommittedEventId: () => false,
-        readPreparedEvent: () => {
-          throw new Error("A new session cannot reference a prepared lifecycle event");
-        },
-        createEventId: randomUUID,
-        now: this.now,
-      });
-      const { rejected, userMessage, nowValue } = acceptCommittedTurn({
-        service: this,
-        result,
-        session,
-        rejectedSession: null,
-        lifecycleEvent,
-        acceptedUserMessageInput,
-        actualVersion,
-        nextAggregateVersion,
+      const committedAt = this.now();
+      const userMessage = createAcceptedUserMessage({
+        event: lifecycleEvent,
+        turn: { dialogProcessId: lifecycleEvent.dialogProcessId },
+        input: acceptedUserMessageInput,
         userId,
         sessionId,
-        resolvedParentSessionId,
+        parentSessionId: resolvedParentSessionId,
+        nowValue: committedAt,
       });
-      if (rejected) return rejected;
-      session.updatedAt = nowValue;
-      await this.sessionRepo.createImmutableSession(userId, session, {
+      const committed = await this.sessionRepo.createStoredSession(userId, session, {
         sessionId,
         scope,
         persistenceContext,
-        authorityEvents: [{ ...result.committedEvent, deliveries: {} }],
+        initialTurn: {
+          committedAt,
+          changes: {
+            turnTransition: { ...lifecycleEvent, userId, sessionId },
+            messages: [userMessage],
+          },
+        },
         scopedMetadata: initialSessionMetadata,
       });
+      const { turnTransition: result, metadata } = committed.result;
+      if (!result.applied)
+        return {
+          ...result,
+          session: null,
+          userMessage: null,
+          dialogProcessId: text(result.turn?.dialogProcessId),
+          aggregateVersion: actualVersion,
+        };
+      Object.assign(session, metadata);
+      session.turnLifecycle = {
+        ...session.turnLifecycle,
+        ...result.header,
+        turns: Object.fromEntries(result.changedTurns.map((turn) => [turn.turnScopeId, turn])),
+        commandReceipts: [result.commandReceipt],
+      };
+      session.messages.push(userMessage);
+      registerSessionMessageFacts(session, userMessage);
       return {
         ...result,
+        lifecycle: session.turnLifecycle,
         session: copyCheckpointReceiptLists(session),
         userMessage,
         dialogProcessId: text(result.turn?.dialogProcessId),
@@ -446,7 +406,7 @@ export async function upsertTurnTiming({
   return this.sessionRepo.withSessionReader(
     userId,
     sessionId,
-    async (reader, _scope, commitChanges) => {
+    async ({ reader, commitChanges }) => {
       const session = await readImmutableTurnMutationSource(reader, { turnScopeId });
       const before = JSON.stringify(session.turnTimings);
       upsertSessionTurnTiming(session, {
@@ -458,12 +418,13 @@ export async function upsertTurnTiming({
       if (JSON.stringify(session.turnTimings) === before)
         return { upserted: false, reason: "unchanged", session };
       const committedAt = this.now();
-      await commitChanges({
-        expectedGeneration: reader.generation,
-        operationId: randomUUID(),
-        changes: { timings: session.turnTimings },
-        committedAt,
-      });
+      await commitChanges(
+        await reader.prepareRequest({
+          operationId: randomUUID(),
+          changes: { timings: session.turnTimings },
+          committedAt,
+        }),
+      );
       session.updatedAt = committedAt;
       return { upserted: true, session };
     },

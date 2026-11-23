@@ -52,6 +52,9 @@ export const DEFAULT_QUANTITY_THRESHOLDS = deepFreeze({
     interestsFavoriteBooksMaxItems: 5,
     interestsHobbiesMaxItems: 5,
   },
+  sessionPageSnapshots: {
+    readers: 32,
+  },
   contextProtocol: {
     turnSummaryCheckpointReceiptLimit: 50,
   },
@@ -142,19 +145,23 @@ export const DEFAULT_QUANTITY_THRESHOLDS = deepFreeze({
 
     thinkingDetailVirtualOverscan: QUANTITY_TIERS.smallFiles,
 
-    thinkingDetailRetryLimit: QUANTITY_TIERS.smallFiles,
-
     frameHealthTopScriptLimit: 3,
 
     sessionListRecentDayGroupCount: 7,
   },
 
+  partitionStorage: {
+    entityPageWriteVectorLimit: 64,
+    recordReadConcurrency: 4,
+  },
   immutableStorage: {
+    entityDirectoryMaxEntries: 32,
+    journalJsonMaxDepth: 64,
+    authorityOutboxPageSize: 256,
     cleanupFilterMaxEntries: 256,
     recordIoConcurrency: 8,
     messagePageSize: 256,
     messageReadPageSize: 64,
-    turnAcceptancePageSize: 1,
     receiptPageSize: 64,
   },
 

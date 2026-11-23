@@ -13,7 +13,7 @@ import {
   ImmutableObjectStore,
   writeDurableReplacement,
 } from "../../src/session/session-artifact-session/immutable-object-store.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 
 const BLOCK_BYTES = LENGTH_THRESHOLDS.immutableStorage.blockBytes;
 const INVALID = { code: "SESSION_IMMUTABLE_STORAGE_INVALID" };

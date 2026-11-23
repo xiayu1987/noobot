@@ -10,7 +10,7 @@ import {
   toggleTurnDetailKey,
 } from "../runtime/engine/turnUiStore.js";
 import { toolLogDetailKey } from "../model/toolLogIdentity.js";
-import { selectThinkingDetailCount } from "../model/thinkingDetailCount.js";
+import { formatThinkingDetailLabel } from "../model/thinkingDetailCount.js";
 
 export function createThinkingPanelPresentation({
   props,
@@ -18,8 +18,8 @@ export function createThinkingPanelPresentation({
   translate,
   getThinkingDetailForMessage,
   getCanonicalExecutionLogs,
+  getThinkingDetailCount,
 }) {
-  const timelineMessage = (messageItem = {}) => messageItem;
   const detailExpansionTick = ref(0);
 
   function groupExecutionLogs(messageItem = {}) {
@@ -54,14 +54,8 @@ export function createThinkingPanelPresentation({
     detailExpansionTick.value += 1;
   }
 
-  function getThinkingDetailCount(messageItem = {}) {
-    return selectThinkingDetailCount(timelineMessage(messageItem));
-  }
-
-  function getThinkingDetailLabel(messageItem = {}) {
-    return translate("message.thinkingDetails", {
-      count: getThinkingDetailCount(messageItem),
-    });
+  function getThinkingDetailLabel(messageItem) {
+    return formatThinkingDetailLabel(translate, getThinkingDetailCount(messageItem));
   }
 
   function getThinkingTreePrefix(toolLogItem = {}) {

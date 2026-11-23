@@ -353,7 +353,7 @@ test("maybeSummarize uses configured memoryModel for long memory and experience 
   assert.deepEqual(files, ["模型选择.md"]);
 });
 
-test("maybeSummarize retries an invalid long memory patch once, then continues later stages and clears short memory", async () => {
+test("maybeSummarize retries an invalid patch, continues later stages and retains unacknowledged memory", async () => {
   const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
   await writeShortMemoryItems(userRoot);
   const calls = [];
@@ -388,7 +388,7 @@ test("maybeSummarize retries an invalid long memory patch once, then continues l
   const shortDoc = JSON.parse(
     await readFile(path.join(userRoot, "memory/short-memory.json"), "utf8"),
   );
-  assert.equal(shortDoc.items.length, 0);
+  assert.equal(shortDoc.items.length, 30);
   assert.equal(await readLongMemoryDoc(userRoot), EMPTY_LONG_MEMORY_DOCUMENT);
 });
 
@@ -598,13 +598,12 @@ test("logs raw model output when daily patch parse fails", async () => {
   assert.match(logContent, /raw:/);
 });
 
-test("captureDialogToShortMemory records only the given dialog and skips injected messages", async () => {
+test("captureDialogToShortMemory consumes scoped records and skips injected messages", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
   const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
   const messages = [
-    { role: "user", content: "上一轮消息", dialogProcessId: "d0", turnScopeId: "t0" },
     { role: "user", content: "真实用户消息", dialogProcessId: "d1", turnScopeId: "t1" },
     {
       role: "user",
@@ -636,7 +635,10 @@ test("captureDialogToShortMemory records only the given dialog and skips injecte
     sessionId: "s1",
     parentSessionId: "parent-1",
     dialogProcessId: "d1",
-    messages,
+    messageRecords: messages.map((message, index) => ({
+      ordinal: index + 1,
+      message: { ...message, sessionId: "s1" },
+    })),
   });
   assert.equal(ok, true);
   const shortDoc = JSON.parse(
@@ -659,7 +661,7 @@ test("captureDialogToShortMemory writes nothing when the dialog has no records",
     sessionId: "s1",
     parentSessionId: "",
     dialogProcessId: "d-missing",
-    messages: [{ role: "user", content: "其他轮次", dialogProcessId: "d1" }],
+    messageRecords: [],
   });
   assert.equal(ok, false);
 });
@@ -695,4 +697,144 @@ test("deleteSessionMemoryBySessionIds removes only memory with an explicit sessi
     shortDoc.items.map((item) => item.sessionId || ""),
     ["s-keep", ""],
   );
+});
+
+test("summary acknowledges its snapshot and preserves a capture made during model execution", async () => {
+  const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
+  await writeShortMemoryItems(userRoot);
+  const stageErrors = [];
+  const service = new MemoryManager(createMemoryConfig(workspaceRoot), {
+    createModelPort: createModelPortFactory([
+      async () => {
+        await service.captureDialogToShortMemory({
+          userId,
+          sessionId: "new-session",
+          parentSessionId: "",
+          dialogProcessId: "new-dialog",
+          messageRecords: [
+            {
+              ordinal: 1,
+              message: {
+                sessionId: "new-session",
+                dialogProcessId: "new-dialog",
+                role: "user",
+                content: "new capture",
+              },
+            },
+          ],
+        });
+        return { output: { text: "NOOP", toolCalls: [] } };
+      },
+      'ADD D[1] domain="并发记忆" new=true experiences="快照确认" lessons="保留并发新增"',
+    ]),
+  });
+  await service.maybeSummarize({
+    ...MEMORY_RUN_PORTS,
+    userId,
+    userConfig: {},
+    abortSignal: new AbortController().signal,
+    onStageError: (entry) => stageErrors.push(entry),
+  });
+  assert.deepEqual(stageErrors, []);
+  const items = await service.shortMemory.readItems(userRoot);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].sessionId, "new-session");
+  assert.equal(items[0].records[0].content, "new capture");
+});
+
+function stubBatchSummaryStages(service, received) {
+  service.consolidateLongMemory = async ({ promptPayload }) => {
+    received.push({ stage: "long", promptPayload });
+    return true;
+  };
+  service.experience.runDaily = async ({ promptPayload }) => {
+    received.push({ stage: "daily", promptPayload });
+    return true;
+  };
+  for (const period of ["Weekly", "Monthly", "Yearly"])
+    service.experience[`run${period}SummaryIfNeeded`] = async () => false;
+}
+
+function runBatchSummary(
+  service,
+  userId,
+  onStageError = ({ error }) => {
+    throw error;
+  },
+) {
+  return service.maybeSummarize({
+    ...MEMORY_RUN_PORTS,
+    userId,
+    userConfig: {},
+    abortSignal: new AbortController().signal,
+    onStageError,
+  });
+}
+
+test("summary consumes bounded oldest batches and leaves the remaining captures pending", async () => {
+  const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
+  await writeShortMemoryItems(userRoot, 65);
+  const received = [];
+  const service = new MemoryManager(createMemoryConfig(workspaceRoot));
+  stubBatchSummaryStages(service, received);
+  await runBatchSummary(service, userId);
+  assert.equal((await service.shortMemory.readItems(userRoot)).length, 35);
+  await runBatchSummary(service, userId);
+  const remaining = await service.shortMemory.readItems(userRoot);
+  assert.equal(remaining.length, 5);
+  assert.equal(remaining[0].records[0].content, "用户消息 61");
+  assert.equal(received.length, 4);
+  for (let index = 0; index < received.length; index += 2) {
+    assert.equal(received[index].promptPayload.length, 30);
+    assert.deepEqual(received[index].promptPayload, received[index + 1].promptPayload);
+  }
+  assert.equal(received[0].promptPayload[0].records[0].content, "用户消息 1");
+  assert.equal(received[2].promptPayload[0].records[0].content, "用户消息 31");
+});
+
+test("one oversized capture advances by exactly the Unicode prefix sent to both summary stages", async () => {
+  const { LENGTH_THRESHOLDS } = await import("@noobot/shared/length-thresholds");
+  const maxChars = LENGTH_THRESHOLDS.memory.longPromptPayloadChars;
+  const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
+  const received = [];
+  const service = new MemoryManager(createMemoryConfig(workspaceRoot));
+  stubBatchSummaryStages(service, received);
+  const content = 'start😀"\\\n'.repeat(maxChars) + "  ";
+  await writeFile(
+    path.join(userRoot, "memory/short-memory.json"),
+    JSON.stringify({
+      items: [
+        { captureId: "large", records: [{ role: "user", content }], createdAt: "2026-01-01" },
+      ],
+    }),
+  );
+  let consumed = "";
+  for (let round = 0; round < 3; round += 1) {
+    await runBatchSummary(service, userId);
+    const [long, daily] = received.slice(round * 2);
+    assert.deepEqual(long.promptPayload, daily.promptPayload);
+    assert.ok(JSON.stringify(long.promptPayload).length <= maxChars);
+    const fragment = long.promptPayload[0].records[0].content;
+    assert.ok(fragment.isWellFormed());
+    consumed += fragment;
+    const remaining = await service.shortMemory.readItems(userRoot);
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0].captureId, "large");
+    assert.equal(consumed + remaining[0].records[0].content, content);
+  }
+});
+
+test("failed bounded summary retains even the selected prefix for retry", async () => {
+  const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
+  await writeShortMemoryItems(userRoot, 65);
+  const service = new MemoryManager(createMemoryConfig(workspaceRoot));
+  stubBatchSummaryStages(service, []);
+  service.consolidateLongMemory = async () => {
+    throw new Error("stage failed");
+  };
+  const before = await service.shortMemory.readItems(userRoot);
+  const failures = [];
+  await runBatchSummary(service, userId, (entry) => failures.push(entry));
+  assert.equal(failures.length, 1);
+  assert.deepEqual(await service.shortMemory.readItems(userRoot), before);
 });

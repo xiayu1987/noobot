@@ -6,12 +6,16 @@
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 import { SESSION_ERROR_CODE } from "../errors.js";
 import { SESSION_COMMAND } from "../command/session-command.js";
-import { isCanonicalCommandReceipt } from "../command/command-receipt.js";
+import {
+  isCanonicalCommandReceipt,
+  resolveMessageDeleteResultEffect,
+} from "../command/command-receipt.js";
 import { collectTurnRecordErrors } from "../lifecycle/turn-record.js";
 import { collectTurnReplacementTombstoneErrors } from "../lifecycle/turn-replacement.js";
 import { normalizeTurnTimingRecord } from "../lifecycle/turn-timing.js";
 import { validateSessionMessageRecordIdentity } from "./session-message-record.js";
 import { collectExactFieldErrors } from "./sessions-summary.js";
+import { resolveSessionMessageSuffixEffect } from "./message-suffix.js";
 
 const BASE_FIELDS = ["kind", "generation", "receipt"];
 const COMMIT_FIELDS = [
@@ -19,7 +23,7 @@ const COMMIT_FIELDS = [
   "baseAggregateVersion",
   "metadata",
   "lifecycleHead",
-  "deletedMessageUids",
+  "messageSuffix",
   "messages",
   "turns",
   "replacements",
@@ -55,16 +59,8 @@ function requireEntityChanges(changes, validate) {
 }
 
 function requireMessages(projection, sessionId) {
-  const removed = projection.deletedMessageUids;
-  if (
-    !Array.isArray(removed) ||
-    !removed.length ||
-    !removed.every(isCanonicalText) ||
-    new Set(removed).size !== removed.length ||
-    !Array.isArray(projection.messages)
-  )
+  if (!Array.isArray(projection.messages) || projection.messages.length > 1)
     fail("invalid_message_changes");
-  const seen = new Set(removed);
   for (const record of projection.messages) {
     if (
       !isPlainObject(record) ||
@@ -74,11 +70,9 @@ function requireMessages(projection, sessionId) {
       record.turnOrdinal < 1 ||
       validateSessionMessageRecordIdentity(record.message).length ||
       record.message.sessionId !== sessionId ||
-      record.message.parentSessionId !== projection.metadata.parentSessionId ||
-      seen.has(record.message.messageUid)
+      record.message.parentSessionId !== projection.metadata.parentSessionId
     )
       fail("invalid_message_record");
-    seen.add(record.message.messageUid);
   }
 }
 
@@ -96,9 +90,17 @@ function requireReplacementReceipt(receipt, sessionId) {
 }
 
 function requireCommandEffect(projection) {
-  const { receipt, deletedMessageUids, messages } = projection;
+  const { receipt, messageSuffix, messages } = projection;
+  const suffix = resolveSessionMessageSuffixEffect(messageSuffix);
+  if (suffix === null) fail("invalid_message_suffix_bound");
   if (receipt.type === SESSION_COMMAND.MESSAGE_DELETE_FROM) {
-    if (messages.length || deletedMessageUids.length !== receipt.result.deletedCount)
+    const deletion = resolveMessageDeleteResultEffect(receipt.result);
+    if (
+      messages.length ||
+      deletion === null ||
+      messageSuffix.firstOrdinal !== deletion.messageSuffix.firstOrdinal ||
+      messageSuffix.previousMessageCount !== deletion.messageSuffix.previousMessageCount
+    )
       fail("deletion_effect_mismatch");
     return;
   }
@@ -106,6 +108,7 @@ function requireCommandEffect(projection) {
   const message = messages[0]?.message;
   if (
     messages.length !== 1 ||
+    messages[0].ordinal !== messageSuffix.firstOrdinal ||
     messages[0].turnOrdinal !== 1 ||
     message.role !== "user" ||
     message.messageUid !== replacement.replacementUserMessageUid ||
@@ -115,10 +118,7 @@ function requireCommandEffect(projection) {
     fail("replacement_effect_mismatch");
 }
 
-export function requireSessionMutationProjection(projection, { sessionId }) {
-  if (!isCanonicalText(sessionId)) throw new TypeError("Mutation projection requires sessionId");
-  if (!isPlainObject(projection)) fail("projection_not_object");
-  const baseline = projection.kind === "baseline";
+function requireCommandOrigin(projection, baseline) {
   if (
     (!baseline && projection.kind !== "commit") ||
     collectExactFieldErrors(projection, baseline ? BASE_FIELDS : COMMIT_FIELDS).length ||
@@ -131,8 +131,9 @@ export function requireSessionMutationProjection(projection, { sessionId }) {
     )
   )
     fail("invalid_command_origin");
-  requireReplacementReceipt(projection.receipt, sessionId);
-  if (baseline) return projection;
+}
+
+function requireCommitMetadata(projection, sessionId) {
   const { metadata, lifecycleHead, receipt } = projection;
   if (
     !isPlainObject(metadata) ||
@@ -148,6 +149,17 @@ export function requireSessionMutationProjection(projection, { sessionId }) {
     (lifecycleHead.activeTurnScopeId !== "" && !isCanonicalText(lifecycleHead.activeTurnScopeId))
   )
     fail("invalid_commit_metadata");
+}
+
+export function requireSessionMutationProjection(projection, { sessionId }) {
+  if (!isCanonicalText(sessionId)) throw new TypeError("Mutation projection requires sessionId");
+  if (!isPlainObject(projection)) fail("projection_not_object");
+  const baseline = projection.kind === "baseline";
+  requireCommandOrigin(projection, baseline);
+  requireReplacementReceipt(projection.receipt, sessionId);
+  if (baseline) return projection;
+  requireCommitMetadata(projection, sessionId);
+  const { lifecycleHead } = projection;
   requireMessages(projection, sessionId);
   requireCommandEffect(projection);
   requireEntityChanges(
@@ -183,21 +195,17 @@ export function decideSessionMutationApplication({
   requireSessionMutationProjection(projection, { sessionId });
   const validGeneration = (value) => Number.isSafeInteger(value) && value >= 1;
   if (
-    !validGeneration(knownGeneration) ||
+    (knownGeneration !== null && !validGeneration(knownGeneration)) ||
     !validGeneration(currentGeneration) ||
     (appliedGeneration !== null && !validGeneration(appliedGeneration)) ||
-    (appliedGeneration !== null && appliedGeneration > knownGeneration) ||
+    (appliedGeneration !== null &&
+      (knownGeneration === null || appliedGeneration > knownGeneration)) ||
     currentGeneration < projection.generation
   )
     fail("invalid_application_generations");
-  const requiredGeneration = Math.max(knownGeneration, currentGeneration);
+  const requiredGeneration =
+    knownGeneration === null ? currentGeneration : Math.max(knownGeneration, currentGeneration);
   if (appliedGeneration !== null && appliedGeneration >= requiredGeneration)
     return Object.freeze({ action: "unchanged", requiredGeneration });
-  if (
-    projection.kind === "commit" &&
-    appliedGeneration === projection.generation - 1 &&
-    requiredGeneration === projection.generation
-  )
-    return Object.freeze({ action: "apply", requiredGeneration });
   return Object.freeze({ action: "synchronize", requiredGeneration });
 }

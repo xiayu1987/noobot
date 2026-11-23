@@ -299,6 +299,9 @@ const preMessageCardRenderers = computed(() =>
   resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE, { messageItem: props.messageItem }),
 );
 const isAssistantMessage = computed(() => getMessageRole(props.messageItem) === "assistant");
+const canCopyUserMessage = computed(
+  () => getMessageRole(props.messageItem) === "user" && Boolean(text(props.messageItem.content)),
+);
 const thinkingPanelVisible = ref(false);
 const statusStepRunning = computed(() =>
   Boolean(statusStepState.value && !isTerminalStatusStepState(statusStepState.value)),
@@ -397,7 +400,7 @@ function resolveRendererContext() {
     deleteMonotonicMessage: props.deleteMonotonicMessage,
     resendMonotonicMessage: props.resendMonotonicMessage,
     onCopyMessageRich: handleCopyAssistantMessageRich,
-    onCopyMessageText: handleCopyAssistantMessageText,
+    onCopyMessageText: handleCopyMessageText,
     translate,
     showSubTaskActivity: showSubTaskActivity.value,
     subTaskStatusText: subTaskStatusText.value,
@@ -472,7 +475,7 @@ function handleCopyAssistantMessageRich() {
   });
 }
 
-function handleCopyAssistantMessageText() {
+function handleCopyMessageText() {
   onCopyMessageMarkdownText(props.messageItem.content);
 }
 
@@ -531,7 +534,7 @@ function toggleAssistantContent() {
       "
       :translate="translate"
       :on-copy-rich="handleCopyAssistantMessageRich"
-      :on-copy-text="handleCopyAssistantMessageText"
+      :on-copy-text="handleCopyMessageText"
       :content-expanded="assistantContentExpanded"
       :on-toggle-content="toggleAssistantContent"
     />
@@ -563,7 +566,10 @@ function toggleAssistantContent() {
       :context="extensionRendererContext"
     />
 
-    <MonotonicMessageActions v-bind="defaultMonotonicMessageActionProps" />
+    <MonotonicMessageActions
+      v-bind="defaultMonotonicMessageActionProps"
+      :on-copy="canCopyUserMessage ? handleCopyMessageText : null"
+    />
 
     <template #after-content>
       <section v-if="artifactTabs.length" class="message-artifact-tabs">
@@ -705,6 +711,10 @@ function toggleAssistantContent() {
   border-radius: var(--noobot-radius-xs);
   background: transparent;
   border: 1px solid transparent;
+}
+.message-runtime-panels.has-thinking-panel {
+  background-color: var(--noobot-thinking-panel-tint);
+  background-clip: padding-box;
 }
 .message-artifact-tabs {
   margin-top: var(--noobot-space-md);

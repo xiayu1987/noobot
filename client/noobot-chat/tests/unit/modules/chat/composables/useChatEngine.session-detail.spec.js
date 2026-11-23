@@ -7,6 +7,9 @@ import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
 import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
+import { createSessionDetailRequests } from "../../../../../src/modules/session/model/list/sessionDetailRequests.js";
+import { createSessionListActions } from "../../../../../src/modules/session/model/list/sessionListActions.js";
+import { renderActiveSessionBeforeReplay } from "../../../../../src/modules/chat/runtime/reconnect/hydrationReplay.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { buildViewMessage } from "../../../../../src/modules/chat/model/messageModel.js";
 import {
@@ -26,6 +29,7 @@ import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 import {
   availableDetailDocument,
   availableDetailEntry,
+  detailResponse,
   unavailableDetailDocument,
 } from "../../../helpers/sessionDetailFixture.js";
 
@@ -59,13 +63,13 @@ function createApplySessionDetailHarness({ sessionId, messages }) {
     sessionId,
     title: "current",
     aggregateVersion: 0,
-    generation: null,
+    knownGeneration: null,
     messages: messages.map((message) => viewMessage(message, sessionId)),
   };
   const sessions = ref([activeSession]);
   const { turnRuntimeRegistry, chatStore } = createTurnRuntimeStore();
   const { applySessionDetail } = createApplicator({ sessions, turnRuntimeRegistry, chatStore });
-  return { activeSession, applySessionDetail, turnRuntimeRegistry };
+  return { activeSession: sessions.value[0], sessions, applySessionDetail, turnRuntimeRegistry };
 }
 
 describe("useChatEngine.session-detail", () => {
@@ -224,7 +228,7 @@ describe("useChatEngine.session-detail", () => {
       sessionId,
       title: "current",
       aggregateVersion: 0,
-      generation: null,
+      knownGeneration: null,
       messages: [
         {
           messageUid: "msg-user-same-scope-stopped",
@@ -628,21 +632,126 @@ describe("useChatEngine.session-detail", () => {
     ).toThrow(expect.objectContaining({ code: SESSION_ERROR_CODE.SESSION_DETAIL_PAYLOAD_INVALID }));
   });
 
-  it("applies only the protocol facts of an unavailable session entry", () => {
-    const unavailableReason = { code: "SESSION_PROTOCOL_INVALID", message: "invalid" };
-    const { activeSession, applySessionDetail, turnRuntimeRegistry } =
-      createApplySessionDetailHarness({ sessionId: "s-unavailable", messages: [] });
+  it.each([
+    { childUnavailable: false, retryOptions: {} },
+    { childUnavailable: false, retryOptions: { force: true } },
+    { childUnavailable: true, retryOptions: {} },
+  ])(
+    "retries unavailable detail without changing list availability (%j)",
+    async ({ childUnavailable, retryOptions }) => {
+      const sessionId = "s-unavailable";
+      const unavailableReason = {
+        code: "ATTACHMENT_METADATA_MISSING",
+        message: "missing metadata",
+      };
+      const { activeSession, sessions, applySessionDetail, turnRuntimeRegistry } =
+        createApplySessionDetailHarness({ sessionId, messages: [] });
+      Object.assign(activeSession, { availability: "available", isUnavailable: false });
+      const activeSessionId = ref(sessionId);
+      const detail = availableDetailDocument({
+        sessionId,
+        title: "current",
+        aggregateVersion: 1,
+        messages: [
+          {
+            role: RoleEnum.USER,
+            content: "previous detail",
+            userMessageId: "msg-1",
+            messageUid: "msg-1",
+            ts: "2026-01-01T00:00:00.000Z",
+            turnScopeId: "client-turn:retry",
+          },
+        ],
+        turnTimings: [],
+      });
+      const unavailable = unavailableDetailDocument({
+        sessionId: childUnavailable ? "s-child" : sessionId,
+        unavailableReason,
+      });
+      const blockedDetail = childUnavailable
+        ? {
+            ...detail,
+            sessions: [
+              ...detail.sessions,
+              { ...unavailable.sessions[0], parentSessionId: sessionId },
+            ],
+          }
+        : unavailable;
+      const getSessionDetailApi = vi
+        .fn()
+        .mockResolvedValueOnce(detailResponse(blockedDetail))
+        .mockResolvedValueOnce(detailResponse(detail));
+      const { fetchSessionDetail } = createSessionDetailRequests({
+        sessions,
+        activeSessionId,
+        userId: ref(FIXTURE_USER_ID),
+        authFetch: vi.fn(),
+        getSessionDetailApi,
+        isSameSessionIdentity: (left, right) => left === right,
+      });
+      const { selectSession } = createSessionListActions({
+        sessions,
+        activeSessionId,
+        turnRuntimeRegistry,
+        loadingSessionDetail: ref(false),
+        fetchSessionDetail,
+        applySessionDetail,
+        ensureConnected: vi.fn(),
+        getSessionsApi: vi.fn(),
+        deleteSessionApi: vi.fn(),
+        renameSessionApi: vi.fn(),
+        createConnectorPanelState: vi.fn(),
+        createLocalSession: vi.fn(),
+        refreshSessionConnectorsAsync: vi.fn(),
+        onSessionDetailApplied: vi.fn(),
+        translate: vi.fn(),
+        notify: vi.fn(),
+      });
+      expect(applySessionDetail(detail)).toBe(true);
+      expect(activeSession.messages).toHaveLength(1);
+      await selectSession(sessionId, { force: true });
+      expect(getSessionDetailApi).toHaveBeenCalledTimes(1);
+      expect(activeSession).toMatchObject({
+        loaded: false,
+        availability: "available",
+        isUnavailable: false,
+        detailUnavailableReason: unavailableReason,
+        messages: [],
+        detailMessages: [],
+        sessionDocs: [],
+      });
+      expect(activeSession).not.toHaveProperty("lastMessage");
 
-    applySessionDetail(
-      unavailableDetailDocument({ sessionId: "s-unavailable", unavailableReason }),
-    );
+      await selectSession(sessionId, retryOptions);
+      expect(getSessionDetailApi).toHaveBeenCalledTimes(2);
+      expect(activeSession).toMatchObject({
+        loaded: true,
+        availability: "available",
+        isUnavailable: false,
+      });
+      expect(activeSession).not.toHaveProperty("detailUnavailableReason");
+      expect(activeSession.messages).toHaveLength(1);
+    },
+  );
 
-    expect(activeSession).toMatchObject({
-      loaded: true,
-      isUnavailable: true,
-      availability: "unavailable",
-      unavailableReason,
+  it("does not report replay hydration success for an unavailable detail document", async () => {
+    const sessionId = "s-replay-unavailable";
+    const { activeSession, applySessionDetail } = createApplySessionDetailHarness({
+      sessionId,
+      messages: [],
     });
-    expect(turnRuntimeRegistry.value.sessions["s-unavailable"]).toBeUndefined();
+    const detail = unavailableDetailDocument({
+      sessionId,
+      unavailableReason: { code: "ATTACHMENT_METADATA_UNREADABLE", message: "metadata unreadable" },
+    });
+    await expect(
+      renderActiveSessionBeforeReplay({
+        activeSession: ref(activeSession),
+        chatList: { fetchSessionDetail: vi.fn().mockResolvedValue(detail), applySessionDetail },
+        getReplayHydrationPromise: () => null,
+        setReplayHydrationPromise: vi.fn(),
+      }),
+    ).resolves.toBe(false);
+    expect(activeSession.loaded).toBe(false);
   });
 });

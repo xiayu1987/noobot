@@ -5,15 +5,17 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 
 import { BotManager } from "../../src/bot/index.js";
 
+import { createWorkspaceAdmission } from "../../src/workspace-lifecycle/workspace-admission.js";
+
 function createBotManagerWithMocks(mocks = {}) {
   const manager = Object.create(BotManager.prototype);
-  Object.assign(manager, mocks);
+  Object.assign(manager, {
+    sessionRuntime: { workspaceAdmission: createWorkspaceAdmission(async () => {}) },
+    ...mocks,
+  });
   return manager;
 }
 
@@ -162,35 +164,4 @@ test("BotManager replaceSessionTurn persists an empty attachment set without wor
 
   assert.deepEqual(calls, ["replace"]);
   assert.deepEqual(result.attachments, []);
-});
-
-test("BotManager should cleanup session-scoped semantic transfer directories", async () => {
-  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-semantic-transfer-cleanup-"));
-  const semanticTransferRoot = path.join(basePath, "runtime", "ops_workdir", ".semantic-transfer");
-  const sessionDeleteDir = path.join(semanticTransferRoot, "session-delete");
-  const sessionKeepDir = path.join(semanticTransferRoot, "session-keep");
-  await fs.mkdir(sessionDeleteDir, { recursive: true });
-  await fs.mkdir(sessionKeepDir, { recursive: true });
-  await fs.writeFile(path.join(sessionDeleteDir, "sample.json"), '{"ok":true}', "utf8");
-  await fs.writeFile(path.join(sessionKeepDir, "sample.json"), '{"ok":true}', "utf8");
-
-  const manager = createBotManagerWithMocks({
-    workspaceService: {
-      getWorkspacePath() {
-        return basePath;
-      },
-    },
-  });
-
-  const result = await manager.deleteSemanticTransferBySessionIds({
-    userId: "u1",
-    sessionIds: ["session-delete"],
-  });
-  assert.deepEqual(result, {
-    deletedSessionIds: ["session-delete"],
-    deletedCount: 1,
-  });
-
-  await assert.rejects(fs.access(sessionDeleteDir));
-  await fs.access(sessionKeepDir);
 });

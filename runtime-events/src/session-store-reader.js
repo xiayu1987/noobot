@@ -21,7 +21,7 @@ async function openStore(file) {
   try {
     return await fs.open(file, "r");
   } catch (error) {
-    if (error.code === "ENOENT" || error.code === "ENOTDIR") return null;
+    if (error.code === "ENOENT") return null;
     throw error;
   }
 }

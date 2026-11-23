@@ -56,11 +56,8 @@ test("plugin artifact outbox commit is sent through the active WebSocket before 
   const bot = {
     session: {
       readServerNow: () => new Date().toISOString(),
-      async getPendingAuthorityEvents() {
+      async prepareAuthorityEventDelivery() {
         return { found: true, events: pending };
-      },
-      async recordAuthorityEventAttempts() {
-        return { recorded: true };
       },
       async compactAuthorityEvents() {
         return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
@@ -69,7 +66,7 @@ test("plugin artifact outbox commit is sent through the active WebSocket before 
         acknowledged += acknowledgements.length;
         const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
         pending = pending.filter((item) => !ackedIds.has(item.eventId));
-        return { acknowledged: true };
+        return { acknowledged: true, drained: pending.length === 0 };
       },
     },
   };
@@ -94,6 +91,7 @@ test("plugin artifact outbox commit is sent through the active WebSocket before 
   });
   attachRunTransport(runHandle, sendEvent);
   const dispatch = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: (...args) => publishRunEvent(runHandle, ...args),
@@ -151,20 +149,22 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   const bot = {
     session: {
       readServerNow: () => new Date().toISOString(),
-      async getPendingAuthorityEvents({ consumerId } = {}) {
-        return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
-      },
-      async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
-        for (const eventId of eventIds) {
+      async prepareAuthorityEventDelivery({ consumerId }) {
+        const events = listPendingAuthorityEvents(eventOutbox, { consumerId });
+        for (const { eventId } of events) {
           const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
             eventId,
             consumerId,
             attemptedAt: new Date().toISOString(),
           });
-          if (!result.found) return { recorded: false, reason: result.reason };
+          assert.equal(result.found, true);
           eventOutbox = result.outbox;
         }
-        return { recorded: true };
+        return {
+          found: true,
+          events: listPendingAuthorityEvents(eventOutbox, { consumerId }),
+          hasMore: false,
+        };
       },
       async compactAuthorityEvents() {
         return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
@@ -182,12 +182,16 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
           if (!result.found) return { acknowledged: false, reason: result.reason };
           eventOutbox = result.outbox;
         }
-        return { acknowledged: true };
+        return {
+          acknowledged: true,
+          drained: listPendingAuthorityEvents(eventOutbox, { consumerId }).length === 0,
+        };
       },
     },
   };
   const createDispatcher = () =>
     createAuthorityEventDispatcher({
+      runNewOperation: (operation) => operation(),
       consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
       resolveBot: () => bot,
       sendEvent: (_eventName, envelope) => {
@@ -259,21 +263,17 @@ test("authority dispatcher preserves the child persistence scope through idle ma
   const bot = {
     session: {
       readServerNow: () => new Date().toISOString(),
-      async getPendingAuthorityEvents(input) {
-        calls.push({ method: "get", input });
+      async prepareAuthorityEventDelivery(input) {
+        calls.push({ method: "prepare", input });
         return {
           found: true,
           events: pending ? [{ eventId: envelope.identity.eventId, envelope }] : [],
         };
       },
-      async recordAuthorityEventAttempts(input) {
-        calls.push({ method: "attempt", input });
-        return { recorded: true };
-      },
       async acknowledgeAuthorityEvents(input) {
         calls.push({ method: "acknowledge", input });
         pending = false;
-        return { acknowledged: true };
+        return { acknowledged: true, drained: true };
       },
       async compactAuthorityEvents(input) {
         calls.push({ method: "compact", input });
@@ -282,6 +282,7 @@ test("authority dispatcher preserves the child persistence scope through idle ma
     },
   };
   const dispatch = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: () => true,
@@ -296,12 +297,12 @@ test("authority dispatcher preserves the child persistence scope through idle ma
   assert.deepEqual(result, { dispatched: true, delivered: 1 });
   assert.deepEqual(
     calls.map(({ method }) => method),
-    ["get", "attempt", "acknowledge", "get"],
+    ["prepare", "acknowledge"],
   );
   t.mock.timers.tick(TIME_THRESHOLDS.agent.authorityOutboxCompactIntervalMs);
   assert.deepEqual(
     calls.map(({ method }) => method),
-    ["get", "attempt", "acknowledge", "get", "compact"],
+    ["prepare", "acknowledge", "compact"],
   );
   for (const { input } of calls) {
     assert.equal(input.persistenceScope, persistenceScope);
@@ -309,17 +310,14 @@ test("authority dispatcher preserves the child persistence scope through idle ma
   }
   assert.equal(calls[0].input.consumerId, AUTHORITY_EVENT_CONSUMER.WEBSOCKET);
   assert.equal(calls[1].input.consumerId, AUTHORITY_EVENT_CONSUMER.WEBSOCKET);
-  assert.deepEqual(calls[1].input.eventIds, [envelope.identity.eventId]);
   assert.deepEqual(
-    calls[2].input.acknowledgements.map((receipt) => receipt.eventId),
+    calls[1].input.acknowledgements.map((receipt) => receipt.eventId),
     [envelope.identity.eventId],
   );
-  assert.equal(calls[2].input.consumerId, AUTHORITY_EVENT_CONSUMER.WEBSOCKET);
-  assert.equal(calls[3].input.consumerId, AUTHORITY_EVENT_CONSUMER.WEBSOCKET);
-  assert.equal("consumerId" in calls[4].input, false);
-  assert.equal("deliveredThroughSequence" in calls[4].input, false);
+  assert.equal("consumerId" in calls[2].input, false);
+  assert.equal("deliveredThroughSequence" in calls[2].input, false);
   assert.equal(
-    Date.now() - Date.parse(calls[4].input.retainDeliveredAfter) >=
+    Date.now() - Date.parse(calls[2].input.retainDeliveredAfter) >=
       TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,
     true,
   );
@@ -355,14 +353,9 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
   const bot = {
     session: {
       readServerNow: () => new Date().toISOString(),
-      async getPendingAuthorityEvents(input) {
-        calls.push({ method: "get", input });
+      async prepareAuthorityEventDelivery(input) {
+        calls.push({ method: "prepare", input });
         return { found: true, events: pending };
-      },
-      async recordAuthorityEventAttempts(input) {
-        calls.push({ method: "attempt", input });
-        const pendingIds = new Set(pending.map((item) => item.eventId));
-        return { recorded: input.eventIds.every((eventId) => pendingIds.has(eventId)) };
       },
       async compactAuthorityEvents() {
         return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
@@ -371,11 +364,12 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
         calls.push({ method: "acknowledge", input });
         const ackedIds = new Set(input.acknowledgements.map((receipt) => receipt.eventId));
         pending = pending.filter((item) => !ackedIds.has(item.eventId));
-        return { acknowledged: true };
+        return { acknowledged: true, drained: pending.length === 0 };
       },
     },
   };
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: (event, envelope) => {
@@ -424,49 +418,57 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
   assert.equal(pending.length, 0);
 });
 
-test("authority dispatcher serializes concurrent scoped drains and performs the requested confirmation pass", async () => {
-  let pending = true;
-  let releaseSend;
-  const sendBarrier = new Promise((resolve) => {
-    releaseSend = resolve;
-  });
-  const calls = { get: 0, attempt: 0, acknowledge: 0, send: 0 };
+test("authority dispatcher sees a commit during send in its next read without an extra confirmation pass", async () => {
+  const sendBarrier = Promise.withResolvers();
+  const sending = Promise.withResolvers();
+  let reads = 0;
+  const sent = [];
+  const acknowledged = [];
   const envelope = createTestLifecycleEnvelope({
     eventId: "authority-event-single-flight",
     sequence: 3,
     sessionId: "child-session",
     parentSessionId: "root-session",
   });
+  const later = createTestLifecycleEnvelope({
+    eventId: "authority-event-during-send",
+    sequence: 4,
+    sessionId: "child-session",
+    parentSessionId: "root-session",
+  });
+  const pending = new Map([[envelope.identity.eventId, envelope]]);
   const bot = {
     session: {
       readServerNow: () => new Date().toISOString(),
-      async getPendingAuthorityEvents() {
-        calls.get += 1;
+      async prepareAuthorityEventDelivery() {
+        reads += 1;
         return {
           found: true,
-          events: pending ? [{ eventId: envelope.identity.eventId, envelope }] : [],
+          events: Array.from(pending, ([eventId, envelope]) => ({ eventId, envelope })),
         };
-      },
-      async recordAuthorityEventAttempts() {
-        calls.attempt += 1;
-        return { recorded: true };
       },
       async compactAuthorityEvents() {
         return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
       },
-      async acknowledgeAuthorityEvents() {
-        calls.acknowledge += 1;
-        pending = false;
-        return { acknowledged: true };
+      async acknowledgeAuthorityEvents({ acknowledgements }) {
+        for (const { eventId } of acknowledgements) {
+          assert.equal(pending.delete(eventId), true);
+          acknowledged.push(eventId);
+        }
+        return { acknowledged: true, drained: pending.size === 0 };
       },
     },
   };
   const dispatch = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
-    sendEvent: async () => {
-      calls.send += 1;
-      await sendBarrier;
+    sendEvent: async (_eventName, { identity: { eventId } }) => {
+      sent.push(eventId);
+      if (eventId === envelope.identity.eventId) {
+        sending.resolve();
+        await sendBarrier.promise;
+      }
       return true;
     },
   });
@@ -483,17 +485,22 @@ test("authority dispatcher serializes concurrent scoped drains and performs the 
   };
 
   const first = dispatch(payload);
+  await sending.promise;
+  pending.set(later.identity.eventId, later);
   const second = dispatch(payload);
   assert.equal(first, second);
-  releaseSend();
+  sendBarrier.resolve();
   assert.deepEqual(await Promise.all([first, second]), [
-    { dispatched: true, delivered: 1 },
-    { dispatched: true, delivered: 1 },
+    { dispatched: true, delivered: 2 },
+    { dispatched: true, delivered: 2 },
   ]);
-  assert.deepEqual(calls, { get: 3, attempt: 1, acknowledge: 1, send: 1 });
+  assert.deepEqual(sent, [envelope.identity.eventId, later.identity.eventId]);
+  assert.deepEqual(acknowledged, sent);
+  assert.equal(pending.size, 0);
+  assert.equal(reads, 2);
 });
 
-test("authority dispatcher repeats a scoped drain when a lifecycle commit arrives during its final empty read", async () => {
+test("authority dispatcher repeats a scoped drain when a lifecycle commit arrives after acknowledgement observes the tail", async () => {
   let pending = [
     {
       eventId: "authority-event-running",
@@ -504,31 +511,23 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
       }),
     },
   ];
-  let releaseEmptyRead;
-  const emptyReadBarrier = new Promise((resolve) => {
-    releaseEmptyRead = resolve;
+  let releaseAck;
+  const ackBarrier = new Promise((resolve) => {
+    releaseAck = resolve;
   });
-  let emptyReadStarted;
-  const emptyReadObserved = new Promise((resolve) => {
-    emptyReadStarted = resolve;
+  let ackStarted;
+  const ackObserved = new Promise((resolve) => {
+    ackStarted = resolve;
   });
   let reads = 0;
   const sent = [];
   const bot = {
     session: {
       readServerNow: () => new Date().toISOString(),
-      async getPendingAuthorityEvents() {
+      async prepareAuthorityEventDelivery() {
         reads += 1;
         const events = pending.slice();
-        if (reads === 2) {
-          emptyReadStarted();
-          await emptyReadBarrier;
-        }
         return { found: true, events };
-      },
-      async recordAuthorityEventAttempts({ eventIds = [] }) {
-        const pendingIds = new Set(pending.map((item) => item.eventId));
-        return { recorded: eventIds.every((eventId) => pendingIds.has(eventId)) };
       },
       async compactAuthorityEvents() {
         return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
@@ -536,11 +535,17 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
       async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
         const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
         pending = pending.filter((item) => !ackedIds.has(item.eventId));
-        return { acknowledged: true };
+        const drained = pending.length === 0;
+        if (reads === 1) {
+          ackStarted();
+          await ackBarrier;
+        }
+        return { acknowledged: true, drained };
       },
     },
   };
   const dispatch = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: (_eventName, envelope) => {
@@ -560,7 +565,7 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
   };
 
   const runningDrain = dispatch(payload);
-  await emptyReadObserved;
+  await ackObserved;
   pending.push({
     eventId: "authority-event-completed",
     envelope: createTestLifecycleEnvelope({
@@ -571,7 +576,7 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
   });
   const terminalDrain = dispatch(payload);
   assert.equal(terminalDrain, runningDrain);
-  releaseEmptyRead();
+  releaseAck();
 
   assert.deepEqual(await Promise.all([runningDrain, terminalDrain]), [
     { dispatched: true, delivered: 2 },
@@ -579,7 +584,7 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
   ]);
   assert.deepEqual(sent, ["authority-event-running", "authority-event-completed"]);
   assert.equal(pending.length, 0);
-  assert.equal(reads, 4);
+  assert.equal(reads, 2);
 });
 
 test("authority dispatcher leaves an event pending when acknowledgement persistence fails", async () => {
@@ -611,20 +616,22 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
   const bot = {
     session: {
       readServerNow: () => new Date().toISOString(),
-      async getPendingAuthorityEvents({ consumerId } = {}) {
-        return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
-      },
-      async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
-        for (const eventId of eventIds) {
+      async prepareAuthorityEventDelivery({ consumerId }) {
+        const events = listPendingAuthorityEvents(eventOutbox, { consumerId });
+        for (const { eventId } of events) {
           const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
             eventId,
             consumerId,
             attemptedAt: new Date().toISOString(),
           });
-          if (!result.found) return { recorded: false, reason: result.reason };
+          assert.equal(result.found, true);
           eventOutbox = result.outbox;
         }
-        return { recorded: true };
+        return {
+          found: true,
+          events: listPendingAuthorityEvents(eventOutbox, { consumerId }),
+          hasMore: false,
+        };
       },
       async compactAuthorityEvents() {
         return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
@@ -644,11 +651,16 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
           deliveredAt: new Date().toISOString(),
         });
         if (result.found) eventOutbox = result.outbox;
-        return { acknowledged: result.found, reason: result.reason };
+        return {
+          acknowledged: result.found,
+          reason: result.reason,
+          drained: listPendingAuthorityEvents(eventOutbox, { consumerId }).length === 0,
+        };
       },
     },
   };
   const dispatch = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: (_eventName, envelope) => {
@@ -694,6 +706,7 @@ test("dispatcher requires a known authority event consumer", () => {
     assert.throws(
       () =>
         createAuthorityEventDispatcher({
+          runNewOperation: (operation) => operation(),
           resolveBot: () => ({}),
           sendEvent: () => true,
           consumerId,
@@ -715,21 +728,17 @@ test("CLI dispatcher acknowledges immediately and schedules idle compaction", as
   const bot = {
     session: {
       readServerNow: () => new Date().toISOString(),
-      async getPendingAuthorityEvents(input) {
-        calls.push({ method: "get", input });
+      async prepareAuthorityEventDelivery(input) {
+        calls.push({ method: "prepare", input });
         return {
           found: true,
           events: pending ? [{ eventId: envelope.identity.eventId, envelope }] : [],
         };
       },
-      async recordAuthorityEventAttempts(input) {
-        calls.push({ method: "attempt", input });
-        return { recorded: true };
-      },
       async acknowledgeAuthorityEvents(input) {
         calls.push({ method: "acknowledge", input });
         pending = false;
-        return { acknowledged: true };
+        return { acknowledged: true, drained: true };
       },
       async compactAuthorityEvents(input) {
         calls.push({ method: "compact", input });
@@ -738,6 +747,7 @@ test("CLI dispatcher acknowledges immediately and schedules idle compaction", as
     },
   };
   const dispatch = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.CLI,
     resolveBot: () => bot,
     sendEvent: () => true,

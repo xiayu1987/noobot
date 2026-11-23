@@ -8,27 +8,20 @@ import {
   ingestAttachments,
   ingestGeneratedArtifacts,
   ingestEmailArtifacts,
-  saveAttachmentRecord,
 } from "./attachment-service-ingest.js";
 import { linkParsedResultToAttachment } from "./attachment-service-link.js";
-import {
-  deleteScopedAttachmentsBySessionIds,
-  pruneOrphanScopedAttachments,
-} from "./attachment-service-cleanup.js";
+import { deleteScopedAttachmentsBySessionIds } from "./attachment-service-cleanup.js";
 import {
   getAttachmentById,
   openAttachmentStream,
   readAttachmentContent,
+  readAttachmentMetadata,
   readAttachmentMetas,
 } from "./attachment-service-query.js";
 
 export class AttachmentService {
   constructor(globalConfig) {
     this.globalConfig = globalConfig;
-  }
-
-  async _saveAttachmentRecord(payload = {}) {
-    return saveAttachmentRecord(payload);
   }
 
   async ingest(payload = {}) {
@@ -55,6 +48,10 @@ export class AttachmentService {
     return openAttachmentStream(this, payload);
   }
 
+  async readAttachmentMetadata(request) {
+    return readAttachmentMetadata(this, request);
+  }
+
   async readAttachmentMetas({ userId, sessionId = "", attachmentSource = "" } = {}) {
     return readAttachmentMetas(this, { userId, sessionId, attachmentSource });
   }
@@ -70,9 +67,5 @@ export class AttachmentService {
 
   async deleteScopedAttachmentsBySessionIds({ userId, sessionIds = [] } = {}) {
     return deleteScopedAttachmentsBySessionIds(this, { userId, sessionIds });
-  }
-
-  async pruneOrphanScopedAttachments({ userId, keepSessionIds = [], attachmentSources = [] } = {}) {
-    return pruneOrphanScopedAttachments(this, { userId, keepSessionIds, attachmentSources });
   }
 }

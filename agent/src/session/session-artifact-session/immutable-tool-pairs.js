@@ -3,25 +3,41 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
-import {
-  resolveContextToolCallDeclarationId,
-  resolveContextToolResultCallId,
-  resolveContextToolCalls,
-} from "@noobot/context-protocol/message/codec";
+import { summaryCheckpointToolPairMemberships } from "@noobot/context-protocol/policy/summary-checkpoint-transaction";
+import { requireToolPairMembershipHeader } from "@noobot/session-protocol/partition-tool-pairs";
 import { immutableStorageError } from "./immutable-object-store.js";
 
-function memberships(message) {
-  const pairs = new Map();
-  if (!message) return pairs;
-  const key = (id) => JSON.stringify([message.dialogProcessId, message.turnScopeId, id]);
-  for (const call of resolveContextToolCalls(message)) {
-    const id = resolveContextToolCallDeclarationId(call);
-    if (id) pairs.set(key(id), "declaration");
-  }
-  const result = resolveContextToolResultCallId(message);
-  if (result) pairs.set(key(result), "result");
-  return pairs;
+export async function withImmutableToolPair(store, snapshot, identity, visit) {
+  const pair = await store.get(snapshot, "toolPairs", identity);
+  if (pair === null) return visit(null);
+  const header = requireToolPairMembershipHeader({ ...pair, identity }, immutableStorageError);
+  if (!header.ownerUid && !header.resultCount)
+    throw immutableStorageError("Empty immutable tool pair");
+  return store.objects.withSnapshot(snapshot, () => {
+    async function checkResult(uid, reference) {
+      if ((await store.objects.readValue(reference)) !== uid)
+        throw immutableStorageError("Immutable tool result index identity mismatch");
+    }
+    return visit({
+      header,
+      async hasResult(uid) {
+        const reference = await store.index.get(pair.resultsRoot, uid);
+        if (reference === null) return false;
+        await checkResult(uid, reference);
+        return true;
+      },
+      async verifyResultCount(signal) {
+        let count = 0;
+        for await (const [uid, reference] of store.index.entries(pair.resultsRoot)) {
+          signal?.throwIfAborted();
+          await checkResult(uid, reference);
+          count += 1;
+        }
+        if (count !== header.resultCount)
+          throw immutableStorageError("Immutable tool result index count mismatch");
+      },
+    });
+  });
 }
 
 async function removeMembership(store, pair, role, messageUid) {
@@ -55,8 +71,8 @@ async function addMembership(store, pair, role, messageUid) {
 }
 
 export async function updateImmutableToolPairs(store, plan, previous, message) {
-  const before = memberships(previous);
-  const after = memberships(message);
+  const before = summaryCheckpointToolPairMemberships(previous);
+  const after = summaryCheckpointToolPairMemberships(message);
   for (const key of new Set([...before.keys(), ...after.keys()])) {
     if (before.get(key) === after.get(key)) continue;
     const pair = {
@@ -72,26 +88,5 @@ export async function updateImmutableToolPairs(store, plan, previous, message) {
       throw immutableStorageError("Invalid tool result count");
     if (!pair.ownerUid && pair.resultCount === 0) plan.remove("toolPairs", key);
     else plan.set("toolPairs", key, pair);
-  }
-}
-
-export async function assertImmutableToolPairClosure(get, messages, summarizedMessageUids) {
-  const selected = new Set(summarizedMessageUids);
-  const counts = new Map();
-  for (const message of messages) {
-    if (!selected.has(message.messageUid)) continue;
-    for (const key of memberships(message).keys()) counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  for (const [key, selectedCount] of counts) {
-    const pair = await get("toolPairs", key);
-    if (!pair) throw immutableStorageError("Selected message has no tool pair index");
-    if (pair.ownerUid && selectedCount !== pair.resultCount + 1)
-      throw Object.assign(
-        new Error(`summary checkpoint splits tool call pair: ${JSON.parse(key)[2]}`),
-        {
-          code: SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_TOOL_PAIR_SPLIT,
-          statusCode: 409,
-        },
-      );
   }
 }

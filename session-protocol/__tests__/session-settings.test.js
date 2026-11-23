@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applySessionSettings } from "../src/index.js";
+import { applySessionMetadataCommit, applySessionSettings } from "../src/index.js";
 
 const updatedAt = "2026-11-12T13:00:00.000Z";
 
@@ -38,4 +38,50 @@ test("settings reject message, lifecycle and unknown mutations and invalid value
     assert.throws(() => applySessionSettings({}, settings, updatedAt), TypeError);
   }
   assert.throws(() => applySessionSettings({}, { modelAlias: "new" }, "invalid"), TypeError);
+});
+
+test("metadata commits preserve the version or advance once without mutating source facts", () => {
+  const metadata = Object.freeze({
+    aggregateVersion: 7,
+    createdAt: "2026-11-01T00:00:00.000Z",
+    updatedAt: "2026-11-02T00:00:00.000Z",
+    caller: "user",
+  });
+  for (const aggregateVersion of [7, 8]) {
+    assert.deepEqual(
+      applySessionMetadataCommit(metadata, { committedAt: updatedAt, aggregateVersion }),
+      { ...metadata, aggregateVersion, updatedAt },
+    );
+  }
+  assert.deepEqual(applySessionMetadataCommit(metadata, { committedAt: updatedAt }), {
+    ...metadata,
+    updatedAt,
+  });
+});
+
+for (const aggregateVersion of [-1, 6, 9, "8", 2 ** 53, null]) {
+  test(`metadata rejects invalid aggregate transition to ${JSON.stringify(aggregateVersion)}`, () => {
+    assert.throws(
+      () =>
+        applySessionMetadataCommit(
+          { aggregateVersion: 7 },
+          { committedAt: updatedAt, aggregateVersion },
+        ),
+      { code: "SESSION_COMMIT_INPUT_INVALID" },
+    );
+  });
+}
+
+test("metadata transitions reject invalid source versions and timestamps", () => {
+  for (const aggregateVersion of [-1, "7", 2 ** 53, undefined]) {
+    assert.throws(
+      () => applySessionMetadataCommit({ aggregateVersion }, { committedAt: updatedAt }),
+      { code: "SESSION_COMMIT_INPUT_INVALID" },
+    );
+  }
+  for (const committedAt of [undefined, null, "invalid", "2026-11-12", "2026-11-12T13:00:00Z"]) {
+    assert.throws(() => applySessionMetadataCommit({ aggregateVersion: 7 }, { committedAt }), {
+      code: "SESSION_COMMIT_INPUT_INVALID",
+    });
+  }
 });

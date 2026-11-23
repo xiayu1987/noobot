@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { ImmutableLocatedRecordStore } from "../../src/session/session-artifact-session/immutable-located-record-store.js";
+import { ImmutableSegmentStore } from "../../src/session/session-artifact-session/immutable-segment-store.js";
 import { auditImmutableSession } from "../../src/session/session-artifact-session/immutable-session-audit.js";
 
 async function fixture(context) {
@@ -38,6 +39,12 @@ for (const overlay of [false, true]) {
     const reason = new Error("audit cancelled during value read");
     const read = ImmutableLocatedRecordStore.prototype.read;
     let readsAfterCancellation = 0;
+    let segmentReadsAfterCancellation = 0;
+    const readSegment = ImmutableSegmentStore.prototype.read;
+    context.mock.method(ImmutableSegmentStore.prototype, "read", function (target) {
+      if (controller.signal.aborted) segmentReadsAfterCancellation += 1;
+      return readSegment.call(this, target);
+    });
     let cancelled = false;
     context.mock.method(ImmutableLocatedRecordStore.prototype, "read", async function (target) {
       if (controller.signal.aborted) readsAfterCancellation += 1;
@@ -62,6 +69,7 @@ for (const overlay of [false, true]) {
     );
     assert.equal(cancelled, true);
     assert.equal(readsAfterCancellation, 0);
+    assert.equal(segmentReadsAfterCancellation, 0);
   });
 }
 

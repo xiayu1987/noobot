@@ -10,4 +10,5 @@ export * from "./writer.js";
 export * from "./session-location.js";
 export * from "./startup-protocol.js";
 export { reportRuntimeEventFailure } from "./failure-report.js";
-export { flushJsonLineBatches } from "./transports/jsonl.js";
+export { withSessionEventRetirement } from "./session-publication.js";
+export { flushJsonLineBatches, listJsonLineFilesNewestFirst } from "./transports/jsonl.js";

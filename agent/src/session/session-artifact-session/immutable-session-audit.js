@@ -27,8 +27,8 @@ import {
 import {
   immutableValueIndexReferences,
   createImmutableCommitOrigin,
-  requireImmutableOperationReceipt,
 } from "@noobot/session-protocol/immutable-storage-graph";
+import { requireImmutableOperationReceipt } from "@noobot/session-protocol/immutable-operation-receipt";
 
 class ImmutableGraphAudit {
   constructor(
@@ -59,7 +59,9 @@ class ImmutableGraphAudit {
   }
 
   async readValidatedTemplate(reference) {
-    const { value, parts } = await this.store.objects.readValueMetadata(reference);
+    const { value, parts } = await this.store.objects.readValueMetadata(reference, undefined, {
+      signal: this.signal,
+    });
     for (const part of parts) {
       if (this.validatedContent.has(part.reference)) continue;
 
@@ -360,16 +362,34 @@ export async function auditImmutableSnapshot({
 }) {
   requireAuditOptions({ batchSize, retainedObjects, maxObjectReads });
 
+  let objectReads = 0;
+  const usedOverrides = new Set();
+  async function objectRead(reference, load) {
+    signal?.throwIfAborted();
+    if (objectReads === maxObjectReads)
+      throw Object.assign(new Error("Immutable maintenance object read budget exhausted"), {
+        code: "SESSION_MAINTENANCE_BUDGET_EXCEEDED",
+      });
+    const count = ++objectReads;
+    let bytes;
+    if (objectOverrides?.has(reference)) {
+      usedOverrides.add(reference);
+      bytes = objectOverrides.get(reference);
+    } else bytes = await load();
+    retainedObjects?.add(reference);
+    signal?.throwIfAborted();
+    if (count % batchSize === 0) await setImmediate(undefined, { signal });
+    return bytes;
+  }
   const store = new ImmutableSessionStore({
     sessionDir: sourceStore.sessionDir,
     sessionId: sourceStore.sessionId,
     objectStore: sourceStore.objects.constructor,
+    objectRead,
   });
   let audit;
-  let objectReads = 0;
   try {
     signal?.throwIfAborted();
-    const usedOverrides = new Set();
     requireImmutableSessionHead(snapshot, store.sessionId, store.format);
     for (const retained of retainedSnapshots) requireImmutableRetainedSnapshot(retained, snapshot);
     requireObjectOverrides(objectOverrides, store);
@@ -380,25 +400,6 @@ export async function auditImmutableSnapshot({
           signal?.throwIfAborted();
           await store.objects.validateSnapshot(head, objectOverrides);
         }
-
-        const read = store.objects.read.bind(store.objects);
-        store.objects.read = async (reference) => {
-          signal?.throwIfAborted();
-          if (objectReads === maxObjectReads)
-            throw Object.assign(new Error("Immutable maintenance object read budget exhausted"), {
-              code: "SESSION_MAINTENANCE_BUDGET_EXCEEDED",
-            });
-          objectReads += 1;
-          let bytes;
-          if (objectOverrides?.has(reference)) {
-            usedOverrides.add(reference);
-            bytes = objectOverrides.get(reference);
-          } else bytes = await read(reference);
-          retainedObjects?.add(reference);
-          signal?.throwIfAborted();
-          if (objectReads % batchSize === 0) await setImmediate(undefined, { signal });
-          return bytes;
-        };
         await store.objects.withSnapshot(snapshot, async () => {
           audit = new ImmutableGraphAudit(store, snapshot, { signal, commitIndex });
           await audit.current();

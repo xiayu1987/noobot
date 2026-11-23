@@ -6,6 +6,7 @@
 import { normalizeSessionEntity } from "../entities/session-entity.js";
 import { immutableStorageError } from "./immutable-object-store.js";
 import { readImmutableSessionSource } from "./immutable-session-source.js";
+import { readImmutableSessionAutoTitle } from "./immutable-message-range.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 async function readCheckpoints(store, snapshot) {
@@ -39,5 +40,6 @@ export async function exportImmutableSession({ store, snapshot }) {
   const result = await readImmutableSessionSource({ store, snapshot });
   const checkpoints = await readCheckpoints(store, snapshot);
   if (Object.keys(checkpoints).length) result.turnSummaryCheckpoints = checkpoints;
+  result.autoTitle = await readImmutableSessionAutoTitle(store, snapshot);
   return normalizeSessionEntity(result);
 }

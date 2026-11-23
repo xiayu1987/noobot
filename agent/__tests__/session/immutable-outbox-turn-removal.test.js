@@ -13,7 +13,7 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { parseAuthorityOutboxTurnRemoval } from "@noobot/event-protocol/outbox";
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
 import { readImmutableOutboxPage } from "../../src/session/session-artifact-session/immutable-outbox.js";
 import { upgradeImmutableOutboxIndexes } from "../../src/session/session-artifact-session/immutable-outbox-index-upgrade.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
@@ -56,13 +56,30 @@ async function accept(store, scope) {
   const result = await commit(
     store,
     {
+      messages: [
+        {
+          sessionId: store.sessionId,
+          parentSessionId: "",
+          messageUid: `message:${scope}`,
+          userMessageId: `user:${scope}`,
+          dialogProcessId: `dialog-${scope}`,
+          parentDialogProcessId: "",
+          turnScopeId: scope,
+          role: "user",
+          messageOrigin: "natural",
+          type: "message",
+          content: scope,
+          attachments: [],
+          ts,
+        },
+      ],
       turnTransition: {
         eventType: "turn.action_accepted",
         phase: "action",
         action: "send",
         sessionId: "s1",
         turnScopeId: scope,
-        dialogProcessId: `dialog:${scope}`,
+        dialogProcessId: `dialog-${scope}`,
         presentationMessageId: `p:${scope}`,
         commandId: `accept:${scope}`,
         causationId: `accept:${scope}`,
@@ -107,6 +124,27 @@ async function complete(store, scope) {
 const page = (store, snapshot) =>
   readImmutableOutboxPage({ store, snapshot, consumerId: "client" });
 
+const deletion = (turnScopeId) => ({
+  messageDeletion: { commandId: "delete-outbox-suffix", anchor: { turnScopeId } },
+});
+
+test("immutable ingress rejects independent outbox retirement without publishing", async (t) => {
+  const store = await fixture(t);
+  const before = await store.snapshot();
+  for (const changes of [
+    { outboxTurnRemoval: { turnScopeIds: ["t1"] } },
+    {
+      sessionMetadata: { customTitle: "must not publish" },
+      outboxTurnRemoval: { turnScopeIds: ["t1"] },
+    },
+  ]) {
+    await assert.rejects(commit(store, changes, "retired-outbox-command"), {
+      code: "SESSION_COMMIT_INPUT_INVALID",
+    });
+    assert.deepEqual(await store.snapshot(), before);
+  }
+});
+
 test("outbox removal protocol rejects ambiguous, duplicate and noncanonical scopes", () => {
   for (const source of [
     null,
@@ -124,30 +162,24 @@ test("outbox removal protocol rejects ambiguous, duplicate and noncanonical scop
   assert.notEqual(parseAuthorityOutboxTurnRemoval(source).turnScopeIds, source.turnScopeIds);
 });
 
-test("scope removal publishes with metadata and cursor, preserves old readers and replays after restart", async (t) => {
+test("message deletion retires outbox atomically, preserves old readers and replays after restart", async (t) => {
   const store = await fixture(t);
-  const removedEvent = await accept(store, "t1");
+  const retainedEvent = await accept(store, "t1");
   await complete(store, "t1");
-  const retainedEvent = await accept(store, "t2");
+  const removedEvent = await accept(store, "t2");
   const before = await store.snapshot();
-  const delta = {
-    outboxTurnRemoval: { turnScopeIds: ["t1"] },
-    sessionMetadata: { customTitle: "removed" },
-    outboxCursors: [{ consumerId: "client", expectedCursor: 0, cursor: 4 }],
-  };
+  const delta = deletion("t2");
   const result = await commit(store, delta, "remove", before.generation);
-  assert.deepEqual(result.result.outboxTurnRemoval, { removed: 4 });
+  assert.equal(result.result.messageDeletion.receipt.result.deletedCount, 1);
   const after = await store.snapshot();
   assert.equal(after.generation, before.generation + 1);
   assert.equal((await page(store, before)).events.length, 5);
-  assert.deepEqual(
-    (await page(store, after)).events.map((event) => event.eventId),
-    [retainedEvent.eventId],
-  );
+  const pending = (await page(store, after)).events;
+  assert.equal(pending.length, 4);
+  assert.equal(pending[0].eventId, retainedEvent.eventId);
   assert.equal(await store.get(after, "outbox", removedEvent.eventId), null);
-  assert.equal(await store.get(after, "turnOutbox", "t1"), null);
-  assert.equal((await store.get(after, "turnOutbox", "t2")).count, 1);
-  assert.equal((await store.get(after, "metadata", "session")).customTitle, "removed");
+  assert.equal(await store.get(after, "turnOutbox", "t2"), null);
+  assert.equal((await store.get(after, "turnOutbox", "t1")).count, 4);
   assert.notEqual(await store.get(after, "events", removedEvent.eventId), null);
   const reopened = new ImmutableSessionStore({
     sessionDir: store.sessionDir,
@@ -160,15 +192,11 @@ test("scope removal publishes with metadata and cursor, preserves old readers an
   assert.deepEqual(await reopened.snapshot(), after);
 });
 
-test("failed scope removal publishes no partial metadata, index, outbox or cursor changes", async (t) => {
+test("failed message deletion publishes no partial message, index or outbox changes", async (t) => {
   const store = await fixture(t);
   await accept(store, "t1");
   const before = await store.snapshot();
-  const delta = {
-    outboxTurnRemoval: { turnScopeIds: ["t1"] },
-    sessionMetadata: { customTitle: "removed" },
-    outboxCursors: [{ consumerId: "client", expectedCursor: 0, cursor: 1 }],
-  };
+  const delta = deletion("t1");
   setFsAdapter({
     rename: async (source, target) => {
       if (target === store.headPath)
@@ -212,11 +240,8 @@ test("cold scope removal never accesses unrelated historical event or outbox bod
     sessionDir: store.sessionDir,
     sessionId: store.sessionId,
   });
-  assert.deepEqual(
-    (await commit(reopened, { outboxTurnRemoval: { turnScopeIds: ["t2"] } }, "remove")).result
-      .outboxTurnRemoval,
-    { removed: 1 },
-  );
+  const removed = await commit(reopened, deletion("t2"), "remove");
+  assert.equal(removed.result.messageDeletion.receipt.result.deletedCount, 1);
 });
 
 test("missing index requires an explicit offline rebuild and completed rebuilds do not scan history", async (t) => {
@@ -232,7 +257,7 @@ test("missing index requires an explicit offline rebuild and completed rebuilds 
     ],
   });
   const old = await store.snapshot();
-  await assert.rejects(commit(store, { outboxTurnRemoval: { turnScopeIds: ["t1"] } }, "remove"), {
+  await assert.rejects(commit(store, deletion("t1"), "remove"), {
     code: "SESSION_IMMUTABLE_INDEX_UPGRADE_REQUIRED",
   });
   assert.deepEqual(await store.snapshot(), old);
@@ -242,7 +267,7 @@ test("missing index requires an explicit offline rebuild and completed rebuilds 
   assert.equal((await store.get(rebuilt, "turnOutbox", "t1")).count, 1);
   assert.equal((await upgradeImmutableOutboxIndexes(options)).result.upgraded, false);
   assert.deepEqual(await store.snapshot(), rebuilt);
-  await commit(store, { outboxTurnRemoval: { turnScopeIds: ["t1"] } }, "remove");
+  await commit(store, deletion("t1"), "remove");
   assert.equal((await page(store, await store.snapshot())).events.length, 0);
 });
 
@@ -257,16 +282,8 @@ test("corrupt scope membership aborts all changes instead of silently retaining 
     changes: [{ collection: "turnOutbox", key: "t1", value: { ...descriptor, count: 2 } }],
   });
   const before = await store.snapshot();
-  await assert.rejects(
-    commit(
-      store,
-      {
-        outboxTurnRemoval: { turnScopeIds: ["t1"] },
-        sessionMetadata: { customTitle: "must not publish" },
-      },
-      "remove",
-    ),
-    { code: "SESSION_IMMUTABLE_STORAGE_INVALID" },
-  );
+  await assert.rejects(commit(store, deletion("t1"), "remove"), {
+    code: "SESSION_IMMUTABLE_STORAGE_INVALID",
+  });
   assert.deepEqual(await store.snapshot(), before);
 });

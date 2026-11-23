@@ -130,6 +130,7 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
   const userMessages = new Map();
   const authorityNow = "2026-01-01T00:00:00.000Z";
   const bot = {
+    runWorkspaceOperation: (_userId, operation) => operation(),
     async resolveExecutionIntent({ turnScopeId } = {}) {
       return createAcceptedAgentExecutionIdentity({ turnScopeId });
     },
@@ -232,20 +233,22 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
             : {}),
         };
       },
-      async getPendingAuthorityEvents({ consumerId } = {}) {
-        return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
-      },
-      async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
-        for (const eventId of eventIds) {
+      async prepareAuthorityEventDelivery({ consumerId }) {
+        const events = listPendingAuthorityEvents(eventOutbox, { consumerId });
+        for (const { eventId } of events) {
           const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
             eventId,
             consumerId,
             attemptedAt: new Date().toISOString(),
           });
-          if (!result.found) return { recorded: false, reason: result.reason };
+          if (!result.found) throw new Error(result.reason);
           eventOutbox = result.outbox;
         }
-        return { recorded: true };
+        return {
+          found: true,
+          events: listPendingAuthorityEvents(eventOutbox, { consumerId }),
+          hasMore: false,
+        };
       },
       async compactAuthorityEvents({ retainDeliveredAfter }) {
         const result = compactAuthorityEventOutbox(normalizeAuthorityEventOutbox(eventOutbox), {
@@ -273,7 +276,11 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
           if (result.deduplicated) deduplicated += 1;
           eventOutbox = result.outbox;
         }
-        return { acknowledged: true, deduplicated };
+        return {
+          acknowledged: true,
+          deduplicated,
+          drained: listPendingAuthorityEvents(eventOutbox, { consumerId }).length === 0,
+        };
       },
     },
   };

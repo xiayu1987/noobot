@@ -12,7 +12,7 @@ import { IMMUTABLE_CLEANUP_PLAN as PLAN } from "@noobot/session-protocol/immutab
 import { ImmutableCleanupRetention } from "../../src/session/session-artifact-session/immutable-cleanup-retention.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { capturedImmutableCandidates } from "../helpers/immutable-cleanup-candidates.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { decodeImmutableRecordReference } from "@noobot/session-protocol/immutable-segment";
 
 const identity = (index) => index.toString(16).padStart(32, "0");

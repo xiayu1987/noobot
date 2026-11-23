@@ -6,13 +6,12 @@
 import {
   createTurnReplaceFingerprint,
   createTurnReplacementCommit,
-  isDialogAnchorMessageRecord,
+  matchesTurnReplacementAnchor,
   parseTurnReplacementChange,
   SESSION_COMMAND,
 } from "@noobot/session-protocol";
 import { commitIndexedTurnReplacement } from "@noobot/authoritative-state/application";
-import { normalizeMessageEntity } from "../entities/message-entity.js";
-import { dedupeAttachmentsByIdentity } from "@noobot/attachment-protocol";
+import { createTurnReplacementMessage } from "../entities/turn-replacement-message.js";
 import { prepareImmutableMessages } from "./immutable-message-changes.js";
 import {
   readFirstImmutableTurnMessage,
@@ -26,7 +25,6 @@ import {
   writeImmutableCommand,
 } from "./immutable-command-index.js";
 import { immutableStorageError } from "./immutable-object-store.js";
-import { readImmutableIndexedTitle } from "./immutable-title-index.js";
 import {
   requireImmutableMessageTailIndex,
   readImmutableMessagePredecessor,
@@ -36,44 +34,12 @@ async function replacementAnchor(store, plan, turnScopeId) {
   await requireImmutableMessageTailIndex(plan);
   const first = await readFirstImmutableTurnMessage(store, plan, turnScopeId);
   const { userMessageUid } = await readImmutableMessagePredecessor(plan, first.message.messageUid);
-  const anchor = userMessageUid && (await plan.get("messages", userMessageUid));
+  const anchor = userMessageUid && (await plan.getMetadata("messages", userMessageUid))?.value;
   if (
-    !anchor ||
-    anchor.message?.messageUid !== userMessageUid ||
-    anchor.message.dialogProcessId !== first.message.dialogProcessId ||
-    !isDialogAnchorMessageRecord(anchor.message) ||
-    anchor.ordinal > first.ordinal
+    !matchesTurnReplacementAnchor({ first, indexedMessageUid: userMessageUid, candidate: anchor })
   )
     throw immutableStorageError("Turn replacement requires a valid indexed user anchor");
   return anchor;
-}
-
-function replacementMessage(anchor, command, identity, committedAt) {
-  const message = { ...anchor.message };
-  for (const key of [
-    "turnId",
-    "messageUid",
-    "userMessageId",
-    "channelState",
-    "error",
-    "status",
-    "terminalOutcome",
-    "state",
-    "__noobotRuntimeRunStateKey",
-  ])
-    delete message[key];
-  return normalizeMessageEntity({
-    ...message,
-    ...identity,
-    role: "user",
-    type: "message",
-    content: command.newContent,
-    turnScopeId: command.turnScopeId,
-    pending: false,
-    done: true,
-    ts: committedAt,
-    attachments: dedupeAttachmentsByIdentity(command.attachments),
-  });
 }
 
 export async function prepareImmutableTurnReplacement({ store, plan, request, committedAt }) {
@@ -100,7 +66,12 @@ export async function prepareImmutableTurnReplacement({ store, plan, request, co
   )
     throw new TypeError("Turn replacement must allocate fresh message, dialog and turn identities");
   const anchor = await replacementAnchor(store, plan, command.anchor.turnScopeId);
-  const message = replacementMessage(anchor, command, request.identity, committedAt);
+  const message = createTurnReplacementMessage(
+    anchor.message,
+    command,
+    request.identity,
+    committedAt,
+  );
   const suffix = await removeImmutableMessageSuffix({ store, plan, facts, anchor });
   const replacement = createTurnReplacementCommit({
     commandId: command.commandId,
@@ -129,23 +100,17 @@ export async function prepareImmutableTurnReplacement({ store, plan, request, co
   await removeImmutableSuffixFacts(store, plan, suffix);
   plan.set("metadata", "facts", suffix.nextFacts);
   plan.set("metadata", "lifecycle", lifecycle.header);
-  const nextMetadata = {
+  plan.set("metadata", "session", {
     ...metadata,
     aggregateVersion: concurrency.nextAggregateVersion,
     updatedAt: committedAt,
-  };
-  const autoTitle = await readImmutableIndexedTitle(store, plan);
-  if (autoTitle) nextMetadata.autoTitle = autoTitle;
-  else delete nextMetadata.autoTitle;
-  plan.set("metadata", "session", nextMetadata);
-  const prepared = await prepareImmutableMessages({
+  });
+  await prepareImmutableMessages({
     store,
-    get: (collection, key) => plan.get(collection, key),
-    getMetadata: (collection, key) => plan.getMetadata(collection, key),
+    plan,
     messages: [message],
     updatedAt: committedAt,
   });
-  for (const change of prepared.changes) await plan.apply(change);
   const receipt = {
     type,
     commandId: command.commandId,

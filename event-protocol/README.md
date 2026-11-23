@@ -67,6 +67,14 @@ with valid field types but foreign coordinates is corrupt and raises
 or authorize compaction. Normalization checks every consumer in the selected entry.
 This validation uses the event already being read and requires no historical scan.
 
+New cursor advances in a transaction share one page budget: the sum of all
+`cursor - expectedCursor` ranges cannot exceed the store's outbox page limit
+(itself bounded by `AUTHORITY_OUTBOX_PAGE_LIMIT`). Splitting a range across
+multiple updates does not increase the budget. An over-budget transaction is
+rejected without publishing cursor changes or acknowledgements. Advance in
+separate page-sized commits; previously committed receipt replay does not
+reapply cursor changes.
+
 ## Outbox compaction
 
 `compactAuthorityEventOutbox(entries, { retainDeliveredAfter })` is the single
@@ -85,6 +93,15 @@ fact per maintenance page; schedulers retain the earliest deadline across pages
 and wake after that timestamp plus their retention duration and one millisecond
 (cutoff equality remains protected), even without another delivery. This avoids
 polling throughout the retention period. `hasMore` describes scan pagination only.
+
+## Session Outbox availability
+
+Pending reads, delivery attempts, acknowledgements and compaction resolve the
+session under its lifecycle lock. An unregistered session returns
+`session_not_found`; a deletion marker returns `session_deleted`, including for
+requests waiting behind deletion. If a registered session lacks its partition
+authority, the operation fails with `SESSION_STORAGE_CORRUPT` rather than an
+absence result. These outcomes do not acknowledge delivery or move a cursor.
 
 ## Outbox journal transactions
 

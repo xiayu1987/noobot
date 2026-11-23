@@ -19,6 +19,9 @@ const requests = {
     routeDialogProcessId: "node-dialog",
     dialogProcessId: "turn-dialog",
     turnScopeId: "turn-1",
+    nodeSessionId: "node-1",
+    cursor: null,
+    limit: 1,
   },
   "execution-report": {
     userId: "user-1",
@@ -38,6 +41,7 @@ for (const [operation, request] of Object.entries(requests)) {
   });
   test(`${operation} rejects missing, empty and non-canonical identities without mutating input`, () => {
     for (const field of Object.keys(request)) {
+      if (field === "cursor" || field === "limit") continue;
       for (const value of [undefined, "", " leading", "trailing ", null, 1, ["duplicate"]]) {
         const input = { ...request, [field]: value };
         const before = structuredClone(input);
@@ -57,6 +61,31 @@ for (const [operation, request] of Object.entries(requests)) {
     }
   });
 }
+
+test("thinking-detail requires bounded page selection and preserves continuation", () => {
+  const request = requests["thinking-detail"];
+  const cursor = { scope: "snapshot-token", after: 1 };
+  assert.equal(
+    requireWorkflowSessionRequest({ ...request, cursor }, "thinking-detail").cursor,
+    cursor,
+  );
+  for (const selection of [
+    { cursor: undefined },
+    { cursor: "token" },
+    { cursor: { scope: "token", after: -1 } },
+    { limit: undefined },
+    { limit: 0 },
+    { limit: Number.MAX_SAFE_INTEGER },
+  ]) {
+    assert.throws(
+      () => requireWorkflowSessionRequest({ ...request, ...selection }, "thinking-detail"),
+      {
+        code: WORKFLOW_SESSION_REQUEST_ERROR_CODE.INVALID,
+        statusCode: 400,
+      },
+    );
+  }
+});
 
 test("detail trace is optional but an explicit trace must be canonical", () => {
   assert.equal(

@@ -12,7 +12,7 @@ import {
 import { mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { diffTurnEntries } from "./turn-message-diff.js";
-import { recordStorageWork } from "./storage-transaction.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 import { normalizeSessionEntity } from "../entities/session-entity.js";
 import { materializeCommittedTurnEvents } from "../authority-outbox-store/outbox-journal.js";
 import {

@@ -10,6 +10,7 @@ import { useWorkflowDrawerHistory } from "../services/workflowDrawerHistory.js";
 import {
   fetchWorkflowNodeExecutionReport,
   fetchWorkflowNodeThinkingDetail,
+  releaseWorkflowNodeThinkingDetail,
 } from "../runtime/workflowNodeSessionDetail.js";
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 import { createWorkflowNodeViewTransaction } from "../runtime/workflowNodeViewTransaction.js";
@@ -71,18 +72,6 @@ function createExecutionController({ props, refs, nodeViewTransaction }) {
 function createViewerCommands(context) {
   const { props, emit, refs, nodeViewTransaction, buildWorkflowDrawerRoute, stepHasSession } =
     context;
-  async function fetchSelectedNodeThinkingDetail({ dialogProcessId, turnScopeId }) {
-    const route = buildWorkflowDrawerRoute(refs.selectedNode.value || {});
-    return fetchWorkflowNodeThinkingDetail({
-      props,
-      translate: context.translate,
-      rootSessionId: route.rootSessionId,
-      routeDialogProcessId: route.dialogProcessId,
-      dialogProcessId,
-      turnScopeId,
-    });
-  }
-
   async function fetchSelectedNodeExecutionReport({ dialogProcessId = "" } = {}) {
     const route = buildWorkflowDrawerRoute(refs.selectedNode.value || {});
     return fetchWorkflowNodeExecutionReport({
@@ -94,9 +83,31 @@ function createViewerCommands(context) {
   }
 
   function handleOpenThinkingDetails(payload = {}) {
+    const route = buildWorkflowDrawerRoute(refs.selectedNode.value || {});
+    const readerProps = {
+      userId: props.userId,
+      workflowSessionService: props.workflowSessionService,
+    };
+    const readerContext = {
+      props: readerProps,
+      rootSessionId: route.rootSessionId,
+      routeDialogProcessId: route.dialogProcessId,
+    };
     emit("open-thinking-details", {
       ...(payload && typeof payload === "object" ? payload : {}),
-      fetchThinkingDetail: fetchSelectedNodeThinkingDetail,
+      fetchThinkingDetail: ({ sessionId, ...selection }) =>
+        fetchWorkflowNodeThinkingDetail({
+          ...readerContext,
+          ...selection,
+          nodeSessionId: sessionId,
+          translate: context.translate,
+        }),
+      releaseThinkingDetail: ({ sessionId, ...selection }) =>
+        releaseWorkflowNodeThinkingDetail({
+          ...readerContext,
+          ...selection,
+          nodeSessionId: sessionId,
+        }),
     });
   }
 

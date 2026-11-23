@@ -19,6 +19,8 @@ const props = defineProps({
   variant: { type: String, default: "panel" },
   userId: { type: String, default: "" },
   fetchExecutionReport: { type: Function, required: true },
+  fetchThinkingDetail: { type: Function, default: null },
+  releaseThinkingDetail: { type: Function, default: null },
 });
 const emit = defineEmits(["open-thinking-details", "panel-visibility-change"]);
 const { translate } = useLocale();
@@ -110,19 +112,23 @@ defineExpose({
     @collapse="updateThinkingOpenNames([])"
   />
   <ThinkingPanelDetails
-    v-else-if="hasThinking || loadedThinkingDetail"
+    v-else-if="variant === 'details'"
+    :page="panel.detailPagination.page.value"
+    :page-loading="panel.detailPagination.loading.value"
+    :page-error="panel.detailPagination.error.value"
     :message-item="detailMessageItem"
     :translate="translate"
     :is-running="isMessageRuntimeRunning(messageItem)"
     :grouped-tool-logs="groupedToolLogs"
     :thinking-content-items="thinkingContentItems"
-    :detail-count="getExecutionLogCount(messageItem)"
     :task-check-receipts="taskCheckReceipts"
     :user-id="userId"
     :get-tree-prefix="getThinkingTreePrefix"
     :get-detail-key="getThinkingDetailItemKey"
     :is-expanded="isThinkingDetailExpanded"
     :toggle-expanded="toggleThinkingDetailExpanded"
+    @next-page="panel.detailPagination.next"
+    @restart-pages="panel.detailPagination.restart"
   />
   <template v-else></template>
 </template>

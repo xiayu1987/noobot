@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
-import { MESSAGE_ORIGIN } from "@noobot/session-protocol";
+import { MESSAGE_ORIGIN, resolveSessionAutoTitle } from "@noobot/session-protocol";
 import { RoleEnum } from "../../model/chatConstants.js";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
@@ -28,7 +28,10 @@ function applySessionTitleFromText({ activeSession, translate, messageText }) {
     text(enUSMessages.chat.newSession),
   ];
   if (!defaultTitles.includes(text(activeSession.value.title))) return;
-  activeSession.value.title = messageText.slice(0, 20);
+  activeSession.value.title = resolveSessionAutoTitle({
+    role: RoleEnum.USER,
+    content: messageText,
+  });
 }
 
 function prepareComposerUserMessage({ request, appendMessage, isImageMime }) {

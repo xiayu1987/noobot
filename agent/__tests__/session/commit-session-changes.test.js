@@ -11,12 +11,17 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
+import { createSessionChangesSubmission } from "@noobot/session-protocol/session-changes";
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import {
+  commitImmutableSessionChanges,
+  commitSessionChanges,
+} from "../helpers/commit-immutable-session-fixture.js";
+import { withImmutableSessionReader } from "../../src/session/session-artifact-session/immutable-session-reader.js";
 import { readImmutableOutboxPage } from "../../src/session/session-artifact-session/immutable-outbox.js";
 import { immutableEventSequenceKey } from "../../src/session/session-artifact-session/immutable-event-changes.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 
 const ts = "2026-01-01T00:00:00.000Z";
@@ -112,6 +117,37 @@ function ack(record, consumerId = "websocket") {
   };
 }
 
+test("immutable storage rejects replacement and its mixed changes before publication", async (t) => {
+  const store = await fixture(t);
+  const created = await commit(store, { messages: [message("m1")] }, "create");
+  const [{ contentReference, owner }] = created.result.messageReceipts;
+  const before = await store.snapshot();
+  const messageContentReplacements = [
+    {
+      messageUid: "m1",
+      dialogProcessId: "d1",
+      turnScopeId: "t1",
+      expectedContentReference: contentReference,
+      owner,
+      content: "",
+    },
+  ];
+  const unsupported = { code: "SESSION_CHANGE_UNSUPPORTED", statusCode: 409 };
+  await assert.rejects(
+    commit(
+      store,
+      { messageContentReplacements, sessionMetadata: { customTitle: "not committed" } },
+      "replace",
+    ),
+    unsupported,
+  );
+  await assert.rejects(
+    commit(store, { summaryCheckpoints: [{ messageContentReplacements }] }, "checkpoint"),
+    unsupported,
+  );
+  assert.deepEqual(await store.snapshot(), before);
+});
+
 test("business delta atomically publishes messages, lifecycle, timing, metadata and a replayable result", async (t) => {
   const store = await fixture(t);
   const initial = await store.snapshot();
@@ -140,6 +176,20 @@ test("business delta atomically publishes messages, lifecycle, timing, metadata 
   assert.equal(replay.replayed, true);
   assert.equal(replay.result.turnTransition.committedEvent.eventId, event.eventId);
   assert.equal((await store.snapshot()).generation, snapshot.generation);
+});
+
+test("a duplicate lifecycle command returns the same result shape without publishing", async (t) => {
+  const store = await fixture(t);
+  await accept(store);
+  const before = await store.snapshot();
+  const duplicate = await commit(store, { turnTransition: acceptance() }, "duplicate");
+
+  assert.equal(duplicate.aborted, true);
+  assert.equal(duplicate.replayed, false);
+  assert.equal(duplicate.generation, before.generation);
+  assert.equal(duplicate.result.turnTransition.applied, false);
+  assert.equal(duplicate.result.turnTransition.deduplicated, true);
+  assert.deepEqual(await store.snapshot(), before);
 });
 
 test("outbox acknowledgements affect only the named consumer and retain old snapshot visibility", async (t) => {
@@ -208,6 +258,168 @@ test("unknown and invalid changes never publish a partially prepared graph", asy
   await assert.rejects(commit(store, { completeSession: {} }, "full-session"), TypeError);
   await assert.rejects(commit(store, { artifactEvents: {} }, "invalid-events"), TypeError);
   assert.deepEqual(await store.snapshot(), initial);
+});
+
+test("commit boundary rejects unsupported request fields without publishing state", async (t) => {
+  const store = await fixture(t);
+  const initial = await store.snapshot();
+  await assert.rejects(
+    commitSessionChanges({
+      sessionDir: store.sessionDir,
+      sessionId: store.sessionId,
+      expectedGeneration: initial.generation,
+      operationId: "invalid-envelope",
+      committedAt: ts,
+      changes: { messages: [message("m1")] },
+      generation: undefined,
+    }),
+    TypeError,
+  );
+  assert.deepEqual(await store.snapshot(), initial);
+});
+
+test("non-JSON changes are rejected before scope validation and publication", async (t) => {
+  const store = await fixture(t);
+  const initial = await store.snapshot();
+  let scopeValidated = false;
+  await assert.rejects(
+    commitSessionChanges({
+      sessionDir: store.sessionDir,
+      sessionId: store.sessionId,
+      expectedGeneration: initial.generation,
+      operationId: "invalid-delta",
+      committedAt: ts,
+      changes: { messages: [message("m1")], completeSession: undefined },
+      validateSnapshot: () => {
+        scopeValidated = true;
+      },
+    }),
+    /require finite JSON values/,
+  );
+  assert.equal(scopeValidated, false);
+  assert.deepEqual(await store.snapshot(), initial);
+});
+
+test("scoped commit rejects unknown fields instead of stripping them before protocol validation", async (t) => {
+  const store = await fixture(t);
+  const initial = await store.snapshot();
+  await withImmutableSessionReader(
+    { sessionDir: store.sessionDir, sessionId: store.sessionId, parentSessionId: "" },
+    async (reader, submit) => {
+      await assert.rejects(
+        submit({
+          expectedGeneration: reader.generation,
+          operationId: "scoped-invalid-envelope",
+          committedAt: ts,
+          changes: { messages: [message("m1")] },
+          generation: undefined,
+        }),
+        TypeError,
+      );
+    },
+  );
+  assert.deepEqual(await store.snapshot(), initial);
+});
+
+test("scoped submission passes the same captured input through commit and replay", async (t) => {
+  const store = await fixture(t);
+  const submission = createSessionChangesSubmission();
+  const transact = ImmutableSessionStore.prototype.transact;
+  let input;
+  let preparations = 0;
+  let transactions = 0;
+  t.mock.method(ImmutableSessionStore.prototype, "transact", function (options) {
+    assert.ok(input);
+    assert.equal(options.input, input);
+    transactions += 1;
+    return transact.call(this, options);
+  });
+  const run = () =>
+    withImmutableSessionReader(
+      { sessionDir: store.sessionDir, sessionId: store.sessionId, parentSessionId: "" },
+      (reader, submit) =>
+        submission.submit({
+          userId: "u1",
+          sessionId: store.sessionId,
+          prepare: () => {
+            preparations += 1;
+            return reader.prepareRequest({
+              operationId: "scoped-captured-input",
+              changes: { messages: [message("m1")] },
+              committedAt: ts,
+            });
+          },
+          commit: (request) => {
+            const captured = request.input;
+            if (input) assert.equal(captured, input);
+            input = captured;
+            return submit(request);
+          },
+        }),
+    );
+  const committed = await run();
+  assert.equal(committed.replayed, false);
+  assert.deepEqual(await run(), { ...committed, replayed: true });
+  assert.equal(preparations, 1);
+  assert.equal(transactions, 2);
+});
+
+test("message receipts use the prepared commit and read its record only once on replay", async (t) => {
+  const store = await fixture(t);
+  const request = {
+    expectedGeneration: (await store.snapshot()).generation,
+    operationId: "reuse-message-receipt-commit",
+    committedAt: ts,
+    changes: { messages: [message("m1")] },
+  };
+  const read = t.mock.method(store, "readCommitRecord");
+  const first = await commitImmutableSessionChanges(store, request);
+  assert.equal(first.result.messageReceipts[0].messageUid, "m1");
+  assert.equal(read.mock.callCount(), 0);
+  assert.deepEqual(await commitImmutableSessionChanges(store, request), {
+    ...first,
+    replayed: true,
+  });
+  assert.equal(read.mock.callCount(), 1);
+});
+
+test("commit validation and retry use the request captured before scope validation", async (t) => {
+  const store = await fixture(t);
+  const initial = await store.snapshot();
+  const request = {
+    expectedGeneration: initial.generation,
+    operationId: "captured-business-delta",
+    committedAt: ts,
+    changes: { messages: [message("m1")] },
+  };
+  const original = structuredClone(request);
+  const first = await commitImmutableSessionChanges(store, request, () => {
+    request.changes.completeSession = undefined;
+    request.changes.messages[0].content = "changed after capture";
+  });
+  const current = await store.snapshot();
+  assert.equal((await store.get(current, "messages", "m1")).message.content, "m1");
+  const replay = await commitSessionChanges({
+    sessionDir: store.sessionDir,
+    sessionId: store.sessionId,
+    ...original,
+  });
+  assert.deepEqual(replay, { ...first, replayed: true });
+  let scopeValidated = false;
+  await assert.rejects(
+    commitSessionChanges({
+      sessionDir: store.sessionDir,
+      sessionId: store.sessionId,
+      ...original,
+      changes: { ...original.changes, completeSession: null },
+      validateSnapshot: () => {
+        scopeValidated = true;
+      },
+    }),
+    /Unsupported session change: completeSession/,
+  );
+  assert.equal(scopeValidated, true);
+  assert.deepEqual(await store.snapshot(), current);
 });
 
 test("cold deltas never load unrelated message bodies and outbox pages bound scanned positions", async (t) => {

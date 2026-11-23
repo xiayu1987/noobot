@@ -36,6 +36,7 @@ test("dispatch admits changed UIDs without repeatedly scanning a retained prefix
   });
   botHookManager.on(HOOK_POINT.BOT.AFTER_AGENT_DISPATCH, () => {
     t.mock.method(store, "updateWhere", () => assert.fail("dispatch scanned the whole ledger"));
+    t.mock.method(store, "toArray", () => assert.fail("dispatch copied the whole ledger"));
     const update = store.updateByUid.bind(store);
     t.mock.method(store, "updateByUid", (uid, patch) => {
       indexedUpdates.push(uid);
@@ -71,5 +72,7 @@ test("dispatch admits changed UIDs without repeatedly scanning a retained prefix
   ]);
   assert.equal(store.readByUid("prefix-512").content, "updated");
   assert.equal(store.readByUid("prefix-0").content, "retained");
-  assert.ok(accepted.storeMessageUids.includes("prefix-1023"));
+  assert.deepEqual(accepted.acceptedMessageUids, expectedUids);
+  assert.equal(accepted.storeMessageCount, 1025);
+  assert.equal(Object.hasOwn(accepted, "storeMessageUids"), false);
 });

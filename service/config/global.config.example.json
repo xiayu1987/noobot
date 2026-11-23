@@ -2,6 +2,30 @@
   "model_library_version": 3,
   "workspace_root": "../workspace",
   "workspace_template_path": "../user-template/default-user",
+  "partitionSessionStorage": {
+    "maxJournals": 32,
+    "journalLimits": {
+      "partitionBytes": 16777216,
+      "partitionRecords": 4096,
+      "transactionBytes": 1048576,
+      "queueBytes": 8388608,
+      "batchBytes": 4194304,
+      "batchRecords": 64,
+      "batchWaitMs": 0,
+      "receiptBytes": 4194304,
+      "receiptRecords": 64,
+      "entityProjectionBytes": 4194304,
+      "entityProjectionRecords": 256,
+      "retentionRecords": 64,
+      "pageBytes": 1048576,
+      "pageRecords": 64,
+      "quotaBytes": 2147483648,
+      "quotaPartitions": 1024,
+      "quotaInodes": 65536,
+      "reserveBytes": 16777216,
+      "reserveInodes": 128
+    }
+  },
   "default_provider": "gpt_5_6_sol",
   "multimodal": {
     "parsing": {

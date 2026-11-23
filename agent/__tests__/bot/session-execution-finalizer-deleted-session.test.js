@@ -15,7 +15,7 @@ import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js"
 import { bindCurrentTurnPersistence } from "../../src/bot/execution/runner/current-turn-persistence.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { pathExists as exists, withProvisionedSessions } from "../helpers/provisioned-sessions.js";
-import { testWallClock } from "../helpers/session-services.js";
+import { executeEmptySessionCleanup, testWallClock } from "../helpers/session-services.js";
 
 const USER_ID = "u1";
 const TARGET_SESSION_ID = "running-target";
@@ -91,14 +91,7 @@ function createHarness(session) {
   });
   payload.turnPersistence = {
     flush: () => dispatchRuntime.persistCurrentTurnMessages(),
-    readResultMessages: () =>
-      session.getSessionTurns({
-        userId: USER_ID,
-        sessionId: TARGET_SESSION_ID,
-        dialogProcessId: payload.dialogProcessId,
-        turnScopeId: payload.turnScopeId,
-        persistenceScope: null,
-      }),
+    readResultTransfers: () => [],
   };
   return { finalizer, payload, effects };
 }
@@ -107,29 +100,38 @@ async function assertDeletedWithoutResidue({ session, scopes, effects }) {
   assert.equal(effects.includes("memory-stage"), false);
   assert.equal(effects.includes("memory"), false);
   assert.equal(await exists(scopes[TARGET_SESSION_ID].sessionDir), false);
+  const query = {
+    userId: USER_ID,
+    dialogProcessId: "dp-running",
+    turnScopeId: "turn-running",
+    cursor: null,
+    limit: 1,
+    persistenceScope: null,
+  };
   await assert.rejects(
-    session.getSessionTurns({
-      userId: USER_ID,
+    session.getSessionTurnMessagePage({
+      ...query,
       sessionId: TARGET_SESSION_ID,
-      persistenceScope: null,
     }),
     { code: "SESSION_DELETED" },
   );
   assert.equal(await exists(path.join(scopes[SIBLING_SESSION_ID].sessionDir, "head.json")), true);
   assert.deepEqual(
-    await session.getSessionTurns({
-      userId: USER_ID,
+    await session.getSessionTurnMessagePage({
+      ...query,
       sessionId: SIBLING_SESSION_ID,
-      persistenceScope: null,
     }),
-    [],
+    null,
   );
 }
 
 test("a session deleted while the agent runs rejects final persistence without recreating it", async () => {
   await withRunningSessions(async ({ session, scopes }) => {
     const { finalizer, payload, effects } = createHarness(session);
-    await session.deleteSessionBranch({ userId: USER_ID, sessionIds: [TARGET_SESSION_ID] });
+    await session.deleteSessionBranch(
+      { userId: USER_ID, sessionIds: [TARGET_SESSION_ID] },
+      executeEmptySessionCleanup,
+    );
 
     await assert.rejects(finalizer.finalizeRunSession(payload), {
       code: "SESSION_DELETED",
@@ -149,7 +151,10 @@ test("a session deleted between message persistence and turn timing rejects the 
       async appendTurns(input) {
         const result = await session.appendTurns(input);
         appendedTurns.push(...result.messageReceipts);
-        await session.deleteSessionBranch({ userId: USER_ID, sessionIds: [TARGET_SESSION_ID] });
+        await session.deleteSessionBranch(
+          { userId: USER_ID, sessionIds: [TARGET_SESSION_ID] },
+          executeEmptySessionCleanup,
+        );
         return result;
       },
     };

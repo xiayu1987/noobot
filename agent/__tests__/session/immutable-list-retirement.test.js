@@ -13,6 +13,7 @@ import {
   readImmutableListProjection,
   upgradeImmutableListProjection,
 } from "../../src/session/session-artifact-session/immutable-list-projection.js";
+import { immutableListProjectionSource } from "../../src/session/session-artifact-session/immutable-message-preview.js";
 import { corruptRecord } from "./helpers/immutable-record-reads.js";
 
 async function fixture(t, facts) {
@@ -47,7 +48,7 @@ test("retirement removes the current duplicate, preserves history and is idempot
     "stale duplicate",
   );
   assert.deepEqual(
-    await readImmutableListProjection((collection, key) => store.get(current, collection, key)),
+    await readImmutableListProjection(immutableListProjectionSource(store, current)),
     { messageCount: 0, lastMessage: null },
   );
   const head = await readFile(store.headPath);

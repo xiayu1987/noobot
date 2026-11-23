@@ -16,7 +16,6 @@ const LENGTH_TIERS = deepFreeze({
     persistedChunk: 40000,
     cleanedText: 120000,
     mainContext: 25000,
-    phaseSummary: 220000,
     externalToolHeavy: 350000,
   },
   displayChars: {
@@ -81,7 +80,7 @@ export const DEFAULT_LENGTH_THRESHOLDS = deepFreeze({
   },
 
   context: {
-    phaseSummaryMessageChars: LENGTH_TIERS.chars.phaseSummary,
+    phaseSummaryMessageChars: LENGTH_TIERS.chars.externalToolHeavy,
 
     harnessSummaryMessageChars: LENGTH_TIERS.chars.externalToolHeavy,
   },
@@ -170,9 +169,13 @@ export const DEFAULT_LENGTH_THRESHOLDS = deepFreeze({
   },
 
   immutableStorage: {
+    partitionContentChunkBytes: 2 * KiB,
+    entityPageKeyBytes: 512,
+    historicalDirectoryChecksumBytes: 16,
     blockBytes: 32 * KiB,
     keyBytes: KiB,
     headBytes: 4 * KiB,
+    migrationAuthorityRecordBytes: 4 * KiB,
     readerRetentionRecordBytes: 4 * KiB,
     cleanupRecordBytes: 32 * KiB,
     valueInlineBytes: 4 * KiB,
@@ -181,6 +184,14 @@ export const DEFAULT_LENGTH_THRESHOLDS = deepFreeze({
     locationIndexTargetBytes: 4 * KiB,
     locationRetirementMetadataBytes: MiB,
     executionProjectionOutputRecordBytes: 32 * MiB,
+  },
+
+  sessionStorage: {
+    messageReadBytes: 16 * MiB,
+    messageWriteBatchBytes: 16 * MiB,
+    listMessagePreviewChars: 256,
+    journalControlBytes: 64 * KiB,
+    journalDirectoryBytes: 512,
   },
 
   sessionLog: {

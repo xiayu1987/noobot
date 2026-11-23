@@ -28,16 +28,13 @@ test("authority dispatcher confirms the sent prefix before propagating a publish
   const bot = {
     session: {
       readServerNow: () => DISPATCHER_SERVER_NOW,
-      async getPendingAuthorityEvents() {
+      async prepareAuthorityEventDelivery() {
         return { found: true, events: pending };
-      },
-      async recordAuthorityEventAttempts() {
-        return { recorded: true };
       },
       async acknowledgeAuthorityEvents({ acknowledgements }) {
         const ids = new Set(acknowledgements.map((item) => item.eventId));
         pending = pending.filter((item) => !ids.has(item.eventId));
-        return { acknowledged: true };
+        return { acknowledged: true, drained: pending.length === 0 };
       },
       async compactAuthorityEvents() {
         return { compacted: false, nextRetainedDeliveryAt: null };
@@ -45,6 +42,7 @@ test("authority dispatcher confirms the sent prefix before propagating a publish
     },
   };
   const dispatch = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: async (_type, envelope) => {
@@ -72,15 +70,13 @@ test("authority dispatcher retains both publisher and acknowledgement failures",
   let throwAcknowledgement = false;
   let acknowledgedIds;
   const dispatch = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => ({
       session: {
         readServerNow: () => DISPATCHER_SERVER_NOW,
-        async getPendingAuthorityEvents() {
+        async prepareAuthorityEventDelivery() {
           return { found: true, events };
-        },
-        async recordAuthorityEventAttempts() {
-          return { recorded: true };
         },
         async acknowledgeAuthorityEvents({ acknowledgements }) {
           acknowledgedIds = acknowledgements.map((item) => item.eventId);
@@ -120,11 +116,8 @@ test("authority dispatcher reports ack failure without counting the sent events"
   const bot = {
     session: {
       readServerNow: () => DISPATCHER_SERVER_NOW,
-      async getPendingAuthorityEvents() {
+      async prepareAuthorityEventDelivery() {
         return { found: true, events: [item] };
-      },
-      async recordAuthorityEventAttempts() {
-        return { recorded: true };
       },
       async acknowledgeAuthorityEvents() {
         return { acknowledged: false, reason: "ack_rejected" };
@@ -133,6 +126,7 @@ test("authority dispatcher reports ack failure without counting the sent events"
   };
   const sent = [];
   const dispatch = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: (eventType) => sent.push(eventType) > 0,
@@ -148,7 +142,7 @@ test("authority dispatcher reports ack failure without counting the sent events"
   assert.equal(sent.length, 1);
 });
 
-test("authority dispatcher drains again when dispatch is requested while a drain is in flight", async () => {
+test("authority dispatcher coalesces a request during a nonempty read without repeating the final read", async () => {
   const item = createPendingEvent("authority-event-dirty", "s-dirty");
   let pending = [item];
   let getCalls = 0;
@@ -159,13 +153,10 @@ test("authority dispatcher drains again when dispatch is requested while a drain
   const bot = {
     session: {
       readServerNow: () => DISPATCHER_SERVER_NOW,
-      async getPendingAuthorityEvents() {
+      async prepareAuthorityEventDelivery() {
         getCalls += 1;
         if (getCalls === 1) await firstGetGate;
         return { found: true, events: pending };
-      },
-      async recordAuthorityEventAttempts() {
-        return { recorded: true };
       },
       async compactAuthorityEvents() {
         return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
@@ -173,11 +164,12 @@ test("authority dispatcher drains again when dispatch is requested while a drain
       async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
         const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
         pending = pending.filter((entry) => !ackedIds.has(entry.eventId));
-        return { acknowledged: true };
+        return { acknowledged: true, drained: pending.length === 0 };
       },
     },
   };
   const dispatch = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: () => true,
@@ -189,7 +181,7 @@ test("authority dispatcher drains again when dispatch is requested while a drain
   releaseFirstGet();
 
   assert.deepEqual(await first, { dispatched: true, delivered: 1 });
-  assert.equal(getCalls, 3);
+  assert.equal(getCalls, 1);
 
   const next = dispatch({ userId: "u1", sessionId: "s-dirty", persistenceScope: null });
   assert.notEqual(next, first);

@@ -18,16 +18,12 @@ import {
   requireImmutableCompactionResult,
   requireImmutableLocationRetirementRequest,
 } from "@noobot/session-protocol/immutable-record-location";
-import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
-import {
-  assertArtifactSessionWritable,
-  resolveSessionArtifactMutationLock,
-} from "./session-artifact-files.js";
+import { withImmutableAuthorityMutation } from "./session-storage-authority.js";
+import { assertArtifactSessionWritable } from "./session-artifact-files.js";
 import {
   readExecutionSegmentStates,
   recoverExecutionLogIndexes,
 } from "./execution-log-recovery.js";
-import { requireBoolean } from "@noobot/shared/value";
 import { requireStorageService } from "./storage-service.js";
 import {
   auditImmutableSession,
@@ -137,22 +133,18 @@ async function inspectAuditedArtifacts({ storageService, sessionDir, signal }, s
   return result;
 }
 
-async function runCleanupMutation(options, operation, run) {
+async function assertMaintenanceWritable(options, operation) {
   const { storageService, sessionDir, sessionId, assertSessionWritable, signal } = options;
   requireStorageService(storageService, operation);
-  return sessionMutationCoordinator.run(
-    resolveSessionArtifactMutationLock(sessionDir),
-    async () => {
-      await assertArtifactSessionWritable({
-        assertSessionWritable,
-        sessionId,
-        sessionDir,
-        operation,
-      });
-      signal?.throwIfAborted();
-      return run();
-    },
-  );
+  await assertArtifactSessionWritable({ assertSessionWritable, sessionId, sessionDir, operation });
+  signal?.throwIfAborted();
+}
+
+function runCleanupMutation(options, operation, run) {
+  return withImmutableAuthorityMutation(options.sessionDir, async () => {
+    await assertMaintenanceWritable(options, operation);
+    return run();
+  });
 }
 
 export async function compactSessionArtifacts(options) {
@@ -223,25 +215,24 @@ export async function discardSessionArtifactLocationRetirement(options) {
 
 export async function prepareSessionArtifactCleanup(options) {
   requireImmutableCleanupRequest("prepare", options);
-  const run = () =>
-    buildImmutableCleanupPlan({
-      sessionDir: options.sessionDir,
-      sessionId: options.sessionId,
-      dryRun: options.dryRun,
-      signal: options.signal,
-      planId: options.planId,
-      maxMarkingPages: options.maxMarkingPages,
-      maxFilterEntries: options.maxFilterEntries,
-      publish: (run) => runCleanupMutation(options, "publish_session_artifact_cleanup", run),
-    });
-  await runCleanupMutation(
-    options,
-    options.planId === undefined
-      ? "prepare_session_artifact_cleanup"
-      : "resume_session_artifact_cleanup",
-    async () => {},
-  );
-  return run();
+  return buildImmutableCleanupPlan({
+    sessionDir: options.sessionDir,
+    sessionId: options.sessionId,
+    dryRun: options.dryRun,
+    signal: options.signal,
+    planId: options.planId,
+    maxMarkingPages: options.maxMarkingPages,
+    maxFilterEntries: options.maxFilterEntries,
+    assertWritable: () =>
+      assertMaintenanceWritable(
+        options,
+        options.planId === undefined
+          ? "prepare_session_artifact_cleanup"
+          : "resume_session_artifact_cleanup",
+      ),
+    assertPublicationWritable: () =>
+      assertMaintenanceWritable(options, "publish_session_artifact_cleanup"),
+  });
 }
 
 export async function cleanupSessionArtifacts(options) {
@@ -279,14 +270,11 @@ function openReaderRecoveryStore({ sessionDir, sessionId, format }) {
 export async function inspectSessionArtifactReader(options) {
   requireImmutableReaderRecoveryRequest("inspect", options);
   requireStorageService(options.storageService, "inspectSessionArtifactReader");
-  return sessionMutationCoordinator.run(
-    resolveSessionArtifactMutationLock(options.sessionDir),
-    async () => {
-      options.signal?.throwIfAborted();
-      const store = await openReaderRecoveryStore(options);
-      return inspectImmutableReaderRetention(store, options.readerId);
-    },
-  );
+  return withImmutableAuthorityMutation(options.sessionDir, async () => {
+    options.signal?.throwIfAborted();
+    const store = await openReaderRecoveryStore(options);
+    return inspectImmutableReaderRetention(store, options.readerId);
+  });
 }
 
 export async function recoverSessionArtifactReader(options) {
@@ -308,21 +296,13 @@ export async function repairSessionArtifacts({
   sessionDir,
   sessionId,
   objectStore,
-  alreadyLocked,
   assertSessionWritable,
   objectReplacements = [],
   signal,
 }) {
-  requireStorageService(storageService, "repairSessionArtifacts");
-  requireBoolean("repairSessionArtifacts", "alreadyLocked", alreadyLocked);
   const replacements = captureImmutableObjectRepairs(objectReplacements);
-  const run = async () => {
-    await assertArtifactSessionWritable({
-      assertSessionWritable,
-      sessionId,
-      sessionDir,
-      operation: "repair_session_artifacts",
-    });
+  const options = { storageService, sessionDir, sessionId, assertSessionWritable, signal };
+  return runCleanupMutation(options, "repair_session_artifacts", async () => {
     const before = await inspectLockedSessionArtifacts({
       storageService,
       sessionDir,
@@ -353,8 +333,5 @@ export async function repairSessionArtifacts({
         objectStore,
       }),
     };
-  };
-  return alreadyLocked
-    ? run()
-    : sessionMutationCoordinator.run(resolveSessionArtifactMutationLock(sessionDir), run);
+  });
 }

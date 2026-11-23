@@ -15,6 +15,7 @@ import {
 } from "../identity/message-identity-schema.js";
 
 export const SESSION_AUTO_TITLE_MAX_LENGTH = 20;
+export const SESSION_AUTO_TITLE_MAX_CODE_UNITS = 2 * SESSION_AUTO_TITLE_MAX_LENGTH;
 export const SESSION_MESSAGE_IDENTITY_INVALID = "SESSION_MESSAGE_IDENTITY_INVALID";
 
 export function validateSessionMessageRecordIdentity(record) {
@@ -148,11 +149,24 @@ export function isDialogAnchorMessageRecord(record = {}) {
   return isNaturalDialogUserMessage(record);
 }
 
+export function projectStoredSessionMetadata(metadata) {
+  const stored = { ...metadata };
+  delete stored.autoTitle;
+  return stored;
+}
+
+export function isSessionAutoTitleCandidate(record = {}) {
+  return text(record?.role).toLowerCase() === "user" && !isInjectedSessionMessageRecord(record);
+}
+
 export function resolveSessionAutoTitle(record = {}) {
-  if (isInjectedSessionMessageRecord(record)) return "";
-  if (text(record?.role).toLowerCase() !== "user") return "";
-  if (!text(record?.content)) return "";
-  return String(record.content).slice(0, SESSION_AUTO_TITLE_MAX_LENGTH);
+  if (!isSessionAutoTitleCandidate(record)) return "";
+  const content = record?.content;
+  if (typeof content !== "string") return "";
+  return Array.from(content.slice(0, SESSION_AUTO_TITLE_MAX_CODE_UNITS))
+    .slice(0, SESSION_AUTO_TITLE_MAX_LENGTH)
+    .join("")
+    .trim();
 }
 
 export function deriveSessionAutoTitle(records = []) {

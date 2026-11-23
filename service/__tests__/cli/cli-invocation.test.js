@@ -15,13 +15,12 @@ import {
   resolveSessionTarget,
   splitStartupArgs,
 } from "../../cli/session-context.js";
-import { createMissingSessionDetailDocument } from "@noobot/session-protocol/session-detail";
+import { createSessionNotFoundError } from "@noobot/session-protocol";
 import {
   SESSIONS_SUMMARY_SCHEMA_VERSION,
   SESSION_SUMMARY_AVAILABILITY,
 } from "@noobot/session-protocol/sessions-summary";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
-import { availableDetailDocument } from "../session-detail.test-helpers.js";
 
 test("send maps flags onto run preferences", () => {
   const invocation = parseCliArgs(
@@ -134,10 +133,11 @@ test("session target: new, -c latest, -r existing", async () => {
           },
         ],
       }),
-      getSessionDisplayData: async ({ sessionId }) =>
-        sessionId === "s1"
-          ? availableDetailDocument({ sessionId, aggregateVersion: 4, messages: [] })
-          : createMissingSessionDetailDocument({ sessionId }),
+      readSessionAggregateVersion: async ({ userId, sessionId }) => {
+        assert.equal(userId, "u");
+        if (sessionId === "s1") return 4;
+        throw createSessionNotFoundError({ userId, sessionId });
+      },
     },
   };
   const created = await resolveSessionTarget({ bot, userId: "u", invocation: {} });

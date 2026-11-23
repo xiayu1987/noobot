@@ -11,6 +11,7 @@
   --noobot-font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
     monospace;
+  --noobot-font-copy-icon: "Bootstrap Copy Icon";
 
   --noobot-font-size-2xs: 10px;
   --noobot-font-size-xs: 12px;

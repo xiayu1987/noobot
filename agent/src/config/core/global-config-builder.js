@@ -48,7 +48,12 @@ export function createGlobalConfigBuilder({ source, migrations = [], validators 
     return cloneConfig(lastRawConfig);
   }
 
-  async function build({ configParams = {}, reloadRawConfig = true, env = process.env } = {}) {
+  async function build({
+    configParams = {},
+    reloadRawConfig = true,
+    env = process.env,
+    requirePartitionStorage,
+  } = {}) {
     const rawConfig = await loadRawConfig({ reload: reloadRawConfig });
     const buildContext = { env, configParams };
     const migrationResult = await applyConfigMigrations({
@@ -68,6 +73,7 @@ export function createGlobalConfigBuilder({ source, migrations = [], validators 
       resolvedConfig,
       validators: normalizedValidators,
       context: buildContext,
+      requirePartitionStorage,
     });
     return createConfigBuildResult({
       rawConfig: migratedRawConfig,

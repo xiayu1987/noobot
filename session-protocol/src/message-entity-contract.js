@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isCanonicalText } from "@noobot/shared/value";
+
 export const MESSAGE_ORIGIN = Object.freeze({
   NATURAL: "natural",
   INTERNAL: "internal",
@@ -70,6 +72,12 @@ export function collectSessionMessageEntityErrors(record) {
     }
   } else if (Object.hasOwn(record, "tool_calls")) {
     errors.push("tool_calls_forbidden");
+  }
+  if (Object.hasOwn(record, "workspaceRootDirectory")) {
+    if (!isCanonicalText(record.workspaceRootDirectory))
+      errors.push("workspace_root_not_canonical");
+    if (record.role !== "assistant" || record.chatPresentation !== true)
+      errors.push("workspace_root_requires_assistant_presentation");
   }
   return errors;
 }

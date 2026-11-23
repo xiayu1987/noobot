@@ -20,7 +20,7 @@ import {
 } from "@noobot/session-protocol/turn-commit";
 import { createAgentApplication } from "#agent/application";
 import { resolveAuthoritativeConnectorSelection } from "../../../services/chat-run-service.js";
-import { attachRunTransport, findActiveRun } from "../run-registry.js";
+import { attachRunTransport } from "../run-registry.js";
 import {
   recordServiceAgentTransportDebug,
   recordServiceWebSocketLifecycle,
@@ -45,19 +45,11 @@ export function validateRunIdentity(context, run) {
   }
 }
 
-export async function bindExistingRun(context, run, onRunBound) {
-  const runningTurn = findActiveRun({
-    userId: context.canonicalRunOwnerId,
-    sessionId: run.sessionId,
-    turnScopeId: run.turnScopeId,
-    dialogProcessId: run.dialogProcessId,
+export async function bindExistingRun(context, run) {
+  context.state.currentRunHandle = run;
+  context.state.currentRunTransportBinding = attachRunTransport(run, context.sendEvent, {
+    onDiagnostic: context.recordRunTransportDiagnostic(run),
   });
-  if (!runningTurn || runningTurn.abortController?.signal?.aborted) return false;
-  context.state.currentRunHandle = runningTurn;
-  context.state.currentRunTransportBinding = attachRunTransport(runningTurn, context.sendEvent, {
-    onDiagnostic: context.recordRunTransportDiagnostic(runningTurn),
-  });
-  onRunBound?.(runningTurn);
   await context.dispatchAuthorityEvents({
     userId: run.userId,
     sessionId: run.sessionId,
@@ -67,10 +59,9 @@ export async function bindExistingRun(context, run, onRunBound) {
     event: "service.websocket.run.transportRebound",
     userId: run.userId,
     sessionId: run.sessionId,
-    dialogProcessId: runningTurn.dialogProcessId,
+    dialogProcessId: run.dialogProcessId,
     turnScopeId: run.turnScopeId,
   });
-  return true;
 }
 
 const RUN_COMMAND_TURN_ACTION = Object.freeze({

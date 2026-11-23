@@ -5,41 +5,11 @@
  */
 import { turnRecord } from "../helpers/turn-record.js";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
-import {
-  SESSIONS_SUMMARY_SCHEMA_VERSION,
-  SESSION_SUMMARY_AVAILABILITY,
-  requireSessionsSummaryPayload,
-} from "@noobot/session-protocol/sessions-summary";
-import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ExecutionReadService } from "../../src/session/services/execution-read-service.js";
 
 const now = () => "2026-07-20T00:00:00.000Z";
-
-function availableSummary({ sessionId, updatedAt }) {
-  return {
-    sessionId,
-    parentSessionId: "",
-    caller: SESSION_CALLER.USER,
-    createdAt: "2026-07-20T00:00:00.000Z",
-    updatedAt,
-    aggregateVersion: 1,
-    title: sessionId,
-    messageCount: 0,
-    lastMessage: null,
-    activeTurnScopeId: "",
-    availability: SESSION_SUMMARY_AVAILABILITY.AVAILABLE,
-  };
-}
-
-function summaryPayload(entries) {
-  return requireSessionsSummaryPayload({
-    schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION,
-    sessions: entries,
-    updatedAt: now(),
-  });
-}
 
 function turn(overrides = {}) {
   return turnRecord({
@@ -58,18 +28,42 @@ function turn(overrides = {}) {
 }
 
 function service(sessions) {
+  return createReader(() => sessions);
+}
+
+function createReader(selectSessions) {
+  let active = 0;
   return new ExecutionReadService({
-    sessionCrudService: {
-      async getAllSessionSummaries() {
-        return summaryPayload(
-          sessions.map(({ sessionId }) => availableSummary({ sessionId, updatedAt: now() })),
-        );
+    sessionRepo: {
+      async listExecutionSessionScopes(userId) {
+        return selectSessions(userId).map(({ sessionId }) => ({
+          sessionId,
+          persistenceContext: { userId, sessionId },
+        }));
       },
-      async getAllSessionsData() {
-        return structuredClone(sessions);
+      async requireSessionReader(userId, sessionId, { persistenceContext }) {
+        assert.deepEqual(persistenceContext, { userId, sessionId });
+        assert.equal(active, 0);
+        const source = selectSessions(userId).find((item) => item.sessionId === sessionId);
+        active += 1;
+        return {
+          async readExecutionSource() {
+            assert.equal(active, 1);
+            if (source.error) throw source.error;
+            return structuredClone({
+              sessionId,
+              parentSessionId: source.parentSessionId ?? "",
+              turns: Object.values(source.turnLifecycle.turns),
+            });
+          },
+          async [Symbol.asyncDispose]() {
+            active -= 1;
+          },
+        };
       },
     },
     now,
+    scopedSessionRoots: [],
   });
 }
 
@@ -274,19 +268,23 @@ test("orphan execution remains visible as a root in the read model", async () =>
   assert.deepEqual(result.tree.rootExecutionIds, ["agent:orphan"]);
 });
 
-test("execution tree query without target is rejected", async () => {
-  const reader = service([
-    {
-      sessionId: "s1",
-      turnLifecycle: { ...createEmptyTurnLifecycle(), sequence: 2, turns: { root: turn() } },
-    },
-  ]);
-  const result = await reader.getExecutionTree({ userId: "u1" });
-  assert.deepEqual(result, { found: false, reason: "missing_execution" });
+test("invalid execution targets are rejected before opening the workspace", async () => {
+  const reader = createReader(() => assert.fail("invalid targets must not enumerate sessions"));
+  for (const [method, target] of [
+    ["getExecution", {}],
+    ["getExecution", { executionId: " agent:root " }],
+    ["getExecutionChildren", { executionId: 42 }],
+    ["getExecutionTree", {}],
+    ["getExecutionTree", { executionId: "agent:root", rootExecutionId: " " }],
+  ]) {
+    assert.deepEqual(await reader[method]({ userId: "u1", ...target }), {
+      found: false,
+      reason: "missing_execution",
+    });
+  }
 });
 
-test("disposable read index is isolated by user and rebuilds when authoritative summaries change", async () => {
-  let scans = 0;
+test("execution reads are isolated by user and observe changed lifecycle facts", async () => {
   const sessionsByUser = {
     u1: [
       {
@@ -309,32 +307,18 @@ test("disposable read index is isolated by user and rebuilds when authoritative 
       },
     ],
   };
-  const reader = new ExecutionReadService({
-    sessionCrudService: {
-      async getAllSessionSummaries({ userId }) {
-        return summaryPayload(sessionsByUser[userId].map(availableSummary));
-      },
-      async getAllSessionsData({ userId }) {
-        scans += 1;
-        return structuredClone(sessionsByUser[userId]);
-      },
-    },
-    now,
-  });
+  const reader = createReader((userId) => sessionsByUser[userId]);
 
   assert.equal(
     (await reader.getExecution({ userId: "u1", executionId: "agent:root" })).found,
     true,
   );
-  assert.equal(
-    (await reader.getExecution({ userId: "u1", executionId: "agent:root" })).found,
-    true,
-  );
-  assert.equal(scans, 1);
   assert.equal((await reader.getExecution({ userId: "u2", executionId: "agent:u2" })).found, true);
-  assert.equal(scans, 2);
+  assert.equal(
+    (await reader.getExecution({ userId: "u2", executionId: "agent:root" })).found,
+    false,
+  );
 
-  sessionsByUser.u1[0].updatedAt = "2026-07-20T00:01:00.000Z";
   sessionsByUser.u1[0].turnLifecycle.sequence = 4;
   sessionsByUser.u1[0].turnLifecycle.turns.root = turn({
     revision: 4,
@@ -343,54 +327,64 @@ test("disposable read index is isolated by user and rebuilds when authoritative 
   });
   const refreshed = await reader.getExecution({ userId: "u1", executionId: "agent:root" });
   assert.equal(refreshed.execution.revision, 4);
-  assert.equal(scans, 3);
 });
 
-test("summary read failure propagates instead of falling back to an uncached scan", async () => {
-  let scans = 0;
-  const reader = new ExecutionReadService({
-    sessionCrudService: {
-      async getAllSessionSummaries() {
-        throw new Error("index unavailable");
-      },
-      async getAllSessionsData() {
-        scans += 1;
-        return [];
-      },
-    },
-    now,
+test("scope discovery failure prevents all execution answers and preserves its reason", async () => {
+  const failure = Object.assign(new Error("published scope is damaged"), {
+    code: "SESSION_STORAGE_CORRUPT",
   });
-  await assert.rejects(
-    reader.getExecution({ userId: "u1", executionId: "agent:root" }),
-    /index unavailable/,
+  const reader = createReader(() => {
+    throw failure;
+  });
+  const request = { userId: "u1", executionId: "agent:root" };
+  const expected = {
+    found: false,
+    reason: "execution_query_incomplete",
+    scopeDiscoveryFailure: { code: failure.code, message: failure.message },
+  };
+  assert.deepEqual(await reader.getExecution(request), expected);
+  assert.deepEqual(await reader.getExecutionChildren(request), expected);
+  assert.deepEqual(await reader.getExecutionTree(request), expected);
+  assert.deepEqual(
+    await reader.getExecutionTree({ userId: "u1", rootExecutionId: "agent:root" }),
+    expected,
   );
-  assert.equal(scans, 0);
+  assert.deepEqual(
+    await reader.getExecution({ ...request, executionId: "agent:missing" }),
+    expected,
+  );
 });
 
-test("unreadable sessions are skipped and surfaced as read diagnostics", async () => {
-  const reader = new ExecutionReadService({
-    sessionCrudService: {
-      async getAllSessionSummaries() {
-        return summaryPayload([availableSummary({ sessionId: "ok", updatedAt: now() })]);
-      },
-      async getAllSessionsData({ failures }) {
-        failures.push({ sessionId: "broken", code: "SESSION_REPAIR_FAILED", message: "bad" });
-        return [
-          {
-            sessionId: "ok",
-            parentSessionId: "",
-            turnLifecycle: { ...createEmptyTurnLifecycle(), sequence: 2, turns: { root: turn() } },
-          },
-        ];
-      },
-    },
-    now,
+test("session directory failure propagates", async () => {
+  const failure = new Error("index unavailable");
+  const reader = createReader(() => {
+    throw failure;
   });
-  const tree = await reader.getExecutionTree({ userId: "u1", rootExecutionId: "agent:root" });
-  assert.equal(tree.found, true);
-  assert.deepEqual(tree.unreadableSessions, [
-    { sessionId: "broken", code: "SESSION_REPAIR_FAILED", message: "bad" },
+  await assert.rejects(reader.getExecution({ userId: "u1", executionId: "agent:root" }), failure);
+});
+
+test("a failed session reader releases before the next read and prevents authoritative answers", async () => {
+  const reader = service([
+    {
+      sessionId: "broken",
+      error: Object.assign(new Error("bad"), { code: "SESSION_REPAIR_FAILED" }),
+    },
+    {
+      sessionId: "ok",
+      turnLifecycle: { ...createEmptyTurnLifecycle(), sequence: 2, turns: { root: turn() } },
+    },
   ]);
-  const snapshot = await reader.getExecution({ userId: "u1", executionId: "agent:root" });
-  assert.equal(snapshot.unreadableSessions.length, 1);
+  const request = { userId: "u1", executionId: "agent:root" };
+  const expected = {
+    found: false,
+    reason: "execution_query_incomplete",
+    unreadableSessions: [{ sessionId: "broken", code: "SESSION_REPAIR_FAILED", message: "bad" }],
+  };
+  assert.deepEqual(await reader.getExecution(request), expected);
+  assert.deepEqual(await reader.getExecutionChildren(request), expected);
+  assert.deepEqual(await reader.getExecutionTree(request), expected);
+  assert.deepEqual(
+    await reader.getExecution({ ...request, executionId: "agent:missing" }),
+    expected,
+  );
 });

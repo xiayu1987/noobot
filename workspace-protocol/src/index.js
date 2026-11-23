@@ -10,3 +10,4 @@ export * from "./asset-sync.js";
 export * from "./layout-migration.js";
 export * from "./session-tree.js";
 export * from "./session-tombstone.js";
+export * from "./maintenance.js";

@@ -20,8 +20,7 @@ test("index sync requests write access only on Windows", () => {
   for (const platform of ["linux", "darwin"]) assert.equal(fileSyncOpenFlags(platform), "r");
 });
 
-test("Windows execution indexes sync during registration, append and rollover", async (context) => {
-  context.mock.property(process, "platform", "win32");
+test("execution indexes sync during registration, append and rollover on the host", async () => {
   await withTemp(async (sessionDir) => {
     const records = [
       { dialogProcessId: "windows-turn-1", content: "first" },

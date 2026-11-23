@@ -3,35 +3,36 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from "node:fs/promises";
 import path from "node:path";
+import { isCanonicalDialogProcessKey } from "@noobot/session-protocol";
+import { isWorkspacePathSegment } from "@noobot/workspace-protocol";
+import { harnessRunsDirectory } from "../store/run-mutation.js";
 
 import { resolveHookClientEmitter } from "@noobot/context-protocol/assembly/hook-context";
 
 import { createCapabilityRuntime } from "../capabilities/runtime.js";
-import { safeId } from "../data/record-builders.js";
 import { normalizeOptions } from "./options.js";
-import {
-  HARNESS_FILES,
-  PLUGIN_NAME,
-  PLUGIN_VERSION,
-  resolveHarnessRunsRelativePath,
-} from "./constants.js";
+import { HARNESS_FILES, PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
 import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
 import { text, isFunction } from "@noobot/shared/value";
-
-function extractRunId(ctx) {
-  return safeId(ctx.dialogProcessId);
-}
 
 export function createRunPaths(ctx, options) {
   const basePath = text(options.basePath);
   if (!basePath) throw new TypeError("harness run paths require options.basePath");
-  const runId = extractRunId(ctx);
-  const runDir = path.join(basePath, resolveHarnessRunsRelativePath(), runId);
+  const { dialogProcessId: runId, sessionId, parentSessionId } = ctx;
+  if (
+    !isCanonicalDialogProcessKey(runId) ||
+    !isWorkspacePathSegment(sessionId) ||
+    (parentSessionId && !isWorkspacePathSegment(parentSessionId))
+  ) {
+    throw new TypeError("harness run requires valid dialog and session ownership");
+  }
+  const runDir = path.join(harnessRunsDirectory(basePath), runId);
   return {
     basePath,
     runId,
+    sessionId,
+    parentSessionId: parentSessionId || null,
     runDir,
     manifest: path.join(runDir, HARNESS_FILES.RUN_MANIFEST),
     contextSnapshot: path.join(runDir, "context-snapshot.json"),
@@ -40,12 +41,6 @@ export function createRunPaths(ctx, options) {
     policyChecks: path.join(runDir, "policy-checks.json"),
     capabilityTraces: path.join(runDir, "capability-traces.jsonl"),
   };
-}
-
-export async function ensureRunDir(paths) {
-  if (!paths?.runDir) return false;
-  await fs.mkdir(paths.runDir, { recursive: true });
-  return true;
 }
 
 export function isPrimaryExecutionScope(ctx = {}) {

@@ -55,6 +55,10 @@ export function isTerminalTurnState(state) {
   return terminalStates.has(state);
 }
 
+export function isUnsuccessfulTurnState(state) {
+  return isTerminalTurnState(state) && state !== TURN_STATE.COMPLETED;
+}
+
 export function isFailedTurnState(state = "") {
   return failedStates.has(text(state));
 }

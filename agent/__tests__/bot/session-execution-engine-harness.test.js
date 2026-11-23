@@ -105,7 +105,7 @@ test("_finalizeRunSession forwards the incremental persistence port unchanged", 
   };
   const turnPersistence = {
     async flush() {},
-    async readResultMessages() {
+    async readResultTransfers() {
       return [];
     },
   };
@@ -159,6 +159,11 @@ test("RunConfigPluginPreparer.prepareRunConfig activates harness by Manifest id 
       messageBlocks: { system: [], history: [], incremental: messages },
     }),
   };
+  await prepared.hookManager.emit(HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD, {
+    userId: hookCtx.userId,
+    sessionId: hookCtx.sessionId,
+    dialogProcessId: hookCtx.dialogProcessId,
+  });
   await prepared.hookManager.emit(HOOK_POINT.AGENT.BEFORE_LLM_CALL, hookCtx);
 
   const resolvedMessages = hookCtx.modelContext.messages;
@@ -377,8 +382,13 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     async getTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }) {
       return createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId });
     },
-    async getSessionTurns() {
-      return persistedTurns;
+    async withSessionDialogMessageRecords({ dialogProcessId }, consume) {
+      async function* records() {
+        for (const [index, message] of persistedTurns.entries()) {
+          if (message.dialogProcessId === dialogProcessId) yield { ordinal: index + 1, message };
+        }
+      }
+      return consume(records());
     },
     async assertReusedUserTurnIdentity(payload = {}) {
       const messageUid = `sm_${payload.turnScopeId}`;
@@ -604,6 +614,11 @@ test("harness records tool call and state commit hook artifacts", async () => {
   });
   const agentContext = createTestAgentExecutionScope(runtime, {
     tools: [{ name: "demo_tool" }, { name: "failing_tool" }],
+  });
+  await hookManager.emit(HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD, {
+    userId: "u1",
+    sessionId,
+    dialogProcessId,
   });
 
   const successCall = { id: "call_ok", name: "demo_tool", args: { x: 1 } };

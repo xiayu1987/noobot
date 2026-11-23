@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { assertTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
+import { summaryCheckpointEffectMessageUids as receiptUids } from "@noobot/context-protocol/policy/summary-checkpoint-transaction";
 import { immutableOrderKey } from "./immutable-order-key.js";
 import { immutableStorageError } from "./immutable-object-store.js";
 
@@ -16,10 +17,6 @@ async function requireImmutableCheckpointIndex(plan) {
     throw Object.assign(new Error("Immutable checkpoint indexes require an offline upgrade"), {
       code: "SESSION_IMMUTABLE_INDEX_UPGRADE_REQUIRED",
     });
-}
-
-function receiptUids(receipt) {
-  return new Set([...receipt.persistedMessageUids, ...receipt.summarizedMessageUids]);
 }
 
 async function descriptor(plan, collection, key) {

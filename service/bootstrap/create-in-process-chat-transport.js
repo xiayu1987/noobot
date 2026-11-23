@@ -74,7 +74,7 @@ export function createInProcessChatTransport({ appDependencies, connectorAccessP
   const handleConnection = createChatConnectionHandler({
     consumerId: AUTHORITY_EVENT_CONSUMER.CLI,
     closePolicy: CONNECTION_CLOSE_POLICY.ABORT_RUN,
-    resolveBot: appDependencies.getBot,
+    serviceBotAccess: appDependencies.serviceBotAccess,
     normalizeLocale: appDependencies.normalizeLocale,
     defaultLocale: appDependencies.defaultLocale,
     translateText: appDependencies.translateText,

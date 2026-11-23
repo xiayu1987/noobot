@@ -30,6 +30,9 @@ export const WORKSPACE_LAYOUT_UPGRADE_OWNER = Object.freeze({
   SESSION_PHASE_SUMMARY: "session-phase-summary",
   SESSION_IMMUTABLE_STORAGE: "session-immutable-storage",
   DIRECTORY_LOCK_RETIREMENT: "directory-lock-retirement",
+  ATTACHMENT_CATALOG: "attachment-catalog",
+  SESSION_PARTITION_STORAGE: "session-partition-storage",
+  SESSION_PARTITION_FORMAT: "session-partition-format",
 });
 
 export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
@@ -244,6 +247,26 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     id: "session-message-inline-metadata-v43",
     toVersion: 43,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE,
+  }),
+  Object.freeze({
+    id: "session-title-index-v44",
+    toVersion: 44,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE,
+  }),
+  Object.freeze({
+    id: "attachment-catalog-v45",
+    toVersion: 45,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.ATTACHMENT_CATALOG,
+  }),
+  Object.freeze({
+    id: "session-partition-storage-v46",
+    toVersion: 46,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_PARTITION_STORAGE,
+  }),
+  Object.freeze({
+    id: "session-partition-format-v47",
+    toVersion: 47,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_PARTITION_FORMAT,
   }),
 ]);
 

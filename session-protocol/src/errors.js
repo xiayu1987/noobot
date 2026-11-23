@@ -6,6 +6,22 @@
 
 import { isCanonicalText, text } from "@noobot/shared/value";
 
+export function partitionJournalError(code, message) {
+  if (code === "SESSION_MUTATION_BUSY") return createSessionMutationBusyError(message);
+  return Object.assign(new Error(message), { code });
+}
+
+export function createSessionMutationBusyError(message) {
+  return Object.assign(new Error(message), { code: "SESSION_MUTATION_BUSY", statusCode: 409 });
+}
+
+export function createSessionJournalRetirementError(cause) {
+  return Object.assign(new Error("Could not retire a resident journal for admission", { cause }), {
+    code: "SESSION_JOURNAL_RETIREMENT_FAILED",
+    statusCode: 503,
+  });
+}
+
 export const SESSION_ERROR_CODE = Object.freeze({
   SESSION_ARTIFACT_EVENTS_INVALID: "SESSION_ARTIFACT_EVENTS_INVALID",
   COMMAND_INVALID: "SESSION_COMMAND_INVALID",
@@ -21,7 +37,6 @@ export const SESSION_ERROR_CODE = Object.freeze({
   MANIFEST_LAYOUT_INVALID: "SESSION_MANIFEST_LAYOUT_INVALID",
   TURN_JOURNAL_SCHEMA_REQUIRED: "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED",
   TURN_JOURNAL_RECORD_INVALID: "SESSION_TURN_JOURNAL_RECORD_INVALID",
-  SUMMARY_DETAIL_REFERENCE_MISMATCH: "SESSION_SUMMARY_DETAIL_REFERENCE_MISMATCH",
   SUMMARY_CHECKPOINT_IDENTITY_INVALID: "SESSION_SUMMARY_CHECKPOINT_IDENTITY_INVALID",
   SUMMARY_SNAPSHOT_PATH_INVALID: "SESSION_SUMMARY_SNAPSHOT_PATH_INVALID",
   SUMMARY_SNAPSHOT_INDEX_MISMATCH: "SESSION_SUMMARY_SNAPSHOT_INDEX_MISMATCH",
@@ -61,7 +76,6 @@ export const SESSION_ARTIFACT_READ_REJECTION_CODES = Object.freeze([
   SESSION_ERROR_CODE.MANIFEST_LAYOUT_INVALID,
   SESSION_ERROR_CODE.TURN_JOURNAL_SCHEMA_REQUIRED,
   SESSION_ERROR_CODE.TURN_JOURNAL_RECORD_INVALID,
-  SESSION_ERROR_CODE.SUMMARY_DETAIL_REFERENCE_MISMATCH,
   SESSION_ERROR_CODE.SUMMARY_CHECKPOINT_IDENTITY_INVALID,
   SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_PATH_INVALID,
   SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_INDEX_MISMATCH,
@@ -116,8 +130,14 @@ export function createSessionArtifactNotFoundError(subject) {
   });
 }
 
+export function matchesSessionScopeIdentity(record, { sessionId, parentSessionId }) {
+  return (
+    record != null && record.sessionId === sessionId && record.parentSessionId === parentSessionId
+  );
+}
+
 export function assertSessionScopeIdentity({ session, sessionId, parentSessionId }) {
-  if (session?.sessionId === sessionId && session?.parentSessionId === parentSessionId) return;
+  if (matchesSessionScopeIdentity(session, { sessionId, parentSessionId })) return;
   const error = new Error(`session identity conflicts with its storage scope: ${text(sessionId)}`);
   error.statusCode = 409;
   error.code = SESSION_ERROR_CODE.SCOPE_IDENTITY_CONFLICT;

@@ -9,3 +9,11 @@ export * from "./projection.js";
 export * from "./access.js";
 export * from "./lifecycle.js";
 export * from "./secrets.js";
+export {
+  CONNECTOR_INSTANCE_REGISTRY_VERSION,
+  LEGACY_CONNECTOR_INSTANCE_REGISTRY_VERSION,
+  requireConnectorInstanceRecord,
+  requireConnectorInstanceRegistry,
+  requireLegacyConnectorInstanceRegistry,
+  requireConnectorInstanceRegistryMigration,
+} from "./instance-registry.js";

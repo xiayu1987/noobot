@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { open } from "node:fs/promises";
+import { SESSION_AUTO_TITLE_MAX_LENGTH } from "@noobot/session-protocol";
 import { isFunction } from "@noobot/shared/value";
 import { decodeImmutableRecordReference } from "@noobot/session-protocol/immutable-segment";
 import { IMMUTABLE_LOCATED_SESSION_FORMAT } from "@noobot/session-protocol/immutable-record-location";
@@ -53,18 +54,26 @@ export async function committedPhysicalRecord(store, reference) {
 }
 
 export async function collectValueRecords(store, reference, records = new Set()) {
+  return store.objects.withSnapshot(await store.snapshot(), () =>
+    collectScopedValueRecords(store.objects, reference, records),
+  );
+}
+
+export async function collectScopedValueRecords(objects, reference, records = new Set()) {
   if (records.has(reference)) return records;
   records.add(reference);
-  const page = await readCommittedPage(store, reference);
+  const page = await objects.readPage(reference);
   if (isImmutableValuePartsPage(page)) {
-    if (page.kind === "value-parts") await collectValueRecords(store, page.template, records);
-    for (const part of page.parts) await collectValueRecords(store, part.reference, records);
+    if (page.kind === "value-parts")
+      await collectScopedValueRecords(objects, page.template, records);
+    for (const part of page.parts)
+      await collectScopedValueRecords(objects, part.reference, records);
   } else if (page.kind === "value") records.add(page.data);
   else if (page.kind === "value-inline") return records;
   else {
     assert.equal(page.kind, "value-branch");
-    await collectValueRecords(store, page.left, records);
-    await collectValueRecords(store, page.right, records);
+    await collectScopedValueRecords(objects, page.left, records);
+    await collectScopedValueRecords(objects, page.right, records);
   }
   return records;
 }
@@ -91,6 +100,35 @@ export async function publishOrphanRecord(store, bytes) {
   } finally {
     batch.release();
   }
+}
+
+export async function forbidMutationBodyReads(store, retainedUid, removedUid) {
+  const snapshot = await store.snapshot();
+  const root = await readCommittedIndex(store, snapshot.root, "messages");
+  const bodyReference = async (uid) => {
+    const reference = await readCommittedIndex(store, root, uid);
+    const { parts } = await readCommittedValueMetadata(store, reference);
+    assert.equal(parts[0].path.join("."), "message.content");
+    return parts[0].reference;
+  };
+  const retained = await bodyReference(retainedUid);
+  const removed = await bodyReference(removedUid);
+  const forbidden = new Set();
+  await store.objects.withSnapshot(snapshot, async () => {
+    let prefix = retained;
+    for (;;) {
+      const page = await store.objects.readPage(prefix);
+      if (page.kind !== "value-branch") {
+        assert.ok(page.bytes >= 6 * SESSION_AUTO_TITLE_MAX_LENGTH + 2);
+        break;
+      }
+      await collectScopedValueRecords(store.objects, page.right, forbidden);
+      prefix = page.left;
+    }
+  });
+  assert.ok(forbidden.size > 0, "fixture must span multiple body records");
+  await collectValueRecords(store, removed, forbidden);
+  return forbidRecordReads(store, forbidden);
 }
 
 export async function forbidRecordReads(store, references) {

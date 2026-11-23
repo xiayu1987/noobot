@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { createMessageUid, createUserMessageId } from "@noobot/session-protocol/message-identity";
 import { createMessageAnchorMatcher } from "./anchor-utils.js";
 import {
@@ -23,26 +24,23 @@ async function commitMutation({
   changeType,
   change,
 }) {
-  return this.sessionRepo.withSessionMutation(
+  return this.sessionRepo.withSessionReader(
     userId,
     sessionId,
-    async () => {
-      await using reader = await this.sessionRepo.requireSessionReader(userId, sessionId, {
-        persistenceContext,
-      });
-      const committed = await this.sessionRepo.commitChanges(userId, sessionId, {
-        persistenceContext,
-        expectedGeneration: reader.generation,
-        operationId: randomUUID(),
-        committedAt: this.now(),
-        changes: { [changeType]: change },
-      });
+    async ({ reader, commitChanges, readCurrent }) => {
+      const committed = await commitChanges(
+        await reader.prepareRequest({
+          operationId: randomUUID(),
+          committedAt: this.now(),
+          changes: { [changeType]: change },
+        }),
+      );
       const { receipt, deduplicated } = committed.result[changeType];
-      await using committedReader = await this.sessionRepo.requireSessionReader(userId, sessionId, {
-        persistenceContext,
-      });
-      const source = await committedReader.readMutationProjection(receipt.commandId);
-      if (!source || JSON.stringify(source.receipt) !== JSON.stringify(receipt)) {
+      const { source, generation } = await readCurrent(async (current) => ({
+        source: await current.readMutationProjection(receipt.commandId),
+        generation: current.generation,
+      }));
+      if (!source || !isDeepStrictEqual(source.receipt, receipt)) {
         throw Object.assign(
           new Error("Committed mutation is missing its command change evidence"),
           {
@@ -50,19 +48,17 @@ async function commitMutation({
           },
         );
       }
-      const deletedMessageUids = source.kind === "baseline" ? null : source.deletedMessageUids;
       const displayMessages =
         source.kind === "baseline"
           ? []
-          : source.messages.map((record) => buildDisplayMessageSummary(record.message));
+          : source.messages.map(({ message, ordinal }) => ({
+              ...buildDisplayMessageSummary(message),
+              sessionOrdinal: ordinal,
+            }));
       return createResponse({
-        receiptResult: receipt.result,
-        commandId: receipt.commandId,
-        committedAggregateVersion: receipt.aggregateVersion,
         deduplicated,
-        deletedMessageUids,
         sessionId,
-        generation: committedReader.generation,
+        generation,
         projection: source,
         displayMessages,
       });

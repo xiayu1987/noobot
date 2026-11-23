@@ -10,6 +10,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { parseTurnReplaceRequest } from "@noobot/session-protocol";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
+import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
+import { forbidMutationBodyReads } from "./helpers/immutable-record-reads.js";
 import {
   immutableMutationFixture,
   mutationMessage as message,
@@ -49,8 +51,12 @@ test("replacement rejects invalid internal identities without publishing a head"
     attachments: [],
   });
   const identity = { dialogProcessId: "new-dialog", messageUid: "sm_new", userMessageId: "um_new" };
+  await assert.rejects(
+    f.commit({ turnReplacement: { command, identity: undefined } }),
+    /require finite JSON values/,
+  );
+  assert.equal((await f.open()).generation, before.generation);
   for (const invalid of [
-    undefined,
     {},
     { ...identity, userMessageId: " " },
     { ...identity, sessionId: "other" },
@@ -75,10 +81,7 @@ test("replacement command replays in a fresh process without publishing another 
     turnScopeId: "replacement",
     attachments: [],
   });
-  const moduleUrl = new URL(
-    "../../src/session/session-artifact-session/commit-session-changes.js",
-    import.meta.url,
-  ).href;
+  const moduleUrl = new URL("../helpers/commit-immutable-session-fixture.js", import.meta.url).href;
   const code = `import { commitSessionChanges } from ${JSON.stringify(moduleUrl)};
     const result = await commitSessionChanges(JSON.parse(process.argv[1]));
     process.stdout.write(JSON.stringify(result.result.turnReplacement));`;
@@ -138,7 +141,7 @@ test("replacement command changes retain the exact suffix and original user acro
   const delta = await before.readCommandChanges(command.commandId);
   const projection = await before.readMutationProjection(command.commandId);
   assert.equal(projection.baseAggregateVersion, 0);
-  assert.deepEqual(projection.deletedMessageUids, ["keep-tail", "drop"]);
+  assert.deepEqual(projection.messageSuffix, { firstOrdinal: 2, previousMessageCount: 3 });
   assert.equal(projection.messages.length, 1);
   assert.equal(projection.messages[0].message.content, "edited");
   assert.equal(projection.messages[0].message.messageUid, "sm_new");
@@ -189,7 +192,6 @@ test("replaceTurn publishes fresh identities, suffix indexes and tombstones in o
     "commandId",
     "committedAggregateVersion",
     "deduplicated",
-    "deletedMessageUids",
     "displayMessages",
     "generation",
     "projection",
@@ -204,7 +206,7 @@ test("replaceTurn publishes fresh identities, suffix indexes and tombstones in o
     response.turnReplacement.replacementUserMessageUid,
   );
   assert.equal(response.deduplicated, false);
-  assert.deepEqual(response.deletedMessageUids, ["tail", "drop"]);
+  assert.deepEqual(response.projection.messageSuffix, { firstOrdinal: 2, previousMessageCount: 3 });
   const after = await f.open();
   assert.equal(after.generation, before.generation + 1);
   const session = await after.exportSession();
@@ -518,12 +520,35 @@ test("committed message role changes reject before publishing a head", async (t)
 test("replacement of the first turn updates the title and permits a subsequent append", async (t) => {
   const f = await immutableMutationFixture(t, { messages: [message("drop")] });
   await f.service.replaceTurn(replacement(f));
-  assert.equal((await (await f.open()).readMetadata()).autoTitle, "edited");
+  assert.equal(
+    (await (await f.open()).readMetadata({ includeAutoTitle: true })).autoTitle,
+    "edited",
+  );
   await f.commit({ messages: [message("next")] });
   assert.deepEqual(
     (await (await f.open()).exportSession()).messages.map((item) => item.content),
     ["edited", "next"],
   );
+});
+
+test("replacing the tail reads only the retained title prefix and no removed body", async (t) => {
+  const title = "12345678901234567890";
+  const f = await immutableMutationFixture(t, {
+    messages: [
+      message("keep", "keep", { content: title + "body".repeat(50000) }),
+      message("drop", "drop", { content: "removed ".repeat(25000) }),
+    ],
+  });
+  const store = await ImmutableSessionStore.open({ sessionDir: f.scope.sessionDir });
+  setFsAdapter(await forbidMutationBodyReads(store, "keep", "drop"));
+  try {
+    await f.service.replaceTurn(replacement(f));
+    const reader = await f.open();
+    assert.equal((await reader.readMetadata({ includeAutoTitle: true })).autoTitle, title);
+    assert.equal(await reader.readMessage("drop"), null);
+  } finally {
+    resetFsAdapter();
+  }
 });
 
 test("reused user identity accepts integrity fields and ignores derived presentation without writing", async (t) => {

@@ -19,6 +19,7 @@ import {
 const COMMAND_CHANGE_COLLECTIONS = Object.freeze([
   "commands",
   "messages",
+  "messageOrder",
   "turns",
   "lifecycle",
   "replacements",
@@ -152,7 +153,14 @@ export async function writeImmutableCommand(store, plan, receipt) {
   }
 }
 
-async function removeCommandReceipt({ store, plan, turnScopeId, commandId, reference }) {
+async function retireSuffixCommand({
+  store,
+  plan,
+  turnScopeId,
+  commandId,
+  reference,
+  removedUids,
+}) {
   if ((await store.objects.readValue(reference)) !== commandId)
     throw immutableStorageError("Command turn membership identity mismatch");
   const key = immutableLifecycleCommandKey(commandId);
@@ -164,29 +172,37 @@ async function removeCommandReceipt({ store, plan, turnScopeId, commandId, refer
     const bindingKey = immutableAttachmentBindingKey(receipt.result.messageUid);
     if ((await plan.get("commands", bindingKey)) !== commandId)
       throw immutableStorageError("Attachment binding command index mismatch");
+    if (!removedUids.has(receipt.result.messageUid)) return false;
     plan.remove("commands", bindingKey);
   }
   plan.remove("commands", key);
+  return true;
 }
 
-async function removeTurnCommands(store, plan, turnScopeId) {
+async function retireTurnCommands(store, plan, turnScopeId, removedUids) {
   const descriptor = await readScope(plan, turnScopeId);
   if (descriptor === null) return 0;
   let count = 0;
+  let removed = 0;
+  let root = descriptor.root;
   for await (const [commandId, reference] of store.index.entries(descriptor.root)) {
-    await removeCommandReceipt({ store, plan, turnScopeId, commandId, reference });
+    if (
+      await retireSuffixCommand({ store, plan, turnScopeId, commandId, reference, removedUids })
+    ) {
+      root = await store.index.set(root, commandId, null);
+      removed += 1;
+    }
     count += 1;
   }
   if (count !== descriptor.count) throw immutableStorageError("Command turn count mismatch");
-  plan.remove("turnCommands", turnScopeId);
-  return count;
+  if (root === null) plan.remove("turnCommands", turnScopeId);
+  else if (removed)
+    plan.set("turnCommands", turnScopeId, { turnScopeId, count: count - removed, root });
 }
 
-export async function removeImmutableTurnCommands(store, plan, turnScopeIds) {
+export async function retireImmutableSuffixCommands(store, plan, { turnScopeIds, uids }) {
   await requireImmutableCommandIndex(plan);
-  let removed = 0;
-  for (const turnScopeId of new Set(turnScopeIds)) {
-    removed += await removeTurnCommands(store, plan, turnScopeId);
-  }
-  return { removed };
+  const removedUids = new Set(uids);
+  for (const turnScopeId of turnScopeIds)
+    await retireTurnCommands(store, plan, turnScopeId, removedUids);
 }

@@ -23,7 +23,10 @@ import {
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
-import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
+import {
+  buildPersistedDisplaySummary,
+  buildPersistedDisplayAndThinking,
+} from "./session-artifact-store-v2.test-helpers.js";
 
 test("session display summary materializes the active Turn presentation in the zero-event window", async () => {
   const summary = await buildPersistedDisplaySummary({
@@ -91,68 +94,71 @@ test("session display summary materializes the active Turn presentation in the z
 });
 
 test("session display summary materializes stopped Turn details on its stable presentation", async () => {
-  const summary = await buildPersistedDisplaySummary({
-    sessionId: "stopped-turn-session",
-    aggregateVersion: 0,
-    messages: [
-      {
-        attachments: [],
-        role: "user",
-        messageOrigin: "natural",
-        type: "message",
-        content: "run tools",
-        userMessageId: "stopped-user",
-        turnScopeId: "turn-stopped",
-        dialogProcessId: "dialog-stopped",
-      },
-      {
-        attachments: [],
-        role: "assistant",
-        modelMessageId: "mm_session_repository_bound_1",
-        type: "tool_call",
-        tool_calls: [{ id: "stopped", name: "read_file", args: {}, type: "tool_call" }],
-        content: "",
-        chatPresentation: false,
-        presentationMessageId: "presentation-stopped",
-        turnScopeId: "turn-stopped",
-        dialogProcessId: "dialog-stopped",
-        toolTimeline: [
-          {
-            key: "call:stopped",
-            toolCallId: "stopped",
-            tool: "read_file",
-            args: {},
-            call: { eventId: "call-stopped", sequence: 1 },
-            result: JSON.stringify({
-              ok: false,
-              status: "aborted",
-              code: "RECOVERABLE_USER_CANCELLED",
-              error: "user stop action",
-              stopType: "user_stop",
-            }),
-            success: false,
-            resultEvent: { eventId: "result-stopped", sequence: 2 },
-          },
-        ],
-      },
-    ],
-    turnLifecycle: {
-      ...createEmptyTurnLifecycle(),
-      activeTurnScopeId: "",
-      sequence: 2,
-      turns: {
-        "turn-stopped": turnRecord({
-          revision: 1,
+  const { summary, detail } = await buildPersistedDisplayAndThinking(
+    {
+      sessionId: "stopped-turn-session",
+      aggregateVersion: 0,
+      messages: [
+        {
+          attachments: [],
+          role: "user",
+          messageOrigin: "natural",
+          type: "message",
+          content: "run tools",
+          userMessageId: "stopped-user",
           turnScopeId: "turn-stopped",
           dialogProcessId: "dialog-stopped",
+        },
+        {
+          attachments: [],
+          role: "assistant",
+          modelMessageId: "mm_session_repository_bound_1",
+          type: "tool_call",
+          tool_calls: [{ id: "stopped", name: "read_file", args: {}, type: "tool_call" }],
+          content: "",
+          chatPresentation: false,
           presentationMessageId: "presentation-stopped",
-          executionState: "user_stopped",
-          state: "stop_completed",
-          sequence: 2,
-        }),
+          turnScopeId: "turn-stopped",
+          dialogProcessId: "dialog-stopped",
+          toolTimeline: [
+            {
+              key: "call:stopped",
+              toolCallId: "stopped",
+              tool: "read_file",
+              args: {},
+              call: { eventId: "call-stopped", sequence: 1 },
+              result: JSON.stringify({
+                ok: false,
+                status: "aborted",
+                code: "RECOVERABLE_USER_CANCELLED",
+                error: "user stop action",
+                stopType: "user_stop",
+              }),
+              success: false,
+              resultEvent: { eventId: "result-stopped", sequence: 2 },
+            },
+          ],
+        },
+      ],
+      turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
+        activeTurnScopeId: "",
+        sequence: 2,
+        turns: {
+          "turn-stopped": turnRecord({
+            revision: 1,
+            turnScopeId: "turn-stopped",
+            dialogProcessId: "dialog-stopped",
+            presentationMessageId: "presentation-stopped",
+            executionState: "user_stopped",
+            state: "stop_completed",
+            sequence: 2,
+          }),
+        },
       },
     },
-  });
+    "turn-stopped",
+  );
 
   const stoppedPresentation = summary.messages.find(
     (message) => message.presentationMessageId === "presentation-stopped",
@@ -160,8 +166,13 @@ test("session display summary materializes stopped Turn details on its stable pr
   assert.equal(stoppedPresentation.role, "assistant");
   assert.equal(stoppedPresentation.turnPlaceholder, true);
   assert.equal(Object.hasOwn(stoppedPresentation, "thinkingDetailCount"), false);
-  assert.equal(countCanonicalThinkingDetailEvents(stoppedPresentation), 2);
-  assert.equal(stoppedPresentation.toolTimeline.length, 1);
+  assert.equal(stoppedPresentation.hasThinkingDetails, true);
+  assert.equal(Object.hasOwn(stoppedPresentation, "toolTimeline"), false);
+  assert.equal(countCanonicalThinkingDetailEvents(detail), 2);
+  assert.deepEqual(
+    detail.toolTimeline.map(({ call, resultEvent }) => [call.eventId, resultEvent.eventId]),
+    [["call-stopped", "result-stopped"]],
+  );
 });
 
 test("Session Detail exposes canonical active Turn messages", async () => {
@@ -245,103 +256,114 @@ test("Session Detail exposes canonical active Turn messages", async () => {
   });
 });
 
-test("active Turn summary carries its authoritative thinking timelines", async () => {
+test("active Turn summary marks its separately readable thinking timelines", async () => {
   const turnScopeId = "client-turn:active-timeline";
   const presentationMessageId = "presentation-active-timeline";
-  const summary = await buildPersistedDisplaySummary({
-    sessionId: "active-timeline-session",
-    aggregateVersion: 0,
-    messages: [
-      {
-        attachments: [],
-        role: "assistant",
-        type: "tool_call",
-        tool_calls: [{ id: "active-tool", name: "read_file", args: {}, type: "tool_call" }],
-        content: "",
-        chatPresentation: false,
-        modelMessageId: "source-tool-message",
-        presentationMessageId,
-        turnScopeId,
-        dialogProcessId: "dialog-active-timeline",
-        toolTimeline: [
-          {
-            key: "call:active-tool",
-            toolCallId: "active-tool",
-            tool: "read_file",
-            args: {},
-            call: { eventId: "tool-start" },
-          },
-        ],
-        activityTimeline: [
-          canonicalActivity({
-            eventId: "thinking-active",
-            activityId: "analysis-active-1",
-            sequenceScopeId: "source-tool-message",
-            sessionId: "active-timeline-session",
-            dialogProcessId: "dialog-active-timeline",
-            turnScopeId,
-            presentationMessageId,
-          }),
-        ],
-      },
-      {
-        attachments: [],
-        role: "assistant",
-        type: "tool_call",
-        tool_calls: [{ id: "active-tool-2", name: "read_file", args: {}, type: "tool_call" }],
-        content: "",
-        chatPresentation: false,
-        modelMessageId: "source-tool-message-2",
-        presentationMessageId,
-        turnScopeId,
-        dialogProcessId: "dialog-active-timeline",
-        toolTimeline: [
-          {
-            key: "call:active-tool-2",
-            toolCallId: "active-tool-2",
-            tool: "search",
-            args: {},
-            call: { eventId: "tool-start-2" },
-          },
-        ],
-        activityTimeline: [
-          canonicalActivity({
-            eventId: "thinking-active-2",
-            activityId: "analysis-active-2",
-            sequence: 2,
-            sequenceScopeId: "source-tool-message-2",
-            sessionId: "active-timeline-session",
-            dialogProcessId: "dialog-active-timeline",
-            turnScopeId,
-            presentationMessageId,
-          }),
-        ],
-      },
-    ],
-    turnLifecycle: {
-      ...createEmptyTurnLifecycle(),
-      activeTurnScopeId: turnScopeId,
-      sequence: 1,
-      turns: {
-        [turnScopeId]: turnRecord({
-          revision: 1,
-          sequence: 1,
-          sessionId: "active-timeline-session",
+  const { summary, detail } = await buildPersistedDisplayAndThinking(
+    {
+      sessionId: "active-timeline-session",
+      aggregateVersion: 0,
+      messages: [
+        {
+          attachments: [],
+          role: "assistant",
+          type: "tool_call",
+          tool_calls: [{ id: "active-tool", name: "read_file", args: {}, type: "tool_call" }],
+          content: "",
+          chatPresentation: false,
+          modelMessageId: "source-tool-message",
+          presentationMessageId,
           turnScopeId,
           dialogProcessId: "dialog-active-timeline",
+          toolTimeline: [
+            {
+              key: "call:active-tool",
+              toolCallId: "active-tool",
+              tool: "read_file",
+              args: {},
+              call: { eventId: "tool-start" },
+            },
+          ],
+          activityTimeline: [
+            canonicalActivity({
+              eventId: "thinking-active",
+              activityId: "analysis-active-1",
+              sequenceScopeId: "source-tool-message",
+              sessionId: "active-timeline-session",
+              dialogProcessId: "dialog-active-timeline",
+              turnScopeId,
+              presentationMessageId,
+            }),
+          ],
+        },
+        {
+          attachments: [],
+          role: "assistant",
+          type: "tool_call",
+          tool_calls: [{ id: "active-tool-2", name: "read_file", args: {}, type: "tool_call" }],
+          content: "",
+          chatPresentation: false,
+          modelMessageId: "source-tool-message-2",
           presentationMessageId,
-          state: "processing",
-          startedAt: "2026-07-31T03:10:00.000Z",
-        }),
+          turnScopeId,
+          dialogProcessId: "dialog-active-timeline",
+          toolTimeline: [
+            {
+              key: "call:active-tool-2",
+              toolCallId: "active-tool-2",
+              tool: "search",
+              args: {},
+              call: { eventId: "tool-start-2" },
+            },
+          ],
+          activityTimeline: [
+            canonicalActivity({
+              eventId: "thinking-active-2",
+              activityId: "analysis-active-2",
+              sequence: 2,
+              sequenceScopeId: "source-tool-message-2",
+              sessionId: "active-timeline-session",
+              dialogProcessId: "dialog-active-timeline",
+              turnScopeId,
+              presentationMessageId,
+            }),
+          ],
+        },
+      ],
+      turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
+        activeTurnScopeId: turnScopeId,
+        sequence: 1,
+        turns: {
+          [turnScopeId]: turnRecord({
+            revision: 1,
+            sequence: 1,
+            sessionId: "active-timeline-session",
+            turnScopeId,
+            dialogProcessId: "dialog-active-timeline",
+            presentationMessageId,
+            state: "processing",
+            startedAt: "2026-07-31T03:10:00.000Z",
+          }),
+        },
       },
     },
-  });
+    turnScopeId,
+  );
   const activePresentation = summary.messages.find(
     (message) => message.presentationMessageId === presentationMessageId,
   );
-  assert.equal(activePresentation.toolTimeline.length, 2);
-  assert.equal(activePresentation.activityTimeline.length, 2);
+  assert.equal(Object.hasOwn(activePresentation, "toolTimeline"), false);
+  assert.equal(Object.hasOwn(activePresentation, "activityTimeline"), false);
+  assert.deepEqual(
+    detail.toolTimeline.map(({ call }) => call.eventId),
+    ["tool-start", "tool-start-2"],
+  );
+  assert.deepEqual(
+    detail.activityTimeline.map(({ eventId }) => eventId),
+    ["thinking-active", "thinking-active-2"],
+  );
   assert.equal(activePresentation.hasThinkingDetails, true);
   assert.equal(Object.hasOwn(activePresentation, "thinkingDetailCount"), false);
-  assert.equal(countCanonicalThinkingDetailEvents(activePresentation), 4);
+  assert.equal(countCanonicalThinkingDetailEvents(detail), 4);
 });

@@ -240,8 +240,7 @@ export function createMonotonicMessageActions({
         turnScopeId: getMessageTurnScopeId(userTargetMessage),
         deletedCount: response.deletedCount,
         anchorIndex: response.anchorIndex,
-        deletedTurnScopeIds: response.deletedTurnScopeIds,
-        deletedMessageUids: response.deletedMessageUids,
+        affectedTurnCount: response.deletedTurnScopeIds.length,
       }));
       const confirmedDeletedTurnScopeIds = response.deletedTurnScopeIds;
       confirmTurnRuntimeDeletion(turnRuntimeRegistry.value, confirmedDeletedTurnScopeIds, {

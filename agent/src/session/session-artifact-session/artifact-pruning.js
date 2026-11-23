@@ -7,7 +7,7 @@ import { readdir, rm } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { forgetVerifiedSnapshot, getTurnMaterializer } from "./turn-materializer.js";
 import { readFileIdentity } from "./verified-snapshot-cache.js";
-import { recordStorageWork } from "./storage-transaction.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 import { resolveTurnJournalPath } from "./turn-journal-store.js";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 

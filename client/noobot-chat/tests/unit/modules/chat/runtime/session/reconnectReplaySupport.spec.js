@@ -58,7 +58,7 @@ describe("reconnectReplay support modules", () => {
   it("fetches fresh session detail when hydrating active session before replay", async () => {
     const detail = detailDocument("s-1");
     const fetchSessionDetail = vi.fn(async () => detail);
-    const applySessionDetail = vi.fn();
+    const applySessionDetail = vi.fn(() => true);
 
     const result = await hydrate(
       { value: { id: "s-1", sessionId: "s-1", messages: [] } },

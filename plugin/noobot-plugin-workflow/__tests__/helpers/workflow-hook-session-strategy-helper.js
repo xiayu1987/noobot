@@ -6,6 +6,10 @@
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import {
+  assertSessionExecutionResult,
+  createSessionExecutionMessageSource,
+} from "@noobot/agent-transport-protocol/session-execution-result";
 import { createEventEnvelope, getEventFamily, validateProtocolEvent } from "@noobot/event-protocol";
 import { deriveAgentExecutionId, deriveTurnCommandId } from "@noobot/session-protocol";
 import {
@@ -68,18 +72,29 @@ export function createCapabilityModelInvoker(output, calls = null) {
   };
 }
 
+export function createExecutionResult(scope, answer = "done") {
+  const messageSource = createSessionExecutionMessageSource(scope);
+  return assertSessionExecutionResult({
+    ...messageSource,
+    messageSource,
+    answer,
+    traces: [],
+    transferEnvelopes: [],
+  });
+}
+
 export function createNodeResult(nodeName, overrides = {}) {
   return {
     sessionId: `session-${nodeName}`,
     dialogProcessId: `dialog-${nodeName}`,
-    result: {
-      answer: `answer-${nodeName}`,
-      traces: [],
-      dialogProcessId: `dialog-${nodeName}`,
-      messages: [
-        { messageUid: `message-${nodeName}`, role: "assistant", content: `result-${nodeName}` },
-      ],
-    },
+    result: createExecutionResult(
+      {
+        sessionId: `session-${nodeName}`,
+        dialogProcessId: `dialog-${nodeName}`,
+        turnScopeId: `turn-${nodeName}`,
+      },
+      `answer-${nodeName}`,
+    ),
     ...overrides,
   };
 }

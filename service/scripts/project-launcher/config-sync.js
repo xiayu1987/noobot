@@ -113,7 +113,7 @@ async function readWorkspaceDirectoryEntries(workspaceRootAbsolutePath) {
   try {
     return await readdir(workspaceRootAbsolutePath, { withFileTypes: true });
   } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return [];
+    if (error?.code === "ENOENT") return [];
     throw error;
   }
 }

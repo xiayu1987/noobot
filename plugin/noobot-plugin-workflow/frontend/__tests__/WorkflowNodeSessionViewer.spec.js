@@ -21,6 +21,49 @@ import {
 } from "./workflowNodeSessionViewerHarness.js";
 
 describe("workflow node session view ownership", () => {
+  it("releases with the original route and user after the selected node and service change", async () => {
+    const original = step("snapshot-owner");
+    const { wrapper, state, viewer, viewerProps, emit } = mountViewer({
+      fetcher: vi.fn(),
+      sessionDocs: reactive({}),
+      initialSelectedNode: original,
+    });
+    const release = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true, released: true }),
+    }));
+    viewerProps.workflowSessionService.releaseThinkingDetail = release;
+    viewer.handleOpenThinkingDetails({ messageItem: { sessionId: original.nodeSessionId } });
+    const capabilities = emit.mock.calls.find(([event]) => event === "open-thinking-details")[1];
+    state.selectedNode.value = step("other");
+    viewerProps.userId = "other-user";
+    viewerProps.workflowSessionService = {};
+    const cursor = { after: 1, scope: JSON.stringify(["retained-snapshot", "partition-snapshot"]) };
+    try {
+      await expect(
+        capabilities.releaseThinkingDetail({
+          sessionId: original.nodeSessionId,
+          dialogProcessId: original.dialogProcessId,
+          turnScopeId: original.turnScopeId,
+          cursor,
+        }),
+      ).resolves.toMatchObject({ released: true });
+      expect(release).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "user-1",
+          sessionId: original.rootSessionId,
+          nodeSessionId: original.nodeSessionId,
+          routeDialogProcessId: original.dialogProcessId,
+          dialogProcessId: original.dialogProcessId,
+          turnScopeId: original.turnScopeId,
+          cursor,
+        }),
+      );
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
   it("does not reopen a drawer from stale history when the workflow card remounts at completion", async () => {
     const routedStep = step("remount");
     const owningNode = {

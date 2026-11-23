@@ -35,7 +35,7 @@ async function listSnapshotFiles(sessionDir) {
       .map((entry) => path.join(directory, entry.name))
       .sort();
   } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return [];
+    if (error?.code === "ENOENT") return [];
     throw error;
   }
 }

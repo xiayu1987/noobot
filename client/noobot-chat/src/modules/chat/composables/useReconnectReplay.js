@@ -156,8 +156,7 @@ export function useReconnectReplay({
       source: "reconnectProtocolReconcile",
     });
     if (!detail.exists) return false;
-    chatList.applySessionDetail(detail);
-    return true;
+    return chatList.applySessionDetail(detail);
   }
 
   async function consumeReplayCacheForSession(sessionId) {
@@ -169,7 +168,8 @@ export function useReconnectReplay({
   }
 
   async function applyReconnectMessagesToActiveSession(messages, { turnScopeId }) {
-    const { sessionId } = activeSession.value;
+    const sessionId = activeSession.value?.sessionId;
+    if (!sessionId) return false;
     if (isDeletedTurn({ sessionId, turnScopeId })) {
       return { applied: false, reason: "deleted_turn_tombstoned" };
     }

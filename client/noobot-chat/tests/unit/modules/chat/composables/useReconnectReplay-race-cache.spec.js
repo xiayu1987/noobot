@@ -16,6 +16,17 @@ afterEach(() => {
 });
 
 describe("useReconnectReplay", () => {
+  it("handles a delayed replay event while the deleted active Session is absent", async () => {
+    const { api, refs } = createFixture();
+    refs.sessions.value.shift();
+    expect(refs.activeSession.value).toBeNull();
+    const { event, data } = createAuthoritativeMessageEnvelope("llm_delta", { text: "late" });
+
+    await expect(api.applyReconnectEvent(event, data)).resolves.toMatchObject({ applied: false });
+    refs.activeSessionId.value = "s-2";
+    expect(refs.activeSession.value.messages).toEqual([]);
+  });
+
   it("RC-05: missing Turn identity does not create a Session-only cache entry", async () => {
     const { api } = createFixture();
 

@@ -164,6 +164,62 @@ describe("SharedChatMessageItem", () => {
     expect(user.find(".message-runtime-panels").exists()).toBe(false);
   });
 
+  it("copies the original user text from the icon beside edit and delete", async () => {
+    const content = "  **text**\n第二行  ";
+    const wrapper = mountItem({
+      messageItem: { role: "user", userMessageId: "u1", turnScopeId: "t1", content },
+      deleteMonotonicMessage: vi.fn(),
+      resendMonotonicMessage: vi.fn(),
+    });
+    const written = new Map();
+    const execCommand = document.execCommand;
+    document.execCommand = vi.fn((command) => {
+      expect(command).toBe("copy");
+      const event = new Event("copy", { cancelable: true });
+      event.clipboardData = { setData: (type, value) => written.set(type, value) };
+      document.dispatchEvent(event);
+      return true;
+    });
+    try {
+      const actions = wrapper.get(".monotonic-action-bar");
+      const copy = actions.get('button[aria-label="message.copyText"]');
+      for (const action of [
+        copy,
+        actions.get("button.is-primary"),
+        actions.get("button.danger-text"),
+      ]) {
+        expect(action.classes()).toContain("noobot-flat-icon-btn");
+        expect(action.get("svg.monotonic-btn-icon").attributes()).toMatchObject({
+          "aria-hidden": "true",
+          viewBox: "0 0 24 24",
+          width: "14",
+          height: "14",
+          stroke: "currentColor",
+          "stroke-width": "2",
+          fill: "none",
+        });
+      }
+      expect(copy.text()).toBe("");
+      await copy.trigger("click");
+      expect(written).toEqual(new Map([["text/plain", content]]));
+    } finally {
+      wrapper.unmount();
+      if (execCommand) document.execCommand = execCommand;
+      else delete document.execCommand;
+    }
+  });
+
+  it("keeps copy available for user messages without editing actions", () => {
+    const wrapper = mountItem({
+      messageItem: { role: "user", userMessageId: "u1", turnScopeId: "t1", content: "text" },
+      sending: true,
+    });
+    const [copy] = wrapper.findAll(".monotonic-action-bar button");
+    expect(copy.attributes("aria-label")).toBe("message.copyText");
+    expect(copy.attributes("disabled")).toBeUndefined();
+    wrapper.unmount();
+  });
+
   it("mounts the current assistant body and unmounts it when collapsed", async () => {
     const wrapper = mountItem({
       currentTurn: true,
@@ -601,6 +657,45 @@ describe("SharedChatMessageItem", () => {
     expect(wrapper.get(".message-content-slot").find(".message-artifact-tabs").exists()).toBe(
       false,
     );
+  });
+
+  it("renders both file tabs from compact tool results restored with session detail", async () => {
+    const toolTimeline = ["write_file", "patch_file"].map((tool) => ({
+      key: `call:${tool}`,
+      toolCallId: tool,
+      tool,
+      status: "completed",
+      success: true,
+      resultEvent: {
+        eventId: `result-${tool}`,
+        summary: tool,
+        mutationRefs: [
+          {
+            mutationId: `mutation-${tool}`,
+            revision: 1,
+            locator: { view: "workspace", path: "example.txt" },
+            fileName: "example.txt",
+            snapshot: "available",
+          },
+        ],
+      },
+    }));
+    const wrapper = mountItem({
+      messageItem: {
+        presentationMessageId: "restored-files",
+        sessionId: "file-session",
+        role: "assistant",
+        content: "Files ready",
+        toolTimeline,
+      },
+    });
+    const writeTab = wrapper.get('[role="tab"][data-tab-name="write-files"]');
+    expect(writeTab.attributes("aria-selected")).toBe("true");
+    expect(wrapper.get('[role="tabpanel"]').text()).toContain("example.txt");
+    const patchTab = wrapper.get('[role="tab"][data-tab-name="patch-files"]');
+    await patchTab.trigger("click");
+    expect(patchTab.attributes("aria-selected")).toBe("true");
+    expect(wrapper.get('[role="tabpanel"]').text()).toContain("example.txt");
   });
 
   it("unmounts artifact tabs in the same flush they were mounted in", async () => {

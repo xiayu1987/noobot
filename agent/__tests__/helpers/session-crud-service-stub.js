@@ -40,6 +40,18 @@ export function createSessionCrudServiceStub(readSession) {
         }),
         sessionArtifactEvents: [],
         messages: structuredClone(session.messages),
+        stats: {
+          messageCount: session.messages.length,
+          displayMessageCount: session.messages.length,
+          injectedMessageCount: 0,
+          thinkingMessageCount: 0,
+          toolLogCount: 0,
+          displayToolLogCount: 0,
+          unassignedToolArtifactCount: 0,
+          conflictedToolArtifactCount: 0,
+          attachmentCount: 0,
+          hasToolDetails: false,
+        },
       });
       return createSessionDetailDocument({ sessionId: session.sessionId, sessions: [entry] });
     },

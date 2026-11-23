@@ -10,93 +10,93 @@ import {
   projectAuthorityEventDeliveryResults,
 } from "@noobot/event-protocol/outbox";
 
-export function commitImmutableOutbox(service, reader, changes, commit) {
-  return commit({
-    expectedGeneration: reader.generation,
-    operationId: randomUUID(),
-    changes,
-    committedAt: service.now(),
-  });
+export function prepareOutboxChanges(service, reader, changes) {
+  return reader.prepareRequest({ operationId: randomUUID(), changes, committedAt: service.now() });
 }
 
-function cursorChange(page, consumerId, acknowledged = new Set()) {
-  const firstPending = page.events.find((event) => !acknowledged.has(event.eventId));
+export async function commitImmutableOutbox(service, reader, changes, commit) {
+  return commit(await prepareOutboxChanges(service, reader, changes));
+}
+
+function cursorChange(page, consumerId, firstPending) {
   const cursor = firstPending ? firstPending.ordinal - 1 : page.cursor;
   return cursor > page.after ? [{ consumerId, expectedCursor: page.after, cursor }] : [];
 }
 
-export async function readImmutablePending(service, request, reader, commit) {
+export async function planPendingOutbox(service, request, reader) {
   const page = await reader.readOutboxPage({ consumerId: request.consumerId });
-  const outboxCursors = cursorChange(page, request.consumerId);
-  if (outboxCursors.length) await commitImmutableOutbox(service, reader, { outboxCursors }, commit);
-  return { found: true, events: page.events, hasMore: page.hasMore };
-}
-
-export async function recordImmutableAttempts(service, request, reader, commit) {
-  const events = await Promise.all(request.eventIds.map((id) => reader.readOutboxEvent(id)));
-  if (events.some((event) => event === null))
-    return { recorded: false, reason: "event_not_found", events: [] };
-  const attemptedAt = service.now();
-  const committed = await commitImmutableOutbox(
-    service,
-    reader,
-    {
-      deliveries: request.eventIds.map((eventId) => ({
-        type: "attempt",
-        eventId,
-        consumerId: request.consumerId,
-        attemptedAt,
-      })),
-    },
-    commit,
-  );
-  return {
-    recorded: true,
-    events: projectAuthorityEventDeliveryResults(
-      events,
-      request.consumerId,
-      committed.result.deliveries,
-    ),
+  const outboxCursors = cursorChange(page, request.consumerId, page.events[0]);
+  const result = { found: true, events: page.events, hasMore: page.hasMore };
+  if (!outboxCursors.length) return () => result;
+  const prepared = await prepareOutboxChanges(service, reader, { outboxCursors });
+  return async (commit) => {
+    await commit(prepared);
+    return result;
   };
 }
 
-export async function acknowledgeImmutableEvents(service, request, reader, commit) {
+export async function planOutboxDelivery(service, { consumerId }, reader) {
+  const page = await reader.readOutboxPage({ consumerId });
+  const { events, hasMore } = page;
+  const outboxCursors = cursorChange(page, consumerId, events[0]);
+  if (!events.length && !outboxCursors.length) return () => ({ found: true, events, hasMore });
+  const attemptedAt = service.now();
+  const prepared = await prepareOutboxChanges(service, reader, {
+    outboxCursors,
+    deliveries: events.map(({ eventId }) => ({
+      type: "attempt",
+      eventId,
+      consumerId,
+      attemptedAt,
+    })),
+  });
+  return async (commit) => {
+    const committed = await commit(prepared);
+    return {
+      found: true,
+      events: projectAuthorityEventDeliveryResults(events, consumerId, committed.result.deliveries),
+      hasMore,
+    };
+  };
+}
+
+export async function planOutboxAcknowledgement(service, request, reader) {
   const records = request.acknowledgements.map((item) => ({
     ...item,
     op: AUTHORITY_OUTBOX_JOURNAL_OP.ACK,
     consumerId: request.consumerId,
     deliveredAt: service.now(),
   }));
-  const events = await Promise.all(records.map((item) => reader.readOutboxEvent(item.eventId)));
+  const page = await reader.readOutboxPage({ consumerId: request.consumerId });
+  const pendingById = new Map(page.events.map((event) => [event.eventId, event]));
+  const events = await Promise.all(
+    records.map(({ eventId }) => pendingById.get(eventId) ?? reader.readOutboxEvent(eventId)),
+  );
   const projection = {
     entries: new Map(events.filter(Boolean).map((event) => [event.eventId, event])),
   };
   const { records: changed, ...result } = planAuthorityOutboxAcknowledgements(projection, records);
-  if (!result.acknowledged) return result;
-  const page = await reader.readOutboxPage({ consumerId: request.consumerId });
-  const outboxCursors = cursorChange(
-    page,
-    request.consumerId,
-    new Set(records.map((item) => item.eventId)),
-  );
-  if (changed.length || outboxCursors.length)
-    await commitImmutableOutbox(
-      service,
-      reader,
-      {
-        deliveries: changed.map(({ op: _op, ...item }) => ({ ...item, type: "acknowledge" })),
-        outboxCursors,
-      },
-      commit,
-    );
-  return result;
+  if (!result.acknowledged) return () => result;
+  const acknowledgedIds = new Set(records.map((item) => item.eventId));
+  const firstPending = page.events.find((event) => !acknowledgedIds.has(event.eventId));
+  const outboxCursors = cursorChange(page, request.consumerId, firstPending);
+  const outcome = { ...result, drained: !page.hasMore && firstPending === undefined };
+  if (!changed.length && !outboxCursors.length) return () => outcome;
+  const prepared = await prepareOutboxChanges(service, reader, {
+    deliveries: changed.map(({ op: _op, ...item }) => ({ ...item, type: "acknowledge" })),
+    outboxCursors,
+  });
+  return async (commit) => {
+    await commit(prepared);
+    return outcome;
+  };
 }
 
 export async function withImmutableOutbox(service, request, action) {
   return service.sessionRepo.withSessionReader(
     request.userId,
     request.sessionId,
-    (reader, _scope, commit) => action(reader, commit),
+    ({ reader, commitChanges }) => action(reader, commitChanges),
     {
       persistenceContext: request.persistenceContext,
     },

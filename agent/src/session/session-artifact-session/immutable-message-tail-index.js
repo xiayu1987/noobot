@@ -16,7 +16,7 @@ export async function requireImmutableMessageTailIndex(plan) {
     });
 }
 
-export async function readImmutableDialogTail(plan, dialogProcessId) {
+async function readImmutableDialogTail(plan, dialogProcessId) {
   const tail = await plan.get("dialogTails", dialogProcessId);
   if (
     !tail ||
@@ -111,7 +111,7 @@ async function unlinkDialog(plan, dialogProcessId, tail) {
 }
 
 async function readTailPredecessor(plan, { messageUid, dialogProcessId, record }) {
-  const previous = await plan.get("messages", messageUid);
+  const previous = (await plan.getMetadata("messages", messageUid))?.value;
   if (
     previous?.message?.messageUid !== messageUid ||
     previous.message.sessionId !== record.message.sessionId ||

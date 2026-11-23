@@ -17,7 +17,6 @@ import {
 } from "@noobot/context-protocol/policy/snapshot";
 import { applySystemRuntimeTurnProgress, resolveToolBindings } from "@noobot/agent-config-protocol";
 import { text } from "@noobot/shared/value";
-import { enrichUserInputAttachmentsFromIndex } from "./turn-attachment-enricher.js";
 
 export async function prepareTurnInput({ attachmentService, buildContextPayload }) {
   const userMessageAttachments = await resolveAttachments({
@@ -34,14 +33,9 @@ export async function prepareAgentTurnExecution(engine, { buildContextPayload: p
     payload.runConfig.resumeFromStoppedSnapshot === true
       ? await prepareStoppedSnapshotResumeTurnExecution(engine, { payload })
       : await engine.agentRuntimeFacade.prepareTurnExecution({ buildContextPayload: payload });
-  const enrichedAttachments = await enrichUserInputAttachmentsFromIndex(engine.workspaceService, {
-    userId: payload.runtimeIdentity.userId,
-    sessionId: payload.runtimeIdentity.sessionId,
-    attachments: payload.userMessageAttachments,
-  });
   return {
     ...prepared,
-    userMessageAttachments: mapAttachmentRecordsToMetas(enrichedAttachments),
+    userMessageAttachments: mapAttachmentRecordsToMetas(payload.userMessageAttachments),
   };
 }
 

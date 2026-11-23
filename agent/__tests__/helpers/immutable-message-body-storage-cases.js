@@ -12,13 +12,14 @@ import {
   readCommittedValue,
   readCommittedValueMetadata,
   collectValueRecords,
+  collectScopedValueRecords,
   forbidRecordReads,
 } from "../session/helpers/immutable-record-reads.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "./commit-immutable-session-fixture.js";
 import { readImmutableIndexedTitle } from "../../src/session/session-artifact-session/immutable-title-index.js";
 import { readImmutableTurnPage } from "../../src/session/session-artifact-session/immutable-message-reader.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 
 async function collectBodyPayloads(store, reference, payloads = new Set()) {
@@ -133,7 +134,11 @@ export function registerImmutableMessageBodyStorageTests({ fixture, message, app
       const empty = await store.snapshot();
       assert.equal(
         await store.objects.withSnapshot(empty, () =>
-          readImmutableIndexedTitle(store, { get: (...args) => store.get(empty, ...args) }),
+          readImmutableIndexedTitle(store, {
+            get: (collection, key) => store.get(empty, collection, key),
+            getMetadata: async (collection, key) =>
+              (await store.getManyMetadata(empty, collection, [key])).get(key),
+          }),
         ),
         "second",
       );
@@ -146,7 +151,11 @@ export function registerImmutableMessageBodyStorageTests({ fixture, message, app
     assert.equal((await store.get(previous, "messages", "old")).message.content, content);
     assert.equal(
       await store.objects.withSnapshot(current, () =>
-        readImmutableIndexedTitle(store, { get: (...args) => store.get(current, ...args) }),
+        readImmutableIndexedTitle(store, {
+          get: (collection, key) => store.get(current, collection, key),
+          getMetadata: async (collection, key) =>
+            (await store.getManyMetadata(current, collection, [key])).get(key),
+        }),
       ),
       "replacement",
     );
@@ -223,49 +232,53 @@ export function registerImmutableMessageBodyStorageTests({ fixture, message, app
     );
   });
 
-  test("first message receipt projection never opens its committed body graph", async (t) => {
+  test("first message receipt projection never reads its staged body graph", async (t) => {
     const store = await fixture(t);
-    const readCommitRecord = ImmutableSessionStore.prototype.readCommitRecord;
+    const prototype = Object.getPrototypeOf(store.objects);
+    const readValuesMetadata = prototype.readValuesMetadata;
     let blockedBodies = 0;
-    let materializationGuard;
-    const interception = t.mock.method(
-      ImmutableSessionStore.prototype,
-      "readCommitRecord",
-      async function (...args) {
-        const record = await readCommitRecord.apply(this, args);
-        const forbidden = new Set();
-        for (const mutation of record.mutations) {
-          if (mutation.collection !== "messages") continue;
-          const metadata = await readCommittedValueMetadata(this, mutation.reference);
-          for (const part of metadata.parts) {
-            await collectValueRecords(this, part.reference, forbidden);
-            blockedBodies += 1;
-          }
+    t.mock.method(prototype, "readValuesMetadata", async function (references, ...args) {
+      const objects = this;
+      const forbidden = new Set();
+      for (const reference of references) {
+        const [metadata] = await readValuesMetadata.call(objects, [reference], ...args);
+        for (const part of metadata.parts) {
+          await collectScopedValueRecords(objects, part.reference, forbidden);
+          blockedBodies += 1;
         }
-        setFsAdapter(await forbidRecordReads(this, forbidden));
-        materializationGuard = forbidBodyMaterialization(t, this, forbidden);
-        return record;
-      },
-    );
-    try {
-      const committed = await commitSessionChanges({
-        sessionDir: store.sessionDir,
-        sessionId: store.sessionId,
-        expectedGeneration: (await store.snapshot()).generation,
-        operationId: "first-receipt-without-body",
-        committedAt: timestamp,
-        changes: {
-          messages: [message("large-receipt", { content: "receipt body 中文".repeat(20000) })],
-        },
+      }
+      if (!forbidden.size) return readValuesMetadata.call(objects, references, ...args);
+      const { read, readMany } = objects;
+      const assertAllowed = (reference) =>
+        assert.equal(forbidden.has(reference), false, `Unexpected body record read: ${reference}`);
+      t.mock.method(objects, "read", async (reference) => {
+        assertAllowed(reference);
+        return read.call(objects, reference);
       });
-      assert.equal(blockedBodies, 1);
-      assert.equal(committed.result.messageReceipts[0].messageUid, "large-receipt");
-      assert.equal(Object.hasOwn(committed.result.messageReceipts[0], "content"), false);
-    } finally {
-      resetFsAdapter();
-      interception.mock.restore();
-      materializationGuard?.mock.restore();
-    }
+      t.mock.method(objects, "readMany", async (references) => {
+        for (const reference of references) assertAllowed(reference);
+        return readMany.call(objects, references);
+      });
+      const body = forbidden.values().next().value;
+      assert.notEqual(body, undefined);
+      await assert.rejects(objects.read(body), /Unexpected body record read/);
+      await assert.rejects(objects.readMany([body]), /Unexpected body record read/);
+      forbidBodyMaterialization(t, { objects }, forbidden);
+      return readValuesMetadata.call(objects, references, ...args);
+    });
+    const committed = await commitSessionChanges({
+      sessionDir: store.sessionDir,
+      sessionId: store.sessionId,
+      expectedGeneration: (await store.snapshot()).generation,
+      operationId: "first-receipt-without-body",
+      committedAt: timestamp,
+      changes: {
+        messages: [message("large-receipt", { content: "receipt body 中文".repeat(20000) })],
+      },
+    });
+    assert.equal(blockedBodies, 1);
+    assert.equal(committed.result.messageReceipts[0].messageUid, "large-receipt");
+    assert.equal(Object.hasOwn(committed.result.messageReceipts[0], "content"), false);
   });
 
   test("message receipts own identities and replay their original generation after updates and removal", async (t) => {

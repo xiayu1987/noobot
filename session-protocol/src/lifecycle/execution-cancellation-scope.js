@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isFunction } from "@noobot/shared/value";
 import { requireAbortSignal } from "./execution-abort.js";
 
 export function createExecutionCancellationScope({ abortSignal, onDisposeError }) {
   requireAbortSignal(abortSignal, "createExecutionCancellationScope");
   const disposers = new Set();
-  const reportDisposeError = typeof onDisposeError === "function" ? onDisposeError : () => {};
+  const reportDisposeError = isFunction(onDisposeError) ? onDisposeError : () => {};
   const scope = {
     get abortSignal() {
       return abortSignal;
@@ -28,7 +29,7 @@ export function createExecutionCancellationScope({ abortSignal, onDisposeError }
   function runDisposer(disposer) {
     try {
       const result = disposer();
-      if (result && typeof result.then === "function") {
+      if (isFunction(result?.then)) {
         result.then(null, reportDisposeError);
       }
     } catch (error) {
@@ -37,7 +38,7 @@ export function createExecutionCancellationScope({ abortSignal, onDisposeError }
   }
 
   function register(disposer) {
-    if (typeof disposer !== "function") {
+    if (!isFunction(disposer)) {
       throw new TypeError("cancellation scope disposer must be a function");
     }
     const normalized = disposer;

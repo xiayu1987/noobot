@@ -6,7 +6,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { isFunction } from "@noobot/shared/value";
 import { filePath as path } from "@noobot/path-resolver";
-import { sessionMutationCoordinator } from "../session-mutation-coordinator.js";
+import { withImmutableAuthorityMutation } from "../session-storage-authority.js";
 import { resolveSessionArtifactMutationLock } from "../session-artifact-files.js";
 import { fsAccess, fsMkdir, fsOpen } from "../../shared/storage/fs-adapter.js";
 import {
@@ -17,7 +17,7 @@ import {
 } from "./immutable-object-store.js";
 import { ImmutableRadixIndex } from "./immutable-radix-index.js";
 import { CurrentImmutableRecordStore } from "./immutable-storage-backends.js";
-import { recordStorageWork } from "./storage-transaction.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 import { immutableOrderKey } from "./immutable-order-key.js";
 import { buildImmutableCommitRoot } from "./immutable-commit-roots.js";
 
@@ -25,13 +25,16 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { readHandlePrefix } from "@noobot/shared/read-file-prefix";
 
 import {
-  IMMUTABLE_SESSION_COLLECTIONS,
   IMMUTABLE_SESSION_HEAD_FILE,
   IMMUTABLE_SESSION_FORMAT_FILE,
   encodeImmutableSessionHead,
   decodeImmutableSessionHeadBytes,
 } from "@noobot/session-protocol/immutable-storage";
 
+import {
+  captureSessionTransactionInput,
+  requireSessionOperationId,
+} from "@noobot/session-protocol/session-changes";
 import {
   IMMUTABLE_COMMIT_INDEX_VERSION,
   IMMUTABLE_VALUE_READ_BATCH_RECORDS,
@@ -41,14 +44,16 @@ import {
   immutableCommitReferences,
   immutableOperationReceiptReferences,
   requireImmutableCommitRecord,
-  requireImmutableOperationId,
   requireImmutableContentReuse,
   requireImmutableSessionChange,
-  requireImmutableOperationReceipt,
-  assertImmutableOperationRetryAvailable,
 } from "@noobot/session-protocol/immutable-storage-graph";
+import {
+  requireImmutableOperationReceipt,
+  assertImmutableOperationRetryMatches,
+} from "@noobot/session-protocol/immutable-operation-receipt";
+import { SESSION_COLLECTION_NAMES } from "@noobot/session-protocol/session-collection-names";
 
-const COLLECTIONS = new Set(IMMUTABLE_SESSION_COLLECTIONS);
+const COLLECTIONS = new Set(SESSION_COLLECTION_NAMES);
 
 async function readEntryBatch(entries, scoped) {
   const selected = [];
@@ -98,6 +103,7 @@ export class ImmutableSessionStore {
     sessionId,
     allowCreate = false,
     objectStore = CurrentImmutableRecordStore,
+    objectRead,
   }) {
     if (typeof sessionId !== "string" || !sessionId) throw new TypeError("sessionId is required");
     this.sessionDir = path.resolve(sessionDir);
@@ -105,7 +111,7 @@ export class ImmutableSessionStore {
     this.allowCreate = allowCreate;
     this.headPath = path.join(this.sessionDir, IMMUTABLE_SESSION_HEAD_FILE);
     this.lockPath = resolveSessionArtifactMutationLock(this.sessionDir);
-    this.objects = new objectStore(this.sessionDir);
+    this.objects = new objectStore(this.sessionDir, objectRead);
     this.format = objectStore.format;
     this.requireReference = this.objects.requireReference.bind(this.objects);
     this.index = new ImmutableRadixIndex(this.objects);
@@ -153,31 +159,38 @@ export class ImmutableSessionStore {
   }
 
   async getMany(snapshot, collection, keys) {
-    return this.readCollectionMany(snapshot, collection, keys, false);
+    return this.readCollectionMany(snapshot, collection, keys, { metadata: false });
   }
 
-  async getManyMetadata(snapshot, collection, keys) {
-    return this.readCollectionMany(snapshot, collection, keys, true);
+  async getManyMetadata(snapshot, collection, keys, options) {
+    return this.readCollectionMany(snapshot, collection, keys, { metadata: true, options });
   }
 
-  async readCollectionMany(snapshot, collection, keys, metadata) {
+  readCollectionMany(snapshot, collection, keys, mode) {
+    return this.objects.withSnapshot(snapshot, () =>
+      this.#readCollectionMany(
+        () => this.index.get(snapshot.root, collection),
+        collection,
+        keys,
+        mode,
+      ),
+    );
+  }
+
+  async #readCollectionMany(resolveRoot, collection, keys, { metadata, options }) {
     if (!Array.isArray(keys)) throw new TypeError("Immutable batch lookup requires keys");
     for (const key of keys) entryKey(collection, key);
     if (!keys.length) return new Map();
-    return this.objects.withSnapshot(snapshot, async () => {
-      const root = await this.index.get(snapshot.root, collection);
-      const references = await this.index.getMany(root, keys);
-      const selected = [...references].filter(([, reference]) => reference !== null);
-      const records = selected.map(([, reference]) => reference);
-      const decoded = metadata
-        ? await this.objects.readValuesMetadata(records)
-        : await this.objects.readValues(records);
-      const values = new Map();
-      let position = 0;
-      for (const [key, reference] of references)
-        values.set(key, reference === null ? null : decoded[position++]);
-      return values;
-    });
+    const references = await this.index.getMany(await resolveRoot(), keys);
+    const records = [...references.values()].filter((reference) => reference !== null);
+    const decoded = metadata
+      ? await this.objects.readValuesMetadata(records, options)
+      : await this.objects.readValues(records, options);
+    const values = new Map();
+    let position = 0;
+    for (const [key, reference] of references)
+      values.set(key, reference === null ? null : decoded[position++]);
+    return values;
   }
 
   async readCommitReference(snapshot, generation) {
@@ -216,12 +229,7 @@ export class ImmutableSessionStore {
       new Set(collections).size !== collections.length
     )
       throw new TypeError("Commit query requires unique business collections");
-    const reference = await this.readCommitReference(snapshot, generation);
-    if (reference === null)
-      throw immutableStorageError("Session commit generation is missing from its index");
-    if (generation === snapshot.generation && reference !== snapshot.commit)
-      throw immutableStorageError("Session commit index disagrees with its pinned head");
-    const record = await this.readCommitRecord(reference, generation);
+    const { record } = await this.#readIndexedCommit(snapshot, generation);
     const selected = new Set(collections);
     const mutations = record.mutations.filter(({ collection }) => selected.has(collection));
     const values = await this.objects.readValues(
@@ -238,6 +246,92 @@ export class ImmutableSessionStore {
       );
     }
     return { generation, operationId: record.operationId, changes };
+  }
+
+  async #readIndexedCommit(snapshot, generation) {
+    const reference = await this.readCommitReference(snapshot, generation);
+    return this.#readCommitAtReference(snapshot, generation, reference);
+  }
+
+  async #readCommitAtReference(snapshot, generation, reference) {
+    if (reference === null)
+      throw immutableStorageError("Session commit generation is missing from its index");
+    if (generation === snapshot.generation && reference !== snapshot.commit)
+      throw immutableStorageError("Session commit index disagrees with its pinned head");
+    return { reference, record: await this.readCommitRecord(reference, generation) };
+  }
+
+  async #readMigrationWindow(snapshot, first, count) {
+    const end = first + count;
+    const keys = [];
+    for (let generation = Math.max(1, first - 1); generation < end; generation += 1) {
+      keys.push(immutableOrderKey(generation));
+    }
+    const root = await this.index.get(snapshot.root, "commitOrder");
+    const references = await this.index.getMany(root, keys);
+    const commits = [];
+    for (let generation = first; generation < end; generation += 1) {
+      const reference = references.get(immutableOrderKey(generation));
+      const commit = await this.#readCommitAtReference(snapshot, generation, reference);
+      const previous = generation === 1 ? null : references.get(immutableOrderKey(generation - 1));
+      commits.push({ ...commit, previous });
+    }
+    const receipts = await this.index.getMany(
+      snapshot.operations,
+      commits.map(({ record }) => record.operationId),
+    );
+    return { commits, receipts };
+  }
+
+  async #readMigrationReceipt(snapshot, { reference, record, previous }, receiptReference) {
+    const { generation } = record;
+    if ((generation > 1 && previous === null) || record.previous !== previous)
+      throw immutableStorageError("Commit chain disagrees with its generation index");
+    const receipt = await this.#readOperationReceiptReference(snapshot, receiptReference);
+    if (receipt === null || receipt.generation !== generation || receipt.commit !== reference)
+      throw immutableStorageError("Immutable operation receipt commit identity mismatch");
+    return { receipt, record };
+  }
+
+  async *migrationOperations(snapshot, signal) {
+    for (let first = 1; first <= snapshot.generation; first += IMMUTABLE_VALUE_READ_BATCH_RECORDS) {
+      signal?.throwIfAborted();
+      const count = Math.min(IMMUTABLE_VALUE_READ_BATCH_RECORDS, snapshot.generation - first + 1);
+      const { commits, receipts } = await this.objects.withSnapshot(snapshot, () =>
+        this.#readMigrationWindow(snapshot, first, count),
+      );
+      for (const commit of commits) {
+        signal?.throwIfAborted();
+        yield await this.objects.withSnapshot(snapshot, () =>
+          this.#readMigrationReceipt(snapshot, commit, receipts.get(commit.record.operationId)),
+        );
+      }
+    }
+  }
+
+  async visitMigrationCommit(snapshot, generation, { visitOperation, visitChange }) {
+    if (!Number.isSafeInteger(generation) || generation < 1 || generation > snapshot.generation)
+      throw new TypeError("Commit lookup requires a generation within its pinned snapshot");
+    return this.objects.withSnapshot(snapshot, async () => {
+      const {
+        commits: [commit],
+        receipts,
+      } = await this.#readMigrationWindow(snapshot, generation, 1);
+      const { receipt, record } = await this.#readMigrationReceipt(
+        snapshot,
+        commit,
+        receipts.get(commit.record.operationId),
+      );
+      await visitOperation({ receipt, record });
+      for (const { collection, key, reference } of record.mutations) {
+        if (collection === "commitOrder") continue;
+        await visitChange(
+          reference === null
+            ? { collection, key, remove: true }
+            : { collection, key, value: await this.objects.readValue(reference) },
+        );
+      }
+    });
   }
 
   async *entries(snapshot, collection, { metadata = false } = {}) {
@@ -271,31 +365,37 @@ export class ImmutableSessionStore {
     prepare,
     validate,
     validateSnapshot,
+    validateInput,
     projectResult,
   }) {
-    requireImmutableOperationId(operationId);
+    requireSessionOperationId(operationId);
     if (
       !Number.isSafeInteger(expectedGeneration) ||
       expectedGeneration < 0 ||
       !isFunction(prepare) ||
       (validate !== undefined && !isFunction(validate)) ||
       (validateSnapshot !== undefined && !isFunction(validateSnapshot)) ||
+      (validateInput !== undefined && !isFunction(validateInput)) ||
       (projectResult !== undefined && !isFunction(projectResult))
     )
       throw new TypeError("Immutable session transaction requires generation and prepare");
-    const detachedInput = JSON.parse(JSON.stringify(input));
-    const digest = immutableTransactionInputDigest(expectedGeneration, detachedInput);
-    return sessionMutationCoordinator.run(this.lockPath, () =>
+    const capturedInput = captureSessionTransactionInput(input);
+    return withImmutableAuthorityMutation(this.sessionDir, () =>
       this.preparedReferences.run(new Map(), () =>
         this.objects.withDurabilityBatch(async () => {
           const previous = await this.snapshot();
           this.objects.beginCommit(previous);
           const collectionRoots = new Map();
-          const read = async (collection, key, metadata) => {
-            entryKey(collection, key);
+          const resolveRoot = (collection) => {
             if (!collectionRoots.has(collection))
               collectionRoots.set(collection, this.index.get(previous.root, collection));
-            const reference = await this.index.get(await collectionRoots.get(collection), key);
+            return collectionRoots.get(collection);
+          };
+          const readMany = (collection, keys, metadata) =>
+            this.#readCollectionMany(() => resolveRoot(collection), collection, keys, { metadata });
+          const read = async (collection, key, metadata) => {
+            entryKey(collection, key);
+            const reference = await this.index.get(await resolveRoot(collection), key);
             if (reference === null) return null;
             return metadata
               ? this.objects.readValueMetadata(reference)
@@ -303,19 +403,23 @@ export class ImmutableSessionStore {
           };
           if (validateSnapshot)
             await validateSnapshot({
-              input: detachedInput,
               snapshot: Object.freeze({ ...previous }),
               get: (collection, key) => read(collection, key, false),
             });
-          const replay = await this.readOperation(previous, operationId, digest);
-          if (replay) return projectResult ? projectResult(replay) : replay;
+          if (validateInput) validateInput(capturedInput);
+          const digest = immutableTransactionInputDigest(expectedGeneration, capturedInput);
+          const replay = await this.#readOperation(previous, operationId, digest);
+          if (replay) {
+            const { outcome, record } = replay;
+            return projectResult ? projectResult(outcome, previous, record) : outcome;
+          }
           this.assertGeneration(previous, expectedGeneration);
           const prepared = await prepare({
             snapshot: Object.freeze({ ...previous }),
-            input: detachedInput,
+            input: capturedInput,
             get: (collection, key) => read(collection, key, false),
-            getMany: (collection, keys) => this.getMany(previous, collection, keys),
-            getManyMetadata: (collection, keys) => this.getManyMetadata(previous, collection, keys),
+            getMany: (collection, keys) => readMany(collection, keys, false),
+            getManyMetadata: (collection, keys) => readMany(collection, keys, true),
             getMetadata: (collection, key) => read(collection, key, true),
           });
           const changes = this.detachChanges(prepared.changes, { allowReferences: true });
@@ -330,18 +434,18 @@ export class ImmutableSessionStore {
               aborted: true,
               result,
             };
-            return projectResult ? projectResult(aborted) : aborted;
+            return projectResult ? projectResult(aborted, previous, null) : aborted;
           }
-          const committed = await this.commitLocked({
+          return this.#commitLocked({
             previous,
             operationId,
             changes,
             digest,
             result,
             validate,
+            projectResult,
             collectionRoots: new Map(collectionRoots),
           });
-          return projectResult ? projectResult(committed) : committed;
         }),
       ),
     );
@@ -376,7 +480,7 @@ export class ImmutableSessionStore {
   }
 
   async commit({ expectedGeneration, operationId, changes }) {
-    requireImmutableOperationId(operationId);
+    requireSessionOperationId(operationId);
     if (
       !Number.isSafeInteger(expectedGeneration) ||
       expectedGeneration < 0 ||
@@ -385,14 +489,14 @@ export class ImmutableSessionStore {
       throw new TypeError("Immutable session commit requires generation and changes");
     const detached = this.detachChanges(changes);
     const digest = contentDigest(JSON.stringify({ expectedGeneration, changes: detached }));
-    return sessionMutationCoordinator.run(this.lockPath, () =>
+    return withImmutableAuthorityMutation(this.sessionDir, () =>
       this.objects.withDurabilityBatch(async () => {
         const previous = await this.snapshot();
         this.objects.beginCommit(previous);
-        const replay = await this.readOperation(previous, operationId, digest);
-        if (replay) return replay;
+        const replay = await this.#readOperation(previous, operationId, digest);
+        if (replay) return replay.outcome;
         this.assertGeneration(previous, expectedGeneration);
-        return this.commitLocked({ previous, operationId, changes: detached, digest });
+        return this.#commitLocked({ previous, operationId, changes: detached, digest });
       }),
     );
   }
@@ -412,29 +516,47 @@ export class ImmutableSessionStore {
     return reference;
   }
 
-  async readOperation(previous, operationId, digest) {
-    const operationRef = await this.index.get(previous.operations, operationId);
-    if (operationRef !== null) {
-      const receipt = await this.objects.readValue(operationRef);
-      requireImmutableOperationReceipt(receipt, previous.generation, this.requireReference);
-      const commit = await this.readCommitRecord(receipt.commit, receipt.generation);
+  async #readOperationReceipt(snapshot, operationId) {
+    const operationRef = await this.index.get(snapshot.operations, operationId);
+    return this.#readOperationReceiptReference(snapshot, operationRef);
+  }
+
+  async #readOperationReceiptReference(snapshot, operationRef) {
+    if (operationRef === null) return null;
+    const receipt = await this.objects.readValue(operationRef);
+    return requireImmutableOperationReceipt(receipt, snapshot.generation, this.requireReference);
+  }
+
+  async readCommittedOperation(snapshot, operationId) {
+    requireSessionOperationId(operationId);
+    return this.objects.withSnapshot(snapshot, async () => {
+      const receipt = await this.#readOperationReceipt(snapshot, operationId);
+      if (receipt === null) return null;
+      const record = await this.readCommitRecord(receipt.commit, receipt.generation);
       if (
-        commit.operationId !== operationId ||
-        (await this.readCommitReference(previous, receipt.generation)) !== receipt.commit ||
-        (receipt.generation === previous.generation && receipt.commit !== previous.commit)
+        record.operationId !== operationId ||
+        (await this.readCommitReference(snapshot, receipt.generation)) !== receipt.commit ||
+        (receipt.generation === snapshot.generation && receipt.commit !== snapshot.commit)
       )
         throw immutableStorageError("Immutable operation receipt commit identity mismatch");
-      assertImmutableOperationRetryAvailable(receipt, operationId);
-      if (receipt.digest !== digest)
-        throw Object.assign(new Error("operationId reused with different changes"), {
-          code: "SESSION_OPERATION_CONFLICT",
-        });
+      return { receipt, record };
+    });
+  }
+
+  async #readOperation(previous, operationId, digest) {
+    const operation = await this.readCommittedOperation(previous, operationId);
+    if (operation !== null) {
+      const { receipt, record } = operation;
+      assertImmutableOperationRetryMatches(receipt, operationId, digest);
       await syncStorageDirectory(this.sessionDir);
       return {
-        generation: receipt.generation,
-        commit: receipt.commit,
-        replayed: true,
-        ...(Object.hasOwn(receipt, "result") ? { result: receipt.result } : {}),
+        record,
+        outcome: {
+          generation: receipt.generation,
+          commit: receipt.commit,
+          replayed: true,
+          ...(Object.hasOwn(receipt, "result") ? { result: receipt.result } : {}),
+        },
       };
     }
     return null;
@@ -456,13 +578,14 @@ export class ImmutableSessionStore {
     return this.putCollectionValue(change.collection, change.key, change.value, change.parts);
   }
 
-  async commitLocked({
+  async #commitLocked({
     previous,
     operationId,
     changes,
     digest,
     result,
     validate,
+    projectResult,
     collectionRoots = new Map(),
   }) {
     const mutations = [];
@@ -513,6 +636,11 @@ export class ImmutableSessionStore {
       operations,
       commit,
     };
+    const committed = { generation, commit, replayed: false, ...outcome };
+
+    const response = projectResult
+      ? await projectResult(committed, Object.freeze({ ...previous, ...head }), record)
+      : committed;
     await this.objects.publishReachable([root, operations, commit]);
     Object.assign(head, this.objects.publicationHeadFields());
 
@@ -531,6 +659,6 @@ export class ImmutableSessionStore {
     }
     recordStorageWork("immutableHeadWriteBytes", bytes.length);
     this.allowCreate = false;
-    return { generation, commit, replayed: false, ...outcome };
+    return response;
   }
 }

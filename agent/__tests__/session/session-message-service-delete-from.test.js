@@ -26,7 +26,7 @@ test("interleaved deletion response preserves the partial turn and replays exact
   });
   const request = deletion(f, "b");
   const first = await f.service.deleteFromMessage(request);
-  assert.deepEqual(first.deletedMessageUids, ["a2", "b1"]);
+  assert.deepEqual(first.projection.messageSuffix, { firstOrdinal: 2, previousMessageCount: 3 });
   assert.deepEqual(
     (await (await f.open()).exportSession()).messages.map((entry) => entry.messageUid),
     ["a1"],
@@ -35,7 +35,7 @@ test("interleaved deletion response preserves the partial turn and replays exact
   const beforeRetry = await f.open();
   const retry = await f.service.deleteFromMessage(request);
   assert.equal(retry.deduplicated, true);
-  assert.deepEqual(retry.deletedMessageUids, first.deletedMessageUids);
+  assert.deepEqual(retry.projection.messageSuffix, first.projection.messageSuffix);
   assert.deepEqual(
     (await (await f.open()).exportSession()).messages.map((entry) => entry.content),
     ["later edit", "a3"],
@@ -215,7 +215,7 @@ test("deleteFromMessage atomically removes lifecycle, summary, timing, command a
     (await after.exportSession()).dialogOrder.map((item) => item.turnScopeId),
     ["keep"],
   );
-  assert.equal((await after.readMetadata()).autoTitle, "keep");
+  assert.equal((await after.readMetadata({ includeAutoTitle: true })).autoTitle, "keep");
 });
 
 test("deleteFromMessage recomputes the title when removing all messages", async (t) => {
@@ -223,7 +223,7 @@ test("deleteFromMessage recomputes the title when removing all messages", async 
   await f.service.deleteFromMessage(deletion(f));
   const after = await f.open();
   assert.equal((await after.readFacts()).messageCount, 0);
-  assert.equal((await after.readMetadata()).autoTitle, undefined);
+  assert.equal((await after.readMetadata({ includeAutoTitle: true })).autoTitle, undefined);
   assert.deepEqual((await after.exportSession()).dialogOrder, []);
 });
 

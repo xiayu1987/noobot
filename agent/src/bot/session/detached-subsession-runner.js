@@ -32,7 +32,6 @@ import { createExecutionFailure } from "../../shared/errors/index.js";
 import { assertNotAborted } from "../../shared/utils/error-utils.js";
 import { transferCanonicalAttachmentsToSubSession } from "./detached-subsession-attachments.js";
 import { isPlainObject, text, isFunction } from "@noobot/shared/value";
-import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { assertSessionExecutionResult } from "@noobot/agent-transport-protocol/session-execution-result";
 
 export { createDetachedTerminalReceipt, createScopedSubSessionEventListener };
@@ -53,6 +52,7 @@ function assertDetachedSubSessionStrategy(strategy = {}) {
 }
 
 export function createDetachedSubSessionRunner({
+  runInWorkspace,
   workspaceService = null,
   configService = null,
   sessionRunner = null,
@@ -62,10 +62,14 @@ export function createDetachedSubSessionRunner({
   prepareRunConfig = null,
   now,
 } = {}) {
+  if (!isFunction(runInWorkspace)) {
+    throw new TypeError("detached sub-session runner requires runInWorkspace");
+  }
   if (!isFunction(now)) {
     throw new TypeError("detached sub-session runner requires now function");
   }
   const dependencies = {
+    runInWorkspace,
     workspaceService,
     configService,
     sessionRunner,
@@ -82,6 +86,12 @@ async function runDetachedSubSession(dependencies, request) {
   assertDetachedRunnerDependencies(dependencies);
   const runtime = resolveDetachedRuntime(request);
   const identity = resolveDetachedIdentity(request, runtime);
+  return dependencies.runInWorkspace(identity.userId, () =>
+    executeDetachedLifecycle(dependencies, request, runtime, identity),
+  );
+}
+
+async function executeDetachedLifecycle(dependencies, request, runtime, identity) {
   const prepared = await prepareDetachedExecution(dependencies, request, runtime, identity);
   const lifecycle = await createDetachedLifecycle(dependencies, request, identity, prepared);
   const accepted = await commitDetachedStart(lifecycle, prepared.message, identity);
@@ -511,8 +521,6 @@ async function commitDetachedCompletion(lifecycle) {
 
 function projectDetachedResult(result, identity, terminalLifecycle) {
   const dialogProcessId = identity.subDialogProcessId;
-  const messages = result.messages;
-  const transferEnvelopes = collectTransferEnvelopes(messages);
   return {
     userId: identity.userId,
     sessionId: identity.subSessionId,
@@ -526,15 +534,12 @@ function projectDetachedResult(result, identity, terminalLifecycle) {
       caller: SESSION_CALLER.BOT,
       answer: result.answer,
       traces: result.traces,
-      messages,
-      ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
+      messageSource: result.messageSource,
+      transferEnvelopes: result.transferEnvelopes,
       dialogProcessId,
+      turnScopeId: identity.turnScopeId,
     },
   };
-}
-
-function collectTransferEnvelopes(turnMessages) {
-  return mergeTransferEnvelopes(...turnMessages.map((message) => message.transferEnvelopes));
 }
 
 function clearParentTurnTransactionIdentity(runConfig = {}) {

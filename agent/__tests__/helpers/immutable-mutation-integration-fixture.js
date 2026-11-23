@@ -8,7 +8,11 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
-import { createTestSessionServices, provisionTestSession } from "./session-services.js";
+import {
+  createTestSessionServices,
+  provisionTestSession,
+  submitTestSessionRequest,
+} from "./session-services.js";
 import { initializeUserWorkspace } from "./user-workspace.js";
 import { createTestSessionRequiredFields } from "./session-message-facts.js";
 import { registerDialogOrderMessage } from "../../src/session/entities/dialog-order-entity.js";
@@ -79,13 +83,17 @@ export async function immutableMutationFixture(t, { messages = [], aggregateVers
   let sequence = 0;
   const commit = async (changes) => {
     await using reader = await open();
-    return await repository.commitChanges("u1", "s1", {
+    return await submitTestSessionRequest(
+      repository,
+      "u1",
+      "s1",
+      await reader.prepareRequest({
+        operationId: `fixture:${++sequence}`,
+        committedAt: mutationTime,
+        changes,
+      }),
       persistenceContext,
-      expectedGeneration: reader.generation,
-      operationId: `fixture:${++sequence}`,
-      committedAt: mutationTime,
-      changes,
-    });
+    );
   };
   return {
     runtime,

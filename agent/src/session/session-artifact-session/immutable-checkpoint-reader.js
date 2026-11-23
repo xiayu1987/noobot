@@ -8,6 +8,11 @@ import { immutableCheckpointKey } from "./immutable-checkpoint-index.js";
 import { immutableOrderKey } from "./immutable-order-key.js";
 import { immutableStorageError } from "./immutable-object-store.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import {
+  createSummaryCheckpointPage,
+  requireSummaryCheckpointPage,
+} from "@noobot/session-protocol/summary-checkpoint-page";
 
 function assertCheckpointState(header, turnScopeId, receipts) {
   try {
@@ -15,11 +20,6 @@ function assertCheckpointState(header, turnScopeId, receipts) {
   } catch (cause) {
     throw immutableStorageError("Invalid immutable checkpoint state", cause);
   }
-  if (
-    !Number.isSafeInteger(header.checkpointRevision) ||
-    receipts.some((receipt) => !Number.isSafeInteger(receipt.checkpointRevision))
-  )
-    throw immutableStorageError("Invalid immutable checkpoint revision");
 }
 
 async function readCheckpointHead(store, snapshot, turnScopeId) {
@@ -37,10 +37,10 @@ export async function readImmutableCheckpointState(store, snapshot, turnScopeId)
     snapshot,
     turnScopeId,
     header,
-    after: Math.max(0, header.checkpointRevision - limit),
+    revision: header.checkpointRevision,
     limit,
   });
-  return { ...header, receipts: page.receipts };
+  return { ...header, receipts: page.receipts.reverse() };
 }
 
 async function readCheckpointReceipt({ store, snapshot, turnScopeId, checkpointId, header }) {
@@ -54,14 +54,7 @@ async function readCheckpointReceipt({ store, snapshot, turnScopeId, checkpointI
 }
 
 function validateCheckpointReceipt(receipt, header, turnScopeId, checkpointId) {
-  if (
-    !header ||
-    header.turnScopeId !== turnScopeId ||
-    receipt.checkpointId !== checkpointId ||
-    !Number.isSafeInteger(receipt.checkpointRevision) ||
-    receipt.checkpointRevision < 1 ||
-    receipt.checkpointRevision > header.checkpointRevision
-  )
+  if (!header || receipt.checkpointId !== checkpointId)
     throw immutableStorageError("Checkpoint receipt index identity mismatch");
   assertCheckpointState(header, turnScopeId, [receipt]);
   return receipt;
@@ -87,36 +80,45 @@ export async function readImmutableCheckpoint(store, snapshot, turnScopeId, chec
   return receipt;
 }
 
-export async function readImmutableCheckpointPage({
-  store,
-  snapshot,
-  turnScopeId,
-  after = 0,
-  limit = QUANTITY_THRESHOLDS.immutableStorage.receiptPageSize,
-}) {
-  if (
-    !Number.isSafeInteger(after) ||
-    after < 0 ||
-    !Number.isSafeInteger(limit) ||
-    limit < 1 ||
-    limit > 256
-  )
-    throw new TypeError("Checkpoint page requires a non-negative cursor and limit 1..256");
+export async function readImmutableCheckpointPage({ store, snapshot, ...options }) {
+  const scope = {
+    sessionId: snapshot.sessionId,
+    snapshotId: JSON.stringify(snapshot.commit),
+    generation: snapshot.generation,
+    limits: {
+      pageRecords: QUANTITY_THRESHOLDS.immutableStorage.messagePageSize,
+      pageBytes: LENGTH_THRESHOLDS.sessionStorage.messageReadBytes,
+    },
+  };
+  const requestedRevision = requireSummaryCheckpointPage(scope, options);
+  const { turnScopeId, limit } = options;
   const header = await readCheckpointHead(store, snapshot, turnScopeId);
+  if (
+    requestedRevision !== null &&
+    (header === null || requestedRevision > header.checkpointRevision)
+  )
+    throw new TypeError("Checkpoint cursor exceeds revision tail");
   if (header === null) return null;
-  return readCheckpointPage({ store, snapshot, turnScopeId, header, after, limit });
+  const { receipts, nextRevision } = await readCheckpointPage({
+    store,
+    snapshot,
+    turnScopeId,
+    header,
+    revision: requestedRevision ?? header.checkpointRevision,
+    limit,
+  });
+  return createSummaryCheckpointPage(scope, options, receipts, nextRevision);
 }
 
-async function readCheckpointPage({ store, snapshot, turnScopeId, header, after, limit }) {
-  const end =
-    after >= header.checkpointRevision ? after : Math.min(header.checkpointRevision, after + limit);
+async function readCheckpointPage({ store, snapshot, turnScopeId, header, revision, limit }) {
+  const end = Math.max(0, revision - limit);
   const orderKeys = [];
-  for (let revision = after + 1; revision <= end; revision += 1)
-    orderKeys.push(immutableCheckpointKey(turnScopeId, immutableOrderKey(revision)));
+  for (let current = revision; current > end; current -= 1)
+    orderKeys.push(immutableCheckpointKey(turnScopeId, immutableOrderKey(current)));
   const order = await store.getMany(snapshot, "checkpointOrder", orderKeys);
   const selected = orderKeys.flatMap((key, slot) => {
     const checkpointId = order.get(key);
-    return checkpointId === null ? [] : [{ checkpointId, revision: after + slot + 1 }];
+    return checkpointId === null ? [] : [{ checkpointId, revision: revision - slot }];
   });
   const values = await store.getMany(
     snapshot,
@@ -130,10 +132,5 @@ async function readCheckpointPage({ store, snapshot, turnScopeId, header, after,
       throw immutableStorageError("Checkpoint order references an invalid receipt");
     receipts.push(validateCheckpointReceipt(receipt, header, turnScopeId, checkpointId));
   }
-  return {
-    generation: snapshot.generation,
-    receipts,
-    cursor: end,
-    hasMore: end < header.checkpointRevision,
-  };
+  return { receipts, nextRevision: end === 0 ? null : end };
 }

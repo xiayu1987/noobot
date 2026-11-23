@@ -14,6 +14,7 @@ import {
   createSessionPersistenceScope,
 } from "@noobot/session-protocol";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
+import { createTestMessageCreationBatch } from "../helpers/message-persistence-receipts.js";
 import { useRuntimeEventsEnv } from "../helpers/runtime-events-env.js";
 import {
   FLOW_CONTROL_ROLE,
@@ -60,20 +61,22 @@ test("message diagnostics and persistence use the same captured input", async (t
       },
     },
   });
-  const saved = await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    messages: [
-      {
-        messageUid: "sm_1",
-        role: "assistant",
-        get content() {
-          reads += 1;
-          return reads === 1 ? "captured" : "changed";
+  const saved = await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "s1",
+      messages: [
+        {
+          messageUid: "sm_1",
+          role: "assistant",
+          get content() {
+            reads += 1;
+            return reads === 1 ? "captured" : "changed";
+          },
         },
-      },
-    ],
-  });
+      ],
+    }),
+  );
   assert.equal(reads, 1);
   assert.equal(saved, receipts);
   assert.equal(captured[0].content, "captured");
@@ -94,14 +97,16 @@ test("appendAgentMessages persists all messages through one appendTurns batch", 
     },
   });
 
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    messages: [
-      { messageUid: "sm_1", role: "assistant", content: "tools" },
-      { messageUid: "sm_2", role: "tool", content: "result", tool_call_id: "call_1" },
-    ],
-  });
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "s1",
+      messages: [
+        { messageUid: "sm_1", role: "assistant", content: "tools" },
+        { messageUid: "sm_2", role: "tool", content: "result", tool_call_id: "call_1" },
+      ],
+    }),
+  );
 
   assert.equal(batches.length, 1);
   assert.deepEqual(
@@ -124,19 +129,21 @@ test("appendAgentMessages preserves the canonical tool policy at the Session bou
     },
   });
 
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    messages: [
-      {
-        messageUid: "sm_result",
-        role: "tool",
-        content: "result",
-        tool_call_id: "call_1",
-        contextPolicy: policy,
-      },
-    ],
-  });
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "s1",
+      messages: [
+        {
+          messageUid: "sm_result",
+          role: "tool",
+          content: "result",
+          tool_call_id: "call_1",
+          contextPolicy: policy,
+        },
+      ],
+    }),
+  );
 
   assert.deepEqual(batches[0].turns[0].contextPolicy, policy);
 });
@@ -162,14 +169,16 @@ test("appendAgentMessages keeps scoped persistence identity for logs and message
     },
   });
 
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "child-1",
-    parentSessionId: "root-1",
-    turnScopeId: "workflow-node:one",
-    messages: [{ role: "assistant", content: "done" }],
-    persistenceScope,
-  });
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "child-1",
+      parentSessionId: "root-1",
+      turnScopeId: "workflow-node:one",
+      messages: [{ role: "assistant", content: "done" }],
+      persistenceScope,
+    }),
+  );
 
   assert.equal(batches[0].messageDiagnostics.length, 1);
   assert.equal(batches[0].messageDiagnostics[0].messageUid, batches[0].turns[0].messageUid);
@@ -192,17 +201,19 @@ test("appendAgentMessages forwards the authoritative realtime message identity",
     },
   });
 
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    messages: [
-      {
-        role: "assistant",
-        content: "done",
-        modelMessageId: "message-1",
-      },
-    ],
-  });
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "s1",
+      messages: [
+        {
+          role: "assistant",
+          content: "done",
+          modelMessageId: "message-1",
+        },
+      ],
+    }),
+  );
 
   assert.equal(turns[0].modelMessageId, "message-1");
 });
@@ -220,20 +231,22 @@ test("appendAgentMessages forwards the canonical internal control message type",
     },
   });
 
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    messages: [
-      {
-        messageUid: "sm_control",
-        role: "user",
-        injectedMessage: true,
-        type: "context_control",
-        content: "checkpoint",
-        noobotInternalMessageType: "noobot.phase_summary_prompt",
-      },
-    ],
-  });
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "s1",
+      messages: [
+        {
+          messageUid: "sm_control",
+          role: "user",
+          injectedMessage: true,
+          type: "context_control",
+          content: "checkpoint",
+          noobotInternalMessageType: "noobot.phase_summary_prompt",
+        },
+      ],
+    }),
+  );
 
   assert.equal(turns[0].noobotInternalMessageType, "noobot.phase_summary_prompt");
 });
@@ -257,31 +270,33 @@ test("appendAgentMessages forwards presentation identity and checkpoint context"
     },
   });
 
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    persistenceScope,
-    messages: [
-      {
-        role: "assistant",
-        content: "analysis",
-        messageUid: "sm_analysis",
-        modelMessageId: "msg_model_1",
-        presentationMessageId: "msg_chat_1",
-        chatPresentation: false,
-        type: "tool_call",
-        activityTimeline: [
-          {
-            eventId: "guidance-analysis:1",
-            sequence: 1,
-            sequenceDomain: "activity",
-            sequenceScopeId: "msg_chat_1",
-            authority: "authoritative",
-          },
-        ],
-      },
-    ],
-  });
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "s1",
+      persistenceScope,
+      messages: [
+        {
+          role: "assistant",
+          content: "analysis",
+          messageUid: "sm_analysis",
+          modelMessageId: "msg_model_1",
+          presentationMessageId: "msg_chat_1",
+          chatPresentation: false,
+          type: "tool_call",
+          activityTimeline: [
+            {
+              eventId: "guidance-analysis:1",
+              sequence: 1,
+              sequenceDomain: "activity",
+              sequenceScopeId: "msg_chat_1",
+              authority: "authoritative",
+            },
+          ],
+        },
+      ],
+    }),
+  );
 
   const [turn] = batches[0].turns;
   assert.equal(turn.presentationMessageId, "msg_chat_1");
@@ -304,13 +319,15 @@ test("SessionTurnPersister never forwards a caller parentSessionId to persistenc
   };
   const persister = new SessionTurnPersister({ session, now: PERSISTER_NOW });
 
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    parentSessionId: "caller-parent",
-    messages: [{ role: "assistant", content: "done" }],
-    dialogProcessId: "dp1",
-  });
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "s1",
+      parentSessionId: "caller-parent",
+      messages: [{ role: "assistant", content: "done" }],
+      dialogProcessId: "dp1",
+    }),
+  );
 
   assert.equal(Object.hasOwn(batches[0], "parentSessionId"), false);
   assert.equal(Object.hasOwn(batches[0].turns[0], "parentSessionId"), false);
@@ -332,43 +349,45 @@ test("SessionTurnPersister persists tool transfer envelopes into session turns",
   };
   const persister = new SessionTurnPersister({ session, now: PERSISTER_NOW });
 
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    messages: [
-      {
-        role: "tool",
-        type: "tool_result",
-        tool_call_id: "call_1",
-        toolName: "multimodal_generate",
-        content: JSON.stringify({ toolName: "multimodal_generate", ok: true }),
-        transferEnvelopes: [
-          {
-            protocol: "noobot.semantic-transfer",
-            version: TRANSFER_VERSION,
-            transferId: "transfer-tool-1",
-            presentationMessageId: "message-tool-1",
-            identity: {
-              sessionId: "s1",
-              turnScopeId: "t1",
-              runId: "r1",
-              producer: { type: "tool", id: "call_1" },
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "s1",
+      messages: [
+        {
+          role: "tool",
+          type: "tool_result",
+          tool_call_id: "call_1",
+          toolName: "multimodal_generate",
+          content: JSON.stringify({ toolName: "multimodal_generate", ok: true }),
+          transferEnvelopes: [
+            {
+              protocol: "noobot.semantic-transfer",
+              version: TRANSFER_VERSION,
+              transferId: "transfer-tool-1",
+              presentationMessageId: "message-tool-1",
+              identity: {
+                sessionId: "s1",
+                turnScopeId: "t1",
+                runId: "r1",
+                producer: { type: "tool", id: "call_1" },
+              },
+              direction: "output",
+              payload: { mode: "direct", content: "tool result" },
+              intent: {
+                source: "tool",
+                reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+                scenario: "tool",
+                strategy: "tool_output",
+              },
+              meta: {},
             },
-            direction: "output",
-            payload: { mode: "direct", content: "tool result" },
-            intent: {
-              source: "tool",
-              reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
-              scenario: "tool",
-              strategy: "tool_output",
-            },
-            meta: {},
-          },
-        ],
-      },
-    ],
-    dialogProcessId: "dp1",
-  });
+          ],
+        },
+      ],
+      dialogProcessId: "dp1",
+    }),
+  );
 
   assert.equal(appendedTurns.length, 1);
   assert.equal("transferEnvelopes" in appendedTurns[0], true);
@@ -417,19 +436,21 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
     meta: {},
   };
 
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    messages: [
-      {
-        role: "assistant",
-        type: "message",
-        content: "done",
-        transferEnvelopes: [envelope],
-      },
-    ],
-    dialogProcessId: "dp1",
-  });
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "s1",
+      messages: [
+        {
+          role: "assistant",
+          type: "message",
+          content: "done",
+          transferEnvelopes: [envelope],
+        },
+      ],
+      dialogProcessId: "dp1",
+    }),
+  );
 
   assert.equal(appendedTurns.length, 1);
   assert.equal(appendedTurns[0].attachmentMetas, undefined);
@@ -467,20 +488,22 @@ test("SessionTurnPersister persists canonical plugin metadata without old concre
     },
   };
 
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    messages: [
-      {
-        role: "assistant",
-        type: "workflow",
-        content: "WORKFLOW_DSL/1",
-        pluginMessage: true,
-        pluginMeta,
-      },
-    ],
-    dialogProcessId: "dp1",
-  });
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "s1",
+      messages: [
+        {
+          role: "assistant",
+          type: "workflow",
+          content: "WORKFLOW_DSL/1",
+          pluginMessage: true,
+          pluginMeta,
+        },
+      ],
+      dialogProcessId: "dp1",
+    }),
+  );
 
   assert.equal(appendedTurns.length, 1);
   assert.equal(appendedTurns[0].pluginMessage, true);
@@ -504,25 +527,27 @@ test("SessionTurnPersister does not carry thinking timing on persisted turns", a
     },
   };
   const persister = new SessionTurnPersister({ session, now: PERSISTER_NOW });
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    messages: [
-      {
-        role: "user",
-        type: "message",
-        content: "[来自harness外部模型输出/guidance]",
-        injectedMessage: true,
-        injectedBy: "harness-plugin",
-      },
-      {
-        role: "assistant",
-        type: "message",
-        content: "done",
-      },
-    ],
-    dialogProcessId: "dp1",
-  });
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "s1",
+      messages: [
+        {
+          role: "user",
+          type: "message",
+          content: "[来自harness外部模型输出/guidance]",
+          injectedMessage: true,
+          injectedBy: "harness-plugin",
+        },
+        {
+          role: "assistant",
+          type: "message",
+          content: "done",
+        },
+      ],
+      dialogProcessId: "dp1",
+    }),
+  );
 
   assert.equal(appendedTurns.length, 2);
   assert.equal(appendedTurns[0].role, "user");
@@ -553,28 +578,30 @@ test("appendAgentMessages keeps relayCorrelationId on persisted injected turns",
     },
   });
 
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    messages: [
-      {
-        messageUid: "sm_relay",
-        role: "user",
-        type: "message",
-        content: "[来自harness外部模型输出/guidance]\n分析中",
-        injectedMessage: true,
-        injectedBy: "harness-plugin",
-        relayCorrelationId: "rc_fixture_1",
-      },
-      {
-        messageUid: "sm_plain",
-        role: "assistant",
-        type: "message",
-        content: "done",
-      },
-    ],
-    dialogProcessId: "dp1",
-  });
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "s1",
+      messages: [
+        {
+          messageUid: "sm_relay",
+          role: "user",
+          type: "message",
+          content: "[来自harness外部模型输出/guidance]\n分析中",
+          injectedMessage: true,
+          injectedBy: "harness-plugin",
+          relayCorrelationId: "rc_fixture_1",
+        },
+        {
+          messageUid: "sm_plain",
+          role: "assistant",
+          type: "message",
+          content: "done",
+        },
+      ],
+      dialogProcessId: "dp1",
+    }),
+  );
 
   assert.equal(appendedTurns.length, 2);
   assert.equal(appendedTurns[0].relayCorrelationId, "rc_fixture_1");
@@ -594,24 +621,26 @@ test("appendAgentMessages keeps canonical user interjection time and sequence", 
     },
   });
 
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    messages: [
-      {
-        messageUid: "interjection-uid-command-1",
-        role: "user",
-        type: "message",
-        content: "accepted constraint",
-        injectedMessage: true,
-        injectedMessageType: "noobot.user_interjection",
-        interjectionSequence: 1,
-        ts: "2026-09-18T01:00:00.000Z",
-      },
-    ],
-    dialogProcessId: "dp1",
-    turnScopeId: "turn-1",
-  });
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      userId: "u1",
+      sessionId: "s1",
+      messages: [
+        {
+          messageUid: "interjection-uid-command-1",
+          role: "user",
+          type: "message",
+          content: "accepted constraint",
+          injectedMessage: true,
+          injectedMessageType: "noobot.user_interjection",
+          interjectionSequence: 1,
+          ts: "2026-09-18T01:00:00.000Z",
+        },
+      ],
+      dialogProcessId: "dp1",
+      turnScopeId: "turn-1",
+    }),
+  );
 
   assert.equal(appendedTurns[0].interjectionSequence, 1);
   assert.equal(appendedTurns[0].ts, "2026-09-18T01:00:00.000Z");
@@ -634,15 +663,21 @@ test("appendAgentMessages propagates Session deletion and absence errors unchang
     messages: [{ messageUid: "sm_1", role: "tool", content: "r", tool_call_id: "call_1" }],
   };
   const deleted = createSessionDeletedError({ userId: "u1", sessionId: "s1" });
-  await assert.rejects(createPersister(deleted).appendAgentMessages(input), (error) => {
-    assert.equal(error, deleted);
-    assert.equal(error.code, SESSION_ERROR_CODE.SESSION_DELETED);
-    return true;
-  });
+  await assert.rejects(
+    createPersister(deleted).appendAgentMessages(createTestMessageCreationBatch(input)),
+    (error) => {
+      assert.equal(error, deleted);
+      assert.equal(error.code, SESSION_ERROR_CODE.SESSION_DELETED);
+      return true;
+    },
+  );
   const missing = createSessionNotFoundError({ userId: "u1", sessionId: "s1" });
-  await assert.rejects(createPersister(missing).appendAgentMessages(input), (error) => {
-    assert.equal(error, missing);
-    assert.equal(error.code, SESSION_ERROR_CODE.SESSION_NOT_FOUND);
-    return true;
-  });
+  await assert.rejects(
+    createPersister(missing).appendAgentMessages(createTestMessageCreationBatch(input)),
+    (error) => {
+      assert.equal(error, missing);
+      assert.equal(error.code, SESSION_ERROR_CODE.SESSION_NOT_FOUND);
+      return true;
+    },
+  );
 });

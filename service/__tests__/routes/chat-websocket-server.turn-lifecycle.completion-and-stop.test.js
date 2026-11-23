@@ -127,6 +127,7 @@ test("rejected stop has no abort or interaction side effects", async () => {
   const sent = [];
   const { createMessageHandler } = await import("../../ws/chat-websocket/message-handler.js");
   const handler = createMessageHandler({
+    runNewOperation: (operation) => operation(),
     state: { currentRunMeta: { sessionId: "session-locked" } },
     authInfo: { userId: "u1" },
     webSocket: { close() {} },

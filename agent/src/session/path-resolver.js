@@ -54,6 +54,14 @@ export class PathResolver {
     return path.join(requireBasePath(basePath), WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE);
   }
 
+  sessionTreeLockFile(basePath) {
+    return path.join(requireBasePath(basePath), WORKSPACE_LAYOUT.SESSION_TREE_LOCK_FILE);
+  }
+
+  sessionTombstoneLockFile(basePath) {
+    return path.join(requireBasePath(basePath), WORKSPACE_LAYOUT.SESSION_TOMBSTONE_LOCK_FILE);
+  }
+
   sessionLifecycleLocksDir(basePath) {
     return path.join(requireBasePath(basePath), WORKSPACE_LAYOUT.SESSION_LIFECYCLE_LOCKS_DIR);
   }

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isFunction } from "@noobot/shared/value";
 import {
   requireDialogProcessKey,
   requireExecutionLogBatch,
@@ -78,7 +79,7 @@ export class FileSystemExecutionRepository {
       const result = await this.sessionRepository.withSessionReader(
         userId,
         sessionId,
-        (reader, scope) =>
+        ({ reader, scope }) =>
           projectMessageDiagnostics({
             storageService: this.storageService,
             sessionDir: scope.sessionDir,
@@ -126,7 +127,7 @@ export class FileSystemExecutionRepository {
     return this.sessionRepository.withSessionReader(
       userId,
       sessionId,
-      async (reader, scope) => {
+      async ({ reader, scope }) => {
         const records = await readTurnExecutionLogs({
           storageService: this.storageService,
           sessionDir: scope.sessionDir,
@@ -178,7 +179,7 @@ export class FileSystemExecutionRepository {
 
   async appendLogs(userId, sessionId, executionLogs, { persistenceContext, deliver } = {}) {
     requireExecutionLogBatch(executionLogs);
-    if (deliver !== undefined && typeof deliver !== "function")
+    if (deliver !== undefined && !isFunction(deliver))
       throw new TypeError("Execution projection requires delivery port");
     let persistedLogs;
     let sourceAccepted = false;
@@ -219,21 +220,18 @@ export class FileSystemExecutionRepository {
           }
         },
       );
-      if (deliver) {
-        if (pending)
-          await this._projectPendingTurn(userId, sessionId, firstTurn, {
-            persistenceContext,
-            deliver,
-            readProjectionBatches,
-          });
-        const remaining = turns.slice(1);
-        if (remaining.length)
-          await this.projectPendingLogs(userId, sessionId, {
-            persistenceContext,
-            dialogProcessIds: remaining,
-            deliver,
-          });
-      }
+      if (deliver && pending)
+        await this._projectPendingTurn(userId, sessionId, firstTurn, {
+          persistenceContext,
+          deliver,
+          readProjectionBatches,
+        });
+      if (deliver && turns.length > 1)
+        await this.projectPendingLogs(userId, sessionId, {
+          persistenceContext,
+          dialogProcessIds: turns.slice(1),
+          deliver,
+        });
       return persistedLogs;
     } catch (cause) {
       if (!sourceAccepted) throw cause;

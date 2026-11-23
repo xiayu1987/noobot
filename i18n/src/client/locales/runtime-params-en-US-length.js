@@ -4,7 +4,42 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  sessionStorage: {
+    messageReadBytes: {
+      name: "Message read budget",
+      description: "Maximum bytes read in a bounded session message request.",
+    },
+    messageWriteBatchBytes: {
+      name: "Message write batch budget",
+      description: "Maximum encoded bytes in one session message persistence batch.",
+    },
+    listMessagePreviewChars: {
+      name: "List message preview length",
+      description: "Maximum UTF-16 code units retained in a session list message preview.",
+    },
+    journalControlBytes: {
+      name: "Journal control record budget",
+      description: "Maximum encoded bytes in a partition journal control record.",
+    },
+    journalDirectoryBytes: {
+      name: "Journal directory entry budget",
+      description: "Maximum encoded bytes in a partition journal directory entry.",
+    },
+  },
   immutableStorage: {
+    partitionContentChunkBytes: {
+      name: "Partition content chunk byte limit",
+      description:
+        "Protocol limit on canonical JSON body bytes in one independently verified message chunk.",
+    },
+    entityPageKeyBytes: {
+      name: "Entity page key byte limit",
+      description: "Protocol limit on escaped JSON bytes of an entity directory key.",
+    },
+    historicalDirectoryChecksumBytes: {
+      name: "Historical directory checksum width",
+      description: "Fixed checksum width in the historical entity directory disk format.",
+    },
     valueInlineBytes: {
       name: "Inline value limit",
       description: "Maximum encoded value bytes stored inline before using a content graph.",
@@ -28,6 +63,10 @@ export default {
     executionProjectionOutputRecordBytes: {
       name: "Execution projection output record limit",
       description: "Maximum encoded bytes in an execution projection output record.",
+    },
+    migrationAuthorityRecordBytes: {
+      name: "Migration authority record limit",
+      description: "Maximum encoded bytes in a partition migration authority record.",
     },
     readerRetentionRecordBytes: {
       name: "Reader retention record limit",

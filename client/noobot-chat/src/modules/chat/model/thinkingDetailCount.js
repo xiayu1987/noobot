@@ -5,9 +5,15 @@
  */
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 
-export function selectThinkingDetailCount(messageItem) {
+export function selectThinkingDetailCount(messageItem = {}) {
   return countCanonicalThinkingDetailEvents({
-    toolTimeline: messageItem.toolTimeline,
-    activityTimeline: messageItem.activityTimeline,
+    toolTimeline: messageItem?.toolTimeline,
+    activityTimeline: messageItem?.activityTimeline,
   });
+}
+
+export function formatThinkingDetailLabel(translate, count) {
+  return count > 0
+    ? translate("message.thinkingDetailsCount", { count })
+    : translate("message.thinkingDetails");
 }

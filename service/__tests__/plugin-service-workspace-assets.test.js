@@ -9,6 +9,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { resolvePluginAssetsRelativePath } from "@noobot/workspace-protocol";
 import { createPluginServicePorts } from "../services/plugin-service-ports.js";
 
 test("workspace asset port writes immutable content and reads the exact version", async (t) => {
@@ -40,6 +41,31 @@ test("workspace asset port writes immutable content and reads the exact version"
     await port.read({ userId: "admin", assetId: "asset.one", version: "a".repeat(64) }),
     null,
   );
+});
+
+test("workspace asset reads reject blocked paths and non-file versions without losing evidence", async (t) => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-plugin-asset-structure-"));
+  t.after(() => fs.rm(workspace, { recursive: true, force: true }));
+  const port = createPluginServicePorts({
+    bot: { getWorkspacePath: () => workspace },
+    translateText: (key) => key,
+  }).workspaceAssets.forPlugin("character");
+  const root = path.join(workspace, resolvePluginAssetsRelativePath("character"));
+  await fs.mkdir(root, { recursive: true });
+  const asset = path.join(root, "asset.one");
+  const version = "a".repeat(64);
+  await fs.writeFile(asset, "preserve");
+  await assert.rejects(port.read({ userId: "admin", assetId: "asset.one", version }), {
+    code: "ENOTDIR",
+  });
+  assert.equal(await fs.readFile(asset, "utf8"), "preserve");
+  await fs.unlink(asset);
+  await fs.mkdir(path.join(asset, version), { recursive: true });
+  await assert.rejects(
+    port.read({ userId: "admin", assetId: "asset.one", version }),
+    /workspace asset version must be a regular file/,
+  );
+  assert.equal((await fs.stat(path.join(asset, version))).isDirectory(), true);
 });
 
 test("workspace asset port rejects invalid identity before filesystem access", async () => {

@@ -104,6 +104,7 @@ function providerCodeKind({ operatorId, status, code, type, detailCode, retryAft
 function providerKind(facts) {
   const { operatorId, status } = facts;
   if (status === 401 || status === 403) return K.AUTHENTICATION;
+  if (status === 524) return K.TIMEOUT;
   if (!SOURCES[operatorId]) return K.UNKNOWN;
   if (status === 402 && [P.DEEPSEEK, P.ANTHROPIC].includes(operatorId)) return K.QUOTA_EXHAUSTED;
   const codeKind = providerCodeKind(facts);

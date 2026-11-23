@@ -21,8 +21,16 @@ export default {
       description: "Turn buffer reserved near the tool loop limit.",
     },
     phaseSummaryLoopTurns: {
-      name: "Agent phase summary loop turns",
-      description: "Turn or attempt count threshold used by agent phase summary loop turns.",
+      name: "Full phase summary loop turns",
+      description: "Agent phase summary loop threshold for Full and custom scenarios.",
+    },
+    phaseSummaryTextLoopTurns: {
+      name: "Text phase summary loop turns",
+      description: "Agent phase summary loop threshold for the Text scenario.",
+    },
+    phaseSummaryProgrammingLoopTurns: {
+      name: "Programming phase summary loop turns",
+      description: "Agent phase summary loop threshold for the Programming scenario.",
     },
     taskCheckLoopTurns: {
       name: "Agent task check loop turns",

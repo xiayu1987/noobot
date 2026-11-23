@@ -218,7 +218,8 @@ test("bindTurnAttachments binds the exact accepted user message and replays idem
   assert.equal(bound.aggregateVersion, 2);
   assert.equal(replay.aggregateVersion, 2);
   assert.equal(replay.deduplicated, true);
-  assert.deepEqual(replay.userMessage.attachments, [canonical()]);
+  assert.equal(replay.messageUid, accepted.userMessage.messageUid);
+  assert.deepEqual(replay.attachments, [canonical()]);
   assert.deepEqual(h.get().messages[0].attachments, [canonical()]);
 });
 

@@ -12,6 +12,7 @@ import {
   createTestSessionServices,
   provisionTestSession,
   withTreeContext,
+  submitTestSessionRequest,
 } from "../helpers/session-services.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
@@ -46,13 +47,17 @@ test("session metadata and current turn identity never materialize historical me
       transferEnvelopes: [],
     }));
     const initial = await repo.requireSessionReader("u1", "A", context);
-    await repo.commitChanges("u1", "A", {
-      ...context,
-      expectedGeneration: initial.generation,
-      operationId: "seed-messages",
-      committedAt: "2026-11-12T00:00:00.000Z",
-      changes: { messages: session.messages.map(normalizeMessageEntity) },
-    });
+    await submitTestSessionRequest(
+      repo,
+      "u1",
+      "A",
+      await initial.prepareRequest({
+        operationId: "seed-messages",
+        committedAt: "2026-11-12T00:00:00.000Z",
+        changes: { messages: session.messages.map(normalizeMessageEntity) },
+      }),
+      context.persistenceContext,
+    );
     const scope = await repo.requireSessionScope("u1", "A", context.persistenceContext);
     const beforeReader = await repo.requireSessionReader("u1", "A", context);
     const before = await beforeReader.readMetadata();
@@ -84,7 +89,7 @@ test("session metadata and current turn identity never materialize historical me
     t.mock.method(repo, "findById", () => {
       throw new Error("full session read is forbidden");
     });
-    const source = await repo.findTurnTerminalSource("u1", "A", {
+    const source = await repo.findTurnLifecycleSource("u1", "A", {
       ...context,
       terminalLimit: snapshotOptions.terminalLimit,
     });

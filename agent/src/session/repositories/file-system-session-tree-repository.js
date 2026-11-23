@@ -17,6 +17,7 @@ import {
 } from "@noobot/workspace-protocol/session-store";
 import { text } from "@noobot/shared/value";
 import { createParsedTextMemo } from "../../shared/storage/parsed-text-memo.js";
+import { SessionMutationCoordinator } from "../session-mutation-coordinator.js";
 
 const parseSessionTree = createParsedTextMemo((raw, file) =>
   normalizeSessionTreeEntity(parseWorkspaceSessionTree({ raw, file })),
@@ -26,7 +27,7 @@ export class FileSystemSessionTreeRepository {
   constructor({ pathResolver, storageService } = {}) {
     this.pathResolver = pathResolver;
     this.storageService = storageService;
-    this._locks = new Map();
+    this.mutationCoordinator = new SessionMutationCoordinator();
   }
 
   _basePath(userId = "") {
@@ -98,32 +99,17 @@ export class FileSystemSessionTreeRepository {
     return this._readTree(userId);
   }
 
-  async saveTree(userId, tree) {
-    await this.assertWorkspaceInitialized(userId);
-    await this.storageService.writeJsonAtomic(
-      this._treeFile(userId),
-      normalizeSessionTreeEntity(tree),
-    );
-  }
-
-  async withLock(userId, callback) {
-    const lockKey = this._basePath(userId);
-    const previousLock = this._locks.get(lockKey) || Promise.resolve();
-    let releaseCurrentLock = () => {};
-    const currentLock = new Promise((resolve) => {
-      releaseCurrentLock = resolve;
+  async updateTree(userId, update) {
+    await this._assertWorkspaceDirectories(userId);
+    const file = this._treeFile(userId);
+    const lock = this.pathResolver.sessionTreeLockFile(this._basePath(userId));
+    return this.mutationCoordinator.run(lock, async () => {
+      const current = await this._readTree(userId);
+      const next = update(current);
+      if (next !== current)
+        await this.storageService.writeJsonAtomic(file, normalizeSessionTreeEntity(next), {
+          durable: true,
+        });
     });
-    const lockMarker = previousLock.then(() => currentLock);
-    this._locks.set(lockKey, lockMarker);
-
-    await previousLock;
-    try {
-      return await callback();
-    } finally {
-      releaseCurrentLock();
-      if (this._locks.get(lockKey) === lockMarker) {
-        this._locks.delete(lockKey);
-      }
-    }
   }
 }

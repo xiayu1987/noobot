@@ -25,6 +25,5 @@ export {
   queryAuthoritativeExecution,
   queryAuthoritativeExecutionChildren,
   queryAuthoritativeExecutionTree,
-  resolveAuthoritativeTurnTerminal,
   resolveIndexedTurnTerminal,
 } from "./authority-query-service.js";

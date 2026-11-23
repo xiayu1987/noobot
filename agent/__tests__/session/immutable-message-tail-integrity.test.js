@@ -12,7 +12,7 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
 import { registerDialogOrderMessage } from "../../src/session/entities/dialog-order-entity.js";
 import { upgradeImmutableMessageTailIndex } from "../../src/session/session-artifact-session/immutable-message-tail-index-upgrade.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";

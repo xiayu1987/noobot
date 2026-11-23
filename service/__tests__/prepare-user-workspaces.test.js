@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SERVICE_STARTUP_PROGRESS_STAGES } from "@noobot/runtime-events";
+import { assertWorkspaceLayoutReady } from "@noobot/workspace-protocol";
 import { SESSION_SUMMARY_AVAILABILITY } from "@noobot/session-protocol/sessions-summary";
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol/turn-lifecycle";
 import { prepareUserWorkspaces } from "../bootstrap/prepare-user-workspaces.js";
@@ -65,6 +66,7 @@ function createBot({ brokenWorkspace, layoutUpgrades = [], summaries = [] }) {
       if (userId === brokenWorkspace) {
         throw Object.assign(new Error("layout broken"), { code: "E_LAYOUT" });
       }
+      assertWorkspaceLayoutReady(layoutUpgrades);
       return { base: `/ws/${userId}`, report: { layoutUpgrades } };
     },
     session: {
@@ -249,7 +251,18 @@ test("startup recovery uses the list projection without exporting session histor
   );
 });
 
-test("failed layout upgrades and quarantined units surface as startup failures", async () => {
+test("a blocked layout upgrade skips startup recovery and preserves the failing stage", async () => {
+  const bot = createBot({
+    layoutUpgrades: [{ id: "next-v8", toVersion: 8, failed: { code: "E_IO", message: "disk" } }],
+  });
+  const result = await prepareUserWorkspaces({ userIds: ["u-1"], bot, reportProgress: () => {} });
+  assert.deepEqual(bot.prepared, []);
+  assert.deepEqual(result.failures, [
+    { userId: "u-1", stage: "next-v8", code: "E_IO", message: "disk" },
+  ]);
+});
+
+test("quarantined units are reported without skipping healthy startup recovery", async () => {
   const bot = createBot({
     layoutUpgrades: [
       {
@@ -266,11 +279,10 @@ test("failed layout upgrades and quarantined units surface as startup failures",
           ],
         },
       },
-      { id: "next-v8", toVersion: 8, failed: { code: "E_IO", message: "disk" } },
     ],
   });
   const result = await prepareUserWorkspaces({ userIds: ["u-1"], bot, reportProgress: () => {} });
-  assert.deepEqual(bot.prepared, []);
+  assert.deepEqual(bot.prepared, ["u-1"]);
   assert.deepEqual(bot.projected, []);
   assert.deepEqual(bot.committed, []);
   assert.deepEqual(result.failures, [
@@ -282,7 +294,6 @@ test("failed layout upgrades and quarantined units surface as startup failures",
       code: "ENAMETOOLONG",
       message: "name too long",
     },
-    { userId: "u-1", stage: "next-v8", code: "E_IO", message: "disk" },
   ]);
 });
 

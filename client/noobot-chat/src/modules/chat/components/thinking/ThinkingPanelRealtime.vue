@@ -157,19 +157,17 @@ watch(
     @update:model-value="emit('update:openNames', $event)"
     item-name="thinking-panel"
     class="thinking-realtime-shell"
-    :class="{ 'is-running': isRunning }"
+    :class="{ 'is-running': isRunning, 'noobot-thinking-sweep': isRunning }"
   >
     <template #title>
       <div class="thinking-title-row">
-        <span class="thinking-elapsed noobot-flat-chip">{{
-          translate("message.thinkingElapsed", {
-            duration: thinkingDurationLabel,
-          })
-        }}</span>
+        <span class="thinking-elapsed noobot-flat-chip">
+          <span class="noobot-thinking-sweep-text">{{
+            translate("message.thinkingElapsed", { duration: thinkingDurationLabel })
+          }}</span>
+        </span>
         <span v-if="thinkingModelLoopRound > 0" class="thinking-loop-round noobot-flat-chip">{{
-          translate("message.thinkingModelLoopRound", {
-            round: thinkingModelLoopRound,
-          })
+          translate("message.thinkingModelLoopRound", { round: thinkingModelLoopRound })
         }}</span>
       </div>
     </template>

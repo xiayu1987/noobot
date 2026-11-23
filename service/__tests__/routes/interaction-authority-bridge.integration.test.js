@@ -9,7 +9,11 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 
-import { createSessionFacade, createSessionServices } from "noobot-agent/session";
+import {
+  createSessionFacade,
+  createSessionServices,
+  immutableSessionReaderAccess,
+} from "noobot-agent/session";
 import { AttachmentService } from "noobot-agent/attach";
 import { resolveScopedSessionRoots } from "@noobot/workspace-protocol";
 import { AUTHORITY_EVENT_CONSUMER } from "../../ws/chat-websocket/authority-event-dispatcher.js";
@@ -33,6 +37,7 @@ test("child interaction authority commits through the protocol persistence scope
       { workspaceRoot },
       {
         now: () => new Date().toISOString(),
+        sessionReaderAccess: immutableSessionReaderAccess,
         attachmentService: new AttachmentService({ workspaceRoot }),
         scopedSessionRoots: resolveScopedSessionRoots([
           { pluginId: "workflow", scopedSessionRoots: ["session"] },
@@ -112,6 +117,7 @@ test("interaction authority bridge leaves identity rejection to the event protoc
       { workspaceRoot },
       {
         now: () => new Date().toISOString(),
+        sessionReaderAccess: immutableSessionReaderAccess,
         attachmentService: new AttachmentService({ workspaceRoot }),
         scopedSessionRoots: resolveScopedSessionRoots([]),
       },

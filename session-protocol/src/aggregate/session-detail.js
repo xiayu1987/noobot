@@ -7,7 +7,10 @@ import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 import { SESSION_ERROR_CODE } from "../errors.js";
 import { isSessionAggregateVersion } from "../command/session-command.js";
 import { normalizeTurnTimingRecord } from "../lifecycle/turn-timing.js";
-import { validateTurnLifecycleSnapshot } from "../turn-lifecycle.js";
+import {
+  requireTurnLifecycleSourceSelection,
+  validateTurnLifecycleSnapshot,
+} from "../turn-lifecycle.js";
 import {
   SESSION_SUMMARY_AVAILABILITY,
   collectExactFieldErrors,
@@ -15,6 +18,63 @@ import {
 } from "./sessions-summary.js";
 import { isSessionCaller } from "@noobot/shared/session-caller";
 import { collectSessionArtifactEventIdentityErrors } from "./session-artifact-events.js";
+import {
+  collectSessionDisplayProjectionErrors,
+  requireRetainedSessionDisplayPageRequest,
+  requireRetainedSessionDisplayPageResponse,
+} from "../session-display-page.js";
+import { createMessageReadBudget, messageReadJsonBytes } from "../message-read-budget.js";
+
+export {
+  requireRetainedSessionDisplayPageRequest,
+  requireSessionDisplayPageRelease,
+  requireSessionDisplayPageTransition,
+} from "../session-display-page.js";
+export { selectBranchDialogMessages } from "./session-detail-branch-dialogs.js";
+
+export function requireSessionDetailStartRequest(request) {
+  if (
+    !isPlainObject(request) ||
+    !Object.hasOwn(request, "terminalLimit") ||
+    !Object.hasOwn(request, "reconcileTurnScopeIds")
+  )
+    throw detailInvalid("detail start requires an explicit lifecycle selection");
+  const { terminalLimit, reconcileTurnScopeIds, ...page } = request;
+  requireRetainedSessionDisplayPageRequest(page);
+  if (page.cursor !== null) throw detailInvalid("detail start cannot continue an existing page");
+  return {
+    page,
+    lifecycle: requireTurnLifecycleSourceSelection({ terminalLimit, reconcileTurnScopeIds }),
+  };
+}
+
+export function requireSessionDetailStartResponse(response, request) {
+  const { page: selection, lifecycle } = requireSessionDetailStartRequest(request);
+  if (!isPlainObject(response)) throw detailInvalid("detail start must be an object");
+  const { caller, createdAt, updatedAt, title, turnTimings, turnLifecycleSnapshot, ...page } =
+    response;
+  requireRetainedSessionDisplayPageResponse(page, selection);
+  if (!isSessionCaller(caller) || ![createdAt, updatedAt, title].every(isCanonicalText))
+    throw detailInvalid("invalid detail metadata");
+  const errors = collectTurnLifecycleSnapshotErrors(response);
+  if (errors.length) throw detailInvalid(errors.join(","), errors);
+  const { unchanged, activeTurn, recentTerminalTurns, replacedTurns } = turnLifecycleSnapshot;
+  const requested = new Set(lifecycle.reconcileTurnScopeIds);
+  if (
+    unchanged ||
+    recentTerminalTurns.length > lifecycle.terminalLimit ||
+    replacedTurns.some((turn) => !requested.has(turn.turnScopeId))
+  )
+    throw detailInvalid("lifecycle snapshot does not match the detail start selection");
+  if (
+    !Array.isArray(turnTimings) ||
+    turnTimings.length > lifecycle.terminalLimit + Number(activeTurn !== null) ||
+    collectTurnTimingErrors(turnTimings).length
+  )
+    throw detailInvalid("invalid detail turn timings");
+  createMessageReadBudget(selection.maxBytes).consume("bytes", messageReadJsonBytes(response));
+  return response;
+}
 
 const AVAILABLE_DETAIL_ENTRY_FIELDS = Object.freeze([
   "sessionId",
@@ -29,6 +89,7 @@ const AVAILABLE_DETAIL_ENTRY_FIELDS = Object.freeze([
   "turnLifecycleSnapshot",
   "sessionArtifactEvents",
   "messages",
+  "stats",
   "availability",
 ]);
 
@@ -85,9 +146,7 @@ function collectAvailableDetailEntryErrors(entry) {
   ) {
     errors.push("invalid_session_artifact_events");
   }
-  if (!Array.isArray(entry.messages) || !entry.messages.every(isPlainObject)) {
-    errors.push("invalid_messages");
-  }
+  errors.push(...collectSessionDisplayProjectionErrors(entry.messages, entry.stats));
   return errors;
 }
 
@@ -145,6 +204,7 @@ export function createAvailableSessionDetailEntry(displaySummary) {
     turnLifecycleSnapshot: displaySummary.turnLifecycleSnapshot,
     sessionArtifactEvents: displaySummary.sessionArtifactEvents,
     messages: displaySummary.messages,
+    stats: displaySummary.stats,
     availability: SESSION_SUMMARY_AVAILABILITY.AVAILABLE,
   });
 }
@@ -153,11 +213,14 @@ export function isAvailableSessionDetailEntry(entry) {
   return entry.availability === SESSION_SUMMARY_AVAILABILITY.AVAILABLE;
 }
 
-export function isSessionDetailEntryCurrent(entry, { sessionId, aggregateVersion, generation }) {
+export function isSessionDetailEntryCurrent(
+  entry,
+  { sessionId, aggregateVersion, knownGeneration },
+) {
   if (
     !isCanonicalText(sessionId) ||
     !isSessionAggregateVersion(aggregateVersion) ||
-    (generation !== null && (!Number.isSafeInteger(generation) || generation < 1))
+    (knownGeneration !== null && (!Number.isSafeInteger(knownGeneration) || knownGeneration < 1))
   ) {
     throw detailInvalid(
       "current detail requires a session identity, aggregate version and observed generation",
@@ -173,7 +236,7 @@ export function isSessionDetailEntryCurrent(entry, { sessionId, aggregateVersion
   }
   return (
     entry.aggregateVersion >= aggregateVersion &&
-    (generation === null || entry.generation >= generation)
+    (knownGeneration === null || entry.generation >= knownGeneration)
   );
 }
 
@@ -209,4 +272,10 @@ export function createMissingSessionDetailDocument({ sessionId }) {
 export function selectMainSessionDetailEntry(document) {
   if (!document.exists) throw detailInvalid("missing session has no main entry");
   return document.sessions.find((entry) => entry.sessionId === document.sessionId);
+}
+
+export function selectSessionDetailBlockingEntry(document) {
+  const main = selectMainSessionDetailEntry(document);
+  if (!isAvailableSessionDetailEntry(main)) return main;
+  return document.sessions.find((entry) => !isAvailableSessionDetailEntry(entry)) ?? null;
 }

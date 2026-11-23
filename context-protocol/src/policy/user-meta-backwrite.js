@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text, isPlainObject } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 import { isCanonicalMessageTimestamp } from "@noobot/session-protocol";
+import { requireUserMetaParsedResultAttachmentRef } from "@noobot/session-protocol/session-changes";
 
 const STATUS_PENDING = "pending";
 
@@ -15,7 +16,10 @@ function cloneJson(value) {
 }
 
 function backwriteKey(record) {
-  return `${record.userMetaSourceMessageUid}\u0000${record.attachmentRef}`;
+  return JSON.stringify([
+    record.userMetaSourceMessageUid,
+    requireUserMetaParsedResultAttachmentRef(record.result),
+  ]);
 }
 
 export function createUserMetaBackwrite({
@@ -24,20 +28,18 @@ export function createUserMetaBackwrite({
   result,
   createdAt = new Date().toISOString(),
 }) {
-  const sourceMessageUid = text(userMetaSourceMessageUid);
-  const normalizedAttachmentRef = text(attachmentRef);
-  if (!sourceMessageUid || !normalizedAttachmentRef) {
+  if (!isCanonicalText(userMetaSourceMessageUid) || !isCanonicalText(attachmentRef)) {
     throw new TypeError("user_meta backwrite requires userMetaSourceMessageUid and attachmentRef");
   }
-  if (!isPlainObject(result)) {
-    throw new TypeError("user_meta backwrite result must be an object");
-  }
+  const sourceAttachmentRef = requireUserMetaParsedResultAttachmentRef(result);
+  if (attachmentRef !== sourceAttachmentRef)
+    throw new TypeError("user_meta backwrite attachmentRef must match result.sourceAttachmentRef");
   if (!isCanonicalMessageTimestamp(createdAt)) {
     throw new TypeError("user_meta backwrite createdAt must be a canonical ISO timestamp");
   }
   return {
-    userMetaSourceMessageUid: sourceMessageUid,
-    attachmentRef: normalizedAttachmentRef,
+    userMetaSourceMessageUid,
+    attachmentRef: sourceAttachmentRef,
     result: cloneJson(result),
     status: STATUS_PENDING,
     createdAt,
@@ -68,17 +70,4 @@ export function normalizeUserMetaBackwrites(records = []) {
     seen.add(key);
     return normalized;
   });
-}
-
-export function mergeUserMetaParsedResults(current = [], result) {
-  if (!isPlainObject(result)) {
-    throw new TypeError("user_meta parsed result must be an object");
-  }
-  const resultRef = text(result.sourceAttachmentRef);
-  if (!resultRef) throw new TypeError("user_meta parsed result requires sourceAttachmentRef");
-  if (!Array.isArray(current)) throw new TypeError("userMetaParsedResults must be an array");
-  return [
-    ...current.filter((item) => text(item?.sourceAttachmentRef) !== resultRef),
-    cloneJson(result),
-  ];
 }

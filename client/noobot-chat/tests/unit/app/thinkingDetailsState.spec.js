@@ -67,16 +67,15 @@ describe("thinking details state", () => {
     ).toBe(0);
   });
 
-  it("builds a translated title with the derived count", () => {
-    const translate = vi.fn((key, params) => `${key}:${params.count}`);
-
-    expect(
-      getThinkingDetailsTitle(
-        { turnScopeId: "turn-1", toolTimeline: [{ key: "call:1", call: { eventId: "call-1" } }] },
-        translate,
-      ),
-    ).toBe("message.thinkingDetails:1");
-    expect(translate).toHaveBeenCalledWith("message.thinkingDetails", { count: 1 });
+  it("includes counts from loaded records and leaves unknown counts blank", () => {
+    const translate = vi.fn((key) => key);
+    expect(getThinkingDetailsTitle({ hasThinkingDetails: true }, translate)).toBe(
+      "message.thinkingDetails",
+    );
+    expect(translate).toHaveBeenCalledWith("message.thinkingDetails");
+    const message = { toolTimeline: [{ key: "call:1", call: { eventId: "call-1" } }] };
+    expect(getThinkingDetailsTitle(message, translate)).toBe("message.thinkingDetailsCount");
+    expect(translate).toHaveBeenCalledWith("message.thinkingDetailsCount", { count: 1 });
   });
 
   it("resolves the latest assistant message with thinking details from the active session", () => {

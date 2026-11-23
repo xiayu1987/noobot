@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { sendRetainedSessionPage } from "@noobot/session-protocol/retained-session-page-http";
 import {
   createBadRequestError,
   createJsonRouteWrapper,
@@ -17,16 +18,30 @@ import {
   SESSION_COMMAND,
   SESSION_ERROR_CODE,
 } from "@noobot/session-protocol";
-import { isAvailableSessionDetailEntry } from "@noobot/session-protocol/session-detail";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
-import { mergeSessionDeletionIds } from "@noobot/hook-protocol";
+import {
+  SESSION_DELETION_STAGE,
+  sessionBranchDeletionKey,
+} from "@noobot/workspace-protocol/session-tombstone";
 import { sendAttachmentContent } from "./attachment-content.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import { withServerNow } from "@noobot/session-protocol/server-clock";
+import { requireSessionDetailStartRequest } from "@noobot/session-protocol/session-detail";
+import {
+  requireRetainedSessionDisplayPageRequest,
+  requireSessionDisplayPageRelease,
+} from "@noobot/session-protocol/session-reader";
+import {
+  decodeThinkingDetailPageQuery,
+  decodeThinkingDetailReleaseQuery,
+  requireMessageContentPage,
+  requireRetainedDisplayArtifactPageRelease,
+  requireRetainedDisplayArtifactPageRequest,
+} from "@noobot/session-protocol/message-read-budget";
 
 const HTTP_SESSION_PERSISTENCE_SCOPE = null;
 
@@ -43,60 +58,60 @@ function decodeSessionCommand(body, { type, userId, sessionId }) {
   return command;
 }
 
-function availableDetailEntries(document) {
-  return document.sessions.filter(isAvailableSessionDetailEntry);
+function releaseDisplayPage(session, userId, { sessionId }, cursor) {
+  return session.releaseSessionDisplayPage({ userId, request: { sessionId, cursor } });
 }
 
-function countAssistantActivities(messages) {
-  return messages.reduce(
-    (count, message) =>
-      count + (Array.isArray(message.activityTimeline) ? message.activityTimeline.length : 0),
-    0,
-  );
+function releaseDisplayArtifactPage(
+  session,
+  userId,
+  { sessionId, dialogProcessId, turnScopeId },
+  cursor,
+) {
+  return session.releaseSessionDisplayArtifactPage({
+    userId,
+    request: { sessionId, dialogProcessId, turnScopeId, cursor },
+  });
 }
 
-function describeDetailEntry(entry) {
-  if (!isAvailableSessionDetailEntry(entry)) {
-    return {
-      sessionId: entry.sessionId,
-      availability: entry.availability,
-      unavailableReasonCode: entry.unavailableReason.code,
-    };
-  }
-  const { activeTurn } = entry.turnLifecycleSnapshot;
-  return {
-    sessionId: entry.sessionId,
-    availability: entry.availability,
-    aggregateVersion: entry.aggregateVersion,
-    messageCount: entry.messages.length,
-    assistantCount: entry.messages.filter((message) => message.role === "assistant").length,
-    assistantActivityCount: countAssistantActivities(entry.messages),
-    activeTurnScopeId: activeTurn === null ? "" : activeTurn.turnScopeId,
-    activePresentationMessageId: activeTurn === null ? "" : activeTurn.presentationMessageId,
+function sessionPageRoute(bot, method, validate, release) {
+  return async (req, res) => {
+    if (Object.keys(req.query).length)
+      throw createBadRequestError("session page routes do not accept query fields");
+    if (!isPlainObject(req.body) || Object.hasOwn(req.body, "sessionId"))
+      throw createBadRequestError("session page requires an object body without route identity");
+    const { userId, sessionId } = req.params;
+    const request = { ...req.body, sessionId };
+    decodeRequestInput(
+      () => validate(request),
+      (error) => error instanceof TypeError,
+    );
+    const session = bot.session;
+    const read = () => session[method]({ userId, request });
+    const send = (page) => res.json(withServerNow({ ok: true, page }, session.readServerNow()));
+    if (release === undefined) {
+      send(await read());
+      return;
+    }
+    await sendRetainedSessionPage(res, {
+      cursor: request.cursor ?? null,
+      read,
+      send,
+      release: (cursor) => release(session, userId, request, cursor),
+    });
   };
 }
 
-function describeDetailMessage(message) {
-  return {
-    messageUid: message.messageUid,
-    userMessageId: message.userMessageId,
-    modelMessageId: message.modelMessageId,
-    presentationMessageId: message.presentationMessageId,
-    role: message.role,
-    type: message.type,
-    chatPresentation: message.chatPresentation,
-    turnPlaceholder: message.turnPlaceholder === true,
-    contentLength: typeof message.content === "string" ? message.content.length : 0,
-    activityTimelineCount: Array.isArray(message.activityTimeline)
-      ? message.activityTimeline.length
-      : 0,
-    toolTimelineCount: Array.isArray(message.toolTimeline) ? message.toolTimeline.length : 0,
-  };
-}
-
-export function registerSessionRoutes(app, { bot, translateText, pluginHost } = {}) {
+export function registerSessionRoutes(
+  app,
+  { bot, runBotOperation, translateText, pluginHost } = {},
+) {
   if (!pluginHost) throw new TypeError("session routes require the activated service plugin host");
-  const jsonRoute = createJsonRouteWrapper({ translateText });
+  if (typeof runBotOperation !== "function")
+    throw new TypeError("session routes require runBotOperation");
+  const wrapJsonRoute = createJsonRouteWrapper({ translateText });
+  const jsonRoute = (handler, options) =>
+    wrapJsonRoute((req, res) => runBotOperation(() => handler(req, res)), options);
 
   app.get(
     "/internal/plugins",
@@ -119,25 +134,77 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
         throw createBadRequestError("session detail does not accept query fields");
       }
       const detail = await bot.session.getSessionDisplayData({ userId, sessionId });
-      const entries = availableDetailEntries(detail);
-      await writeRuntimeEvent({
-        scope: "session",
-        source: "service",
-        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-        category: RUNTIME_EVENT_CATEGORIES.DEBUG,
-        level: "debug",
-        debugType: "timeline-pipeline",
-        event: "service.timelinePipeline.sessionDetailRead",
-        userId,
-        sessionId,
-        data: {
-          exists: detail.exists,
-          entryCount: detail.sessions.length,
-          entries: detail.sessions.map(describeDetailEntry),
-          messages: entries.flatMap((entry) => entry.messages.map(describeDetailMessage)),
-        },
-      });
       res.json(withServerNow({ ok: true, ...detail }, bot.session.readServerNow()));
+    }),
+  );
+
+  const displayPagePath = "/internal/session/:userId/:sessionId/display-page";
+  app.post(
+    "/internal/session/:userId/:sessionId/detail-start",
+    jsonRoute(
+      sessionPageRoute(
+        bot,
+        "getSessionDetailStart",
+        requireSessionDetailStartRequest,
+        releaseDisplayPage,
+      ),
+    ),
+  );
+  app.post(
+    displayPagePath,
+    jsonRoute(
+      sessionPageRoute(
+        bot,
+        "getSessionDisplayPage",
+        requireRetainedSessionDisplayPageRequest,
+        releaseDisplayPage,
+      ),
+    ),
+  );
+  app.delete(
+    displayPagePath,
+    jsonRoute(sessionPageRoute(bot, "releaseSessionDisplayPage", requireSessionDisplayPageRelease)),
+  );
+
+  const displayArtifactPagePath = "/internal/session/:userId/:sessionId/display-artifact-page";
+  app.post(
+    displayArtifactPagePath,
+    jsonRoute(
+      sessionPageRoute(
+        bot,
+        "getSessionDisplayArtifactPage",
+        requireRetainedDisplayArtifactPageRequest,
+        releaseDisplayArtifactPage,
+      ),
+    ),
+  );
+  app.delete(
+    displayArtifactPagePath,
+    jsonRoute(
+      sessionPageRoute(
+        bot,
+        "releaseSessionDisplayArtifactPage",
+        requireRetainedDisplayArtifactPageRelease,
+      ),
+    ),
+  );
+
+  app.post(
+    "/internal/session/:userId/:sessionId/message-content-page",
+    jsonRoute(async (req, res) => {
+      if (Object.keys(req.query).length)
+        throw createBadRequestError("message content page does not accept query fields");
+      const selection = decodeRequestInput(
+        () => requireMessageContentPage(req.body),
+        (error) => error instanceof TypeError,
+      );
+      const page = await bot.session.getSessionMessageContentPage({
+        userId: req.params.userId,
+        sessionId: req.params.sessionId,
+        persistenceScope: HTTP_SESSION_PERSISTENCE_SCOPE,
+        ...selection,
+      });
+      res.json({ ok: true, page });
     }),
   );
 
@@ -193,13 +260,28 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
     "/internal/session/:userId/:sessionId/thinking-detail",
     jsonRoute(async (req, res) => {
       const { userId, sessionId } = req.params;
-      const detail = await bot.session.getSessionThinkingDetail({
-        userId,
-        sessionId,
-        dialogProcessId: req.query.dialogProcessId,
-        turnScopeId: req.query.turnScopeId,
+      const { dialogProcessId, turnScopeId } = req.query;
+      const selection = decodeThinkingDetailPageQuery(req.query);
+      const session = bot.session;
+      const scope = { userId, sessionId, dialogProcessId, turnScopeId };
+      await sendRetainedSessionPage(res, {
+        cursor: selection.cursor,
+        read: () => session.getSessionThinkingDetail({ ...scope, ...selection }),
+        send: (detail) => res.json({ ok: true, ...detail }),
+        release: (cursor) => session.releaseSessionThinkingDetail({ ...scope, cursor }),
       });
-      res.json({ ok: true, ...detail });
+    }),
+  );
+
+  app.delete(
+    "/internal/session/:userId/:sessionId/thinking-detail",
+    jsonRoute(async (req, res) => {
+      const { userId, sessionId } = req.params;
+      const result = await bot.session.releaseSessionThinkingDetail({
+        userId,
+        ...decodeThinkingDetailReleaseQuery({ ...req.query, sessionId }),
+      });
+      res.json({ ok: true, ...result });
     }),
   );
 
@@ -294,10 +376,9 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
       await logDeleteMutation("service.messageDelete.committed", {
         deletedCount: response.deletedCount,
         anchorIndex: response.anchorIndex,
-        deletedTurnScopeIds: response.deletedTurnScopeIds,
+        affectedTurnCount: response.deletedTurnScopeIds.length,
         committedAggregateVersion: response.committedAggregateVersion,
         deduplicated: response.deduplicated,
-        deletedMessageUids: response.deletedMessageUids,
       });
       res.json({ ok: true, ...response });
     }),
@@ -340,8 +421,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
         replacementDialogProcessId: commit.replacementDialogProcessId,
         committedAggregateVersion: commit.committedAggregateVersion,
         replacementUserMessageUid: commit.replacementUserMessageUid,
-        deletedMessageUids: response.deletedMessageUids,
-        replacedTurnScopeIds: commit.replacedTurnScopeIds,
+        replacedTurnCount: commit.replacedTurnScopeIds.length,
         deduplicated: response.deduplicated,
       },
     });
@@ -367,44 +447,33 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
 
   app.post("/internal/session/:userId/:sessionId/rename", renameSessionHandler);
 
-  async function deleteSessionBranches({ userId, sessionIds }) {
-    const result = await bot.session.deleteSessionBranch({ userId, sessionIds });
-    const branchSessionIds = mergeSessionDeletionIds(result.deletedSessionIds);
-    if (!branchSessionIds.length) {
-      throw new Error("deleteSessionBranch must report deletedSessionIds");
-    }
-    const remainingSessionIds = (await bot.session.listSessionIds({ userId }))
-      .map((item) => text(item))
-      .filter(Boolean);
-    const pluginCleanup = await pluginHost.emitAfterSessionDelete({
-      bot,
+  const deletionSteps = {
+    [SESSION_DELETION_STAGE.PLAN_PLUGINS]: () => pluginHost.listSessionDeletionHandlers(),
+    [SESSION_DELETION_STAGE.PLUGINS]: ({
       userId,
-      deletedSessionIds: branchSessionIds,
-      remainingSessionIds,
-    });
-    const deletedSessionIds = mergeSessionDeletionIds(
-      branchSessionIds,
-      pluginCleanup?.deletedRelatedSessionIds,
+      deletionKey,
+      deletedSessionIds,
+      pluginHandlerIds,
+    }) =>
+      pluginHost.emitAfterSessionDelete({
+        bot,
+        userId,
+        deletionKey,
+        deletedSessionIds,
+        pluginHandlerIds,
+      }),
+    [SESSION_DELETION_STAGE.ATTACHMENTS]: ({ userId, deletedSessionIds }) =>
+      bot.deleteScopedAttachmentsBySessionIds({ userId, sessionIds: deletedSessionIds }),
+    [SESSION_DELETION_STAGE.SHORT_MEMORY]: ({ userId, deletedSessionIds }) =>
+      bot.deleteSessionMemoryBySessionIds({ userId, sessionIds: deletedSessionIds }),
+  };
+
+  function deleteSessionBranches(request) {
+    decodeRequestInput(
+      () => sessionBranchDeletionKey(request.sessionIds),
+      (error) => error instanceof TypeError,
     );
-    const cleanupScope = { userId, sessionIds: deletedSessionIds };
-    const deletedAttachments = await bot.deleteScopedAttachmentsBySessionIds(cleanupScope);
-    const deletedSemanticTransfer = await bot.deleteSemanticTransferBySessionIds(cleanupScope);
-    const deletedMemory = await bot.deleteSessionMemoryBySessionIds(cleanupScope);
-    const deletedOrphanAttachments = await bot.pruneOrphanScopedAttachments({
-      userId,
-      keepSessionIds: mergeSessionDeletionIds(
-        remainingSessionIds,
-        pluginCleanup?.retainedRelatedSessionIds,
-      ),
-    });
-    return {
-      ok: true,
-      ...result,
-      deletedAttachments,
-      deletedOrphanAttachments,
-      deletedSemanticTransfer,
-      deletedMemory,
-    };
+    return bot.session.deleteSessionBranch(request, (stage) => deletionSteps[stage.stage](stage));
   }
 
   app.delete(
@@ -423,15 +492,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
     jsonRoute(
       async (req, res) => {
         const { userId } = req.params;
-        const sessionIds = req.body?.sessionIds;
-        if (
-          !Array.isArray(sessionIds) ||
-          !sessionIds.length ||
-          sessionIds.some((id) => typeof id !== "string" || !text(id))
-        ) {
-          throw createBadRequestError("sessionIds must be a non-empty array of session ids");
-        }
-        res.json(await deleteSessionBranches({ userId, sessionIds }));
+        res.json(await deleteSessionBranches({ userId, sessionIds: req.body?.sessionIds }));
       },
       { fallbackErrorKey: "common.deleteSessionFailed" },
     ),

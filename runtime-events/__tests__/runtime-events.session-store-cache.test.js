@@ -46,6 +46,27 @@ test("same-size rewrite and atomic replacement invalidate immediately", async (t
   assert.equal((await readSessionStore(file, parse)).value, 3);
 });
 
+test("an obstructed store path fails without parsing absence or reusing cached state", async (t) => {
+  const root = path.dirname(await fixture(t));
+  const directory = path.join(root, "session");
+  const file = path.join(directory, "store.json");
+  const parse = ({ raw }) => {
+    assert.notEqual(raw, null, "Structural failures must not reach the missing-store parser");
+    return JSON.parse(raw);
+  };
+  await fs.mkdir(directory);
+  await fs.writeFile(file, '{"value":1}');
+  assert.equal((await readSessionStore(file, parse)).value, 1);
+  await fs.rm(directory, { recursive: true });
+  await fs.writeFile(directory, "obstruction");
+  await assert.rejects(readSessionStore(file, parse), { code: "ENOTDIR" });
+  assert.equal(await fs.readFile(directory, "utf8"), "obstruction");
+  await fs.unlink(directory);
+  await fs.mkdir(directory);
+  await fs.writeFile(file, '{"value":2}');
+  assert.equal((await readSessionStore(file, parse)).value, 2);
+});
+
 test("missing and corrupted stores never reuse the last valid projection", async (t) => {
   const file = await fixture(t);
   const parse = ({ raw }) => (raw === null ? null : JSON.parse(raw));

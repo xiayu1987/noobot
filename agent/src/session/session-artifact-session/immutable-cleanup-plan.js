@@ -46,6 +46,7 @@ import { withStorageCleanup } from "./immutable-storage-io.js";
 
 import { ImmutableCleanupChunkWriter } from "./immutable-cleanup-chunks.js";
 import { withImmutableCleanupPlanMutation } from "./immutable-cleanup-coordinator.js";
+import { withImmutableAuthorityMutation } from "../session-storage-authority.js";
 
 function directoryOf(sessionDir, id) {
   return path.join(sessionDir, PLAN.directory, requireImmutableCleanupPlanId(id));
@@ -76,9 +77,25 @@ async function requirePlanHead(sessionDir, head) {
 
 export function buildImmutableCleanupPlan(options) {
   const id = options.planId ?? randomUUID();
-  return withImmutableCleanupPlanMutation(options.sessionDir, id, () =>
-    buildCleanupPlan(options, id),
-  );
+  return withImmutableCleanupPlanMutation(options.sessionDir, id, async () => {
+    await withImmutableAuthorityMutation(options.sessionDir, () => options.assertWritable?.());
+    const publishSessionState = (run) =>
+      withImmutableAuthorityMutation(options.sessionDir, async () => {
+        await options.assertPublicationWritable?.();
+        return run();
+      });
+    return buildCleanupPlan(
+      {
+        ...options,
+        publishSessionState,
+        publish: (run) =>
+          options.publish
+            ? options.publish(() => publishSessionState(run))
+            : publishSessionState(run),
+      },
+      id,
+    );
+  });
 }
 
 async function buildCleanupPlan(
@@ -87,6 +104,7 @@ async function buildCleanupPlan(
     sessionId,
     dryRun,
     signal,
+    publishSessionState,
     publish,
     objectStore,
     planId,
@@ -116,6 +134,7 @@ async function buildCleanupPlan(
       dryRun,
       signal,
       chunks,
+      publishSessionState,
       preserve: () => {
         preserve = true;
       },

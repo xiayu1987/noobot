@@ -3,28 +3,25 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject, stableValue } from "@noobot/shared/value";
 import { SESSION_ERROR_CODE } from "../errors.js";
 import { SESSION_COMMAND, isSessionAggregateVersion } from "../command/session-command.js";
-import { validateCommandReceiptResult } from "../command/command-receipt.js";
+import {
+  MESSAGE_DELETE_RESULT_FIELDS,
+  TURN_REPLACE_RESULT_FIELDS,
+  validateCommandReceiptResult,
+} from "../command/command-receipt.js";
 import { requireSessionMutationProjection } from "./session-mutation-projection.js";
 
 const ENVELOPE_FIELDS = Object.freeze([
   "commandId",
   "committedAggregateVersion",
   "deduplicated",
-  "deletedMessageUids",
   "sessionId",
   "generation",
   "projection",
   "displayMessages",
 ]);
-const MESSAGE_DELETE_RESULT_FIELDS = Object.freeze([
-  "deletedCount",
-  "anchorIndex",
-  "deletedTurnScopeIds",
-]);
-const TURN_REPLACE_RESULT_FIELDS = Object.freeze(["turnReplacement"]);
 const MESSAGE_DELETE_RESPONSE_FIELDS = Object.freeze([
   ...MESSAGE_DELETE_RESULT_FIELDS,
   ...ENVELOPE_FIELDS,
@@ -81,8 +78,6 @@ function readProjection(response) {
   const errors = [];
   if (!Number.isSafeInteger(generation) || generation < projection.generation)
     errors.push("invalid_generation");
-  if (!response.deduplicated && generation !== projection.generation)
-    errors.push("new_commit_generation_mismatch");
   const receipt = projection.receipt;
   if (
     receipt.commandId !== response.commandId ||
@@ -92,24 +87,22 @@ function readProjection(response) {
   const result = Object.hasOwn(response, "turnReplacement")
     ? { turnReplacement: response.turnReplacement }
     : pickFields(response, MESSAGE_DELETE_RESULT_FIELDS);
-  if (JSON.stringify(result) !== JSON.stringify(receipt.result))
+  if (JSON.stringify(stableValue(result)) !== JSON.stringify(stableValue(receipt.result)))
     errors.push("projection_result_mismatch");
   if (!Array.isArray(displayMessages))
     return { errors: [...errors, "invalid_display_messages"], main: null };
   if (projection.kind === "baseline") {
-    if (!response.deduplicated || response.deletedMessageUids !== null || displayMessages.length)
-      errors.push("invalid_baseline_effect");
+    if (!response.deduplicated || displayMessages.length) errors.push("invalid_baseline_effect");
     return { errors, main: null };
   }
-  if (JSON.stringify(response.deletedMessageUids) !== JSON.stringify(projection.deletedMessageUids))
-    errors.push("projection_deletion_mismatch");
 
   if (
     displayMessages.length !== projection.messages.length ||
     displayMessages.some((message, index) => {
-      const source = projection.messages[index].message;
+      const { message: source, ordinal } = projection.messages[index];
       return (
         !isPlainObject(message) ||
+        message.sessionOrdinal !== ordinal ||
         message.role !== "user" ||
         message.messageUid !== source.messageUid ||
         message.turnScopeId !== source.turnScopeId ||
@@ -120,26 +113,6 @@ function readProjection(response) {
   )
     errors.push("display_effect_mismatch");
   return { errors, main: errors.length ? null : { messages: displayMessages } };
-}
-
-function collectMessageDeletionErrors(response, main) {
-  const uids = response.deletedMessageUids;
-  if (uids === null) return response.deduplicated === true ? [] : ["missing_deletion_evidence"];
-  if (
-    !Array.isArray(uids) ||
-    uids.some((uid) => !isCanonicalText(uid)) ||
-    new Set(uids).size !== uids.length
-  )
-    return ["invalid_deleted_message_uids"];
-  const errors = [];
-  if (Object.hasOwn(response, "deletedCount") && uids.length !== response.deletedCount)
-    errors.push("deleted_message_count_mismatch");
-  if (!response.deduplicated && main) {
-    const removed = new Set(uids);
-    if (main.messages.some((message) => removed.has(message.messageUid)))
-      errors.push("deleted_message_still_materialized");
-  }
-  return errors;
 }
 
 function collectReplacementMaterializationErrors(commit, messages, deduplicated) {
@@ -178,7 +151,6 @@ function collectMessageDeleteErrors(response) {
   ];
   const detail = readProjection(response);
   errors.push(...detail.errors);
-  errors.push(...collectMessageDeletionErrors(response, detail.main));
   return errors;
 }
 
@@ -195,7 +167,6 @@ function collectTurnReplaceErrors(response) {
   ];
   const detail = readProjection(response);
   errors.push(...detail.errors);
-  errors.push(...collectMessageDeletionErrors(response, detail.main));
   if (receiptErrors.length) return errors;
   const commit = response.turnReplacement;
   if (commit.commandId !== response.commandId) errors.push("command_id_mismatch");
@@ -229,54 +200,30 @@ export function requireTurnReplaceResponse(response) {
   return response;
 }
 
-export function createMessageDeleteResponse({
-  receiptResult,
-  commandId,
-  committedAggregateVersion,
+function createMutationResponse({
   deduplicated,
-  deletedMessageUids,
   sessionId,
   generation,
   projection,
   displayMessages,
 }) {
-  return requireMessageDeleteResponse(
-    Object.freeze({
-      ...receiptResult,
-      commandId,
-      committedAggregateVersion,
-      deduplicated,
-      deletedMessageUids,
-      sessionId,
-      generation,
-      projection,
-      displayMessages,
-    }),
-  );
+  const receipt = projection?.receipt;
+  return Object.freeze({
+    ...receipt?.result,
+    commandId: receipt?.commandId,
+    committedAggregateVersion: receipt?.aggregateVersion,
+    deduplicated,
+    sessionId,
+    generation,
+    projection,
+    displayMessages,
+  });
 }
 
-export function createTurnReplaceResponse({
-  receiptResult,
-  commandId,
-  committedAggregateVersion,
-  deduplicated,
-  deletedMessageUids,
-  sessionId,
-  generation,
-  projection,
-  displayMessages,
-}) {
-  return requireTurnReplaceResponse(
-    Object.freeze({
-      ...receiptResult,
-      commandId,
-      committedAggregateVersion,
-      deduplicated,
-      deletedMessageUids,
-      sessionId,
-      generation,
-      projection,
-      displayMessages,
-    }),
-  );
+export function createMessageDeleteResponse(input) {
+  return requireMessageDeleteResponse(createMutationResponse(input));
+}
+
+export function createTurnReplaceResponse(input) {
+  return requireTurnReplaceResponse(createMutationResponse(input));
 }

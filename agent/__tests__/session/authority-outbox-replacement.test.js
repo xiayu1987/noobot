@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createEventEnvelope } from "@noobot/event-protocol/envelope";
 import { projectAuthorityOutboxJournal } from "@noobot/event-protocol/outbox";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { writeSessionArtifact } from "./session-artifact-store-v2.test-helpers.js";
 import {
   appendAuthorityOutboxRecords,

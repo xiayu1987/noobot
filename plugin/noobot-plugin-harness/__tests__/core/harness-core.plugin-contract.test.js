@@ -36,7 +36,13 @@ test("harness plugin injects prompt into before_llm_call messages", async () => 
     dialogProcessId: "dp2",
     messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "hello" }] },
   };
+  await hookManager.emit("agent.before_context_build", { ...messagesCtx });
   await hookManager.emit("agent.before_llm_call", messagesCtx);
+  await hookManager.emit("agent.after_turn", { ...messagesCtx });
+  const runDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs", "dp2");
+  const prompt = JSON.parse((await fs.readFile(path.join(runDir, "prompts.jsonl"), "utf8")).trim());
+  assert.equal(prompt.point, "agent.before_llm_call");
+  await assert.rejects(fs.stat(path.join(runDir, "events.jsonl")), { code: "ENOENT" });
   const messages = messagesCtx.modelContext.messageBlocks.system;
 
   assert.equal(messages[0].role, "system");
@@ -65,6 +71,11 @@ test("harness plugin exposes capability handler skeleton and hook mapping in man
     },
   );
 
+  await hookManager.emit("agent.before_context_build", {
+    userId: "u3",
+    sessionId: "s3",
+    dialogProcessId: "dp3",
+  });
   await hookManager.emit("agent.before_turn", {
     userId: "u3",
     sessionId: "s3",

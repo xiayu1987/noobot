@@ -57,13 +57,15 @@ export async function waitForTurnTerminal(
   turnScopeId = "",
   { timeoutMs = PROTOCOL_TIMEOUTS.model } = {},
 ) {
-  return waitForCaptured(
-    () =>
-      lifecycleForSession(capture, sessionId).find(
+  return capture.waitForReceivedFrame(
+    (frame) =>
+      findLifecycleEnvelopes([frame]).find(
         (event) =>
-          isSettlingTurnEvent(event) && (!turnScopeId || event.turnScopeId === turnScopeId),
+          event.sessionId === sessionId &&
+          isSettlingTurnEvent(event) &&
+          (!turnScopeId || event.turnScopeId === turnScopeId),
       ),
-    { timeoutMs },
+    timeoutMs,
   );
 }
 

@@ -140,9 +140,9 @@ export function isCanonicalActivityTimelineFact(value) {
   );
 }
 
-export function mergeCanonicalActivityTimelines(...timelines) {
+export function collectCanonicalActivityVersions(facts) {
   const byIdentity = new Map();
-  for (const fact of timelines.flat()) {
+  for (const fact of facts) {
     if (!isCanonicalActivityTimelineFact(fact)) {
       throw Object.assign(new TypeError("activity timeline contains a noncanonical fact"), {
         code: ACTIVITY_TIMELINE_ERROR_CODE.FACT_INVALID,
@@ -154,7 +154,13 @@ export function mergeCanonicalActivityTimelines(...timelines) {
       byIdentity.set(identity, fact);
     }
   }
-  return [...byIdentity.values()].sort((left, right) => left.sequence - right.sequence);
+  return [...byIdentity.values()];
+}
+
+export function mergeCanonicalActivityTimelines(...timelines) {
+  return collectCanonicalActivityVersions(timelines.flat()).sort(
+    (left, right) => left.sequence - right.sequence,
+  );
 }
 
 export function selectMessageActivityTimeline(message) {

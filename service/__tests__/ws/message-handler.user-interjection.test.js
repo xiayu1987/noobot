@@ -66,6 +66,7 @@ function createFixture() {
     persistenceScope: null,
   });
   const handler = createMessageHandler({
+    runNewOperation: (operation) => operation(),
     state: {},
     authInfo: { userId: handle.userId },
     webSocket: { close: (...args) => closed.push(args) },

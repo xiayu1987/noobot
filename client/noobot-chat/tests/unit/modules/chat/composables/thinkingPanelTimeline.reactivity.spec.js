@@ -5,14 +5,13 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { effectScope, nextTick, reactive } from "vue";
-const detailServiceMock = vi.hoisted(() => ({ getDetail: null }));
+const detailServiceMock = vi.hoisted(() => ({ getPage: null }));
 vi.mock("../../../../../src/infrastructure/api/thinking/thinkingDetailService.js", () => ({
   thinkingDetailService: {
-    getDetail: (...args) => detailServiceMock.getDetail(...args),
+    getPage: (...args) => detailServiceMock.getPage(...args),
   },
 }));
 import { useThinkingTimeline } from "../../../../../src/modules/chat/composables/thinkingPanelTimeline.js";
-import { __resetThinkingDetailCacheForTests } from "../../../../../src/modules/chat/model/thinkingDetailCache.js";
 import { canonicalActivityFact } from "../helpers/messageEventFixture.js";
 import {
   createUserInterjectionContentFact,
@@ -65,11 +64,134 @@ function toolMessage(index) {
 describe("thinking panel round timeline reactivity", () => {
   let scope = null;
 
+  it("releases an injected snapshot using its original reader and user", async () => {
+    const messageItem = { ...toolMessage(0), pending: false };
+    const cursor = { after: 1, scope: "original-snapshot" };
+    const fetchThinkingDetail = vi.fn(async () => ({
+      messageItem,
+      page: { generation: 7, messageCount: 2, after: 0, count: 1, nextCursor: cursor },
+    }));
+    const releaseThinkingDetail = vi.fn(async () => ({ released: true }));
+    const props = reactive({
+      userId: "original-user",
+      messageItem,
+      allMessages: [],
+      fetchThinkingDetail,
+      releaseThinkingDetail,
+    });
+    scope = effectScope();
+    const timeline = scope.run(() =>
+      useThinkingTimeline(props, () => ({ running: false }), {
+        shouldLoadThinkingDetail: () => false,
+      }),
+    );
+    await timeline.detailPagination.restart();
+    props.userId = "new-user";
+    props.fetchThinkingDetail = vi.fn();
+    props.releaseThinkingDetail = vi.fn();
+    await timeline.detailPagination.invalidate();
+    expect(fetchThinkingDetail).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "original-user" }),
+    );
+    expect(releaseThinkingDetail).toHaveBeenCalledTimes(1);
+    expect(releaseThinkingDetail).toHaveBeenCalledWith({
+      userId: "original-user",
+      sessionId: messageItem.sessionId,
+      dialogProcessId: messageItem.dialogProcessId,
+      turnScopeId: messageItem.turnScopeId,
+      cursor,
+    });
+    expect(props.releaseThinkingDetail).not.toHaveBeenCalled();
+  });
+
+  it("uses the supplied scoped reader for the first page and snapshot continuation", async () => {
+    const messageItem = { ...toolMessage(0), pending: false };
+    const cursor = { scope: "plugin-snapshot", after: 1 };
+    const page = { generation: 7, messageCount: 2, after: 0, count: 1, nextCursor: cursor };
+    const fetchThinkingDetail = vi
+      .fn()
+      .mockResolvedValueOnce({ messageItem, page })
+      .mockResolvedValueOnce({
+        messageItem,
+        page: { ...page, after: 1, nextCursor: null },
+      });
+    detailServiceMock.getPage = vi.fn(() => {
+      throw new Error("wrong authority");
+    });
+    const props = reactive({
+      messageItem,
+      allMessages: [],
+      fetchThinkingDetail,
+      releaseThinkingDetail: vi.fn(async () => ({ released: true })),
+    });
+    scope = effectScope();
+    const timeline = scope.run(() =>
+      useThinkingTimeline(props, () => ({ running: false }), {
+        shouldLoadThinkingDetail: () => false,
+      }),
+    );
+    await timeline.detailPagination.restart();
+    await timeline.detailPagination.next();
+    expect(fetchThinkingDetail).toHaveBeenCalledTimes(2);
+    expect(fetchThinkingDetail.mock.calls[0][0]).toMatchObject({
+      sessionId: messageItem.sessionId,
+      cursor: null,
+      snapshot: null,
+    });
+    expect(fetchThinkingDetail.mock.calls[1][0]).toMatchObject({
+      sessionId: messageItem.sessionId,
+      cursor,
+      snapshot: page,
+    });
+    expect(detailServiceMock.getPage).not.toHaveBeenCalled();
+    expect(timeline.detailPagination.error.value).toBeNull();
+  });
+
+  it.each(["user", "reader"])(
+    "rejects stale in-flight results after a %s switch",
+    async (change) => {
+      let finishOld;
+      const oldRequest = new Promise((resolve) => {
+        finishOld = resolve;
+      });
+      const messageItem = { ...toolMessage(0), pending: false };
+      const page = { generation: 7, messageCount: 1, after: 0, count: 1, nextCursor: null };
+      const oldReader = vi.fn(() => oldRequest);
+      const newReader = vi.fn(async () => ({
+        messageItem: { ...messageItem, source: "new" },
+        page,
+      }));
+      detailServiceMock.getPage = vi.fn(({ userId }) =>
+        userId === "old-user" ? oldRequest : newReader(),
+      );
+      const props = reactive({
+        messageItem,
+        allMessages: [],
+        userId: "old-user",
+        fetchThinkingDetail: change === "reader" ? oldReader : undefined,
+        releaseThinkingDetail: vi.fn(async () => ({ released: true })),
+      });
+      scope = effectScope();
+      const timeline = scope.run(() => useThinkingTimeline(props, () => ({ running: false })));
+      if (change === "reader") props.fetchThinkingDetail = newReader;
+      else props.userId = "new-user";
+      await nextTick();
+      await Promise.resolve();
+      await nextTick();
+      expect(newReader).toHaveBeenCalledTimes(1);
+      expect(timeline.loadedThinkingDetail.value.messageItem.source).toBe("new");
+      finishOld({ messageItem: { ...messageItem, source: "old" }, page });
+      await nextTick();
+      await Promise.resolve();
+      expect(timeline.loadedThinkingDetail.value.messageItem.source).toBe("new");
+      expect(timeline.detailPagination.error.value).toBeNull();
+    },
+  );
+
   afterEach(() => {
     scope?.stop();
     scope = null;
-    __resetThinkingDetailCacheForTests();
-    detailServiceMock.getDetail = null;
+    detailServiceMock.getPage = null;
   });
 
   function mountRound() {
@@ -174,10 +296,11 @@ describe("thinking panel round timeline reactivity", () => {
       activityTimeline: [],
     };
     const allMessages = reactive([settled]);
-    detailServiceMock.getDetail = async () => ({
+    detailServiceMock.getPage = async () => ({
       exists: true,
       revision: "revision-1",
       messageItem: { ...settled, thinkingContentTimeline: [interjectionFact(1)] },
+      page: { generation: 3, messageCount: 1, after: 0, count: 1, nextCursor: null },
     });
     const props = reactive({
       messageItem: allMessages[0],

@@ -8,7 +8,7 @@ import test from "node:test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, mkdir, rm, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { sessionMutationCoordinator } from "../../src/session/session-mutation-coordinator.js";
@@ -32,6 +32,7 @@ import {
 import { auditImmutableSession } from "../../src/session/session-artifact-session/immutable-session-audit.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
 import { prepareSessionArtifactCleanupToCompletion } from "../helpers/immutable-cleanup.js";
+import { holdSessionLock } from "../helpers/session-lock-process.js";
 
 async function fixture(t) {
   const sessionDir = await mkdtemp(path.join(tmpdir(), "cleanup-preparation-"));
@@ -88,23 +89,28 @@ test("process exit preserves plan-owned roots through relocation and cleanup unt
   await assert.rejects(readFile(path.join(directory, PLAN.manifest)), { code: "ENOENT" });
   await assert.rejects(readdir(path.join(sessionDir, RETENTION.directory)), { code: "ENOENT" });
   const lockPath = resolveImmutableCleanupPlanMutationLock(sessionDir, planId);
-  const lockOwner = await readFile(lockPath);
+  const lock = await stat(lockPath);
   const ownership = await readFile(path.join(directory, PLAN.preparation));
   const capture = await readFile(path.join(directory, PLAN.capture));
-  const readTiming = sessionMutationCoordinator.readTiming;
-  let timing = { timeoutMs: 50, staleMs: 60000, pollMs: 5 };
-  const timingMock = t.mock.method(sessionMutationCoordinator, "readTiming", () => timing);
-  for (const run of [
-    () => prepareSessionArtifactCleanup({ ...options, planId, dryRun: false }),
-    () => cleanupSessionArtifacts({ ...options, planId }),
-    () => discardSessionArtifactCleanup({ ...options, planId }),
-  ]) {
-    await assert.rejects(run(), { code: "SESSION_MUTATION_BUSY" });
-    assert.deepEqual(await readFile(lockPath), lockOwner);
-    assert.deepEqual(await readFile(path.join(directory, PLAN.preparation)), ownership);
-    assert.deepEqual(await readFile(path.join(directory, PLAN.capture)), capture);
+  const stop = await holdSessionLock(lockPath);
+  const timingMock = t.mock.method(sessionMutationCoordinator, "readTiming", () => ({
+    timeoutMs: 50,
+    pollMs: 5,
+  }));
+  try {
+    for (const run of [
+      () => prepareSessionArtifactCleanup({ ...options, planId, dryRun: false }),
+      () => cleanupSessionArtifacts({ ...options, planId }),
+      () => discardSessionArtifactCleanup({ ...options, planId }),
+    ]) {
+      await assert.rejects(run(), { code: "SESSION_MUTATION_BUSY" });
+      assert.deepEqual(await readFile(path.join(directory, PLAN.preparation)), ownership);
+      assert.deepEqual(await readFile(path.join(directory, PLAN.capture)), capture);
+    }
+  } finally {
+    timingMock.mock.restore();
+    await stop();
   }
-  timing = readTiming();
   const oldFile = store.objects.segments.segmentPath(before.segmentTail.segmentId);
   const body = Array.from(
     { length: 80 },
@@ -138,10 +144,9 @@ test("process exit preserves plan-owned roots through relocation and cleanup unt
   await cleanup(options);
   await readFile(oldFile);
   assert.equal(await reopened.get(before, "metadata", "item"), "retained");
-  timing = { timeoutMs: 5000, staleMs: 1000, pollMs: 5 };
   await discardSessionArtifactCleanup({ ...options, planId });
-  timingMock.mock.restore();
-  await assert.rejects(readFile(lockPath), { code: "ENOENT" });
+  assert.equal((await stat(lockPath)).ino, lock.ino);
+  await assert.rejects(readFile(path.join(directory, PLAN.preparation)), { code: "ENOENT" });
   assert.deepEqual(await readImmutableReaderRetentions(reopened, await reopened.snapshot()), []);
   await cleanup(options);
   await assert.rejects(readFile(oldFile), { code: "ENOENT" });
@@ -334,6 +339,37 @@ test("preparation resumption rejects missing and old retention checkpoints witho
   await assert.rejects(resume(), { code: "SESSION_IMMUTABLE_STORAGE_INVALID" });
   await writeFile(checkpoint, before);
   assert.equal((await resume()).scannedPages, 1);
+});
+
+test("preparation cannot register retained roots after publication authorization is denied", async (t) => {
+  const { store, sessionDir, options } = await fixture(t);
+  const denied = new Error("retention authorization denied");
+  let planId;
+  await assert.rejects(
+    prepareSessionArtifactCleanup({
+      ...options,
+      dryRun: false,
+      assertSessionWritable: async ({ operation }) => {
+        if (operation === "publish_session_artifact_cleanup") throw denied;
+      },
+    }),
+    (error) => {
+      assert.equal(error.cause, denied);
+      planId = error.planId;
+      return true;
+    },
+  );
+  const directory = path.join(sessionDir, PLAN.directory, planId);
+  await assert.rejects(readFile(path.join(directory, PLAN.preparation)), { code: "ENOENT" });
+  await assert.rejects(readFile(path.join(directory, PLAN.manifest)), { code: "ENOENT" });
+  assert.deepEqual(await readImmutableReaderRetentions(store, await store.snapshot()), []);
+  const resumed = await prepareSessionArtifactCleanupToCompletion({
+    ...options,
+    dryRun: false,
+    planId,
+  });
+  assert.equal(resumed.planId, planId);
+  assert.equal(resumed.complete, true);
 });
 
 test("published preparation recovers a failed ownership release without republishing the plan", async (t) => {

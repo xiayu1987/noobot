@@ -3,13 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import {
-  ATOMIC_RENAME_RETRY_DELAYS_MS,
-  writeFileAtomic,
-} from "../../shared/storage/atomic-file-write.js";
+import { writeDurableJsonFile } from "../../shared/storage/durable-file.js";
 import {
   isMissingPersistencePathError,
   readOptionalPersistedJsonFile,
@@ -30,14 +27,7 @@ export async function readOptionalJson(filePath) {
 }
 
 export async function writeJson(filePath, payload = {}) {
-  await writeFileAtomic({
-    filePath,
-    content: JSON.stringify(payload, null, 2),
-    writeFile,
-    rename,
-    remove: rm,
-    retryDelaysMs: ATOMIC_RENAME_RETRY_DELAYS_MS,
-  });
+  await writeDurableJsonFile(filePath, JSON.stringify(payload, null, 2));
 }
 
 export async function readText(filePath, fallback = "") {

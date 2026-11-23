@@ -46,7 +46,7 @@ not create another identity source.
 重建的 `session-summary`、`session-summary-details` 是投影；schema 将 `events`、
 `execution-events` 和 `debug-*` 声明为冻结记录，不对它们执行消息字段改名。
 迁移入口见[会话修复](../session-repair/README.md)，存储维护见
-[不可变会话维护](../agent/docs/immutable-session-maintenance.md)。
+[会话存储架构](session-storage-architecture.md)。
 
 Legacy fields are handled by explicit migration rules. Summary artifacts are
 rebuilt projections; frozen event and debug records are not renamed in place.

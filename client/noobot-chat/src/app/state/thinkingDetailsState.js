@@ -8,7 +8,10 @@ import {
   isAssistantWithoutTurnScope,
 } from "../../modules/chat/model/messageIdentity.js";
 import { selectMessageToolTimeline } from "@noobot/event-protocol/tool-timeline";
-import { selectThinkingDetailCount } from "../../modules/chat/model/thinkingDetailCount.js";
+import {
+  formatThinkingDetailLabel,
+  selectThinkingDetailCount,
+} from "../../modules/chat/model/thinkingDetailCount.js";
 
 export function getThinkingDetailsCount(messageItem = {}) {
   if (isAssistantWithoutTurnScope(messageItem)) return 0;
@@ -16,11 +19,11 @@ export function getThinkingDetailsCount(messageItem = {}) {
 }
 
 function hasThinkingDetails(messageItem = {}) {
-  return messageItem?.hasThinkingDetails === true || selectThinkingDetailCount(messageItem) > 0;
+  return messageItem?.hasThinkingDetails === true || getThinkingDetailsCount(messageItem) > 0;
 }
 
-export function getThinkingDetailsTitle(messageItem = {}, translate) {
-  return translate("message.thinkingDetails", { count: getThinkingDetailsCount(messageItem) });
+export function getThinkingDetailsTitle(messageItem, translate) {
+  return formatThinkingDetailLabel(translate, getThinkingDetailsCount(messageItem));
 }
 
 export function resolveFallbackThinkingDetailsPayload(activeSession) {

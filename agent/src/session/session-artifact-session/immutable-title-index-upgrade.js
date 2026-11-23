@@ -3,6 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  IMMUTABLE_TITLE_INDEX_VERSION,
+  immutableTitleIndexRequiresUpgrade,
+} from "@noobot/session-protocol/immutable-storage";
 import { ImmutableSessionStore } from "./immutable-session-store.js";
 import { ImmutableSessionChanges } from "./immutable-message-changes.js";
 import { immutableOrderKey } from "./immutable-order-key.js";
@@ -14,12 +18,14 @@ export async function upgradeImmutableTitleIndex({ sessionDir, sessionId }) {
   const snapshot = await store.snapshot();
   return store.transact({
     expectedGeneration: snapshot.generation,
-    operationId: `upgrade-title-index:${snapshot.generation}`,
+    operationId: `upgrade-title-index-v${IMMUTABLE_TITLE_INDEX_VERSION}:${snapshot.generation}`,
     input: {},
     prepare: async ({ get }) => {
-      const version = await get("metadata", "titleIndex");
-      if (version?.version === 1) return { abort: true, changes: [], result: { upgraded: false } };
-      if (version !== null) throw immutableStorageError("Unknown title index version");
+      const descriptor = await get("metadata", "titleIndex");
+      if (!immutableTitleIndexRequiresUpgrade(descriptor)) {
+        if (descriptor.root !== null) store.requireReference(descriptor.root);
+        return { abort: true, changes: [], result: { upgraded: false } };
+      }
       const facts = await get("metadata", "facts");
       if (
         !facts ||

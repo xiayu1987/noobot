@@ -8,26 +8,41 @@ import { text } from "@noobot/shared/value";
 import { requireSessionTurnViewSelection } from "@noobot/session-protocol";
 import { readTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import { requireTurnLookupKey } from "@noobot/session-protocol/turn-lookup-key";
+import { requireMessageContentPage } from "@noobot/session-protocol/message-read-budget";
+import { readRequiredMessageContentPage } from "../../session-message-content-page.js";
 
-export async function getSessionTurns({
+export async function getSessionMessageContentPage({
+  userId,
+  sessionId,
+  persistenceContext,
+  messageUid,
+  byteOffset,
+  maxBytes,
+  expectedContentReference,
+}) {
+  const selection = { messageUid, byteOffset, maxBytes, expectedContentReference };
+  requireMessageContentPage(selection);
+  await using reader = await this.sessionRepo.requireSessionReader(userId, sessionId, {
+    persistenceContext,
+  });
+  return await readRequiredMessageContentPage(reader, selection);
+}
+
+export async function getSessionTurnMessagePage({
   userId,
   sessionId,
   turnScopeId,
   dialogProcessId,
+  cursor,
+  limit,
+  maxBytes,
   persistenceContext,
 }) {
-  if (turnScopeId !== undefined || dialogProcessId !== undefined) {
-    const lookupKey = requireTurnLookupKey({ turnScopeId, dialogProcessId });
-    const { session } = await this.sessionRepo.requireTurnView(userId, sessionId, {
-      turnScopeIds: [lookupKey.turnScopeId],
-      persistenceContext,
-    });
-    return session.messages.filter(
-      (message) => message.dialogProcessId === lookupKey.dialogProcessId,
-    );
-  }
-  const session = await this.sessionRepo.requireById(userId, sessionId, { persistenceContext });
-  return session.messages;
+  const lookupKey = requireTurnLookupKey({ turnScopeId, dialogProcessId });
+  await using reader = await this.sessionRepo.requireSessionReader(userId, sessionId, {
+    persistenceContext,
+  });
+  return await reader.readScopedTurnMessagePage({ lookupKey, cursor, limit, maxBytes });
 }
 
 export async function getSessionMessageSources({
@@ -36,19 +51,19 @@ export async function getSessionMessageSources({
   persistenceContext,
   messageUids,
   turnScopeIds,
+  maxBytes,
 }) {
   const selection = requireSessionTurnViewSelection({ turnScopeIds, messageUids });
   if (!selection.messageUids.length) return [];
   await using reader = await this.sessionRepo.requireSessionReader(userId, sessionId, {
     persistenceContext,
   });
-  return await Promise.all(
-    selection.messageUids.map(async (uid) => {
-      const record = await reader.readMessage(uid);
-      if (!record) throw new Error(`Session message source is missing: ${uid}`);
-      return record.message;
-    }),
-  );
+  const records = await reader.readMessages({ messageUids: selection.messageUids, maxBytes });
+  return records.map((record, position) => {
+    if (!record)
+      throw new Error(`Session message source is missing: ${selection.messageUids[position]}`);
+    return record.message;
+  });
 }
 
 export async function getSessionContextSource({
@@ -57,11 +72,13 @@ export async function getSessionContextSource({
   persistenceContext,
   scope,
   historyLimit,
+  limits,
 }) {
   return this.sessionRepo.requireContextSource(userId, sessionId, {
     persistenceContext,
     scope,
     historyLimit,
+    limits,
   });
 }
 

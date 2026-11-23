@@ -61,22 +61,18 @@ function input(replace = false) {
     baseAggregateVersion: 3,
     metadata: { sessionId: "s1", parentSessionId: "", aggregateVersion: 4 },
     lifecycleHead: { sequence: 5, activeTurnScopeId: "" },
-    deletedMessageUids: ["removed"],
+    messageSuffix: { firstOrdinal: 3, previousMessageCount: 3 },
     messages: replace ? [{ ordinal: 3, turnOrdinal: 1, message }] : [],
     turns: [],
     replacements: [],
     timings: [],
   };
   return {
-    receiptResult: result,
-    commandId,
-    committedAggregateVersion: 4,
     deduplicated: false,
-    deletedMessageUids: ["removed"],
     sessionId: "s1",
     generation: 9,
     projection,
-    displayMessages: replace ? [message] : [],
+    displayMessages: replace ? [{ ...message, sessionOrdinal: 3 }] : [],
   };
 }
 
@@ -88,15 +84,35 @@ for (const replace of [false, true]) {
     const response = create(input(replace));
     assert.equal(requireResponse(response), response);
     assert.equal(Object.hasOwn(response, "detail"), false);
-    assert.deepEqual(response.deletedMessageUids, ["removed"]);
+    assert.deepEqual(response.projection.messageSuffix, {
+      firstOrdinal: 3,
+      previousMessageCount: 3,
+    });
     assert.equal(response.projection.turns.length, 0);
   });
-  test(`${label} retry preserves original effects while reporting a later generation`, () => {
-    const source = input(replace);
-    const response = create({ ...source, deduplicated: true, generation: 100 });
-    assert.equal(response.projection.generation, 9);
-    assert.equal(response.generation, 100);
-    assert.deepEqual(response.displayMessages, source.displayMessages);
+  for (const deduplicated of [false, true]) {
+    test(`${label} ${deduplicated ? "retry" : "first commit"} preserves original effects while reporting a later generation`, () => {
+      const source = input(replace);
+      const response = create({ ...source, deduplicated, generation: 100 });
+      assert.equal(response.deduplicated, deduplicated);
+      assert.deepEqual(response.projection, source.projection);
+      assert.equal(response.projection.generation, 9);
+      assert.equal(response.generation, 100);
+      assert.deepEqual(response.displayMessages, source.displayMessages);
+    });
+  }
+  test(`${label} response matches persisted receipt fields regardless of key order`, () => {
+    const response = create(input(replace));
+    const { receipt } = response.projection;
+    const reversed = (value) => Object.fromEntries(Object.entries(value).reverse());
+    const result = replace
+      ? { turnReplacement: reversed(receipt.result.turnReplacement) }
+      : reversed(receipt.result);
+    const reordered = {
+      ...response,
+      projection: { ...response.projection, receipt: { ...receipt, result } },
+    };
+    assert.equal(requireResponse(reordered), reordered);
   });
   test(`${label} rejects mismatched identity, deletion evidence and generations`, () => {
     const response = create(input(replace));
@@ -105,8 +121,14 @@ for (const replace of [false, true]) {
       { sessionId: "other" },
       { committedAggregateVersion: 5 },
       { deletedMessageUids: ["other"] },
+      {
+        projection: {
+          ...response.projection,
+          messageSuffix: { firstOrdinal: 2, previousMessageCount: 3 },
+        },
+      },
       { generation: 8 },
-      { generation: 10 },
+      { generation: 9.5 },
       { displayMessages: [null] },
       { detail: {} },
       { deduplicated: "yes" },
@@ -121,13 +143,12 @@ for (const replace of [false, true]) {
     const baseline = {
       ...source,
       deduplicated: true,
-      deletedMessageUids: null,
       displayMessages: [],
     };
     assert.equal(create(baseline).projection.kind, "baseline");
     for (const changes of [
       { deduplicated: false },
-      { deletedMessageUids: [] },
+      { projection: { ...baseline.projection, deletedMessageUids: [] } },
       { displayMessages: [{}] },
     ])
       assert.throws(() => create({ ...baseline, ...changes }), {
@@ -136,14 +157,20 @@ for (const replace of [false, true]) {
   });
 }
 
-test("replacement display content must match the original committed message", () => {
+test("replacement display content and position must match the original committed message", () => {
   const source = input(true);
-  assert.throws(
-    () =>
-      createTurnReplaceResponse({
-        ...source,
-        displayMessages: [{ ...source.displayMessages[0], content: "later edit" }],
-      }),
-    { code: SESSION_ERROR_CODE.SESSION_MUTATION_RESPONSE_INVALID },
-  );
+  for (const changes of [
+    { content: "later edit" },
+    { sessionOrdinal: 4 },
+    { sessionOrdinal: undefined },
+  ]) {
+    assert.throws(
+      () =>
+        createTurnReplaceResponse({
+          ...source,
+          displayMessages: [{ ...source.displayMessages[0], ...changes }],
+        }),
+      { code: SESSION_ERROR_CODE.SESSION_MUTATION_RESPONSE_INVALID },
+    );
+  }
 });

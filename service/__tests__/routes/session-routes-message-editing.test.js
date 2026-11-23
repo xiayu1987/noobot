@@ -25,19 +25,15 @@ useProvisionedRuntimeEventsWorkspace(["u1"], { u1: ["s1"] });
 
 const COMMITTED_AT = "2026-07-31T00:00:00.000Z";
 
-function mutationResult(payload, { type, version, receiptResult, deletedMessageUids, messages }) {
+function mutationResult(payload, { type, version, receiptResult, messageSuffix, messages }) {
   const generation = 9;
   const createResponse =
     type === SESSION_COMMAND.TURN_REPLACE ? createTurnReplaceResponse : createMessageDeleteResponse;
   return createResponse({
-    commandId: payload.commandId,
-    committedAggregateVersion: version,
     deduplicated: false,
     sessionId: payload.sessionId,
     generation,
-    deletedMessageUids,
-    receiptResult,
-    displayMessages: messages,
+    displayMessages: messages.map((message, index) => ({ ...message, sessionOrdinal: index + 1 })),
     projection: {
       kind: "commit",
       generation,
@@ -52,7 +48,7 @@ function mutationResult(payload, { type, version, receiptResult, deletedMessageU
       baseAggregateVersion: version - 1,
       metadata: { sessionId: payload.sessionId, parentSessionId: "", aggregateVersion: version },
       lifecycleHead: { sequence: 0, activeTurnScopeId: "" },
-      deletedMessageUids,
+      messageSuffix,
       messages: messages.map((message, index) => ({ ordinal: index + 1, turnOrdinal: 1, message })),
       turns: [],
       replacements: [],
@@ -65,7 +61,7 @@ function createDeleteResult(payload) {
   return mutationResult(payload, {
     type: SESSION_COMMAND.MESSAGE_DELETE_FROM,
     version: 3,
-    deletedMessageUids: ["deleted-user", "deleted-tail"],
+    messageSuffix: { firstOrdinal: 2, previousMessageCount: 3 },
     messages: [],
     receiptResult: {
       deletedCount: 2,
@@ -93,7 +89,7 @@ function createReplaceTurnResult(
   return mutationResult(payload, {
     type: SESSION_COMMAND.TURN_REPLACE,
     version,
-    deletedMessageUids: ["original-user"],
+    messageSuffix: { firstOrdinal: 1, previousMessageCount: 1 },
     messages: [replacementUser],
     receiptResult: {
       turnReplacement: createTurnReplacementCommit({
@@ -140,7 +136,6 @@ test("session-routes: delete-from 路由透传请求体并返回增量投影", a
       session: {
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-        getAllSessionsData: async () => [],
         deleteFromMessage: async (payload) => {
           calls.push(payload);
           return createDeleteResult(payload);
@@ -172,7 +167,10 @@ test("session-routes: delete-from 路由透传请求体并返回增量投影", a
     assert.equal(payload.deletedCount, 2);
     assert.equal(payload.anchorIndex, 1);
     assert.deepEqual(payload.deletedTurnScopeIds, ["turn-delete", "turn-tail"]);
-    assert.deepEqual(payload.deletedMessageUids, ["deleted-user", "deleted-tail"]);
+    assert.deepEqual(payload.projection.messageSuffix, {
+      firstOrdinal: 2,
+      previousMessageCount: 3,
+    });
     assert.deepEqual(payload, { ok: true, ...createDeleteResult(calls[0]) });
     assert.equal(Object.hasOwn(payload, "detail"), false);
     assert.deepEqual(calls[0], {
@@ -194,7 +192,6 @@ test("session-routes: delete-from 保留服务层 404/409 状态码", async () =
       session: {
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-        getAllSessionsData: async () => [],
         deleteFromMessage: async () => {
           const statusCode = errors.shift();
           const error = new Error(`delete-from-${statusCode}`);
@@ -244,7 +241,6 @@ test("session-routes: rename 路由 trim 标题并返回成功", async () => {
       session: {
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-        getAllSessionsData: async () => [],
         renameSession: async (payload) => {
           calls.push(payload);
           return { sessionId: payload.sessionId, customTitle: payload.title };
@@ -281,7 +277,6 @@ test("session-routes: rename 空标题返回 400，session 不存在返回 404",
       session: {
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-        getAllSessionsData: async () => [],
         renameSession: async ({ userId, sessionId }) => {
           throw createSessionNotFoundError({ userId, sessionId });
         },
@@ -319,7 +314,6 @@ test("session-routes: replace-turn 路由透传请求体并返回增量投影", 
       session: {
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-        getAllSessionsData: async () => [],
       },
       replaceSessionTurn: async (payload) => {
         calls.push(payload);
@@ -356,7 +350,10 @@ test("session-routes: replace-turn 路由透传请求体并返回增量投影", 
     assert.equal(payload.commandId, "idem-2");
     assert.equal(payload.committedAggregateVersion, 4);
     assert.equal(payload.turnReplacement.replacementTurnScopeId, "turn-scope-replace");
-    assert.deepEqual(payload.deletedMessageUids, ["original-user"]);
+    assert.deepEqual(payload.projection.messageSuffix, {
+      firstOrdinal: 1,
+      previousMessageCount: 1,
+    });
     assert.equal(payload.turnReplacement.replacementDialogProcessId, "dialog-replacement");
     assert.equal(payload.turnReplacement.replacementUserMessageUid, "replacement-user-1");
     assert.deepEqual(payload, {
@@ -390,7 +387,6 @@ test("session-routes: replace-turn rejects duplicate /api/internal service route
       session: {
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-        getAllSessionsData: async () => [],
       },
       replaceSessionTurn: async (payload) => {
         calls.push(payload);
@@ -438,7 +434,6 @@ test("session-routes: replace-turn 保留服务层 404/409 状态码", async () 
       session: {
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-        getAllSessionsData: async () => [],
       },
       replaceSessionTurn: async () => {
         const statusCode = errors.shift();
@@ -523,7 +518,10 @@ for (const replace of [false, true]) {
     const { projection, sessionId, generation, displayMessages, ...legacy } = committed;
     const invalidResults = [
       { ...legacy, detail: { sessionId: "s1", exists: true, sessions: [] } },
-      { ...committed, projection: { ...projection, deletedMessageUids: ["wrong"] } },
+      {
+        ...committed,
+        projection: { ...projection, messageSuffix: { firstOrdinal: 0, previousMessageCount: 1 } },
+      },
       { ...committed, generation: generation - 1 },
     ];
     for (const result of invalidResults) {

@@ -44,6 +44,7 @@
   --noobot-duration-slow: 0.3s;
   --noobot-duration-pulse: 1.25s;
   --noobot-duration-breathe: 2.4s;
+  --noobot-ease-linear: linear;
   --noobot-ease-standard: ease;
   --noobot-ease-in-out: ease-in-out;
   --noobot-ease-emphasized: cubic-bezier(0.4, 0, 0.2, 1);

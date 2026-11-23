@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { parseTurnSummaryCheckpointRequest } from "@noobot/context-protocol/policy/summary-checkpoint-request";
-import { applyTurnSummaryCheckpoint } from "@noobot/context-protocol/policy/summary-checkpoint-transaction";
-import { ImmutableSessionChanges, publishMessageIndexes } from "./immutable-message-changes.js";
-import { assertImmutableToolPairClosure } from "./immutable-tool-pairs.js";
+import { applyIndexedTurnSummaryCheckpoint } from "@noobot/context-protocol/policy/summary-checkpoint-transaction";
+import { publishMessageIndexes } from "./immutable-message-changes.js";
 import { immutableStorageError } from "./immutable-object-store.js";
 
 import { immutableCheckpointKey, writeImmutableCheckpoint } from "./immutable-checkpoint-index.js";
@@ -32,17 +31,10 @@ async function readCheckpointMessages(readManyMetadata, request, sessionId) {
   return records;
 }
 
-export async function prepareImmutableSummaryCheckpoint({
-  store,
-  get,
-  getManyMetadata,
-  checkpoint,
-  committedAt,
-}) {
+export async function prepareImmutableSummaryCheckpoint({ store, plan, checkpoint, committedAt }) {
   const request = parseTurnSummaryCheckpointRequest(checkpoint);
   if (request.sessionId !== store.sessionId)
     throw new TypeError("Summary checkpoint session ownership mismatch");
-  const plan = new ImmutableSessionChanges(get);
   const read = (collection, key) => plan.get(collection, key);
   const key = immutableCheckpointKey(request.turnScopeId, request.checkpointId);
   const header = await read("checkpointHeads", request.turnScopeId);
@@ -54,7 +46,11 @@ export async function prepareImmutableSummaryCheckpoint({
   if (receipt && !header) throw immutableStorageError("Checkpoint receipt has no owning state");
   const records = receipt
     ? new Map()
-    : await readCheckpointMessages(getManyMetadata, request, store.sessionId);
+    : await readCheckpointMessages(
+        (collection, keys) => plan.getManyMetadata(collection, keys),
+        request,
+        store.sessionId,
+      );
   const session = {
     messages: [...records.values()].map(({ value }) => value.message),
     turnLifecycle: { ...lifecycle, turns: turn ? { [request.turnScopeId]: turn } : {} },
@@ -62,9 +58,18 @@ export async function prepareImmutableSummaryCheckpoint({
   };
 
   const original = new Map(session.messages.map((message) => [message.messageUid, message]));
-  const result = applyTurnSummaryCheckpoint(session, request, committedAt);
-  if (!result.committed) return { changes: [], result };
-  await assertImmutableToolPairClosure(read, [...original.values()], request.summarizedMessageUids);
+  const result = await applyIndexedTurnSummaryCheckpoint(
+    session,
+    request,
+    committedAt,
+    async (keys) => {
+      const pairs = await plan.getMany("toolPairs", keys);
+      for (const key of keys)
+        if (!pairs.get(key)) throw immutableStorageError("Selected message has no tool pair index");
+      return pairs;
+    },
+  );
+  if (!result.committed) return result;
   const changed = session.messages.filter(
     (message) => message !== original.get(message.messageUid),
   );
@@ -79,5 +84,5 @@ export async function prepareImmutableSummaryCheckpoint({
   const metadata = await read("metadata", "session");
   if (!metadata) throw immutableStorageError("Immutable session is not initialized");
   plan.set("metadata", "session", { ...metadata, updatedAt: committedAt });
-  return { changes: plan.changes(), result };
+  return result;
 }

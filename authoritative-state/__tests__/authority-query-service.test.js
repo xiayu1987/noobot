@@ -10,8 +10,9 @@ import {
   buildAuthoritativeExecutionReadModel,
   createAuthoritativeTurnSnapshot,
   queryAuthoritativeExecution,
+  queryAuthoritativeExecutionChildren,
   queryAuthoritativeExecutionTree,
-  resolveAuthoritativeTurnTerminal,
+  resolveIndexedTurnTerminal,
 } from "../src/application/index.js";
 
 import { turnRecord } from "./helpers/turn-record.js";
@@ -138,21 +139,20 @@ test("authority snapshots only terminal Turns represented by canonical messages"
 });
 
 test("authority owns terminal readiness decisions", () => {
-  const lifecycle = { ...createEmptyTurnLifecycle(), sequence: 2, turns: { "turn-1": turn() } };
   assert.throws(
     () =>
-      resolveAuthoritativeTurnTerminal({
+      resolveIndexedTurnTerminal({
         generatedAt: "2026-07-18T00:00:00.000Z",
-        lifecycle,
+        turn: turn(),
         sessionId: "s1",
         turnScopeId: "turn-1",
       }),
     /requires commandId/,
   );
   assert.equal(
-    resolveAuthoritativeTurnTerminal({
+    resolveIndexedTurnTerminal({
       generatedAt: "2026-07-18T00:00:00.000Z",
-      lifecycle,
+      turn: null,
       turnTimings: [],
       commandId: "resolve-1",
       sessionId: "s1",
@@ -161,9 +161,9 @@ test("authority owns terminal readiness decisions", () => {
     "turn_not_found",
   );
   assert.equal(
-    resolveAuthoritativeTurnTerminal({
+    resolveIndexedTurnTerminal({
       generatedAt: "2026-07-18T00:00:00.000Z",
-      lifecycle,
+      turn: turn(),
       turnTimings: [],
       commandId: "resolve-1",
       sessionId: "s1",
@@ -172,7 +172,7 @@ test("authority owns terminal readiness decisions", () => {
     "turn_not_terminal",
   );
 
-  lifecycle.turns["turn-1"] = turn({
+  const completed = turn({
     state: "completed",
     phase: "completion",
     finishedAt: now,
@@ -185,9 +185,9 @@ test("authority owns terminal readiness decisions", () => {
       updatedAt: now,
     },
   });
-  const resolved = resolveAuthoritativeTurnTerminal({
+  const resolved = resolveIndexedTurnTerminal({
     generatedAt: "2026-07-18T00:00:00.000Z",
-    lifecycle,
+    turn: completed,
     turnTimings: [],
     aggregateVersion: 12,
     commandId: "resolve-1",
@@ -199,19 +199,19 @@ test("authority owns terminal readiness decisions", () => {
   assert.equal(resolved.turn.terminalStatus.status, "completed");
 });
 
-test("terminal query rejects noncanonical identity before reading lifecycle", () => {
+test("terminal query rejects noncanonical identity before reading the turn", () => {
   for (const field of ["commandId", "sessionId", "turnScopeId"]) {
     for (const value of [" padded ", "", 42, null, undefined]) {
       const input = { commandId: "read", sessionId: "s1", turnScopeId: "turn-1", [field]: value };
-      input.lifecycle = new Proxy(
+      input.turn = new Proxy(
         {},
         {
           get() {
-            throw new Error("lifecycle_read");
+            assert.fail("turn must not be read");
           },
         },
       );
-      assert.throws(() => resolveAuthoritativeTurnTerminal(input), TypeError);
+      assert.throws(() => resolveIndexedTurnTerminal(input), TypeError);
     }
   }
 });
@@ -258,7 +258,9 @@ test("snapshot and terminal reads project the same persisted timing and reject a
   };
   const before = structuredClone(input);
   const snapshot = createAuthoritativeTurnSnapshot(input);
-  const terminal = resolveAuthoritativeTurnTerminal(input);
+  const readTerminal = (source) =>
+    resolveIndexedTurnTerminal({ ...source, turn: source.lifecycle.turns[source.turnScopeId] });
+  const terminal = readTerminal(input);
   assert.equal(
     snapshot.recentTerminalTurns[0].thinkingFinishedAt,
     terminal.turn.thinkingFinishedAt,
@@ -269,7 +271,7 @@ test("snapshot and terminal reads project the same persisted timing and reject a
     ...input,
     turnTimings: [{ turnScopeId: "turn-1", dialogProcessId: "foreign", modelLoopRound: 3 }],
   };
-  for (const read of [createAuthoritativeTurnSnapshot, resolveAuthoritativeTurnTerminal]) {
+  for (const read of [createAuthoritativeTurnSnapshot, readTerminal]) {
     assert.throws(() => read(invalid), { code: SESSION_ERROR_CODE.TURN_TIMING_CONFLICT });
   }
 });
@@ -278,39 +280,30 @@ test("authority execution read model excludes conflicting ownership and builds t
   const readModel = buildAuthoritativeExecutionReadModel([
     {
       sessionId: "root",
-      turnLifecycle: { ...createEmptyTurnLifecycle(), sequence: 2, turns: { "turn-1": turn() } },
+      parentSessionId: "",
+      turns: [turn()],
     },
     {
       sessionId: "child",
       parentSessionId: "root",
-      turnLifecycle: {
-        ...createEmptyTurnLifecycle(),
-        sequence: 2,
-        turns: {
-          child: turn({
-            turnScopeId: "child",
-            executionId: "agent:child",
-            parentExecutionId: "agent:turn-1",
-            rootExecutionId: "agent:turn-1",
-          }),
-        },
-      },
+      turns: [
+        turn({
+          turnScopeId: "child",
+          executionId: "agent:child",
+          parentExecutionId: "agent:turn-1",
+          rootExecutionId: "agent:turn-1",
+        }),
+      ],
     },
     {
       sessionId: "left",
-      turnLifecycle: {
-        ...createEmptyTurnLifecycle(),
-        sequence: 2,
-        turns: { conflict: turn({ turnScopeId: "conflict" }) },
-      },
+      parentSessionId: "",
+      turns: [turn({ turnScopeId: "conflict" })],
     },
     {
       sessionId: "right",
-      turnLifecycle: {
-        ...createEmptyTurnLifecycle(),
-        sequence: 2,
-        turns: { conflict: turn({ turnScopeId: "conflict" }) },
-      },
+      parentSessionId: "",
+      turns: [turn({ turnScopeId: "conflict" })],
     },
   ]);
   assert.equal(
@@ -323,4 +316,112 @@ test("authority execution read model excludes conflicting ownership and builds t
   });
   assert.equal(tree.rootExecutionId, "agent:turn-1");
   assert.deepEqual(tree.tree.executions["agent:turn-1"].childExecutionIds, ["agent:child"]);
+});
+
+test("execution trees and children do not omit an identity claimed by three roots", () => {
+  const roots = ["turn-1", "turn-2", "turn-3"];
+  const readModel = buildAuthoritativeExecutionReadModel(
+    roots.map((root) => ({
+      sessionId: root,
+      parentSessionId: "",
+      turns: [
+        turn({ turnScopeId: root }),
+        turn({
+          turnScopeId: "duplicate",
+          parentExecutionId: `agent:${root}`,
+          rootExecutionId: `agent:${root}`,
+        }),
+      ],
+    })),
+  );
+  for (const root of roots) {
+    const executionId = `agent:${root}`;
+    for (const query of [queryAuthoritativeExecutionTree, queryAuthoritativeExecutionChildren]) {
+      const result = query(readModel, { executionId });
+      assert.equal(result.found, false);
+      assert.equal(result.reason, "execution_identity_conflict");
+      assert.deepEqual(
+        result.conflict.identities.map(({ sessionId }) => sessionId),
+        roots,
+      );
+    }
+    assert.equal(queryAuthoritativeExecution(readModel, { executionId }).found, true);
+  }
+});
+
+test("a root-only tree query reports conflicting claims even when the root is not visible", () => {
+  const rootExecutionId = "agent:missing-root";
+  const claim = turn({
+    turnScopeId: "duplicate",
+    parentExecutionId: rootExecutionId,
+    rootExecutionId,
+  });
+  const readModel = buildAuthoritativeExecutionReadModel(
+    ["left", "right"].map((sessionId) => ({ sessionId, parentSessionId: "", turns: [claim] })),
+  );
+  assert.equal(
+    queryAuthoritativeExecutionTree(readModel, { rootExecutionId }).reason,
+    "execution_identity_conflict",
+  );
+});
+
+test("a selected execution conflicts with claims under a different parent and root", () => {
+  const rootExecutionId = "agent:turn-1";
+  const otherRoot = "agent:other-root";
+  const claim = (root) =>
+    turn({ turnScopeId: "duplicate", parentExecutionId: root, rootExecutionId: root });
+  const readModel = buildAuthoritativeExecutionReadModel([
+    { sessionId: "left", parentSessionId: "", turns: [turn(), claim(rootExecutionId)] },
+    { sessionId: "right", parentSessionId: "", turns: [claim(otherRoot)] },
+  ]);
+  for (const result of [
+    queryAuthoritativeExecutionChildren(readModel, { executionId: rootExecutionId }),
+    queryAuthoritativeExecutionTree(readModel, { rootExecutionId }),
+  ]) {
+    assert.equal(result.reason, "execution_identity_conflict");
+    assert.deepEqual(
+      result.conflict.identities.map(({ rootExecutionId }) => rootExecutionId),
+      [rootExecutionId, otherRoot],
+    );
+  }
+});
+
+test("direct children do not depend on conflicts below the queried parent", () => {
+  const root = "agent:turn-1";
+  const child = "agent:child";
+  const grandchild = turn({
+    turnScopeId: "grandchild",
+    parentExecutionId: child,
+    rootExecutionId: root,
+  });
+  const readModel = buildAuthoritativeExecutionReadModel([
+    {
+      sessionId: "root",
+      parentSessionId: "",
+      turns: [
+        turn(),
+        turn({ turnScopeId: "child", parentExecutionId: root, rootExecutionId: root }),
+      ],
+    },
+    { sessionId: "left", parentSessionId: "root", turns: [grandchild] },
+    { sessionId: "right", parentSessionId: "root", turns: [grandchild] },
+  ]);
+  const result = queryAuthoritativeExecutionChildren(readModel, { executionId: root });
+  assert.equal(result.found, true);
+  assert.deepEqual(
+    result.children.map(({ executionId }) => executionId),
+    [child],
+  );
+  assert.equal(
+    queryAuthoritativeExecutionChildren(readModel, { executionId: child }).reason,
+    "execution_identity_conflict",
+  );
+  assert.equal(
+    queryAuthoritativeExecutionChildren(readModel, { executionId: "agent:grandchild" }).reason,
+    "execution_identity_conflict",
+  );
+  assert.equal(
+    queryAuthoritativeExecutionTree(readModel, { executionId: root }).reason,
+    "execution_identity_conflict",
+  );
 });

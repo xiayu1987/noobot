@@ -14,7 +14,7 @@ import { repairUserWorkspace } from "../src/workspace-lifecycle/index.js";
 import { initializeImmutableSession } from "../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { ImmutableSessionStore } from "../src/session/session-artifact-session/immutable-session-store.js";
 import { openSessionArtifactReader } from "../src/session/session-artifact-session/immutable-session-reader.js";
-import { commitSessionChanges } from "../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "./helpers/commit-immutable-session-fixture.js";
 import { createTestSessionRequiredFields } from "./helpers/session-message-facts.js";
 import { mutationMessage, mutationTime } from "./helpers/immutable-mutation-integration-fixture.js";
 import { TEST_STORAGE_SERVICE } from "./helpers/storage-service.js";
@@ -83,7 +83,11 @@ for (const relativePath of [
         { collection: "contextSources", key: "old-turn", remove: true },
         { collection: "dialogTurns", key: "dialog-old-turn", remove: true },
         { collection: "dialogOrder", key: "0000000000000001", remove: true },
-        { collection: "contextSources", key: "stale-turn", value: { count: 0, root: null } },
+        {
+          collection: "contextSources",
+          key: "stale-turn",
+          value: { count: 0, root: null, directory: { ordinals: [] } },
+        },
       ],
     });
     const broken = await store.snapshot();

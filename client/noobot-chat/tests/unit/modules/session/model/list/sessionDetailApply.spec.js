@@ -33,8 +33,8 @@ function document(messages, aggregateVersion = 2, sessionId = "s1", generation =
 
 function fixture() {
   const sessions = ref([
-    { sessionId: "s1", aggregateVersion: 1, generation: null, messages: [], title: "before" },
-    { sessionId: "s2", aggregateVersion: 1, generation: null, messages: [], title: "other" },
+    { sessionId: "s1", aggregateVersion: 1, knownGeneration: null, messages: [], title: "before" },
+    { sessionId: "s2", aggregateVersion: 1, knownGeneration: null, messages: [], title: "other" },
   ]);
   const chatStore = { applyTurnTimingSnapshot: vi.fn() };
   const onSessionDetailApplied = vi.fn();
@@ -48,11 +48,20 @@ function fixture() {
 }
 
 describe("session detail authority", () => {
+  it("preserves the authoritative source count when only a subset are display rows", () => {
+    const { applySessionDetail, sessions } = fixture();
+    const detail = document([message("visible", "a")]);
+    detail.sessions[0].stats.messageCount = 50;
+    applySessionDetail(detail);
+    expect(sessions.value[0].messageCount).toBe(50);
+    expect(sessions.value[0].messages).toHaveLength(1);
+  });
+
   it("uses head generation for same-version edits and rejects late snapshots before side effects", () => {
     const { applySessionDetail, sessions, chatStore, onSessionDetailApplied } = fixture();
     applySessionDetail(document([message("before", "a")], 2, "s1", 11));
     applySessionDetail(document([message("edited", "a"), message("later", "b")], 2, "s1", 12));
-    expect(sessions.value[0].generation).toBe(12);
+    expect(sessions.value[0].sessionDocs[0].generation).toBe(12);
     expect(sessions.value[0].detailMessages.map((item) => item.messageUid)).toEqual([
       "edited",
       "later",

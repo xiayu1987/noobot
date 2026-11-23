@@ -33,25 +33,31 @@ const baseIdentity = {
   attachmentSource: base.attachmentSource,
 };
 
-test("workflow reads transfers from canonical session result messages and rejects conflicting facts", () => {
+test("workflow reads transfers from the canonical result protocol and rejects conflicting facts", () => {
   const envelope = createV2AttachmentTransferEnvelope({ attachmentId: "result-attachment" });
   const result = {
-    messages: [
-      { messageUid: "assistant-1", transferEnvelopes: [envelope] },
-      { messageUid: "tool-1", transferEnvelopes: [envelope] },
-      { messageUid: "user-1" },
-    ],
+    answer: "done",
+    traces: [],
+    sessionId: "session-a",
+    dialogProcessId: "dialog-a",
+    turnScopeId: "turn-a",
+    messageSource: { sessionId: "session-a", dialogProcessId: "dialog-a", turnScopeId: "turn-a" },
+    transferEnvelopes: [envelope, envelope],
   };
   const original = structuredClone(result);
   assert.deepEqual(getWorkflowTransferPayloadFromResult(result).transferEnvelopes, [envelope]);
   assert.deepEqual(result, original);
-  assert.deepEqual(getWorkflowTransferPayloadFromResult({ messages: [] }).transferEnvelopes, []);
+  assert.deepEqual(
+    getWorkflowTransferPayloadFromResult({ ...result, transferEnvelopes: [] }).transferEnvelopes,
+    [],
+  );
   const conflict = structuredClone(envelope);
   conflict.payload.attachments[0].name = "conflict.txt";
   assert.throws(
     () =>
       getWorkflowTransferPayloadFromResult({
-        messages: [{ transferEnvelopes: [envelope] }, { transferEnvelopes: [conflict] }],
+        ...result,
+        transferEnvelopes: [envelope, conflict],
       }),
     { code: TRANSFER_ERROR_CODE.IDENTITY_CONFLICT },
   );

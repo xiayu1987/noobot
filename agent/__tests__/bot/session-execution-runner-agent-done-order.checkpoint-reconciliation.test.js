@@ -6,14 +6,9 @@
 import test from "node:test";
 import { createTestMessagePersistenceReceipts } from "../helpers/message-persistence-receipts.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
-import {
-  assert,
-  createRunner,
-  finalizeAgentTurn,
-} from "./session-execution-runner-agent-done-order.fixtures.js";
-import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { assert, createRunner } from "./session-execution-runner-agent-done-order.fixtures.js";
 
-test("runSession reads the complete durable result only after flushing pending changes", async () => {
+test("runSession flushes pending changes before returning transfers without reading durable history", async () => {
   const callOrder = [];
   let capturedFinalizePayload = null;
   const durableMessages = [
@@ -48,15 +43,14 @@ test("runSession reads the complete durable result only after flushing pending c
       modelMessages: [],
     }),
     getSessionTurns: async () => {
-      callOrder.push("readResult");
-      return durableMessages;
+      assert.fail("finalization must not load durable history");
     },
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
       assert.equal(callOrder.includes("readResult"), false);
       await payload.turnPersistence.flush();
       callOrder.push("flushed");
-      payload.resultMessages = await payload.turnPersistence.readResultMessages();
+      payload.resultTransfers = await payload.turnPersistence.readResultTransfers();
       return { ok: true };
     },
   });
@@ -68,8 +62,9 @@ test("runSession reads the complete durable result only after flushing pending c
     turnScopeId: "turn-a",
   });
 
-  assert.deepEqual(capturedFinalizePayload.resultMessages, durableMessages);
-  assert.ok(callOrder.indexOf("flushed") < callOrder.indexOf("readResult"));
+  assert.deepEqual(capturedFinalizePayload.resultTransfers, []);
+  assert.equal(callOrder.includes("flushed"), true);
+  assert.equal(callOrder.includes("readResult"), false);
 });
 
 test("runSession upserts summarized messages created after a checkpoint", async () => {
@@ -137,7 +132,7 @@ test("runSession upserts summarized messages created after a checkpoint", async 
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
       await payload.turnPersistence.flush();
-      payload.resultMessages = await payload.turnPersistence.readResultMessages();
+      payload.resultTransfers = await payload.turnPersistence.readResultTransfers();
       return { ok: true };
     },
   });
@@ -153,11 +148,9 @@ test("runSession upserts summarized messages created after a checkpoint", async 
     writes.map((message) => message.messageUid).sort(),
     ["sm_tail-tool", "sm_final-assistant"].sort(),
   );
+  assert.deepEqual(capturedFinalizePayload.resultTransfers, []);
   assert.deepEqual(
-    capturedFinalizePayload.resultMessages.map((message) => [
-      message.messageUid,
-      message.summarized,
-    ]),
+    durableMessages.map((message) => [message.messageUid, message.summarized]),
     [
       ["sm_checkpoint-tool", true],
       ["sm_tail-tool", true],
@@ -166,7 +159,7 @@ test("runSession upserts summarized messages created after a checkpoint", async 
   );
 });
 
-test("runSession returns committed scope members independently of checkpoint UID caches", async () => {
+test("runSession finalization never expands committed scope members from history", async () => {
   const callOrder = [];
   const runtime = createTestRuntimeContext();
   let capturedFinalizePayload = null;
@@ -219,7 +212,7 @@ test("runSession returns committed scope members independently of checkpoint UID
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
       await payload.turnPersistence.flush();
-      payload.resultMessages = await payload.turnPersistence.readResultMessages();
+      payload.resultTransfers = await payload.turnPersistence.readResultTransfers();
       return { ok: true };
     },
   });
@@ -231,13 +224,11 @@ test("runSession returns committed scope members independently of checkpoint UID
     turnScopeId: "turn-a",
   });
 
-  assert.deepEqual(
-    capturedFinalizePayload.resultMessages.map((message) => message.messageUid),
-    ["sm_first", "sm_unrelated", "sm_retained"],
-  );
+  assert.deepEqual(capturedFinalizePayload.resultTransfers, []);
+  assert.equal(Object.hasOwn(capturedFinalizePayload.turnPersistence, "readResultMessages"), false);
 });
 
-test("runSession recovers committed checkpoint messages without a runtime receipt cache", async () => {
+test("runSession finalizes a checkpoint tail without loading its committed prefix", async () => {
   const callOrder = [];
   const runtime = createTestRuntimeContext();
   let capturedFinalizePayload = null;
@@ -283,7 +274,7 @@ test("runSession recovers committed checkpoint messages without a runtime receip
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
       await payload.turnPersistence.flush();
-      payload.resultMessages = await payload.turnPersistence.readResultMessages();
+      payload.resultTransfers = await payload.turnPersistence.readResultTransfers();
       return { ok: true };
     },
   });
@@ -295,59 +286,75 @@ test("runSession recovers committed checkpoint messages without a runtime receip
     turnScopeId: "turn-a",
   });
 
-  assert.deepEqual(
-    capturedFinalizePayload.resultMessages.map((message) => message.messageUid),
-    ["sm_first", "sm_retained"],
-  );
+  assert.deepEqual(capturedFinalizePayload.resultTransfers, []);
+  assert.equal(Object.hasOwn(capturedFinalizePayload.turnPersistence, "readResultMessages"), false);
 });
 
-test("finalizer preserves canonical activity from the timeline checkpoint", async () => {
+test("finalizer preserves persisted activity while flushing the active message delta", async () => {
   let capturedFinalizePayload = null;
-  await finalizeAgentTurn({
-    resolvedRunConfig: {},
-    runtimeEventListener: null,
-    usedSessionId: "s1",
+  const runtime = createTestRuntimeContext();
+  const durable = new Map();
+  const writes = [];
+  const activity = {
+    messageUid: "sm_activity",
+    role: "assistant",
+    type: "tool_call",
+    turnScopeId: "turn-a",
     dialogProcessId: "dialog-1",
-    resolvedTurnScopeId: "turn-a",
-    dispatchRuntime: { async persistCurrentTurnMessages() {} },
+    activityTimeline: [{ eventId: "guidance-analysis:1" }],
+  };
+  const finalMessage = {
+    messageUid: "sm_final",
+    modelMessageId: "message-final",
+    role: "assistant",
+    type: "message",
+    content: "done",
+    turnScopeId: "turn-a",
+    dialogProcessId: "dialog-1",
+  };
+  const runner = createRunner({
+    callOrder: [],
+    runtime,
+    agentRunner: async () => {
+      runtime.currentTurnMessages.push(activity);
+      await runtime.persistCurrentTurnMessages();
+      writes.length = 0;
+      return {
+        output: "done",
+        modelMessageId: "message-final",
+        traces: [],
+        turnMessages: [finalMessage],
+        modelLoopRound: 0,
+        modelMessages: [],
+      };
+    },
+    appendAgentMessages: async ({ messages, ...identity }) => {
+      for (const message of messages) {
+        writes.push(message.messageUid);
+        durable.set(message.messageUid, structuredClone(message));
+      }
+      return createTestMessagePersistenceReceipts({ messages, ...identity });
+    },
     getSessionTurns: async () => [
-      {
-        messageUid: "sm_assistant",
-        role: "assistant",
-        type: "tool_call",
-        turnScopeId: "turn-a",
-        dialogProcessId: "dialog-1",
-        activityTimeline: [{ eventId: "guidance-analysis:1" }],
-      },
+      assert.fail("finalization must not reconstruct persisted history"),
     ],
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
       await payload.turnPersistence.flush();
-      payload.resultMessages = await payload.turnPersistence.readResultMessages();
+      payload.resultTransfers = await payload.turnPersistence.readResultTransfers();
       return { ok: true };
     },
-    userId: "u1",
-    parentSessionId: "",
-    parentDialogProcessId: "",
-    caller: SESSION_CALLER.USER,
-    agentResult: {
-      turnMessages: [
-        {
-          messageUid: "sm_assistant",
-          role: "assistant",
-          type: "tool_call",
-          activityTimeline: [],
-        },
-      ],
-    },
-    userConfig: {},
-    lifecycle: null,
-    persistenceContext: null,
   });
 
-  assert.equal(capturedFinalizePayload.resultMessages.length, 1);
-  assert.equal(
-    capturedFinalizePayload.resultMessages[0].activityTimeline[0].eventId,
-    "guidance-analysis:1",
-  );
+  await runner.runAcceptedSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    turnScopeId: "turn-a",
+  });
+
+  assert.deepEqual(capturedFinalizePayload.resultTransfers, []);
+  assert.deepEqual(writes, ["sm_final"]);
+  assert.equal(durable.get("sm_final").content, "done");
+  assert.deepEqual(durable.get("sm_activity").activityTimeline, activity.activityTimeline);
 });

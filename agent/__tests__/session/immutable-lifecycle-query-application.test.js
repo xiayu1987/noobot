@@ -108,7 +108,10 @@ test("replacement snapshot window omits retired turns while command projection r
     newContent: "edited",
     attachments: [],
   });
-  assert.deepEqual(replacement.deletedMessageUids, ["drop"]);
+  assert.deepEqual(replacement.projection.messageSuffix, {
+    firstOrdinal: 2,
+    previousMessageCount: 2,
+  });
   assert.ok(replacement.projection.replacements.some((entry) => entry.key === "drop"));
   context.mock.method(ImmutableSessionStore.prototype, "entries", () =>
     assert.fail("snapshot query cannot enumerate tombstones"),

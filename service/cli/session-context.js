@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
-import {
-  isAvailableSessionDetailEntry,
-  requireSessionDetailDocument,
-  selectMainSessionDetailEntry,
-} from "@noobot/session-protocol/session-detail";
+import { isSessionNotFoundError } from "@noobot/session-protocol";
 import {
   SESSION_SUMMARY_AVAILABILITY,
   compareSessionSummaries,
@@ -70,15 +66,12 @@ export async function resolveSessionTarget({ bot, userId, invocation }) {
 }
 
 export async function readAggregateVersion({ bot, userId, sessionId }) {
-  const document = requireSessionDetailDocument(
-    await bot.session.getSessionDisplayData({ userId, sessionId }),
-  );
-  if (!document.exists) throw new CliUsageError(`session not found: ${sessionId}`);
-  const entry = selectMainSessionDetailEntry(document);
-  if (!isAvailableSessionDetailEntry(entry)) {
-    throw new CliUsageError(`session unavailable: ${sessionId} (${entry.unavailableReason.code})`);
+  try {
+    return await bot.session.readSessionAggregateVersion({ userId, sessionId });
+  } catch (error) {
+    if (isSessionNotFoundError(error)) throw new CliUsageError(error.message);
+    throw error;
   }
-  return entry.aggregateVersion;
 }
 
 export async function probeRunningService(env = process.env) {

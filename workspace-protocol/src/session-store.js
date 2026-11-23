@@ -45,24 +45,45 @@ function parseStoreFile(raw, file) {
   }
 }
 
+export function createWorkspaceNotInitializedError(file) {
+  const treeFile = requireStoreFile(file);
+  return sessionStoreError(
+    SESSION_STORE_ERROR.WORKSPACE_NOT_INITIALIZED,
+    `workspace not initialized: ${treeFile}`,
+    { missingFile: treeFile },
+  );
+}
+
 export function parseWorkspaceSessionTree({ raw, file }) {
   const treeFile = requireStoreFile(file);
-  if (requireRawOrMissing(raw) === null) {
-    throw sessionStoreError(
-      SESSION_STORE_ERROR.WORKSPACE_NOT_INITIALIZED,
-      `workspace not initialized: ${treeFile}`,
-      { missingFile: treeFile },
-    );
-  }
+  if (requireRawOrMissing(raw) === null) throw createWorkspaceNotInitializedError(treeFile);
   return normalizeSessionTree(parseStoreFile(raw, treeFile));
 }
 
-export function parseWorkspaceSessionTombstones({ raw, file }) {
+export async function readWorkspaceSessionDeletionState({
+  file,
+  readFile,
+  parse = parseWorkspaceSessionDeletionState,
+}) {
+  requireStoreFile(file);
+  let raw;
+  try {
+    raw = await readFile(file, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    raw = null;
+  }
+  return parse({ raw, file });
+}
+
+export function parseWorkspaceSessionDeletionState({ raw, file }) {
   const tombstoneFile = requireStoreFile(file);
-  if (requireRawOrMissing(raw) === null) return {};
-  return {
-    ...requireSessionTombstoneSessions(parseStoreFile(raw, tombstoneFile), {
-      persistencePath: tombstoneFile,
-    }),
-  };
+  if (requireRawOrMissing(raw) === null) return { sessions: {} };
+  const tombstone = parseStoreFile(raw, tombstoneFile);
+  requireSessionTombstoneSessions(tombstone, { persistencePath: tombstoneFile });
+  return tombstone;
+}
+
+export function parseWorkspaceSessionTombstones(input) {
+  return { ...parseWorkspaceSessionDeletionState(input).sessions };
 }

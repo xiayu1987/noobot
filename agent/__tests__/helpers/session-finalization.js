@@ -13,7 +13,7 @@ export function createTestSessionFinalizationContext() {
     runtimeEventListener: { onEvent() {}, async flush() {} },
     turnPersistence: {
       async flush() {},
-      async readResultMessages() {
+      async readResultTransfers() {
         return [];
       },
     },

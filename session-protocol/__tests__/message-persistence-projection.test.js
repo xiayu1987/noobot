@@ -18,6 +18,7 @@ const receipt = {
   ...ownership,
   messageUid: message.messageUid,
   contentReference: "content-reference",
+  owner: 1,
   generation: 1,
   activityEventIds: [],
 };
@@ -74,6 +75,7 @@ test("an explicit append and metadata update share the acknowledged content vers
       dialogProcessId: ownership.dialogProcessId,
       turnScopeId: ownership.turnScopeId,
       expectedContentReference: receipt.contentReference,
+      owner: receipt.owner,
       content: " after",
     },
   ]);
@@ -83,6 +85,7 @@ test("an explicit append and metadata update share the acknowledged content vers
       dialogProcessId: ownership.dialogProcessId,
       turnScopeId: ownership.turnScopeId,
       expectedContentReference: receipt.contentReference,
+      owner: receipt.owner,
       metadata: { summarized: true },
       metadataRemovals: [],
     },
@@ -99,6 +102,7 @@ test("unchanged acknowledged messages confirm their content version without carr
         dialogProcessId: ownership.dialogProcessId,
         turnScopeId: ownership.turnScopeId,
         expectedContentReference: receipt.contentReference,
+        owner: receipt.owner,
         metadata: {},
         metadataRemovals: [],
       },
@@ -125,6 +129,7 @@ test("presentation demotion removes workspace metadata without resubmitting cont
       dialogProcessId: ownership.dialogProcessId,
       turnScopeId: ownership.turnScopeId,
       expectedContentReference: receipt.contentReference,
+      owner: receipt.owner,
       metadata: { chatPresentation: false },
       metadataRemovals: ["workspaceRootDirectory"],
     },
@@ -138,6 +143,7 @@ test("metadata removals reject ambiguous or foreign fields before applying any c
     dialogProcessId: ownership.dialogProcessId,
     turnScopeId: ownership.turnScopeId,
     expectedContentReference: receipt.contentReference,
+    owner: receipt.owner,
     metadata: { chatPresentation: false },
     metadataRemovals: ["workspaceRootDirectory"],
   };
@@ -168,6 +174,40 @@ test("metadata removals reject ambiguous or foreign fields before applying any c
     assert.equal(original.chatPresentation, true);
     assert.equal(original.workspaceRootDirectory, "/workspace");
   }
+});
+
+test("user message attachment changes require the binding command", () => {
+  const user = { ...message, role: "user", attachments: [{ attachmentId: "upload" }] };
+  const update = {
+    messageUid: user.messageUid,
+    dialogProcessId: user.dialogProcessId,
+    turnScopeId: user.turnScopeId,
+    expectedContentReference: receipt.contentReference,
+    owner: receipt.owner,
+    metadata: {},
+    metadataRemovals: [],
+  };
+  assert.throws(
+    () => applyMessageMetadataUpdate(user, { ...update, metadataRemovals: ["attachments"] }),
+    /require the binding command/,
+  );
+  const change = { ...update, metadata: { attachments: [] } };
+  assert.throws(() => applyMessageMetadataUpdate(user, change), /require the binding command/);
+  assert.deepEqual(applyMessageMetadataUpdate(message, change).attachments, []);
+  assert.throws(
+    () =>
+      projectMessagePersistenceChange(
+        { ...user, attachments: [] },
+        { message: user, receipt },
+        ownership,
+      ),
+    /require the binding command/,
+  );
+  assert.deepEqual(
+    projectMessagePersistenceChange(structuredClone(user), { message: user, receipt }, ownership)
+      .messageMetadataUpdates[0],
+    update,
+  );
 });
 
 test("full assignments preserve replacement semantics without inferring a prefix append", () => {

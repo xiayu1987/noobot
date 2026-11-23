@@ -3,14 +3,24 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { hash } from "node:crypto";
+import { filePath as path } from "@noobot/path-resolver";
 import { createSessionDeletedError } from "@noobot/session-protocol";
 import { fatalSystemError } from "../../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { text } from "@noobot/shared/value";
-import { parseWorkspaceSessionTombstones } from "@noobot/workspace-protocol/session-store";
 import { createSessionTreePersistenceContext } from "../../session-location-resolver.js";
-import { createParsedTextMemo } from "../../../shared/storage/parsed-text-memo.js";
+import { readSessionDeletionState } from "../../session-deletion-state.js";
+import { requireServerNow } from "@noobot/session-protocol/server-clock";
+import {
+  advanceSessionBranchDeletion,
+  requireBranchDeletionDirectoriesAvailable,
+  requireSessionTombstoneSessions,
+  SESSION_DELETION_STAGE,
+  sessionTombstoneBranchDeletions,
+} from "@noobot/workspace-protocol/session-tombstone";
+import { syncStorageDirectory } from "../../../shared/storage/durable-file.js";
 
 function requireIdentity(value, message, code) {
   const normalized = text(value);
@@ -37,34 +47,95 @@ export function sessionTreeNodeMissingError(sessionId) {
   });
 }
 
-const parseSessionTombstones = createParsedTextMemo((raw, file) =>
-  parseWorkspaceSessionTombstones({ raw, file }),
-);
-
 class SessionAccessMethods {
-  async _readDeletedSessions(userId) {
-    const file = this._sessionTombstoneFile(requireUserId(userId));
-    const raw = await this.storageService.readTextOrNull(file);
-    return { sessions: parseSessionTombstones(raw, file) };
+  withSessionBranchDeletion(userId, key, operation) {
+    const dir = this.pathResolver.sessionLifecycleLocksDir(this._basePath(userId));
+    return this._withMutationLock(path.join(dir, `.branch-${hash("sha256", key)}.lock`), operation);
   }
 
-  async markSessionsDeleted(userId, sessionIds) {
-    const normalizedUserId = requireUserId(userId);
-    if (!Array.isArray(sessionIds)) throw new TypeError("markSessionsDeleted requires sessionIds");
-    const ids = [...new Set(sessionIds.map((sessionId) => requireSessionId(sessionId)))];
-    if (!ids.length) return 0;
-    const current = await this._readDeletedSessions(normalizedUserId);
-    const deletedAt = Date.now();
-    const sessions = { ...current.sessions };
-    for (const sessionId of ids) {
-      sessions[sessionId] = deletedAt;
-    }
-    await this.storageService.writeJsonAtomic(this._sessionTombstoneFile(normalizedUserId), {
-      sessions,
-      updatedAt: this.now(),
+  _readDeletedSessions(userId) {
+    return readSessionDeletionState(this._basePath(requireUserId(userId)));
+  }
+
+  async readSessionBranchDeletion(userId, key) {
+    const current = await this._readDeletedSessions(userId);
+    const operation = sessionTombstoneBranchDeletions(current)[key];
+    if (operation) await syncStorageDirectory(path.dirname(this._sessionTombstoneFile(userId)));
+    return operation;
+  }
+
+  withSessionDeletionFence(userId, operation) {
+    const lock = this.pathResolver.sessionTombstoneLockFile(this._basePath(requireUserId(userId)));
+    return this._withMutationLock(lock, operation);
+  }
+
+  async _updateSessionTombstones(userId, update) {
+    const file = this._sessionTombstoneFile(requireUserId(userId));
+    return this.withSessionDeletionFence(userId, async () => {
+      const current = await this._readDeletedSessions(userId);
+      const next = update(current);
+      if (next === current) return current;
+      requireSessionTombstoneSessions(next, { persistencePath: file });
+      await this.storageService.writeJsonAtomic(file, next, { durable: true });
+      return next;
     });
-    await this.removeSessionDisplaySummaries(normalizedUserId, ids);
-    return ids.length;
+  }
+
+  _addSessionTombstones(state, sessionIds, userId) {
+    for (const sessionId of sessionIds) {
+      if (Object.hasOwn(state.sessions, sessionId)) {
+        throw createSessionDeletedError({ userId, sessionId });
+      }
+    }
+    const updatedAt = this.now();
+    const deletedAt = requireServerNow(updatedAt);
+    return {
+      ...state,
+      sessions: {
+        ...state.sessions,
+        ...Object.fromEntries(sessionIds.map((sessionId) => [sessionId, deletedAt])),
+      },
+      updatedAt,
+    };
+  }
+
+  async recordSessionBranchDeletion(userId, key, targets, pluginHandlerIds) {
+    const operation = { targets, pluginHandlerIds, nextStage: SESSION_DELETION_STAGE.DIRECTORIES };
+    const ids = targets.map(({ sessionId }) => sessionId);
+    await this._updateSessionTombstones(userId, (current) => {
+      const next = this._addSessionTombstones(current, ids, userId);
+      requireBranchDeletionDirectoriesAvailable(current, targets);
+      return {
+        ...next,
+        branchDeletions: { ...sessionTombstoneBranchDeletions(current), [key]: operation },
+      };
+    });
+    return operation;
+  }
+
+  async advanceSessionBranchDeletion(userId, key, completedStage) {
+    const state = await this._updateSessionTombstones(userId, (current) => {
+      const operations = sessionTombstoneBranchDeletions(current);
+      const next = advanceSessionBranchDeletion(operations[key], completedStage);
+      return { ...current, branchDeletions: { ...operations, [key]: next } };
+    });
+    return sessionTombstoneBranchDeletions(state)[key];
+  }
+
+  async releaseDeletedSessionReads(userId, targets) {
+    const directories = new Set(
+      targets.map(({ directory }) => path.join(this._basePath(userId), ...directory)),
+    );
+    return this.revokeSessionReads(
+      userId,
+      new Set(targets.map(({ sessionId }) => sessionId)),
+      directories,
+    );
+  }
+
+  async revokeSessionReads(userId, sessionIds, directories) {
+    await this.pageSnapshots.releaseDeletedSessions({ userId, sessionIds, directories });
+    await this.removeSessionDisplaySummaries(userId, [...sessionIds]);
   }
 
   async isSessionDeleted(userId, sessionId) {

@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { assertAuthorityOutboxRequest } from "@noobot/event-protocol/outbox";
+import {
+  assertAuthorityOutboxRequest,
+  assertAuthorityOutboxAcknowledgementResult,
+} from "@noobot/event-protocol/outbox";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
 import { isFunction } from "@noobot/shared/value";
 import { withAuthorityOutboxDelivery } from "./authority-outbox-maintenance.js";
@@ -41,7 +44,9 @@ async function publishAuthorityEvents(events, publishEvent) {
 
 async function acknowledgePublishedEvents(session, request, publishFailure) {
   try {
-    const result = await session.acknowledgeAuthorityEvents(request);
+    const result = assertAuthorityOutboxAcknowledgementResult(
+      await session.acknowledgeAuthorityEvents(request),
+    );
     if (!result.acknowledged && publishFailure) throw new Error(result.reason);
     return result;
   } catch (error) {
@@ -60,18 +65,15 @@ async function dispatchAuthorityBatch({
   events,
   publishEvent,
   onAcknowledged,
+  entry,
 }) {
-  const attempt = await session.recordAuthorityEventAttempts({
-    ...identity,
-    consumerId,
-    eventIds: events.map((item) => item.eventId),
-  });
-  if (!attempt.recorded) return { dispatched: false, reason: attempt.reason, delivered: 0 };
   const { acknowledgements, sendFailed, publishFailure } = await publishAuthorityEvents(
     events,
     publishEvent,
   );
+  let drained;
   if (acknowledgements.length) {
+    entry.dirty = false;
     const acknowledged = await acknowledgePublishedEvents(
       session,
       { ...identity, consumerId, acknowledgements },
@@ -79,32 +81,29 @@ async function dispatchAuthorityBatch({
     );
     if (!acknowledged.acknowledged)
       return { dispatched: false, reason: acknowledged.reason, delivered: 0 };
+    drained = acknowledged.drained;
     onAcknowledged();
   }
   if (publishFailure) throw publishFailure.error;
   const delivered = acknowledgements.length;
   if (sendFailed) return { dispatched: false, reason: "authority_event_send_failed", delivered };
-  return { dispatched: true, delivered };
+  return { dispatched: true, delivered, drained };
 }
 
-async function drainDirtyScope(entry, drain) {
-  let delivered = 0;
-  do {
-    entry.dirty = false;
-    const result = await drain();
-    delivered += result.delivered;
-    if (result.dispatched !== true) return { ...result, delivered };
-  } while (entry.dirty);
-  return { dispatched: true, delivered };
-}
-
-export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumerId }) {
+export function createAuthorityEventDispatcher({
+  runNewOperation,
+  resolveBot,
+  sendEvent,
+  consumerId,
+}) {
   const normalizedConsumerId = consumerId;
   if (!KNOWN_CONSUMERS.has(normalizedConsumerId)) {
     throw new Error(`authority event consumerId is required: ${normalizedConsumerId || "<empty>"}`);
   }
   if (!isFunction(resolveBot))
     throw new TypeError("authority event dispatcher requires resolveBot");
+  if (!isFunction(runNewOperation))
+    throw new TypeError("authority event dispatcher requires runNewOperation");
   if (!isFunction(sendEvent)) throw new TypeError("authority event dispatcher requires sendEvent");
   const inFlightByScope = new Map();
 
@@ -112,6 +111,8 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
     { userId, sessionId, persistenceScope },
     publishEvent,
     onAcknowledged,
+    entry,
+    finish,
   ) => {
     const identity = {
       userId,
@@ -122,7 +123,8 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
     let delivered = 0;
     const consumerId = normalizedConsumerId;
     while (true) {
-      const pending = await bot.session.getPendingAuthorityEvents({
+      entry.dirty = false;
+      const pending = await bot.session.prepareAuthorityEventDelivery({
         ...identity,
         consumerId,
       });
@@ -135,7 +137,9 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
       }
       const { events } = pending;
       if (!events.length) {
-        if (pending.hasMore === true) continue;
+        if (pending.hasMore === true || entry.dirty) continue;
+
+        finish();
         break;
       }
       const result = await dispatchAuthorityBatch({
@@ -145,9 +149,14 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
         events,
         publishEvent,
         onAcknowledged,
+        entry,
       });
       delivered += result.delivered;
       if (!result.dispatched) return { ...result, delivered };
+      if (result.drained && !entry.dirty) {
+        finish();
+        break;
+      }
     }
     return { dispatched: true, delivered };
   };
@@ -162,7 +171,7 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
         `invalid authority dispatch persistenceScope: ${scopeValidation.errors.join(",")}`,
       );
     }
-    assertAuthorityOutboxRequest({ ...payload, consumerId }, "pending");
+    assertAuthorityOutboxRequest({ ...payload, consumerId }, "prepareDelivery");
     const key = [payload.userId, payload.sessionId, scopeKey(payload.persistenceScope)].join("::");
     const active = inFlightByScope.get(key);
     if (active) {
@@ -171,13 +180,19 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
     }
 
     const entry = { dirty: false, promise: null };
+    const finish = () => {
+      if (inFlightByScope.get(key) === entry) inFlightByScope.delete(key);
+    };
     entry.promise = (async () => {
       try {
-        return await withAuthorityOutboxDelivery(resolveBot, payload, (onAcknowledged) =>
-          drainDirtyScope(entry, () => drainAuthorityEvents(payload, publishEvent, onAcknowledged)),
+        return await withAuthorityOutboxDelivery(
+          { runNewOperation, resolveBot },
+          payload,
+          (onAcknowledged) =>
+            drainAuthorityEvents(payload, publishEvent, onAcknowledged, entry, finish),
         );
       } finally {
-        if (inFlightByScope.get(key) === entry) inFlightByScope.delete(key);
+        finish();
       }
     })();
     inFlightByScope.set(key, entry);

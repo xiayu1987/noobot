@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { MODEL_ERROR_KIND as K } from "../protocol/constants.js";
-import { ModelProtocolError } from "../protocol/error.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 export const MODEL_RECOVERY_ACTION = Object.freeze({
@@ -38,9 +37,6 @@ export function mayReplayModelRequest({ outputObserved, attempts, maxAttempts, s
 
 export function resolveModelRetryDelay({ attempt, baseDelayMs, retryAfterMs = 0 }) {
   const maxDelayMs = TIME_THRESHOLDS.model.maxRetryDelayMs;
-  if (!Number.isFinite(retryAfterMs) || retryAfterMs > maxDelayMs)
-    throw new ModelProtocolError("provider retry wait exceeds the allowed budget", {
-      details: { retryAfterMs, maxDelayMs },
-    });
+  if (!Number.isFinite(retryAfterMs) || retryAfterMs > maxDelayMs) return null;
   return Math.max(retryAfterMs, Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1)));
 }

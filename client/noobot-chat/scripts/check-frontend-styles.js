@@ -216,10 +216,18 @@ function inspectSpacing(filePath, source) {
 
 function inspectTypography(filePath, source) {
   const isTypographySource = typographySources.includes(filePath);
+  const fontFaces = [...source.matchAll(/@font-face\s*\{[^{}]*\}/g)];
   for (const match of source.matchAll(typographyDeclaration)) {
     const { property, quotedValue, plainValue } = match.groups;
     const rawValue = quotedValue ?? plainValue;
     if (isTypographySource && property.startsWith("--")) continue;
+    if (
+      property === "font-family" &&
+      fontFaces.some(
+        (face) => match.index > face.index && match.index < face.index + face[0].length,
+      )
+    )
+      continue;
     const value = rawValue
       .replace(/\s*!important\s*$/, "")
       .replace(/\s+/g, " ")

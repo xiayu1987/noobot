@@ -5,7 +5,7 @@
 
 import { text } from "@noobot/shared/value";
 import { MESSAGE_EVENT_TYPE, isHostActivity } from "./message-event.js";
-import { mergeCanonicalActivityTimelines } from "./activity-timeline.js";
+import { collectCanonicalActivityVersions } from "./activity-timeline.js";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
 import {
   isInjectedSessionMessageRecord,
@@ -124,41 +124,82 @@ function activityContentFact(activity) {
   };
 }
 
-export function projectThinkingDetailContentTimeline(messages = [], activityTimeline = []) {
+export function projectThinkingDetailContentFragment({ messages, activityTimeline, after }) {
   if (!Array.isArray(messages)) throw new TypeError("invalid_thinking_content_messages");
-  const timeline = messages.flatMap(selectThinkingDetailContentTimeline);
-  const activities = mergeCanonicalActivityTimelines(activityTimeline);
-  const supersededRelayCorrelationIds = new Set(
-    messages
-      .filter((message = {}) => isThinkingDetailInjectedMessage(message))
-      .map((message = {}) => text(message?.relayCorrelationId))
-      .filter(Boolean),
-  );
+  if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(after + messages.length)) {
+    throw new TypeError("invalid_thinking_content_position");
+  }
+  const storedContent = messages.flatMap(selectThinkingDetailContentTimeline);
+  const projectedContent = [];
+  const supersededRelayCorrelationIds = new Set();
   for (const [index, message] of messages.entries()) {
-    const fact = projectMessageContentFact(message, index);
-    if (fact) timeline.push(fact);
-  }
-  for (const activity of activities) {
-    if (
-      supersededRelayCorrelationIds.size &&
-      supersededRelayCorrelationIds.has(text(activity?.relayCorrelationId))
-    ) {
-      continue;
+    const fact = projectMessageContentFact(message, after + index);
+    if (fact) projectedContent.push(fact);
+    if (isThinkingDetailInjectedMessage(message) && text(message.relayCorrelationId)) {
+      supersededRelayCorrelationIds.add(text(message.relayCorrelationId));
     }
-    const fact = activityContentFact(activity);
-    if (fact) timeline.push(fact);
   }
-  return reduceThinkingDetailContentTimelines(timeline);
+  return {
+    storedContent,
+    projectedContent,
+    activities: collectCanonicalActivityVersions(activityTimeline),
+    supersededRelayCorrelationIds: [...supersededRelayCorrelationIds],
+  };
+}
+
+export function mergeThinkingDetailContentFragments(fragments) {
+  const storedContent = [];
+  const projectedContent = [];
+  const activities = [];
+  const supersededRelayCorrelationIds = new Set();
+  for (const fragment of fragments) {
+    for (const fact of fragment.storedContent) storedContent.push(fact);
+    for (const fact of fragment.projectedContent) projectedContent.push(fact);
+    for (const id of fragment.supersededRelayCorrelationIds) supersededRelayCorrelationIds.add(id);
+    for (const fact of fragment.activities) activities.push(fact);
+  }
+  const activityTimeline = collectCanonicalActivityVersions(activities).sort(
+    (left, right) => left.sequence - right.sequence,
+  );
+  const activityContent = [];
+  for (const activity of activityTimeline) {
+    if (supersededRelayCorrelationIds.has(text(activity.relayCorrelationId))) continue;
+    const fact = activityContentFact(activity);
+    if (fact) activityContent.push(fact);
+  }
+  return {
+    activityTimeline,
+    thinkingContentTimeline: reduceThinkingDetailContentTimelines(
+      storedContent,
+      projectedContent,
+      activityContent,
+    ),
+  };
+}
+
+export function projectThinkingDetailContentTimeline(messages = [], activityTimeline = []) {
+  return mergeThinkingDetailContentFragments([
+    projectThinkingDetailContentFragment({ messages, activityTimeline, after: 0 }),
+  ]).thinkingContentTimeline;
+}
+
+function messageContentKind(message) {
+  if (isThinkingDetailUserInterjection(message)) {
+    return THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION;
+  }
+  if (isThinkingDetailInjectedMessage(message)) {
+    return THINKING_DETAIL_CONTENT_KIND.INJECTED_MESSAGE;
+  }
+  return null;
+}
+
+export function requiresThinkingDetailMessageContent(message) {
+  return messageContentKind(message) !== null;
 }
 
 function projectMessageContentFact(message, index) {
-  if (isThinkingDetailUserInterjection(message)) {
-    return messageContentFact(message, THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION, index);
-  }
-  if (isThinkingDetailInjectedMessage(message)) {
-    return messageContentFact(message, THINKING_DETAIL_CONTENT_KIND.INJECTED_MESSAGE, index);
-  }
-  return null;
+  const kind = messageContentKind(message);
+  return kind === null ? null : messageContentFact(message, kind, index);
 }
 
 export function selectThinkingDetailContentTimeline(message) {

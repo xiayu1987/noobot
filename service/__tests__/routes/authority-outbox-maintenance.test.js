@@ -22,6 +22,7 @@ import {
   AUTHORITY_EVENT_CONSUMER,
 } from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import { createTestLifecycleEnvelope } from "./chat-websocket-server.turn-lifecycle.fixtures.js";
+import { createServiceBotAccess } from "../../services/service-bot-access.js";
 import {
   compactAuthorityEventOutbox,
   normalizeAuthorityEventOutbox,
@@ -36,7 +37,7 @@ function fixture(t, compact) {
   const bot = {
     session: {
       readServerNow: () => "2026-11-12T12:00:00.000Z",
-      getPendingAuthorityEvents: async () => ({ found: true, events: [] }),
+      prepareAuthorityEventDelivery: async () => ({ found: true, events: [] }),
       compactAuthorityEvents: async (request) => {
         calls.push(request);
         if (compact) await compact();
@@ -46,8 +47,10 @@ function fixture(t, compact) {
   };
   let currentBot = bot;
   const resolveBot = () => currentBot;
+  const runNewOperation = (operation) => operation();
   const dispatcher = () =>
     createAuthorityEventDispatcher({
+      runNewOperation,
       resolveBot,
       sendEvent: () => true,
       consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
@@ -61,6 +64,58 @@ function fixture(t, compact) {
     },
   };
 }
+
+test("timer acquires a fresh Bot lease and retirement drains the compaction", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const started = Promise.withResolvers();
+  const finished = Promise.withResolvers();
+  let attempts = 0;
+  const first = {
+    session: {
+      prepareAuthorityEventDelivery: async () => ({ found: true, events: [] }),
+      compactAuthorityEvents: () => assert.fail("must not compact with the retired Bot"),
+    },
+  };
+  const second = {
+    session: {
+      readServerNow: () => "2026-11-12T12:00:00.000Z",
+      compactAuthorityEvents: async () => {
+        attempts += 1;
+        started.resolve();
+        await finished.promise;
+        return { compacted: true, nextRetainedDeliveryAt: null };
+      },
+    },
+  };
+  let current = first;
+  const access = createServiceBotAccess({ getBot: () => current });
+  const dispatch = createAuthorityEventDispatcher({
+    resolveBot: access.getRetainedBot,
+    runNewOperation: access.runNewOperation,
+    sendEvent: () => true,
+    consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
+  });
+  await access.runOperation(() => dispatch(identity));
+  await access.withRetirement(() => {
+    current = second;
+  });
+  t.mock.timers.tick(idleMs);
+  await setImmediate();
+  assert.equal(attempts, 1);
+  await started.promise;
+  let retired = false;
+  const retiring = access.withRetirement(() => {
+    retired = true;
+  });
+  try {
+    await setImmediate();
+    assert.equal(retired, false);
+  } finally {
+    finished.resolve();
+    await retiring;
+  }
+  assert.equal(retired, true);
+});
 
 test("multiple connections share a fixed maintenance deadline and retain the delivery cutoff", async (t) => {
   const { calls, dispatcher } = fixture(t);
@@ -102,7 +157,7 @@ test("an active delivery postpones maintenance across connections and scopes sta
   const { bot, calls, dispatcher } = fixture(t);
   await dispatcher()(identity);
   const pending = Promise.withResolvers();
-  bot.session.getPendingAuthorityEvents = () => pending.promise;
+  bot.session.prepareAuthorityEventDelivery = () => pending.promise;
   const delivery = dispatcher()(identity);
   t.mock.timers.tick(idleMs * 2);
   assert.equal(calls.length, 0);
@@ -162,12 +217,11 @@ for (const failureMode of ["return-false", "throw"]) {
       });
       return { eventId: envelope.identity.eventId, envelope };
     });
-    bot.session.getPendingAuthorityEvents = async () => ({ found: true, events });
-    bot.session.recordAuthorityEventAttempts = async () => ({ recorded: true });
+    bot.session.prepareAuthorityEventDelivery = async () => ({ found: true, events });
     const acknowledged = [];
     bot.session.acknowledgeAuthorityEvents = async ({ acknowledgements }) => {
       acknowledged.push(...acknowledgements.map((item) => item.eventId));
-      return { acknowledged: true };
+      return { acknowledged: true, drained: true };
     };
     const failure = new Error("publisher failed after one delivery");
     const delivery = dispatcher()(identity, async (_type, envelope) => {
@@ -306,7 +360,7 @@ for (const busy of ["delivery", "maintenance"]) {
     await setImmediate();
     let delivery;
     if (busy === "delivery") {
-      bot.session.getPendingAuthorityEvents = () => gate.promise;
+      bot.session.prepareAuthorityEventDelivery = () => gate.promise;
       delivery = dispatch(identity);
     } else {
       await dispatch(identity);

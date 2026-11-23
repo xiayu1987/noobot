@@ -11,43 +11,46 @@ import path from "node:path";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { readImmutableListProjection } from "../../src/session/session-artifact-session/immutable-list-projection.js";
+import { immutableListProjectionSource } from "../../src/session/session-artifact-session/immutable-message-preview.js";
+import { sessionMessagePreviewLimits } from "@noobot/session-protocol/message-preview";
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
 
 test("list reads only the authoritative facts and the selected message", async () => {
   const calls = [];
-  const value = await readImmutableListProjection(async (collection, key) => {
-    calls.push([collection, key]);
-    if (collection === "metadata" && key === "facts")
+  const value = await readImmutableListProjection({
+    get: async (collection, key) => {
+      calls.push([collection, key]);
+      assert.deepEqual([collection, key], ["metadata", "facts"]);
       return { messageCount: 10, lastMessageUid: "last" };
-    if (collection === "messages" && key === "last")
+    },
+    readMessageSummary: async (messageUid) => {
+      calls.push(["preview", messageUid]);
       return {
-        message: {
-          messageUid: "last",
-          sessionId: "list",
-          role: "assistant",
-          content: "latest",
-          modelMessageId: "model-last",
-          presentationMessageId: "presentation-last",
-        },
+        messageUid: "last",
+        content: "latest",
+        contentTruncated: false,
       };
-    throw new Error(`Unexpected list dependency: ${collection}/${key}`);
+    },
   });
   assert.equal(value.messageCount, 10);
   assert.equal(value.lastMessage.content, "latest");
   assert.deepEqual(calls, [
     ["metadata", "facts"],
-    ["messages", "last"],
+    ["preview", "last"],
   ]);
 });
 
 test("empty lists require no message or projection read", async () => {
   const calls = [];
-  const value = await readImmutableListProjection(async (collection, key) => {
-    calls.push([collection, key]);
-    assert.deepEqual([collection, key], ["metadata", "facts"]);
-    return { messageCount: 0, lastMessageUid: "" };
+  const value = await readImmutableListProjection({
+    get: async (collection, key) => {
+      calls.push([collection, key]);
+      assert.deepEqual([collection, key], ["metadata", "facts"]);
+      return { messageCount: 0, lastMessageUid: "" };
+    },
+    readMessageSummary: async () => assert.fail("Empty lists must not read a message"),
   });
   assert.deepEqual(value, { messageCount: 0, lastMessage: null });
   assert.equal(calls.length, 1);
@@ -62,21 +65,25 @@ for (const facts of [
 ]) {
   test(`invalid list facts reject before fetching a message: ${JSON.stringify(facts)}`, async () => {
     await assert.rejects(
-      readImmutableListProjection(async (collection) => {
-        assert.equal(collection, "metadata");
-        return facts;
+      readImmutableListProjection({
+        get: async (collection) => {
+          assert.equal(collection, "metadata");
+          return facts;
+        },
+        readMessageSummary: async () => assert.fail("Invalid facts must not read a message"),
       }),
       { code: "SESSION_IMMUTABLE_STORAGE_INVALID" },
     );
   });
 }
 
-for (const record of [null, { message: { messageUid: "foreign" } }]) {
+for (const record of [null, { messageUid: "foreign" }]) {
   test(`missing or foreign last message rejects: ${JSON.stringify(record)}`, async () => {
     await assert.rejects(
-      readImmutableListProjection(async (collection) =>
-        collection === "metadata" ? { messageCount: 1, lastMessageUid: "last" } : record,
-      ),
+      readImmutableListProjection({
+        get: async () => ({ messageCount: 1, lastMessageUid: "last" }),
+        readMessageSummary: async () => record,
+      }),
       { code: "SESSION_IMMUTABLE_STORAGE_INVALID" },
     );
   });
@@ -131,9 +138,11 @@ test("initialization and message updates publish no duplicate list body", async 
   });
   const snapshot = await store.snapshot();
   assert.equal(await store.get(snapshot, "metadata", "listProjection"), null);
-  const list = await readImmutableListProjection((collection, key) =>
-    store.get(snapshot, collection, key),
-  );
+  const list = await readImmutableListProjection(immutableListProjectionSource(store, snapshot));
   assert.equal(list.messageCount, 1);
-  assert.equal(list.lastMessage.content, message.content);
+  assert.equal(
+    list.lastMessage.content,
+    message.content.slice(0, sessionMessagePreviewLimits().chars),
+  );
+  assert.equal(list.lastMessage.contentTruncated, true);
 });

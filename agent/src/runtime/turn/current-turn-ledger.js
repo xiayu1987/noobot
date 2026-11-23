@@ -5,7 +5,11 @@
  */
 import { isFunction, text } from "@noobot/shared/value";
 import { canonicalAssistantPresentationIdentity } from "@noobot/session-protocol";
-import { requireMessagePersistenceReceipt } from "@noobot/session-protocol/session-changes";
+import {
+  requireMessagePersistenceReceipt,
+  sameMessageCreationOwner,
+} from "@noobot/session-protocol/session-changes";
+import { selectMessagePersistenceBatch } from "@noobot/session-protocol/message-persistence-batch";
 import { createMessagePositionIndex } from "./message-position-index.js";
 import { createTurnCompletionIndex } from "./turn-completion-index.js";
 import {
@@ -19,6 +23,26 @@ import {
 
 function cloneMessages(messages) {
   return messages.map((message) => ({ ...message }));
+}
+
+function persistenceEntry(entry) {
+  return {
+    ...entry,
+    message: { ...entry.message },
+    persisted: entry.persistenceState.committed,
+    contentAppend:
+      entry.persistenceState.committed?.contentEpoch === entry.contentEpoch &&
+      entry.message.content !== entry.persistenceState.committed.message.content
+        ? entry.message.content.slice(entry.persistenceState.committed.message.content.length)
+        : null,
+  };
+}
+
+function* pendingThrough(pending, revision) {
+  for (const entry of pending.values()) {
+    if (entry.revision > revision) break;
+    yield persistenceEntry(entry);
+  }
 }
 
 export function createCurrentTurnMessagesStore(messages = []) {
@@ -114,6 +138,7 @@ export function createCurrentTurnMessagesStore(messages = []) {
     const state = persistenceStates.get(messageUid);
     if (!append && state.content !== message.content) state.contentEpoch = {};
     state.content = message.content;
+    pending.delete(messageUid);
     pending.set(messageUid, {
       messageUid,
       revision: nextRevision,
@@ -209,7 +234,7 @@ export function createCurrentTurnMessagesStore(messages = []) {
       return { ...next };
     },
     updateLast(patch = {}, matcher = null) {
-      if (typeof matcher !== "function") {
+      if (!isFunction(matcher)) {
         const index = lastPosition;
         return index === undefined ? null : updateAt(index, patch);
       }
@@ -246,6 +271,15 @@ export function createCurrentTurnMessagesStore(messages = []) {
       if (last === undefined) return [];
       const selected = new Set(artifactPositions);
       selected.add(last);
+      return [...selected]
+        .sort((left, right) => left - right)
+        .map((index) => ({ ...items.get(index) }));
+    },
+    readResultMessages() {
+      const selected = new Set();
+      for (const { messageUid } of pending.values()) selected.add(positions.get(messageUid));
+      const last = finalAssistantPositions.last();
+      if (last !== undefined) selected.add(last);
       return [...selected]
         .sort((left, right) => left - right)
         .map((index) => ({ ...items.get(index) }));
@@ -312,7 +346,7 @@ export function createCurrentTurnMessagesStore(messages = []) {
       let updatedCount = 0;
       const previousItems = [...items.values()];
       const nextItems = previousItems.map((item, index) => {
-        if (typeof matcher === "function" && !matcher(item, index)) return item;
+        if (isFunction(matcher) && !matcher(item, index)) return item;
         updatedCount += 1;
         return patchAgentTurnMessageValue(item, patch);
       });
@@ -337,18 +371,27 @@ export function createCurrentTurnMessagesStore(messages = []) {
     readCounts() {
       return { ...counts };
     },
+    readPersistenceBoundary() {
+      return revision;
+    },
+    readPendingChangeBatch({ throughRevision, ownership, maxBytes, maxRecords }) {
+      if (
+        !Number.isSafeInteger(throughRevision) ||
+        throughRevision < 0 ||
+        throughRevision > revision
+      )
+        throw new TypeError("Persistence requires a valid revision boundary");
+      const batch = selectMessagePersistenceBatch({
+        entries: pendingThrough(pending, throughRevision),
+        ownership,
+        maxBytes,
+        maxRecords,
+      });
+      return { ...batch, counts: { ...counts } };
+    },
     readPendingChanges() {
       return {
-        entries: [...pending.values()].map((entry) => ({
-          ...entry,
-          message: { ...entry.message },
-          persisted: entry.persistenceState.committed,
-          contentAppend:
-            entry.persistenceState.committed?.contentEpoch === entry.contentEpoch &&
-            entry.message.content !== entry.persistenceState.committed.message.content
-              ? entry.message.content.slice(entry.persistenceState.committed.message.content.length)
-              : null,
-        })),
+        entries: [...pendingThrough(pending, revision)],
         counts: { ...counts },
       };
     },
@@ -376,6 +419,11 @@ export function createCurrentTurnMessagesStore(messages = []) {
           throw new TypeError("Persistence receipt ownership mismatch");
         if (
           state.committed &&
+          !sameMessageCreationOwner(state.committed.receipt.owner, receipt.owner)
+        )
+          throw new TypeError("Persistence receipt changed the message creation owner");
+        if (
+          state.committed &&
           (receipt.generation < state.committed.receipt.generation ||
             entry.revision < state.committed.revision)
         )
@@ -386,6 +434,10 @@ export function createCurrentTurnMessagesStore(messages = []) {
             message: entry.message,
             receipt: Object.freeze({
               ...receipt,
+              owner:
+                typeof receipt.owner === "number"
+                  ? receipt.owner
+                  : Object.freeze({ ...receipt.owner }),
               activityEventIds: Object.freeze([...receipt.activityEventIds]),
             }),
             contentEpoch: entry.contentEpoch,
@@ -418,6 +470,7 @@ export function requireCurrentTurnMessagesStore(currentTurnMessages) {
     isFunction(currentTurnMessages.updateWhere) &&
     isFunction(currentTurnMessages.readSnapshot) &&
     isFunction(currentTurnMessages.readPendingChanges) &&
+    isFunction(currentTurnMessages.readResultMessages) &&
     isFunction(currentTurnMessages.acknowledgeChanges) &&
     isFunction(currentTurnMessages.toArray)
   )

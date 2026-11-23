@@ -5,6 +5,7 @@
  */
 
 import { resolveSessionAutoTitle } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 import { registerDialogOrderMessage } from "./dialog-order-entity.js";
 
 export function registerSessionMessageFacts(session, message) {
@@ -15,5 +16,5 @@ export function registerSessionMessageFacts(session, message) {
 }
 
 export function resolveSessionTitle(session) {
-  return session.customTitle || session.autoTitle || session.sessionId.slice(0, 8);
+  return session.customTitle || text(session.autoTitle) || session.sessionId.slice(0, 8);
 }

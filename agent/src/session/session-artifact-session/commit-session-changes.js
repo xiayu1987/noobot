@@ -4,17 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import { mergeUserMetaParsedResults } from "@noobot/context-protocol/policy/user-meta-backwrite";
 import {
   applySessionSettings,
   decideAggregateConcurrency,
   createScopedSessionMetadataRecord,
   mergeTurnTimingRecord,
   normalizeTurnTimingRecord,
+  requireTurnTimingOwnership,
 } from "@noobot/session-protocol";
-import { requireSessionChanges } from "@noobot/session-protocol/session-changes";
-import { immutableCheckpointMessageResult } from "@noobot/session-protocol/immutable-storage-graph";
-import { ImmutableSessionStore } from "./immutable-session-store.js";
+import {
+  mergeUserMetaParsedResults,
+  requireImmutableSessionChanges,
+  requirePreparedSessionCommitRequest,
+} from "@noobot/session-protocol/session-changes";
+import {
+  immutableCheckpointMessageResult,
+  requireImmutableCommitOrigin,
+} from "@noobot/session-protocol/immutable-storage-graph";
 import {
   ImmutableSessionChanges,
   prepareImmutableMessages,
@@ -26,7 +32,6 @@ import {
   prepareImmutableDeliveries,
   prepareImmutableOutboxCursors,
   prepareImmutableOutboxMaintenance,
-  prepareImmutableOutboxTurnRemoval,
 } from "./immutable-outbox.js";
 import { immutableStorageError } from "./immutable-object-store.js";
 import { prepareImmutableSummaryCheckpoint } from "./immutable-summary-changes.js";
@@ -37,10 +42,7 @@ import { prepareImmutableTurnReplacement } from "./immutable-turn-replacement.js
 import { prepareImmutableLifecycleIndex } from "./immutable-lifecycle-index.js";
 import { prepareImmutableMessageUpdates } from "./immutable-message-content-appends.js";
 import { prepareImmutableMessageDiagnostics } from "./immutable-message-diagnostics.js";
-import {
-  readCommittedMessageReceipts,
-  readCheckpointMessageReceipts,
-} from "./immutable-message-receipts.js";
+import { projectImmutableSessionCommitResult } from "./immutable-message-receipts.js";
 
 async function prepareTimings(plan, timings) {
   for (const source of timings) {
@@ -48,8 +50,7 @@ async function prepareTimings(plan, timings) {
     const owner =
       (await plan.get("turns", incoming.turnScopeId)) ??
       (await plan.get("lifecycle", incoming.turnScopeId));
-    if (!owner || owner.dialogProcessId !== incoming.dialogProcessId)
-      throw new TypeError("Turn timing ownership mismatch");
+    requireTurnTimingOwnership(incoming, owner?.dialogProcessId);
     const previous = await plan.get("timings", incoming.turnScopeId);
     plan.set(
       "timings",
@@ -57,10 +58,6 @@ async function prepareTimings(plan, timings) {
       previous ? mergeTurnTimingRecord(previous, incoming) : incoming,
     );
   }
-}
-
-async function absorb(plan, prepared) {
-  for (const change of prepared.changes) await plan.apply(change);
 }
 
 async function prepareArtifactEvent(store, plan, event) {
@@ -81,24 +78,23 @@ async function prepareArtifactEvent(store, plan, event) {
   return record.envelope;
 }
 
-async function prepareCheckpointReplays({ store, read, checkpoints, committedAt }) {
+async function prepareCheckpointReplays({ store, plan, checkpoints, committedAt, generation }) {
   const duplicateCheckpoints = new Map();
   const replayedMessageUids = new Set();
   for (const checkpoint of checkpoints) {
-    if (
-      !(await read(
-        "checkpoints",
-        immutableCheckpointKey(checkpoint.turnScopeId, checkpoint.checkpointId),
-      ))
-    )
-      continue;
+    const key = immutableCheckpointKey(checkpoint.turnScopeId, checkpoint.checkpointId);
+    if (!(await plan.get("checkpoints", key))) continue;
     const prepared = await prepareImmutableSummaryCheckpoint({
       store,
-      get: read,
+      plan,
       checkpoint,
       committedAt,
     });
-    duplicateCheckpoints.set(checkpoint, prepared);
+    const origin = requireImmutableCommitOrigin(
+      await plan.get("checkpointCommits", key),
+      generation,
+    );
+    duplicateCheckpoints.set(checkpoint, { ...prepared, originGeneration: origin.generation });
     for (const message of [
       ...checkpoint.messages,
       ...(checkpoint.messageContentAppends ?? []),
@@ -109,58 +105,42 @@ async function prepareCheckpointReplays({ store, read, checkpoints, committedAt 
   return { duplicateCheckpoints, replayedMessageUids };
 }
 
-export async function commitSessionChanges({ sessionDir, sessionId, ...request }) {
-  const store = await ImmutableSessionStore.open({ sessionDir, sessionId });
-  return commitImmutableSessionChanges(store, request);
+export async function commitScopedImmutableSessionChanges(store, request, validateSnapshot) {
+  const prepared = requirePreparedSessionCommitRequest(request);
+  if (prepared.epoch !== null)
+    throw new TypeError("Immutable storage cannot commit a partition request");
+  return transactSessionChanges(store, prepared, validateSnapshot);
 }
 
-export async function commitImmutableSessionChanges(
+function transactSessionChanges(
   store,
-  { expectedGeneration, operationId, changes, committedAt, validateSnapshot },
+  { expectedGeneration, operationId, input },
+  validateSnapshot,
 ) {
   return store.transact({
     expectedGeneration,
     operationId,
-    input: { changes, committedAt },
-    validateSnapshot: async ({ input, ...snapshotContext }) => {
-      if (validateSnapshot) await validateSnapshot(snapshotContext);
-      requireSessionChanges(input.changes);
-      if (typeof input.committedAt !== "string" || !Number.isFinite(Date.parse(input.committedAt)))
-        throw new TypeError("Session changes require a committedAt timestamp");
-    },
-    projectResult: async (outcome) => {
-      const { messages, ...result } = outcome.result;
-      if (messages)
-        result.messageReceipts = await readCommittedMessageReceipts(store, outcome, messages);
-      if (result.summaryCheckpoints) {
-        result.summaryCheckpoints = await Promise.all(
-          result.summaryCheckpoints.map(async (checkpoint) => {
-            const { messages: identities, turnScopeId, ...value } = checkpoint;
-            return {
-              ...value,
-              messageReceipts: await readCheckpointMessageReceipts(store, {
-                ...checkpoint,
-                messages: identities,
-                turnScopeId,
-              }),
-            };
-          }),
-        );
-      }
-      return { ...outcome, result };
-    },
+    input,
+    validateSnapshot,
+    validateInput: ({ changes }) => requireImmutableSessionChanges(changes),
+    projectResult: async (outcome, snapshot, record) => ({
+      ...outcome,
+      result: await projectImmutableSessionCommitResult(store, snapshot, record, outcome.result),
+    }),
     prepare: (context) => prepareSessionChanges(store, context),
   });
 }
 
-async function prepareSessionChanges(store, { get, getMany, getManyMetadata, getMetadata, input }) {
+async function prepareSessionChanges(
+  store,
+  { get, getMany, getManyMetadata, getMetadata, input, snapshot },
+) {
   const delta = input.changes;
   const plan = new ImmutableSessionChanges(get, {
     getMany,
     getManyMetadata,
     getMetadata,
     readContent: (reference) => store.objects.readValue(reference),
-    readContentMetadata: (reference) => store.objects.readValueMetadata(reference),
   });
   const read = (collection, key) => plan.get(collection, key);
   const original = await read("metadata", "session");
@@ -168,7 +148,7 @@ async function prepareSessionChanges(store, { get, getMany, getManyMetadata, get
   if (delta.userMetaParsedResult) {
     return prepareUserMetaResult({ store, plan, original, input });
   }
-  return prepareSessionMutation({ store, plan, read, input });
+  return prepareSessionMutation({ store, plan, read, input, generation: snapshot.generation });
 }
 
 async function prepareUserMetaResult({ store, plan, original, input }) {
@@ -209,7 +189,7 @@ async function prepareUserMetaResult({ store, plan, original, input }) {
   };
 }
 
-async function prepareSessionMutation({ store, plan, read, input }) {
+async function prepareSessionMutation({ store, plan, read, input, generation }) {
   const delta = input.changes;
   if (delta.turnReplacement) {
     const result = await prepareImmutableTurnReplacement({
@@ -244,33 +224,30 @@ async function prepareSessionMutation({ store, plan, read, input }) {
     };
   }
   if (delta.attachmentBinding) {
-    const prepared = await prepareImmutableAttachmentBinding({
+    const result = await prepareImmutableAttachmentBinding({
       store,
-      get: read,
-      getMetadata: (collection, key) => plan.getMetadata(collection, key),
+      plan,
       request: delta.attachmentBinding,
       committedAt: input.committedAt,
     });
-    if (!prepared.abort) {
-      await absorb(plan, prepared);
-    }
     return {
-      ...prepared,
+      abort: result.deduplicated,
       changes: plan.changes(),
-      result: { attachmentBinding: prepared.result },
+      result: { attachmentBinding: result },
     };
   }
-  return prepareAggregateChanges({ store, plan, read, input });
+  return prepareAggregateChanges({ store, plan, read, input, generation });
 }
 
-async function prepareAggregateChanges({ store, plan, read, input }) {
+async function prepareAggregateChanges({ store, plan, read, input, generation }) {
   const delta = input.changes;
   const result = {};
   const { duplicateCheckpoints, replayedMessageUids } = await prepareCheckpointReplays({
     store,
-    read,
+    plan,
     checkpoints: delta.summaryCheckpoints ?? [],
     committedAt: input.committedAt,
+    generation,
   });
   const messages = (delta.messages ?? []).filter(
     (message) => !replayedMessageUids.has(message.messageUid),
@@ -278,15 +255,19 @@ async function prepareAggregateChanges({ store, plan, read, input }) {
   const preparedMessages = await prepareMessageChanges({
     store,
     plan,
-    read,
     input,
     messages,
     result,
   });
   if (preparedMessages?.abort) return preparedMessages;
   await prepareMessageUpdates({ store, plan, input, replayedMessageUids, result });
-  await prepareImmutableMessageDiagnostics(plan, delta.messageDiagnostics ?? []);
-  await prepareCheckpoints({ store, plan, read, input, duplicateCheckpoints, result });
+  await prepareImmutableMessageDiagnostics(
+    plan,
+    (delta.messageDiagnostics ?? []).filter(
+      ({ messageUid }) => !replayedMessageUids.has(messageUid),
+    ),
+  );
+  await prepareCheckpoints({ store, plan, input, duplicateCheckpoints, result, generation });
   await prepareDeliveryChanges({ store, plan, input, result });
   await prepareSessionMetadata({ plan, read, input, messages });
   await prepareImmutableLifecycleIndex(plan);
@@ -298,31 +279,26 @@ async function prepareAggregateChanges({ store, plan, read, input }) {
   return { abort, changes, result };
 }
 
-async function prepareMessageChanges({ store, plan, read, input, messages, result }) {
+async function prepareMessageChanges({ store, plan, input, messages, result }) {
   const delta = input.changes;
   if (delta.turnTransition) {
     const prepared = await prepareImmutableTurnCommit({
       store,
-      get: read,
-      getMetadata: (collection, key) => plan.getMetadata(collection, key),
+      plan,
       event: delta.turnTransition,
       messages,
       now: () => input.committedAt,
       createEventId: randomUUID,
     });
-    if (prepared.abort) return prepared;
-    await absorb(plan, prepared);
-    result.turnTransition = prepared.result;
+    result.turnTransition = prepared;
+    if (!prepared.applied) return { abort: true, changes: plan.changes(), result };
   } else if (messages.length) {
-    const prepared = await prepareImmutableMessages({
+    result.messages = await prepareImmutableMessages({
       store,
-      get: read,
-      getMetadata: (collection, key) => plan.getMetadata(collection, key),
+      plan,
       messages,
       updatedAt: input.committedAt,
     });
-    await absorb(plan, prepared);
-    result.messages = prepared.result.turns;
   }
 }
 
@@ -346,22 +322,29 @@ async function prepareMessageUpdates({ store, plan, input, replayedMessageUids, 
   }
 }
 
-async function prepareCheckpoints({ store, plan, read, input, duplicateCheckpoints, result }) {
+async function prepareCheckpoints({
+  store,
+  plan,
+  input,
+  duplicateCheckpoints,
+  result,
+  generation,
+}) {
   const delta = input.changes;
   result.summaryCheckpoints = [];
   for (const checkpoint of delta.summaryCheckpoints ?? []) {
+    const duplicate = duplicateCheckpoints.get(checkpoint);
     const prepared =
-      duplicateCheckpoints.get(checkpoint) ??
+      duplicate ??
       (await prepareImmutableSummaryCheckpoint({
         store,
-        get: read,
-        getManyMetadata: (collection, keys) => plan.getManyMetadata(collection, keys),
+        plan,
         checkpoint,
         committedAt: input.committedAt,
       }));
-    await absorb(plan, prepared);
     result.summaryCheckpoints.push({
-      ...prepared.result,
+      ...prepared,
+      ...(prepared.deduplicated === true && !duplicate ? { originGeneration: generation + 1 } : {}),
       turnScopeId: checkpoint.turnScopeId,
       messages: immutableCheckpointMessageResult(checkpoint),
     });
@@ -376,12 +359,6 @@ async function prepareDeliveryChanges({ store, plan, input, result }) {
     result.events.push(await prepareArtifactEvent(store, plan, event));
   }
   await prepareTimings(plan, delta.timings ?? []);
-  if (delta.outboxTurnRemoval)
-    result.outboxTurnRemoval = await prepareImmutableOutboxTurnRemoval(
-      store,
-      plan,
-      delta.outboxTurnRemoval,
-    );
   result.deliveries = await prepareImmutableDeliveries(plan, delta.deliveries ?? [], sessionId);
   result.outboxCursors = await prepareImmutableOutboxCursors(
     plan,

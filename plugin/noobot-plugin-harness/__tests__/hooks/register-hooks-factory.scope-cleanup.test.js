@@ -98,6 +98,8 @@ test("createRegisterHarnessHooks cleans harness runs on after_session_delete", a
   });
 
   await handlers.get("service.after_session_delete")({
+    userId: "u1",
+    deletionKey: '["s-delete"]',
     sessionId: "s-parent",
     deletedSessionIds: ["s-parent", "s-child"],
     basePath: "/tmp/base",
@@ -105,6 +107,6 @@ test("createRegisterHarnessHooks cleans harness runs on after_session_delete", a
 
   assert.deepEqual(
     calls.map((item) => (Array.isArray(item) ? item[0] : item)),
-    ["flushAllManifests", "flushAllJsonlBuffers", "cleanupRunsBySessionIds", "emit"],
+    ["cleanupRunsBySessionIds", "emit"],
   );
 });

@@ -208,6 +208,23 @@ test("latest injected selection is scoped independently to each terminal dialog"
   ]);
 });
 
+test("terminal history retains the latest injection for each distinct source and type tuple", () => {
+  const injected = (messageUid, injectedBy, injectedMessageType) =>
+    message({ messageUid, injectedMessage: true, injectedBy, injectedMessageType });
+
+  const result = projectTerminalHistoryMessages({
+    messages: [
+      message({ messageUid: "original", messageOrigin: "natural" }),
+      injected("first-old", "plugin:scope", "guidance"),
+      injected("second", "plugin", "scope:guidance"),
+      injected("first-new", "plugin:scope", "guidance"),
+    ],
+    terminalStatuses: [status()],
+  });
+
+  assert.deepEqual(ids(result), ["original", "second", "first-new", terminalKey("turn-1")]);
+});
+
 test("terminal status requires the complete round identity", () => {
   assert.throws(
     () =>

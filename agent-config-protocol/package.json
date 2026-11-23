@@ -16,6 +16,7 @@
   "dependencies": {
     "@noobot/execution-isolation-protocol": "file:../execution-isolation-protocol",
     "@noobot/model-protocol": "file:../model-protocol",
+    "@noobot/session-protocol": "file:../session-protocol",
     "@noobot/shared": "file:../shared"
   }
 }

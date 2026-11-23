@@ -6,6 +6,7 @@
 import {
   assertTurnReplacementCommit,
   collectTurnReplacementTombstoneErrors,
+  projectTurnReplacementTombstone,
 } from "@noobot/session-protocol";
 import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js";
 import { text as clean, isFunction } from "@noobot/shared/value";
@@ -107,18 +108,10 @@ function commitPreparedTurnReplacement({
   const sequence = normalizedLifecycle.sequence + 1;
   for (const turnScopeId of replacedTurnScopeIds) {
     delete normalizedLifecycle.turns[turnScopeId];
-    normalizedLifecycle.replacedTurns[turnScopeId] = {
+    normalizedLifecycle.replacedTurns[turnScopeId] = projectTurnReplacementTombstone(replacement, {
       turnScopeId,
-      replacementDialogProcessId: clean(replacement.replacementDialogProcessId),
-      replacementTurnScopeId: clean(replacement.replacementTurnScopeId),
-      replacementUserMessageUid: clean(replacement.replacementUserMessageUid),
-      requestHash: clean(replacement.requestHash),
-      commandId: clean(replacement.commandId),
-      committedAggregateVersion: Number(replacement.committedAggregateVersion),
-      replacedTurnScopeIds: [...replacedTurnScopeIds],
       sequence,
-      committedAt: clean(replacement.committedAt),
-    };
+    });
   }
   if (replacedScopes.has(normalizedLifecycle.activeTurnScopeId)) {
     normalizedLifecycle.activeTurnScopeId = "";

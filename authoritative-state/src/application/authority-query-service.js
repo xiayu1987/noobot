@@ -3,8 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { requireSessionExecutionSource } from "@noobot/session-protocol/session-reader";
 import {
   buildExecutionTree,
+  EXECUTION_QUERY_COMMAND,
+  EXECUTION_QUERY_IDENTITY_CONFLICT,
+  EXECUTION_QUERY_MISSING_TARGET,
+  isExecutionQueryTargetValid,
+  isDirectExecutionChild,
+  isExecutionInRoot,
   projectExecutionRecord,
 } from "@noobot/session-protocol/execution-lifecycle";
 import {
@@ -14,9 +21,13 @@ import {
   isTurnSnapshotKnownSequence,
   isTurnSnapshotTerminalLimit,
 } from "@noobot/session-protocol/turn-lifecycle";
-import { assertTurnRecord, isTerminalTurnState, projectTurnTiming } from "@noobot/session-protocol";
+import {
+  assertTurnLifecycleStateIntegrity,
+  assertTurnRecord,
+  isTerminalTurnState,
+  projectTurnTiming,
+} from "@noobot/session-protocol";
 import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js";
-import { text as clean } from "@noobot/shared/value";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 function selectLifecycleActiveTurn(lifecycle) {
@@ -44,7 +55,7 @@ export function createAuthoritativeTurnSnapshot({
   if (!isTurnSnapshotTerminalLimit(terminalLimit)) {
     throw new TypeError("turn_snapshot_requires_terminal_limit");
   }
-  const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
+  const lifecycle = assertTurnLifecycleStateIntegrity(lifecycleSource);
   const terminalTurnScopes = new Set(terminalTurnScopeIds);
   const lifecycleActiveTurn = selectLifecycleActiveTurn(lifecycle);
   const activeTurn = lifecycleActiveTurn
@@ -65,28 +76,6 @@ export function createAuthoritativeTurnSnapshot({
     replacedTurns: Object.values(lifecycle.replacedTurns),
     unchanged: knownSequence > 0 && knownSequence === lifecycle.sequence,
     recovery,
-    generatedAt,
-  });
-}
-
-export function resolveAuthoritativeTurnTerminal({
-  lifecycle: lifecycleSource,
-  turnTimings,
-  commandId,
-  sessionId,
-  turnScopeId,
-  aggregateVersion = null,
-  generatedAt,
-}) {
-  requireTurnTerminalResolutionIdentity({ commandId, sessionId, turnScopeId });
-  const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
-  return resolveIndexedTurnTerminal({
-    turn: lifecycle.turns[turnScopeId] || null,
-    turnTimings,
-    commandId,
-    sessionId,
-    turnScopeId,
-    aggregateVersion,
     generatedAt,
   });
 }
@@ -152,8 +141,24 @@ export function projectAuthoritativeExecution(turn, session) {
   });
 }
 
+function executionOwnership(item) {
+  return {
+    executionKind: item.executionKind,
+    sessionId: item.sessionId,
+    parentSessionId: item.parentSessionId,
+    turnScopeId: item.turnScopeId,
+    parentExecutionId: item.parentExecutionId,
+    rootExecutionId: item.rootExecutionId,
+    origin: item.origin,
+  };
+}
+
 function indexExecutionIdentity(execution, byId, conflicts) {
-  if (!execution.executionId || conflicts.has(execution.executionId)) return;
+  const conflict = conflicts.get(execution.executionId);
+  if (conflict) {
+    conflict.identities.push(executionOwnership(execution));
+    return;
+  }
   const current = byId.get(execution.executionId);
   if (!current) {
     byId.set(execution.executionId, execution);
@@ -161,39 +166,45 @@ function indexExecutionIdentity(execution, byId, conflicts) {
   }
   conflicts.set(execution.executionId, {
     executionId: execution.executionId,
-    reason: "execution_identity_conflict",
-    identities: [current, execution].map((item) => ({
-      executionKind: item.executionKind,
-      sessionId: item.sessionId,
-      parentSessionId: item.parentSessionId,
-      turnScopeId: item.turnScopeId,
-      parentExecutionId: item.parentExecutionId,
-      rootExecutionId: item.rootExecutionId,
-      origin: item.origin,
-    })),
+    reason: EXECUTION_QUERY_IDENTITY_CONFLICT,
+    identities: [current, execution].map(executionOwnership),
   });
   byId.delete(execution.executionId);
 }
 
-export function buildAuthoritativeExecutionReadModel(sessions = []) {
+export function buildAuthoritativeExecutionReadModel(sources) {
   const byId = new Map();
   const conflicts = new Map();
-  for (const session of Array.isArray(sessions) ? sessions : []) {
-    const lifecycle = normalizeTurnLifecycleEntity(session.turnLifecycle);
-    for (const turn of Object.values(lifecycle.turns)) {
+  for (const source of sources) {
+    const session = requireSessionExecutionSource(source);
+    for (const turn of session.turns) {
+      assertTurnRecord(turn);
       const execution = projectAuthoritativeExecution(turn, session);
       indexExecutionIdentity(execution, byId, conflicts);
     }
   }
-  return { executions: [...byId.values()], conflicts };
+  return { byId, conflicts };
+}
+
+function queryRelatedExecutions(readModel, includes) {
+  for (const conflict of readModel.conflicts.values()) {
+    if (
+      conflict.identities.some((identity) =>
+        includes({ ...identity, executionId: conflict.executionId }),
+      )
+    ) {
+      return { found: false, reason: conflict.reason, conflict };
+    }
+  }
+  return { found: true, executions: Array.from(readModel.byId.values()).filter(includes) };
 }
 
 export function queryAuthoritativeExecution(readModel, { executionId, generatedAt }) {
-  const id = clean(executionId);
-  if (!id) return { found: false, reason: "missing_execution" };
-  const conflict = readModel.conflicts.get(id);
+  if (!isExecutionQueryTargetValid(EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, { executionId }))
+    return { found: false, reason: EXECUTION_QUERY_MISSING_TARGET };
+  const conflict = readModel.conflicts.get(executionId);
   if (conflict) return { found: false, reason: conflict.reason, conflict };
-  const execution = readModel.executions.find((item) => item.executionId === id);
+  const execution = readModel.byId.get(executionId);
   return execution
     ? { found: true, execution, generatedAt }
     : { found: false, reason: "execution_not_found" };
@@ -201,31 +212,32 @@ export function queryAuthoritativeExecution(readModel, { executionId, generatedA
 
 export function queryAuthoritativeExecutionTree(
   readModel,
-  { executionId = "", rootExecutionId = "", generatedAt },
+  { executionId = "", rootExecutionId, generatedAt },
 ) {
-  const requestedExecutionId = clean(executionId);
-  const requestedRootId = clean(rootExecutionId);
-  const targetId = requestedExecutionId || requestedRootId;
-  if (!targetId) return { found: false, reason: "missing_execution" };
-  const conflict = readModel.conflicts.get(targetId);
-  if (conflict) return { found: false, reason: conflict.reason, conflict };
-  const selected = requestedExecutionId
-    ? readModel.executions.find((item) => item.executionId === requestedExecutionId)
-    : readModel.executions.find(
-        (item) => item.executionId === requestedRootId || item.rootExecutionId === requestedRootId,
-      );
-  if (!selected) return { found: false, reason: "execution_not_found" };
-  const rootId = requestedRootId || selected.rootExecutionId;
-  const tree = buildExecutionTree(
-    readModel.executions.filter(
-      (item) => item.executionId === rootId || item.rootExecutionId === rootId,
-    ),
+  if (
+    !isExecutionQueryTargetValid(EXECUTION_QUERY_COMMAND.TREE_GET, { executionId, rootExecutionId })
+  )
+    return { found: false, reason: EXECUTION_QUERY_MISSING_TARGET };
+  let rootId = rootExecutionId;
+  if (executionId) {
+    const focus = queryAuthoritativeExecution(readModel, {
+      executionId,
+      generatedAt,
+    });
+    if (!focus.found) return focus;
+    if (!rootId) rootId = focus.execution.rootExecutionId;
+  }
+  const result = queryRelatedExecutions(readModel, (execution) =>
+    isExecutionInRoot(execution, rootId),
   );
-  const execution = tree.executions[requestedExecutionId || rootId];
-  if (!execution) return { found: false, reason: "execution_not_found" };
+  if (!result.found) return result;
+  const tree = buildExecutionTree(result.executions);
+  const focusId = executionId || rootId;
+  if (!Object.hasOwn(tree.executions, focusId))
+    return { found: false, reason: "execution_not_found" };
   return {
     found: true,
-    execution,
+    execution: tree.executions[focusId],
     rootExecutionId: rootId,
     tree,
     generatedAt,
@@ -233,12 +245,11 @@ export function queryAuthoritativeExecutionTree(
 }
 
 export function queryAuthoritativeExecutionChildren(readModel, options) {
-  const result = queryAuthoritativeExecutionTree(readModel, options);
+  const focus = queryAuthoritativeExecution(readModel, options);
+  if (!focus.found) return focus;
+  const result = queryRelatedExecutions(readModel, (execution) =>
+    isDirectExecutionChild(execution, focus.execution.executionId),
+  );
   if (!result.found) return result;
-  return {
-    found: true,
-    execution: result.execution,
-    children: result.execution.childExecutionIds.map((id) => result.tree.executions[id]),
-    generatedAt: result.generatedAt,
-  };
+  return { ...focus, children: result.executions };
 }

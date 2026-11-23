@@ -15,20 +15,27 @@ import { ImmutableSessionStore } from "../../src/session/session-artifact-sessio
 import { readImmutableReaderRetentions } from "../../src/session/session-artifact-session/immutable-reader-retention.js";
 import { createScopedSessionArtifactReader } from "../../src/session/session-scoped-artifact-reader.js";
 import { readSessionThinkingDetail } from "../../src/session/session-thinking-detail.js";
+import { SessionPageSnapshots } from "../../src/session/session-page-snapshots.js";
+import { immutableSessionReaderAccess as sessionReaderAccess } from "../../src/session/session-artifact-session/immutable-reader-access.js";
 import { prepareAndCleanupSessionArtifacts } from "../helpers/immutable-cleanup.js";
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
-import { prepareImmutableMessages } from "../../src/session/session-artifact-session/immutable-message-changes.js";
+import {
+  ImmutableSessionChanges,
+  prepareImmutableMessages,
+} from "../../src/session/session-artifact-session/immutable-message-changes.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
+
+const authoritySessionId = "scoped-parent";
 
 async function fixture(t) {
   const sessionDir = await mkdtemp(path.join(tmpdir(), "scoped-retention-"));
   t.after(() => rm(sessionDir, { recursive: true, force: true }));
   const message = {
     sessionId: "scoped",
-    parentSessionId: "",
+    parentSessionId: authoritySessionId,
     messageUid: "guidance",
     modelMessageId: "model-guidance",
     presentationMessageId: "presentation-guidance",
@@ -46,6 +53,7 @@ async function fixture(t) {
     session: applySessionMessageFacts({
       ...createTestSessionRequiredFields(),
       sessionId: "scoped",
+      parentSessionId: authoritySessionId,
       aggregateVersion: 0,
       messages: [message],
     }),
@@ -53,13 +61,36 @@ async function fixture(t) {
   });
   const store = await ImmutableSessionStore.open({ sessionDir });
   const directory = path.join(sessionDir, RETENTION.directory);
-  const readers = createScopedSessionArtifactReader({ storageService });
-  return { sessionDir, store, directory, readers, message };
+  const pageSnapshots = new SessionPageSnapshots();
+  t.after(() => pageSnapshots.close());
+  const readers = createScopedSessionArtifactReader({
+    storageService,
+    sessionReaderAccess,
+    pageSnapshots,
+    withDeletionFence: (_userId, open) => open(),
+    assertAuthorityActive: async () => {},
+  });
+  const readThinking = () =>
+    readSessionThinkingDetail({
+      pageSnapshots: pageSnapshots.withReadAuthority(async () => {}),
+      identity: [sessionDir],
+      open: () =>
+        sessionReaderAccess.open({
+          sessionDir,
+          sessionId: "scoped",
+          parentSessionId: authoritySessionId,
+        }),
+      sessionId: "scoped",
+      lookupKey: { turnScopeId: "turn", dialogProcessId: "dialog" },
+      cursor: null,
+      limit: 1,
+    });
+  return { sessionDir, store, directory, readers, message, readThinking };
 }
 
 for (const operation of ["thinking", "snapshot"]) {
   test(`${operation} query pins its captured head across a commit and concurrent cleanup`, async (t) => {
-    const { sessionDir, store, directory, readers, message } = await fixture(t);
+    const { sessionDir, store, directory, readers, message, readThinking } = await fixture(t);
     const historical = await store.snapshot();
     const entered = Promise.withResolvers();
     const resume = Promise.withResolvers();
@@ -99,8 +130,12 @@ for (const operation of ["thinking", "snapshot"]) {
     );
     const query =
       operation === "thinking"
-        ? readSessionThinkingDetail({ sessionDir, turnScopeId: "turn", dialogProcessId: "dialog" })
-        : readers.readScopedSessionSnapshot({ sessionDir });
+        ? readThinking()
+        : readers.readScopedSessionSnapshot({
+            userId: "user",
+            authoritySessionId,
+            sessionDir,
+          });
     const settled = query.then(() => "settled");
     await Promise.race([
       entered.promise,
@@ -111,14 +146,16 @@ for (const operation of ["thinking", "snapshot"]) {
       expectedGeneration: historical.generation,
       operationId: "advance-during-query",
       input: { message: { ...message, content: "replacement thinking body" } },
-      prepare: ({ get, getMetadata, input }) =>
-        prepareImmutableMessages({
+      prepare: async ({ get, getMany, getMetadata, input }) => {
+        const plan = new ImmutableSessionChanges(get, { getMany, getMetadata });
+        await prepareImmutableMessages({
           store,
-          get,
-          getMetadata,
+          plan,
           messages: [input.message],
           updatedAt: "2026-01-01T00:00:01.000Z",
-        }),
+        });
+        return { changes: plan.changes() };
+      },
     });
     await prepareAndCleanupSessionArtifacts({
       storageService,
@@ -133,17 +170,15 @@ for (const operation of ["thinking", "snapshot"]) {
     const result = await query;
     if (operation === "thinking") {
       assert.equal(result.exists, true);
-      assert.equal(result.messageItem.thinkingContentTimeline[0].text, message.content);
-      const current = await readSessionThinkingDetail({
-        sessionDir,
-        turnScopeId: "turn",
-        dialogProcessId: "dialog",
-      });
-      assert.equal(
-        current.messageItem.thinkingContentTimeline[0].text,
-        "replacement thinking body",
-      );
-      assert.notEqual(current.revision, result.revision);
+      assert.equal(result.messages[0].content, message.content);
+      assert.equal(result.generation, historical.generation);
+      assert.equal(result.messageCount, 1);
+      assert.equal(result.nextCursor, null);
+      const current = await readThinking();
+      assert.equal(current.messages[0].content, "replacement thinking body");
+      assert.ok(current.generation > result.generation);
+      assert.equal(current.messageCount, 1);
+      assert.equal(current.nextCursor, null);
     } else assert.equal(result.sessionSummary.sessionId, "scoped");
     assert.deepEqual(await readdir(directory), []);
   });
@@ -180,7 +215,11 @@ test("failed scoped metadata read drains the concurrent snapshot read before rel
     return get.call(this, snapshot, collection, key);
   });
   let settled = false;
-  const query = readers.readScopedSessionSnapshot({ sessionDir });
+  const query = readers.readScopedSessionSnapshot({
+    userId: "user",
+    authoritySessionId,
+    sessionDir,
+  });
   const checked = assert
     .rejects(query, (error) => error === failure)
     .finally(() => {
@@ -196,7 +235,7 @@ test("failed scoped metadata read drains the concurrent snapshot read before rel
 });
 
 test("failed thinking-detail read releases its retention and preserves the read error", async (t) => {
-  const { sessionDir, store, directory } = await fixture(t);
+  const { store, directory, readThinking } = await fixture(t);
   const failure = new Error("turn read failed");
   const get = ImmutableSessionStore.prototype.get;
   t.mock.method(ImmutableSessionStore.prototype, "get", async function (snapshot, collection, key) {
@@ -206,9 +245,6 @@ test("failed thinking-detail read releases its retention and preserves the read 
     }
     return get.call(this, snapshot, collection, key);
   });
-  await assert.rejects(
-    readSessionThinkingDetail({ sessionDir, turnScopeId: "turn", dialogProcessId: "dialog" }),
-    (error) => error === failure,
-  );
+  await assert.rejects(readThinking(), (error) => error === failure);
   assert.deepEqual(await readdir(directory), []);
 });

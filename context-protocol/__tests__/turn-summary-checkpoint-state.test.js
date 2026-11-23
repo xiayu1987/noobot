@@ -73,3 +73,39 @@ test("checkpoint state rejects receipts ahead of or out of revision order", () =
     INVALID_STATE,
   );
 });
+
+test("checkpoint numeric facts reject unsafe integers at the shared protocol boundary", () => {
+  const highest = Number.MAX_SAFE_INTEGER;
+  const state = { ...SCOPE, checkpointRevision: highest, receipts: [receipt(highest)] };
+  assert.equal(assertTurnSummaryCheckpointState(state, "t"), state);
+  for (const value of [highest + 1, Number.MAX_VALUE, Infinity, NaN, 1.5, "1"]) {
+    assert.throws(
+      () => assertTurnSummaryCheckpointState({ ...state, checkpointRevision: value }, "t"),
+      INVALID_STATE,
+    );
+    for (const field of ["checkpointRevision", "markedCount"]) {
+      const invalid = { ...receipt(1), [field]: value };
+      assert.throws(
+        () => assertTurnSummaryCheckpointState({ ...state, receipts: [invalid] }, "t"),
+        INVALID_STATE,
+      );
+      assert.throws(
+        () =>
+          appendTurnSummaryCheckpointReceipt(createEmptyTurnSummaryCheckpointState(SCOPE), invalid),
+        INVALID_STATE,
+      );
+    }
+  }
+});
+
+test("checkpoint revision exhaustion rejects append without changing the last valid state", () => {
+  const highest = Number.MAX_SAFE_INTEGER;
+  const state = { ...SCOPE, checkpointRevision: highest - 1, receipts: [] };
+  const last = appendTurnSummaryCheckpointReceipt(state, receipt(highest));
+  const before = structuredClone(last);
+  assert.throws(
+    () => appendTurnSummaryCheckpointReceipt(last, receipt(highest + 1)),
+    INVALID_STATE,
+  );
+  assert.deepEqual(last, before);
+});

@@ -14,7 +14,7 @@ import {
   decodeImmutableRecordReference,
 } from "@noobot/session-protocol/immutable-segment";
 import { IMMUTABLE_VALUE_READ_BATCH_RECORDS } from "@noobot/session-protocol/immutable-storage-graph";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { resetFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 
 async function fixture(t, count) {

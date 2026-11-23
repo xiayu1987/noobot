@@ -8,9 +8,21 @@ import test from "node:test";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { setImmediate } from "node:timers/promises";
-import { flushRuntimeEvents, RUNTIME_EVENT_ERROR_CODE, writeRuntimeEvent } from "../src/index.js";
-import { persistSession, tempRoot, readJsonl } from "./runtime-events-test-fixtures.js";
+import {
+  flushRuntimeEvents,
+  RUNTIME_EVENT_ERROR_CODE,
+  withSessionEventRetirement,
+  writeRuntimeEvent,
+} from "../src/index.js";
+import {
+  markSessionDeleted,
+  persistSession,
+  tempRoot,
+  readJsonl,
+} from "./runtime-events-test-fixtures.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { tryAcquireDescriptorLock } from "@noobot/platform-compatibility/descriptor-lock";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 import { appendJsonLine } from "../src/transports/jsonl.js";
 
 const event = {
@@ -31,6 +43,50 @@ async function registeredSession(t) {
     caller: SESSION_CALLER.USER,
   });
 }
+
+test("directory retirement waits for admitted runtime events and rejects late publication", async (t) => {
+  const root = await tempRoot();
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const workspacePath = path.join(root, event.userId);
+  const sessionDir = await persistSession(root, event.userId, {
+    sessionId: event.sessionId,
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+  });
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const writing = writeRuntimeEvent(event, {
+    locationResolver: {
+      async locateSessionScope() {
+        entered.resolve();
+        await release.promise;
+        return { sessionDir };
+      },
+    },
+  });
+  let retiring;
+  try {
+    await Promise.race([entered.promise, writing]);
+    await using handle = await fs.open(
+      path.join(workspacePath, WORKSPACE_LAYOUT.SESSION_EVENT_PUBLICATION_LOCK_FILE),
+      "r+",
+    );
+    assert.equal(await tryAcquireDescriptorLock(handle), false);
+    await markSessionDeleted(root, event.userId, event.sessionId);
+    retiring = withSessionEventRetirement(workspacePath, async () => {
+      const result = await writing;
+      assert.equal(result.ok, true);
+      assert.equal((await readJsonl(result.file)).length, 1);
+      await fs.rm(sessionDir, { recursive: true });
+    });
+  } finally {
+    release.resolve();
+  }
+  await retiring;
+  const late = await writeRuntimeEvent(event);
+  assert.equal(late.deleted, true);
+  await assert.rejects(fs.stat(sessionDir), { code: "ENOENT" });
+});
 
 test("runtime flush waits for location preparation and durable publication", async (t) => {
   const sessionDir = await registeredSession(t);

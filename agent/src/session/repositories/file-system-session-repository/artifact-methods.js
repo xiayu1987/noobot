@@ -7,11 +7,31 @@ import { randomUUID } from "node:crypto";
 import { requireTurnLookupKey } from "@noobot/session-protocol/turn-lookup-key";
 import { fsRm } from "../../../shared/storage/fs-adapter.js";
 import { applySessionSettings } from "@noobot/session-protocol";
+import {
+  requireThinkingDetailPageSelection,
+  requireThinkingDetailReleaseSelection,
+  treeSessionPageScope,
+} from "@noobot/session-protocol/message-read-budget";
+import {
+  readSessionThinkingDetail,
+  releaseSessionThinkingDetail,
+} from "../../session-thinking-detail.js";
+import {
+  readRetainedDisplayArtifactPage,
+  readRetainedSessionDetailStart,
+  readRetainedSessionDisplayPage,
+  releaseRetainedDisplayArtifactPage,
+  releaseRetainedSessionDisplayPage,
+} from "../../session-display-page.js";
 
 class SessionArtifactMethods {
-  async requireContextSource(userId, sessionId, { persistenceContext, scope, historyLimit }) {
+  async requireContextSource(
+    userId,
+    sessionId,
+    { persistenceContext, scope, historyLimit, limits },
+  ) {
     await using reader = await this.requireSessionReader(userId, sessionId, { persistenceContext });
-    return await reader.readContextSource({ scope, historyLimit });
+    return await reader.readContextSource({ scope, historyLimit, limits });
   }
 
   async requireRunContextSource(userId, sessionId, { persistenceContext, lookupKey }) {
@@ -30,66 +50,131 @@ class SessionArtifactMethods {
     };
   }
 
-  async findTurnTerminalSource(
-    userId,
-    sessionId,
-    { persistenceContext, turnScopeId, terminalLimit },
-  ) {
-    if (await this.isSessionDeleted(userId, sessionId)) return null;
-    await using reader = await this.findImmutableSessionReader(userId, sessionId, {
+  async findTurnTerminalSource(userId, sessionId, { persistenceContext, turnScopeId }) {
+    await using reader = await this.findSessionReader(userId, sessionId, {
       persistenceContext,
     });
-    if (!reader) return null;
-    if (turnScopeId) {
-      const metadata = await reader.readMetadata();
-      const timing = await reader.readTurnTiming(turnScopeId);
-      return {
-        sessionId,
-        turn: await reader.readTurnState(turnScopeId),
-        turnTimings: timing ? [timing] : [],
-        aggregateVersion: metadata.aggregateVersion,
-      };
-    }
+    if (reader === null) return null;
+    const { aggregateVersion } = await reader.readMetadata();
+    const turn = await reader.readTurnState(turnScopeId);
+    const timing = await reader.readTurnTiming(turnScopeId);
+    return { turn, turnTimings: timing === null ? [] : [timing], aggregateVersion };
+  }
+
+  async findTurnLifecycleSource(userId, sessionId, { persistenceContext, terminalLimit }) {
+    await using reader = await this.findSessionReader(userId, sessionId, { persistenceContext });
+    if (reader === null) return null;
     return await reader.readLifecycleSource({ terminalLimit });
   }
 
   async updateSessionSettings(userId, sessionId, { settings, persistenceContext }) {
-    return this.withSessionMutation(
+    return this.withSessionReader(
       userId,
       sessionId,
-      async () => {
-        await using reader = await this.requireSessionReader(userId, sessionId, {
-          persistenceContext,
-        });
+      async ({ reader, commitChanges }) => {
         const committedAt = this.now();
         const metadata = applySessionSettings(await reader.readMetadata(), settings, committedAt);
-        await this.commitChanges(userId, sessionId, {
-          persistenceContext,
-          expectedGeneration: reader.generation,
-          operationId: randomUUID(),
-          changes: { sessionMetadata: settings },
-          committedAt,
-        });
+        await commitChanges(
+          await reader.prepareRequest({
+            operationId: randomUUID(),
+            changes: { sessionMetadata: settings },
+            committedAt,
+          }),
+        );
         return metadata;
       },
       { persistenceContext },
     );
   }
 
-  async readSessionDisplaySummary(userId, sessionId, { persistenceContext }) {
+  async readSessionDisplaySummary(
+    userId,
+    sessionId,
+    { persistenceContext, includeThinkingTimeline },
+  ) {
     await using reader = await this.requireSessionReader(userId, sessionId, {
       persistenceContext,
     });
     return {
-      ...(await reader.readDisplayProjection()),
+      ...(await reader.readDisplayProjection({ includeThinkingTimeline })),
       generation: reader.generation,
     };
   }
 
-  async readSessionTurn(userId, sessionId, { lookupKey, persistenceContext }) {
+  _sessionPageAccess(userId, sessionId, persistenceContext) {
+    return {
+      pageSnapshots: this.pageSnapshots.withReadAuthority(() =>
+        this.assertSessionWritable(userId, sessionId),
+      ),
+      identity: treeSessionPageScope(userId, sessionId),
+      open: () => this.requireSessionReader(userId, sessionId, { persistenceContext }),
+    };
+  }
+
+  async readSessionDetailStart(userId, request, { persistenceContext }) {
+    return readRetainedSessionDetailStart({
+      ...this._sessionPageAccess(userId, request.sessionId, persistenceContext),
+      request,
+    });
+  }
+
+  async readSessionDisplayPage(userId, request, { persistenceContext }) {
+    return readRetainedSessionDisplayPage({
+      ...this._sessionPageAccess(userId, request.sessionId, persistenceContext),
+      request,
+    });
+  }
+
+  async releaseSessionDisplayPage(userId, request) {
+    return releaseRetainedSessionDisplayPage({
+      pageSnapshots: this.pageSnapshots,
+      identity: treeSessionPageScope(userId, request.sessionId),
+      request,
+    });
+  }
+
+  async readSessionDisplayArtifactPage(userId, request, { persistenceContext }) {
+    return readRetainedDisplayArtifactPage({
+      ...this._sessionPageAccess(userId, request.sessionId, persistenceContext),
+      request,
+    });
+  }
+
+  async releaseSessionDisplayArtifactPage(userId, request) {
+    return releaseRetainedDisplayArtifactPage({
+      pageSnapshots: this.pageSnapshots,
+      identity: treeSessionPageScope(userId, request.sessionId),
+      request,
+    });
+  }
+
+  async readSessionThinkingDetail(
+    userId,
+    sessionId,
+    { lookupKey, cursor, limit, maxBytes, persistenceContext },
+  ) {
     const key = requireTurnLookupKey(lookupKey);
-    await using reader = await this.requireSessionReader(userId, sessionId, { persistenceContext });
-    return await reader.readTurn(key);
+    requireThinkingDetailPageSelection({ sessionId, ...key, cursor, limit });
+    return readSessionThinkingDetail({
+      ...this._sessionPageAccess(userId, sessionId, persistenceContext),
+      sessionId,
+      lookupKey: key,
+      cursor,
+      limit,
+      maxBytes,
+    });
+  }
+
+  async releaseSessionThinkingDetail(userId, sessionId, { lookupKey, cursor }) {
+    const key = requireTurnLookupKey(lookupKey);
+    requireThinkingDetailReleaseSelection({ sessionId, ...key, cursor });
+    return releaseSessionThinkingDetail({
+      pageSnapshots: this.pageSnapshots,
+      identity: treeSessionPageScope(userId, sessionId),
+      sessionId,
+      lookupKey: key,
+      cursor,
+    });
   }
 
   async removeSessionDisplaySummaries(userId, sessionIds) {

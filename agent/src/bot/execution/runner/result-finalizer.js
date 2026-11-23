@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+
 export async function finalizeAgentTurn({
   startedAt,
   resolvedRunConfig,
@@ -13,7 +15,6 @@ export async function finalizeAgentTurn({
   resolvedTurnScopeId,
   dispatchRuntime,
   userMessageUid,
-  getSessionTurns,
   finalizeRunSession,
   userId,
   parentSessionId,
@@ -26,19 +27,15 @@ export async function finalizeAgentTurn({
 }) {
   const turnPersistence = {
     flush: () => dispatchRuntime.persistCurrentTurnMessages(),
-    async readResultMessages() {
-      const messages = await getSessionTurns({
-        userId,
-        sessionId: usedSessionId,
-        turnScopeId: resolvedTurnScopeId,
-        dialogProcessId,
-        persistenceScope,
-      });
-      return messages.filter(
-        (message) =>
-          message.turnScopeId === resolvedTurnScopeId &&
-          message.dialogProcessId === dialogProcessId &&
-          message.messageUid !== userMessageUid,
+    readResultTransfers() {
+      const sources = [
+        ...dispatchRuntime.summaryCheckpointPromotionSources,
+        ...dispatchRuntime.currentTurnMessages.readArtifactProjectionSources(),
+      ];
+      return mergeTransferEnvelopes(
+        ...sources
+          .filter((message) => message.messageUid !== userMessageUid)
+          .map((message) => message.transferEnvelopes),
       );
     },
   };

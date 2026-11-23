@@ -13,11 +13,9 @@ import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { collectValueRecords, committedPhysicalRecord } from "./helpers/immutable-record-reads.js";
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
-import { evaluatePerformanceCollection } from "../../../scripts/e2e-docker/performance-gate.mjs";
-import { performanceReportFixture } from "../../../scripts/e2e-docker/__tests__/performance-fixture.mjs";
 
 const ts = "2026-01-01T00:00:00.000Z";
 function message(uid, content = uid, scope = uid) {
@@ -86,24 +84,12 @@ function request(store, generation, operationId, content) {
   };
 }
 
-function assertGateAccepts(work) {
-  const report = performanceReportFixture();
-  const samples = [...report.samples, ...report.stopContinues.map(({ continued }) => continued)];
-  for (const index of [1, 9, 19, 21]) samples[index].checkpointSamples[0].storageWork = work;
-  const result = evaluatePerformanceCollection(
-    report.samples,
-    report.stopContinues.map(({ continued }) => continued),
-    report.stopContinues,
-  );
-  assert.equal(result.passed, true, JSON.stringify(result.failures));
-}
-
 for (const [historyCount, sameTurn] of [
   [0, false],
   [64, false],
   [64, true],
 ]) {
-  test(`real cold checkpoint satisfies the performance gate with ${historyCount} messages in ${sameTurn ? "the same turn" : "unrelated turns"}`, async (t) => {
+  test(`cold Immutable writes do not read historical values with ${historyCount} messages in ${sameTurn ? "the same turn" : "unrelated turns"}`, async (t) => {
     let store = await fixture(t, historyCount, sameTurn);
     const before = await store.snapshot();
     const historicalValues = new Set();
@@ -147,17 +133,16 @@ for (const [historyCount, sameTurn] of [
         });
       },
     });
-    let observation;
+    let result;
     try {
-      observation = await observeSessionStorageWork(() =>
-        commitSessionChanges(request(store, before.generation, "append-current", "first")),
+      result = await commitSessionChanges(
+        request(store, before.generation, "append-current", "first"),
       );
     } finally {
       resetFsAdapter();
     }
     assert.deepEqual(historicalReads, [], "checkpoint must not read unrelated message values");
-    assertGateAccepts(observation.work);
-    assert.equal(observation.result.generation, before.generation + 1);
+    assert.equal(result.generation, before.generation + 1);
     assert.equal(await store.get(before, "messages", "current"), null);
     const pinned = await store.snapshot();
     await commitSessionChanges(request(store, pinned.generation, "edit-current", "second"));

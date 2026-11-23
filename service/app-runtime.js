@@ -12,6 +12,8 @@ import { registerGlobalMiddlewares } from "./bootstrap/register-global-middlewar
 import { registerHttpModules } from "./bootstrap/register-http-modules.js";
 import { startHttpServer } from "./bootstrap/start-http-server.js";
 import { prepareUserWorkspaces } from "./bootstrap/prepare-user-workspaces.js";
+import { openStartupWorkspaceStorage } from "noobot-agent/workspace-session-storage";
+import { closeRuntimeResources } from "./bootstrap/close-runtime-resources.js";
 import {
   createThrottledProgressReporter,
   startStartupHeartbeat,
@@ -23,8 +25,7 @@ import {
   RUNTIME_EVENT_SCOPES,
   SERVICE_STARTUP_EVENTS,
   SERVICE_STARTUP_SOURCE,
-  requireServiceWorkspacePreparation,
-  flushJsonLineBatches,
+  flushRuntimeEvents,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
@@ -51,28 +52,12 @@ const {
   normalizeLocale,
   defaultLocale,
   getBot,
+  serviceBotAccess,
   readSessionUserIds,
+  workspaceRootPath,
   buildHttpModuleDependencies,
   openVSCodeService,
 } = appDependencies;
-
-registerGlobalMiddlewares(app, {
-  resolveRequestLocale,
-  defaultLocale,
-});
-
-await registerHttpModules(app, { ...buildHttpModuleDependencies(), connectorRuntime });
-
-app.get("/health", (...[, res]) => res.json({ ok: true }));
-
-if (shouldServeDesktopFrontend) {
-  app.use(express.static(desktopFrontendRoot));
-  app.get(/^\/(?!api\/|internal\/|agent-proxy\/ws|health$).*/, (...[, res]) => {
-    res.sendFile(path.join(desktopFrontendRoot, "index.html"));
-  });
-}
-
-openVSCodeService?.startLifecycleManager?.();
 
 function stopManagedOpenVSCodeInstances() {
   openVSCodeService?.stopLifecycleManager?.({ stopInstances: true });
@@ -80,16 +65,42 @@ function stopManagedOpenVSCodeInstances() {
 
 let shuttingDown = false;
 let httpServer;
+let resourceCleanup;
+let storage;
+let workspacePreparationSettled;
+const startupController = new AbortController();
+
+function closeResources() {
+  if (!resourceCleanup)
+    resourceCleanup = closeRuntimeResources({
+      stopManagedInstances: stopManagedOpenVSCodeInstances,
+      closeHttp: async () => {
+        if (httpServer) await httpServer.close();
+      },
+      closeBot: async () => {
+        await workspacePreparationSettled;
+        await getBot().close();
+      },
+      releaseConnectors,
+      flushEvents: async () => {
+        try {
+          await flushRuntimeEvents();
+        } finally {
+          await storage?.close();
+        }
+      },
+    }).catch((cause) => {
+      resourceCleanup = undefined;
+      throw cause;
+    });
+  return resourceCleanup;
+}
 
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
-  stopManagedOpenVSCodeInstances();
-  await releaseConnectors();
-  if (httpServer?.listening) {
-    await new Promise((resolve) => httpServer.close(() => resolve()));
-  }
-  await flushJsonLineBatches();
+  startupController.abort();
+  await closeResources();
   process.exit(signal === "SIGINT" ? 130 : 143);
 }
 
@@ -98,15 +109,34 @@ process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 const stopStartupHeartbeat = startStartupHeartbeat();
 try {
+  storage = await openStartupWorkspaceStorage(workspaceRootPath(), {
+    signal: startupController.signal,
+  });
+  startupController.signal.throwIfAborted();
+  registerGlobalMiddlewares(app, { resolveRequestLocale, defaultLocale });
+  await registerHttpModules(app, { ...buildHttpModuleDependencies(), connectorRuntime });
+  app.get("/health", (...[, res]) => res.json({ ok: true }));
+  if (shouldServeDesktopFrontend) {
+    app.use(express.static(desktopFrontendRoot));
+    app.get(/^\/(?!api\/|internal\/|agent-proxy\/ws|health$).*/, (...[, res]) => {
+      res.sendFile(path.join(desktopFrontendRoot, "index.html"));
+    });
+  }
+  openVSCodeService?.startLifecycleManager?.();
   const reportProgress = createThrottledProgressReporter({
     write: writeStartupProgressEvent,
     now: () => performance.now(),
   });
-  const preparation = await prepareUserWorkspaces({
+  const preparingWorkspaces = prepareUserWorkspaces({
     userIds: await readSessionUserIds(),
     bot: getBot(),
     reportProgress,
+    signal: startupController.signal,
+    startupStorage: storage,
   });
+  workspacePreparationSettled = Promise.allSettled([preparingWorkspaces]);
+  const preparation = await preparingWorkspaces;
+  await storage.finishStartup();
   reportProgress.flush();
   await writeRuntimeEvent({
     scope: RUNTIME_EVENT_SCOPES.STARTUP,
@@ -119,11 +149,10 @@ try {
       : SERVICE_STARTUP_EVENTS.WORKSPACE_PREPARATION_COMPLETED,
     data: preparation,
   });
-  requireServiceWorkspacePreparation(preparation);
   if (!shuttingDown) {
     httpServer = await startHttpServer({
       app,
-      getBot,
+      serviceBotAccess,
       resolveRequestLocale,
       resolveAuthByApiKey,
       mapAgentRunCommand,
@@ -149,14 +178,14 @@ try {
       message: String(error?.message || error || ""),
     },
   });
-  const reporting = await Promise.allSettled([flushJsonLineBatches(), eventWrite]);
+  const reporting = await Promise.allSettled([closeResources(), eventWrite]);
   const reportingErrors = reporting
     .filter((result) => result.status === "rejected")
     .map((result) => result.reason);
   if (reportingErrors.length)
     throw new AggregateError(
       [error, ...reportingErrors],
-      "Service startup and failure logging failed",
+      "Service startup, resource cleanup or failure logging failed",
       {
         cause: error,
       },

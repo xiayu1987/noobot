@@ -102,6 +102,8 @@ Session log WebSocket:
 
 Model history is fixed by the agent runtime: it keeps the latest 5 `dialogProcessId/dialogId` rounds. There is no session history-window configuration.
 
+The service requires the global-only `partitionSessionStorage` object. `maxJournals` limits resident journals across all workspaces served by the same session runtime; it is not a disk quota. `journalLimits` defines per-journal budgets. Size and validate the limits against a representative workspace before creating or migrating sessions. Published journals bind these limits. Startup automatically migrates older sessions before opening HTTP and WebSocket endpoints. A manual migration plan must use the service's active `journalLimits`. See the [example configuration](service/config/global.config.example.json) and the [upgrade procedure](docs/session-storage-architecture.md#41-切换执行入口).
+
 ### 3.3 Attachments
 
 Global config only; user config cannot override these keys. Omitted keys use builtin defaults; invalid values are rejected.
@@ -180,7 +182,7 @@ Execution isolation is defined by the `@noobot/execution-isolation-protocol` wor
 
 Large-context length defaults:
 
-- Phase-summary character threshold: 220000
+- Phase-summary character threshold: 350000
 - Semantic-transfer direct threshold: 40000 chars
 - Semantic-transfer tool-result inline threshold: 40000 chars
 - Semantic-transfer tool-input overflow threshold: 40000 chars

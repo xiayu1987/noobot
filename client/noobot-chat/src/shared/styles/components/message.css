@@ -309,6 +309,57 @@
   color: var(--noobot-status-warning);
 }
 
+@property --noobot-thinking-sweep-position {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: -70%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports ((background-clip: text) and (-webkit-text-fill-color: transparent)) {
+    .noobot-thinking-sweep,
+    .noobot-thinking-sweep-once {
+      animation: noobot-thinking-text-sweep var(--noobot-duration-thinking-sweep)
+        var(--noobot-ease-linear) infinite;
+    }
+
+    .noobot-thinking-sweep-once {
+      animation-iteration-count: 1;
+    }
+
+    .noobot-thinking-sweep .noobot-thinking-sweep-text,
+    .noobot-thinking-sweep-once {
+      background-image:
+        linear-gradient(
+          104deg,
+          transparent,
+          color-mix(in srgb, currentColor 45%, var(--noobot-thinking-text-sweep-steel)) 20%,
+          var(--noobot-thinking-text-sweep-silver) 40%,
+          var(--noobot-thinking-text-sweep-shine) 49% 58%,
+          var(--noobot-thinking-text-sweep-silver) 69%,
+          color-mix(in srgb, currentColor 45%, var(--noobot-thinking-text-sweep-steel)) 82%,
+          transparent
+        ),
+        linear-gradient(currentColor, currentColor);
+      background-size:
+        min(40%, var(--noobot-thinking-text-sweep-width)) 100%,
+        100% 100%;
+      background-position:
+        var(--noobot-thinking-sweep-position) center,
+        left center;
+      background-repeat: no-repeat;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+  }
+}
+
+@keyframes noobot-thinking-text-sweep {
+  to {
+    --noobot-thinking-sweep-position: 170%;
+  }
+}
+
 @keyframes message-status-dot-pulse {
   0% {
     transform: scale(1.15);

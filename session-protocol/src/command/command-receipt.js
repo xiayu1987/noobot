@@ -7,9 +7,20 @@ import { validateTurnReplacementCommit } from "../lifecycle/turn-replacement.js"
 import { TURN_EVENT_VALUES } from "../lifecycle/turn-event.js";
 import { SESSION_COMMAND, isSessionAggregateVersion } from "./session-command.js";
 import { SESSION_ERROR_CODE } from "../errors.js";
+import {
+  resolveSessionMessageSuffix,
+  resolveSessionMessageSuffixEffect,
+} from "../aggregate/message-suffix.js";
 
 const SESSION_COMMAND_TYPES = new Set(Object.values(SESSION_COMMAND));
 const TURN_EVENT_TYPES = new Set(TURN_EVENT_VALUES);
+
+export const MESSAGE_DELETE_RESULT_FIELDS = Object.freeze([
+  "deletedCount",
+  "anchorIndex",
+  "deletedTurnScopeIds",
+]);
+export const TURN_REPLACE_RESULT_FIELDS = Object.freeze(["turnReplacement"]);
 
 function invalidCommandReceipt() {
   return Object.assign(new TypeError("invalid command receipt"), {
@@ -53,19 +64,29 @@ function validateMessageUidResult(result, errors) {
 }
 
 function validateMessageDeleteResult(result, errors) {
-  collectUnknownFieldErrors(result, ["deletedCount", "anchorIndex", "deletedTurnScopeIds"], errors);
+  collectUnknownFieldErrors(result, MESSAGE_DELETE_RESULT_FIELDS, errors);
   if (!isNonNegativeInteger(result.deletedCount)) errors.push("invalid_result_deleted_count");
   if (!isNonNegativeInteger(result.anchorIndex)) errors.push("invalid_result_anchor_index");
   if (
+    isNonNegativeInteger(result.deletedCount) &&
+    isNonNegativeInteger(result.anchorIndex) &&
+    resolveSessionMessageSuffix(
+      result.anchorIndex + 1,
+      result.anchorIndex + result.deletedCount,
+    ) === null
+  )
+    errors.push("invalid_result_message_suffix");
+  if (
     !Array.isArray(result.deletedTurnScopeIds) ||
-    !result.deletedTurnScopeIds.every(isCanonicalText)
+    !result.deletedTurnScopeIds.every(isCanonicalText) ||
+    new Set(result.deletedTurnScopeIds).size !== result.deletedTurnScopeIds.length
   ) {
     errors.push("invalid_result_deleted_turn_scope_ids");
   }
 }
 
 function validateTurnReplaceResult(result, errors) {
-  collectUnknownFieldErrors(result, ["turnReplacement"], errors);
+  collectUnknownFieldErrors(result, TURN_REPLACE_RESULT_FIELDS, errors);
   if (!validateTurnReplacementCommit(result.turnReplacement).valid) {
     errors.push("invalid_result_turn_replacement");
   }
@@ -85,6 +106,27 @@ export function validateCommandReceiptResult(type, result) {
   if (isPlainObject(result)) validate(result, errors);
   else errors.push("invalid_command_result");
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
+}
+
+export function resolveMessageDeleteResultEffect(result) {
+  if (!validateCommandReceiptResult(SESSION_COMMAND.MESSAGE_DELETE_FROM, result).valid) return null;
+  return resolveSessionMessageSuffix(
+    result.anchorIndex + 1,
+    result.anchorIndex + result.deletedCount,
+  );
+}
+
+export function createMessageDeleteResult(messageSuffix, deletedTurnScopeIds) {
+  const effect = resolveSessionMessageSuffixEffect(messageSuffix);
+  if (effect === null) throw invalidCommandReceipt();
+  const result = {
+    deletedCount: effect.deletedCount,
+    anchorIndex: effect.retainedMessageCount,
+    deletedTurnScopeIds,
+  };
+  if (!validateCommandReceiptResult(SESSION_COMMAND.MESSAGE_DELETE_FROM, result).valid)
+    throw invalidCommandReceipt();
+  return { ...result, deletedTurnScopeIds: [...deletedTurnScopeIds] };
 }
 
 function hasOnlyKeys(receipt, allowedKeys) {

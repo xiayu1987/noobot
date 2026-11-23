@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { WebSocket } from "ws";
 import {
   startServerWithWs,
@@ -26,9 +27,13 @@ useProvisionedRuntimeEventsWorkspace(["primary-user", "owner-a", "owner-b", "can
   "canonical-owner": ["s-owner-stop"],
 });
 
-test("chat-websocket-server: stop from a new websocket aborts an active run by turnScopeId", async () => {
+test("chat-websocket-server: retirement rejects new runs but retains cross-socket stop through terminal commit", async () => {
+  const finishRun = Promise.withResolvers();
+  const retirementOrder = [];
+  let replacing;
   const server = await startServerWithWs({
     materializeTerminalMessages: ({ terminalStatus, previousSummaryVersion }) => {
+      retirementOrder.push("old-terminal-materialization");
       return {
         materialized: true,
         terminalStatus,
@@ -49,6 +54,7 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
         if (abortSignal?.aborted) return resolve();
         abortSignal?.addEventListener?.("abort", resolve, { once: true });
       });
+      await finishRun.promise;
       const error = new Error("aborted by cross websocket stop");
       error.name = "AbortError";
       throw error;
@@ -89,6 +95,36 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
     });
     runWs.on("message", (raw) => runEvents.push(JSON.parse(String(raw || "{}"))));
 
+    replacing = server.replaceBot({}, () => {
+      retirementOrder.push("publish-replacement");
+    });
+    const newWs = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
+      headers: { authorization: "Bearer test-key" },
+    });
+    await once(newWs, "open");
+    const newRunEvents = [];
+    newWs.on("message", (raw) => newRunEvents.push(JSON.parse(String(raw))));
+    newWs.send(
+      JSON.stringify(
+        createProtocolTestCommand({
+          sessionId: "s-cross-stop",
+          message: "must not start during retirement",
+          turnScopeId: "turn-retirement-rejected",
+        }),
+      ),
+    );
+    await waitForCondition(
+      () => newRunEvents.some((item) => item.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT),
+      { message: "new run did not receive a command receipt during retirement" },
+    );
+    const receipt = newRunEvents.find(
+      (item) => item.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    );
+    assert.equal(receipt.data.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
+    assert.equal(receipt.data.error.code, "RUNTIME_CLOSED");
+    newWs.close();
+    assert.deepEqual(retirementOrder, []);
+
     const stopAck = await new Promise((resolve, reject) => {
       const ws = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
         headers: { authorization: "Bearer test-key" },
@@ -124,6 +160,8 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
     });
     assert.equal(stopAck?.data?.payload?.phase, "stop");
     assert.equal(stopAck?.data?.identity?.turnScopeId, "turn-cross-stop");
+    assert.deepEqual(retirementOrder, []);
+    finishRun.resolve();
 
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("active run stopped timeout")), 1000);
@@ -164,8 +202,12 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
     assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-cross-stop");
     assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
     assert.ok(stoppedEvent?.data?.identity?.eventId);
+    await replacing;
+    assert.deepEqual(retirementOrder, ["old-terminal-materialization", "publish-replacement"]);
   } finally {
+    finishRun.resolve();
     await closeServer(server);
+    await replacing;
   }
 });
 

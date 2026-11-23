@@ -3,12 +3,24 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isDeepStrictEqual } from "node:util";
 import {
+  artifactRetirementKey,
+  isCommittedArtifactRetired,
+} from "@noobot/event-protocol/plugin-artifact-event";
+import {
+  AUTHORITY_OUTBOX_PAGE_LIMIT,
   acknowledgeAuthorityEventDelivery,
+  assertAuthorityEventScope,
   authorityEventConsumerDelivery,
+  authorityOutboxCommittedPageWindow,
   recordAuthorityEventDeliveryAttempt,
   compactAuthorityEventOutbox,
+  decodeStoredAuthorityOutboxCursor,
   normalizeAuthorityEventOutbox,
+  requireAuthorityOutboxConsumer,
+  requireAuthorityOutboxCursorAdvances,
+  requireAuthorityOutboxPagePosition,
 } from "@noobot/event-protocol/outbox";
 import { immutableOrderKey } from "./immutable-order-key.js";
 import { immutableStorageError } from "./immutable-object-store.js";
@@ -16,18 +28,7 @@ import {
   requireImmutableOutboxIndex,
   removeImmutableOutboxEvent,
 } from "./immutable-outbox-turn-index.js";
-export { prepareImmutableOutboxTurnRemoval } from "./immutable-outbox-turn-index.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-
-function requireConsumer(consumerId) {
-  if (
-    typeof consumerId !== "string" ||
-    !consumerId ||
-    consumerId.trim() !== consumerId ||
-    Buffer.byteLength(consumerId) > 1024
-  )
-    throw new TypeError("Outbox page requires a canonical consumerId");
-}
 
 export async function prepareImmutableOutboxMaintenance(
   store,
@@ -81,18 +82,55 @@ export async function prepareImmutableOutboxMaintenance(
   return { compacted: removed > 0, removed, scanned: end - after, hasMore, nextRetainedDeliveryAt };
 }
 
-async function readCursor(get, consumerId) {
+async function readCursor(get, consumerId, tail) {
   const state = await get("outboxConsumers", consumerId);
-  if (state === null) return 0;
-  if (state.consumerId !== consumerId || !Number.isSafeInteger(state.cursor) || state.cursor < 0)
-    throw immutableStorageError("Invalid immutable outbox consumer cursor");
-  return state.cursor;
+  try {
+    return decodeStoredAuthorityOutboxCursor(state, consumerId, tail);
+  } catch (cause) {
+    throw immutableStorageError("Invalid immutable outbox consumer cursor", cause);
+  }
+}
+
+export async function readImmutableOutboxCursor(store, snapshot, consumerId) {
+  const get = (collection, key) => store.get(snapshot, collection, key);
+  return readCursor(get, consumerId, await readOutboxTail(get));
+}
+
+export async function readOutboxTail(get) {
+  const header = await get("metadata", "events");
+  if (!Number.isSafeInteger(header?.sequence) || header.sequence < 0)
+    throw immutableStorageError("Invalid immutable event ordinal");
+  return header.sequence;
+}
+
+export function readImmutableOutboxTail(store, snapshot) {
+  return readOutboxTail((collection, key) => store.get(snapshot, collection, key));
+}
+
+function requireEventIdAtPosition(eventId, ordinal) {
+  if (typeof eventId !== "string" || !eventId)
+    throw immutableStorageError(`Event order has a missing or invalid position: ${ordinal}`);
+  return eventId;
+}
+
+async function readEventIdAtPosition(get, ordinal) {
+  return requireEventIdAtPosition(await get("eventOrder", immutableOrderKey(ordinal)), ordinal);
 }
 
 async function readOutboxPosition(get, ordinal, sessionId) {
-  const eventId = await get("eventOrder", immutableOrderKey(ordinal));
-  if (eventId === null) throw immutableStorageError("Event order has a missing position");
-  return readOutboxEvent(get, eventId, sessionId);
+  return readOutboxEvent(get, await readEventIdAtPosition(get, ordinal), sessionId);
+}
+
+function requireCommittedEvent(value, eventId, scope, ordinal) {
+  const event = requireOutboxEvent(value, eventId, scope.sessionId);
+  if (event?.ordinal !== ordinal)
+    throw immutableStorageError(`Missing or mismatched immutable committed event at ${ordinal}`);
+  try {
+    assertAuthorityEventScope(event, scope);
+  } catch (cause) {
+    throw immutableStorageError("Invalid immutable committed event scope", cause);
+  }
+  return event;
 }
 
 async function readOutboxEvent(get, eventId, sessionId) {
@@ -112,12 +150,76 @@ function requireOutboxEvent(item, eventId, sessionId) {
   return item;
 }
 
-export function readImmutableOutboxEvent(store, snapshot, eventId) {
-  return readOutboxEvent(
-    (collection, key) => store.get(snapshot, collection, key),
-    eventId,
-    store.sessionId,
+function bindOutboxDelivery(event, committed) {
+  if (event === null) return null;
+  if (
+    committed === null ||
+    (Object.hasOwn(event, "ordinal") && event.ordinal !== committed.ordinal) ||
+    event.committedAt !== committed.committedAt ||
+    !isDeepStrictEqual(event.envelope, committed.envelope)
+  )
+    throw immutableStorageError("Immutable outbox delivery does not match its committed event");
+  return { ...event, ordinal: committed.ordinal };
+}
+
+export async function readImmutableOutboxEvent(store, snapshot, eventId) {
+  const get = (collection, key) => store.get(snapshot, collection, key);
+  const event = await readOutboxEvent(get, eventId, store.sessionId);
+  if (event === null) return null;
+  const delivery = bindOutboxDelivery(
+    event,
+    requireOutboxEvent(await get("events", eventId), eventId, store.sessionId),
   );
+  const { ordinal } = delivery;
+  if (ordinal > (await readOutboxTail(get)))
+    throw immutableStorageError("Immutable event exceeds committed outbox tail");
+  if ((await get("eventOrder", immutableOrderKey(ordinal))) !== eventId)
+    throw immutableStorageError("Immutable event ordinal mismatch");
+  return delivery;
+}
+
+export function readImmutableMigrationOutboxPage(store, snapshot, scope, { after, limit }) {
+  return store.objects.withSnapshot(snapshot, async () => {
+    const tail = await readImmutableOutboxTail(store, snapshot);
+    const positions = [];
+    const { cursor: end } = authorityOutboxCommittedPageWindow({ after, limit, tail });
+    for (let ordinal = after + 1; ordinal <= end; ordinal += 1)
+      positions.push(immutableOrderKey(ordinal));
+    const order = await store.getMany(snapshot, "eventOrder", positions);
+    const ids = positions.map((key, index) =>
+      requireEventIdAtPosition(order.get(key), after + index + 1),
+    );
+    const events = await store.getMany(snapshot, "events", ids);
+    const committed = ids.map((id, index) =>
+      requireCommittedEvent(events.get(id), id, scope, after + index + 1),
+    );
+    const deliveries = await store.getMany(snapshot, "outbox", ids);
+    const keys = new Set(
+      committed.map(({ envelope }) => artifactRetirementKey(envelope.identity.turnScopeId)),
+    );
+    const retirements = await store.getMany(snapshot, "metadata", [...keys]);
+    const records = [];
+    for (const event of committed) {
+      const { eventId } = event;
+      const delivery = bindOutboxDelivery(
+        requireOutboxEvent(deliveries.get(eventId), eventId, scope.sessionId),
+        event,
+      );
+      let retired;
+      try {
+        retired = await isCommittedArtifactRetired((key) => retirements.get(key), event, tail);
+      } catch (cause) {
+        throw immutableStorageError(
+          `Invalid source outbox retirement: ${artifactRetirementKey(event.envelope.identity.turnScopeId)}`,
+          cause,
+        );
+      }
+      if (retired && delivery !== null)
+        throw immutableStorageError(`Retired source event remains deliverable: ${eventId}`);
+      records.push({ committed: event, delivery, retired });
+    }
+    return { records, cursor: end };
+  });
 }
 
 async function assertDeliveredRange(plan, { previous, cursor, sessionId, consumerId }) {
@@ -137,27 +239,22 @@ async function assertDeliveredRange(plan, { previous, cursor, sessionId, consume
 }
 
 export async function prepareImmutableOutboxCursors(plan, updates, sessionId) {
+  requireAuthorityOutboxCursorAdvances(updates, AUTHORITY_OUTBOX_PAGE_LIMIT);
   const results = [];
   for (const update of updates) {
-    requireConsumer(update?.consumerId);
     const { consumerId, expectedCursor, cursor } = update;
-    if (
-      !Number.isSafeInteger(expectedCursor) ||
-      expectedCursor < 0 ||
-      !Number.isSafeInteger(cursor) ||
-      cursor < expectedCursor ||
-      cursor - expectedCursor > 256
-    )
-      throw new TypeError("Outbox cursor advance requires a bounded monotonic range");
-    const previous = await readCursor((collection, key) => plan.get(collection, key), consumerId);
+    const header = await plan.get("metadata", "events");
+    const previous =
+      (await readCursor(
+        (collection, key) => plan.get(collection, key),
+        consumerId,
+        header?.sequence,
+      )) ?? 0;
     if (previous !== expectedCursor)
       throw Object.assign(new Error("Outbox consumer cursor conflict"), {
         code: "SESSION_OUTBOX_CURSOR_CONFLICT",
         currentCursor: previous,
       });
-    const header = await plan.get("metadata", "events");
-    if (!header || !Number.isSafeInteger(header.sequence) || header.sequence < previous)
-      throw immutableStorageError("Invalid immutable event ordinal");
     if (cursor > header.sequence)
       throw new TypeError("Outbox cursor exceeds the committed event sequence");
     await assertDeliveredRange(plan, { previous, cursor, sessionId, consumerId });
@@ -219,23 +316,13 @@ export async function readImmutableOutboxPage({
   after,
   limit = QUANTITY_THRESHOLDS.immutableStorage.receiptPageSize,
 }) {
-  requireConsumer(consumerId);
+  requireAuthorityOutboxConsumer(consumerId);
   const get = (collection, key) => store.get(snapshot, collection, key);
-  if (after === undefined) after = await readCursor(get, consumerId);
-  if (
-    !Number.isSafeInteger(after) ||
-    after < 0 ||
-    !Number.isSafeInteger(limit) ||
-    limit < 1 ||
-    limit > 256
-  )
-    throw new TypeError("Outbox page requires a non-negative cursor and limit 1..256");
-  const header = await store.get(snapshot, "metadata", "events");
-  if (!header || !Number.isSafeInteger(header.sequence) || header.sequence < 0)
-    throw immutableStorageError("Invalid immutable event ordinal");
-  if (after > header.sequence)
-    throw new TypeError("Outbox cursor exceeds the committed event sequence");
-  const end = after >= header.sequence ? after : Math.min(header.sequence, after + limit);
+  const tail = await readOutboxTail(get);
+  if (after === undefined) after = (await readCursor(get, consumerId, tail)) ?? 0;
+  requireAuthorityOutboxPagePosition(after, limit);
+  if (after > tail) throw new TypeError("Outbox cursor exceeds the committed event sequence");
+  const end = Math.min(tail, after + limit);
   const events = [];
   const items = await readOutboxRange(
     (collection, keys) => store.getMany(snapshot, collection, keys),
@@ -253,6 +340,6 @@ export async function readImmutableOutboxPage({
     events,
     after,
     cursor: end,
-    hasMore: end < header.sequence,
+    hasMore: end < tail,
   };
 }

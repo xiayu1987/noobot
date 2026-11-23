@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { isInjectedSessionMessageRecord } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
+import { isCanonicalText, text } from "@noobot/shared/value";
+
+export { selectShortMemoryBatch, acknowledgeShortMemoryBatch } from "./short-memory-batch.js";
 
 const SHORT_MEMORY_RECORD_ROLES = new Set(["user", "assistant"]);
 
@@ -20,6 +22,32 @@ export function toShortMemoryRecords(messages = []) {
     out.push({ role, content });
   }
   return out;
+}
+
+export async function collectShortMemoryRecords({ sessionId, dialogProcessId, messageRecords }) {
+  if (
+    !isCanonicalText(sessionId) ||
+    !isCanonicalText(dialogProcessId) ||
+    (!messageRecords?.[Symbol.asyncIterator] && !messageRecords?.[Symbol.iterator])
+  )
+    throw new TypeError("Short memory capture requires a scoped message record stream");
+  const retained = [];
+  const seen = new Set();
+  for await (const record of messageRecords) {
+    if (
+      !Number.isSafeInteger(record?.ordinal) ||
+      record.ordinal < 1 ||
+      seen.has(record.ordinal) ||
+      record.message?.sessionId !== sessionId ||
+      record.message.dialogProcessId !== dialogProcessId
+    )
+      throw new TypeError("Short memory message record ownership or order is invalid");
+    seen.add(record.ordinal);
+    for (const value of toShortMemoryRecords([record.message]))
+      retained.push({ ordinal: record.ordinal, value });
+  }
+  retained.sort((left, right) => left.ordinal - right.ordinal);
+  return retained.map(({ value }) => value);
 }
 
 function toTimestamp(value) {

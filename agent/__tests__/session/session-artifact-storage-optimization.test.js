@@ -7,11 +7,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
 import path from "node:path";
-import {
-  withSessionStorageTransaction,
-  memoizeArtifactRead,
-  observeSessionStorageWork,
-} from "../../src/session/session-artifact-session/storage-transaction.js";
+import { withSessionReadCache, memoizeSessionRead } from "../../src/session/session-read-cache.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import {
   readOptionalJsonWithStorage,
   writeJsonWithStorage,
@@ -26,27 +23,27 @@ import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
 
 const missing = (file) => assert.rejects(stat(file), { code: "ENOENT" });
 
-test("storage transactions deduplicate concurrent and nested reads and isolate sessions", async () =>
+test("read caches deduplicate concurrent and nested reads and isolate sessions", async () =>
   withTemp(async (root) => {
     const file = path.join(root, "session.json");
     let reads = 0;
-    const read = () => memoizeArtifactRead("test", file, async () => ++reads);
-    await withSessionStorageTransaction(root, async () => {
+    const read = () => memoizeSessionRead("test", file, async () => ++reads);
+    await withSessionReadCache(root, async () => {
       assert.deepEqual(await Promise.all([read(), read()]), [1, 1]);
-      assert.equal(await withSessionStorageTransaction(root, read), 1);
-      assert.equal(await withSessionStorageTransaction(path.join(root, "other"), read), 2);
+      assert.equal(await withSessionReadCache(root, read), 1);
+      assert.equal(await withSessionReadCache(path.join(root, "other"), read), 2);
       assert.equal(await read(), 1);
     });
-    assert.equal(await withSessionStorageTransaction(root, read), 3);
+    assert.equal(await withSessionReadCache(root, read), 3);
     assert.equal(await read(), 4);
   }));
 
-test("transaction JSON reads return owned copies and writes invalidate all cached tiers", async () =>
+test("cached JSON reads return owned copies and writes invalidate all cached tiers", async () =>
   withTemp(async (root) => {
     const artifactPath = path.join(root, "session.json");
     await writeFile(artifactPath, JSON.stringify({ revision: 1 }));
     const options = { storageService, artifactPath };
-    await withSessionStorageTransaction(root, async () => {
+    await withSessionReadCache(root, async () => {
       const first = await readOptionalJsonWithStorage(options);
       first.revision = 99;
       assert.deepEqual(await readOptionalJsonWithStorage(options), { revision: 1 });
@@ -75,7 +72,7 @@ test("transaction JSON snapshots isolate concurrent owners and preserve the exac
     await writeFile(artifactPath, '{"nested":{"value":-0},"items":[1,2]}');
     const options = { storageService, artifactPath };
     const observed = await observeSessionStorageWork(() =>
-      withSessionStorageTransaction(root, async () => {
+      withSessionReadCache(root, async () => {
         const [first, second] = await Promise.all([
           readOptionalJsonWithStorage(options),
           readOptionalJsonWithStorage(options),
@@ -111,7 +108,7 @@ test("transaction JSON copies also isolate injected storage without source obser
       readOptionalJson: async () => ({ nested: { value: -0 } }),
     });
     const options = { storageService: storage, artifactPath: path.join(root, "session.json") };
-    await withSessionStorageTransaction(root, async () => {
+    await withSessionReadCache(root, async () => {
       const first = await readOptionalJsonWithStorage(options);
       first.nested.value = 99;
       assert.ok(Object.is((await readOptionalJsonWithStorage(options)).nested.value, -0));

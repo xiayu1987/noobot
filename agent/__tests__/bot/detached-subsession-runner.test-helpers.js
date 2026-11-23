@@ -7,6 +7,8 @@ import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { TOOL_NAME } from "../../src/tools/constants/index.js";
 
+import { createWorkspaceAdmission } from "../../src/workspace-lifecycle/workspace-admission.js";
+
 export const DETACHED_REQUEST_METADATA = Object.freeze({ scope: TOOL_NAME.CALL_MCP_TASK });
 const DETACHED_TEST_NOW = () => "2026-01-01T00:00:00.000Z";
 
@@ -23,6 +25,7 @@ export function createDeps(overrides = {}) {
   };
   const deps = {
     now: DETACHED_TEST_NOW,
+    runInWorkspace: createWorkspaceAdmission(async () => {}).run,
     workspaceService: {
       getWorkspacePath(userId = "") {
         return `/tmp/workspace/${userId}`;
@@ -40,7 +43,14 @@ export function createDeps(overrides = {}) {
         return {
           answer: "agent answer",
           traces: [{ type: "trace" }],
-          messages: [{ messageUid: "sm_child", role: "assistant", content: "agent answer" }],
+          sessionId: payload.sessionId,
+          turnScopeId: payload.turnScopeId,
+          messageSource: {
+            sessionId: payload.sessionId,
+            dialogProcessId: payload.dialogProcessId,
+            turnScopeId: payload.turnScopeId,
+          },
+          transferEnvelopes: [],
           dialogProcessId: payload.dialogProcessId,
         };
       },

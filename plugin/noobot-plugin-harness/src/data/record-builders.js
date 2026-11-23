@@ -6,7 +6,6 @@
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import crypto from "node:crypto";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { text } from "@noobot/shared/value";
 
 function stableStringify(value) {
   try {
@@ -25,11 +24,6 @@ function sha256Text(inputText = "") {
 
 export function nowIso() {
   return new Date().toISOString();
-}
-
-export function safeId(value = "") {
-  const normalizedText = text(value);
-  return normalizedText.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160);
 }
 
 export function safeError(error) {

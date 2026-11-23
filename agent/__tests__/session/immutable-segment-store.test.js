@@ -13,7 +13,7 @@ import {
   decodeImmutableRecordReference,
   IMMUTABLE_SEGMENT,
 } from "@noobot/session-protocol/immutable-segment";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { resetFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 
 async function fixture(t) {

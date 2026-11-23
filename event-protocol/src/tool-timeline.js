@@ -18,8 +18,8 @@ import { projectToolOperationSummary } from "./tool-presentation.js";
 
 export function compactThinkingTimeline(items) {
   const compactFact = (fact, summary) => ({
-    eventId: text(fact.eventId),
-    sequence: fact.sequence,
+    ...(text(fact.eventId) ? { eventId: text(fact.eventId) } : {}),
+    ...(fact.sequence === undefined ? {} : { sequence: fact.sequence }),
     ...(text(fact.timestamp) ? { timestamp: String(fact.timestamp).trim() } : {}),
     ...(text(fact.sequenceScopeId) ? { sequenceScopeId: String(fact.sequenceScopeId).trim() } : {}),
     ...(text(fact.authority) ? { authority: String(fact.authority).trim() } : {}),

@@ -14,6 +14,7 @@ import {
   isAvailableSessionDetailEntry,
   requireSessionDetailDocument,
   selectMainSessionDetailEntry,
+  selectSessionDetailBlockingEntry,
 } from "@noobot/session-protocol/session-detail";
 import { readApiResponseEnvelope } from "@noobot/shared/request-error";
 import { observeServerClock } from "../../../chat/model/serverClock.js";
@@ -22,7 +23,6 @@ const RECENT_SESSION_DETAIL_REUSE_MS = 2000;
 
 export function createSessionDetailRequests({
   sessions,
-  activeSessionId,
   userId,
   authFetch,
   getSessionDetailApi,
@@ -48,12 +48,12 @@ export function createSessionDetailRequests({
 
   function createSessionDetailRequestState(sessionId) {
     const targetSession = findSessionByAnyIdInList(sessions.value, sessionId);
-    const activeId = normalizeSessionId(activeSessionId.value);
     const pendingEntry = pendingSessionDetailRequests.get(sessionId);
     const recentMatches =
       recentSessionDetail !== null &&
       isSameSessionIdentity(recentSessionDetail.sessionId, sessionId) &&
       recentSessionDetail.targetSession === targetSession &&
+      !targetSession?.detailUnavailableReason &&
       nowMs() - recentSessionDetail.loadedAt <= RECENT_SESSION_DETAIL_REUSE_MS &&
       (targetSession === null ||
         isSessionDetailEntryCurrent(
@@ -61,18 +61,15 @@ export function createSessionDetailRequests({
           targetSession,
         ));
     return {
-      sessionId,
-      activeSessionId: activeId,
       targetSession,
-      targetExists: targetSession !== null,
       targetLoaded: targetSession !== null && hasCurrentSessionDetail(targetSession),
-      sameAsActive: isSameSessionIdentity(sessionId, activeId),
       pendingPromise:
         pendingEntry !== undefined &&
         pendingEntry.targetSession === targetSession &&
         pendingEntry.aggregateVersion ===
           (targetSession === null ? null : targetSession.aggregateVersion) &&
-        pendingEntry.generation === (targetSession === null ? null : targetSession.generation)
+        pendingEntry.knownGeneration ===
+          (targetSession === null ? null : targetSession.knownGeneration)
           ? pendingEntry.promise
           : null,
       recentDetail: recentMatches ? recentSessionDetail.detail : null,
@@ -88,15 +85,10 @@ export function createSessionDetailRequests({
     const reuseRecentlyLoaded = intent.reuseRecentlyLoaded === true;
     if (state.pendingPromise)
       return { action: "wait", promise: state.pendingPromise, state, source };
-    if (!requireFresh && reuseRecentlyLoaded && state.recentDetail) {
+    if (!force && !requireFresh && reuseRecentlyLoaded && state.recentDetail) {
       return { action: "reuse", detail: state.recentDetail, state, source };
     }
-    if (
-      !requireFresh &&
-      allowLoadedSnapshot &&
-      state.targetLoaded &&
-      (!force || state.sameAsActive)
-    ) {
+    if (!force && !requireFresh && allowLoadedSnapshot && state.targetLoaded) {
       return {
         action: "reuse",
         detail: requireLoadedSessionDetail(state.targetSession),
@@ -155,7 +147,7 @@ export function createSessionDetailRequests({
         !isSessionDetailEntryCurrent(main, targetSession)
       ) {
         throw new TypeError(
-          `session detail version is stale: ${requestSessionId}, received ${main.aggregateVersion}/${main.generation}, required ${targetSession.aggregateVersion}/${targetSession.generation}`,
+          `session detail version is stale: ${requestSessionId}, received ${main.aggregateVersion}/${main.generation}, required ${targetSession.aggregateVersion}/${targetSession.knownGeneration}`,
         );
       }
       logWorkflowDiagnostics("frontend.workflowDetail.responseReceived", () => ({
@@ -163,15 +155,17 @@ export function createSessionDetailRequests({
         requestSource: decision.source,
         sessionDocCount: data.sessions.length,
       }));
-      if (targetSession !== null && isAvailableSessionDetailEntry(main)) {
-        targetSession.generation = main.generation;
+      if (selectSessionDetailBlockingEntry(data) === null) {
+        if (targetSession !== null) targetSession.knownGeneration = main.generation;
+        recentSessionDetail = {
+          sessionId: data.sessionId,
+          targetSession,
+          loadedAt: nowMs(),
+          detail: data,
+        };
+      } else if (recentSessionDetail?.sessionId === requestSessionId) {
+        recentSessionDetail = null;
       }
-      recentSessionDetail = {
-        sessionId: data.sessionId,
-        targetSession,
-        loadedAt: nowMs(),
-        detail: data,
-      };
       return data;
     })();
 
@@ -182,10 +176,8 @@ export function createSessionDetailRequests({
         decision.state.targetSession === null
           ? null
           : decision.state.targetSession.aggregateVersion,
-      generation:
-        decision.state.targetSession === null ? null : decision.state.targetSession.generation,
-      source: decision.source,
-      startedAt: nowMs(),
+      knownGeneration:
+        decision.state.targetSession === null ? null : decision.state.targetSession.knownGeneration,
     });
     try {
       return await requestPromise;
@@ -196,17 +188,43 @@ export function createSessionDetailRequests({
     }
   }
 
-  async function fetchThinkingDetail({ sessionId, dialogProcessId, turnScopeId }) {
-    return thinkingDetailService.getDetail({
-      userId: userId.value,
+  async function fetchThinkingDetail({
+    userId: requestUserId,
+    sessionId,
+    dialogProcessId,
+    turnScopeId,
+    cursor = null,
+    snapshot = null,
+  }) {
+    return thinkingDetailService.getPage({
+      userId: requestUserId,
       sessionId,
       dialogProcessId,
       turnScopeId,
+      cursor,
+      snapshot,
+    });
+  }
+
+  async function releaseThinkingDetail({
+    userId: requestUserId,
+    sessionId,
+    dialogProcessId,
+    turnScopeId,
+    cursor,
+  }) {
+    return thinkingDetailService.release({
+      userId: requestUserId,
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
+      cursor,
     });
   }
 
   return {
     fetchSessionDetail,
     fetchThinkingDetail,
+    releaseThinkingDetail,
   };
 }

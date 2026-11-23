@@ -5,8 +5,10 @@
  */
 import { randomUUID } from "node:crypto";
 import { prepareAttachmentBinding } from "../../attachment-binding-request.js";
-import { readImmutableTurnMutationSource } from "./immutable-turn-source.js";
-import { requireImmutableAttachmentBindingResult } from "@noobot/session-protocol/immutable-storage-graph";
+import {
+  requireAttachmentBindingResponse,
+  requireAttachmentBindingResult,
+} from "@noobot/session-protocol";
 
 export async function bindTurnAttachments({
   userId,
@@ -27,53 +29,30 @@ export async function bindTurnAttachments({
     attachments,
     expectedAggregateVersion,
   });
-  return this.sessionRepo.withSessionMutation(
+  return this.sessionRepo.withSessionReader(
     identity.userId,
     identity.sessionId,
-    async () => {
-      await using reader = await this.sessionRepo.requireSessionReader(
-        identity.userId,
-        identity.sessionId,
-        { persistenceContext },
-      );
-      const committed = await this.sessionRepo.commitChanges(identity.userId, identity.sessionId, {
-        persistenceContext,
-        expectedGeneration: reader.generation,
-        operationId: randomUUID(),
-        changes: {
-          attachmentBinding: {
-            ...identity,
-            attachments: canonicalAttachments,
-            expectedAggregateVersion: normalizedExpectedVersion,
+    async ({ reader, commitChanges, readCurrent }) => {
+      const committed = await commitChanges(
+        await reader.prepareRequest({
+          operationId: randomUUID(),
+          changes: {
+            attachmentBinding: {
+              ...identity,
+              attachments: canonicalAttachments,
+              expectedAggregateVersion: normalizedExpectedVersion,
+            },
           },
-        },
-        committedAt: this.now(),
-      });
-      await using current = await this.sessionRepo.requireSessionReader(
-        identity.userId,
-        identity.sessionId,
-        { persistenceContext },
+          committedAt: this.now(),
+        }),
       );
-      const source = await readImmutableTurnMutationSource(current, identity);
-      const result = requireImmutableAttachmentBindingResult(committed.result.attachmentBinding);
+      const result = requireAttachmentBindingResult(committed.result.attachmentBinding);
       if (result.messageUid !== identity.messageUid)
         throw new TypeError("Attachment binding result message identity mismatch");
-      const record = await current.readMessage(result.messageUid);
-      if (
-        !record ||
-        record.message.turnScopeId !== identity.turnScopeId ||
-        record.message.role !== "user"
-      )
-        throw new TypeError(
-          "Committed attachment binding message is missing or belongs to another turn",
-        );
-      return {
-        userMessage: record.message,
-        attachments: record.message.attachments,
-        aggregateVersion: result.aggregateVersion,
-        deduplicated: result.deduplicated,
-        session: source,
-      };
+      const storedAttachments = await readCurrent((current) =>
+        current.readAttachmentBindingTarget(identity),
+      );
+      return requireAttachmentBindingResponse({ ...result, attachments: storedAttachments });
     },
     { persistenceContext },
   );

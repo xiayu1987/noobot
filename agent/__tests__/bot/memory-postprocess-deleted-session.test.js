@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createWorkspaceAdmission } from "../../src/workspace-lifecycle/workspace-admission.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
@@ -14,6 +15,7 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createSessionFacade } from "../../src/session/index.js";
 import { MemoryPostProcessService } from "../../src/bot/execution/memory-postprocess.js";
 import {
+  executeEmptySessionCleanup,
   createTestSessionServices,
   provisionTestSession,
   testWallClock,
@@ -53,6 +55,7 @@ test("memory postprocess for a session deleted after scheduling reports SESSION_
       const captures = [];
       const loggedErrors = [];
       const service = new MemoryPostProcessService({
+        workspaceAdmission: createWorkspaceAdmission(async () => {}),
         now: testWallClock,
         globalConfig: {},
         session,
@@ -68,7 +71,10 @@ test("memory postprocess for a session deleted after scheduling reports SESSION_
           },
         },
       });
-      await session.deleteSessionBranch({ userId: USER_ID, sessionIds: [SESSION_ID] });
+      await session.deleteSessionBranch(
+        { userId: USER_ID, sessionIds: [SESSION_ID] },
+        executeEmptySessionCleanup,
+      );
 
       await assert.rejects(
         service.runMemoryPostProcessFlow({

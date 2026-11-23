@@ -10,6 +10,7 @@ import {
   isFailedTurnState,
   isTerminalTurnEvent,
   isTerminalTurnState,
+  isUnsuccessfulTurnState,
   TURN_EVENT,
   TURN_EVENT_VALUES,
   TURN_FAILED_STATES,
@@ -17,6 +18,28 @@ import {
   TURN_STATE,
   TURN_TERMINAL_EVENTS,
 } from "../src/index.js";
+import { isLifecycleTerminalCandidate } from "../src/lifecycle-terminal-index.js";
+
+test("message-free terminal indexing follows lifecycle state without terminal details", () => {
+  const unsuccessful = new Set([
+    "stop_completed",
+    "action_failed",
+    "processing_failed",
+    "completion_failed",
+    "stop_failed",
+  ]);
+  for (const state of [...Object.values(TURN_STATE), "", undefined, "unknown"]) {
+    const turn = { state, terminalStatus: null, executionState: "completed" };
+    assert.equal(isUnsuccessfulTurnState(state), unsuccessful.has(state), String(state));
+    assert.equal(isLifecycleTerminalCandidate(turn, false), unsuccessful.has(state), String(state));
+    assert.equal(
+      isLifecycleTerminalCandidate(turn, true),
+      unsuccessful.has(state) || state === "completed",
+      String(state),
+    );
+  }
+  assert.equal(isLifecycleTerminalCandidate(null, true), false);
+});
 
 test("terminal turn events cover exactly the events that derive terminal states", () => {
   const derivedTerminalEvents = TURN_EVENT_VALUES.filter((eventType) =>

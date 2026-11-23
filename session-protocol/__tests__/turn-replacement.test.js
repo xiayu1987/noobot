@@ -9,6 +9,7 @@ import {
   parseTurnReplaceRequest,
   parseTurnReplacementChange,
   createTurnReplaceFingerprint,
+  matchesTurnReplacementAnchor,
 } from "../src/command/turn-replace-command.js";
 import {
   assertTurnReplacementCommit,
@@ -30,6 +31,36 @@ function input(overrides = {}) {
     ...overrides,
   };
 }
+
+test("replacement anchor is a natural user at or before the first message in the same dialog", () => {
+  const message = {
+    sessionId: "session-1",
+    dialogProcessId: "dialog-old",
+    turnScopeId: "turn-source",
+    messageUid: "indexed-user",
+    role: "user",
+    type: "message",
+    messageOrigin: "natural",
+  };
+  const first = {
+    ordinal: 12,
+    message: { ...message, turnScopeId: "continuation", messageUid: "first-message" },
+  };
+  const matches = (candidate) =>
+    matchesTurnReplacementAnchor({ first, indexedMessageUid: "indexed-user", candidate });
+  assert.equal(matches({ message, ordinal: 10 }), true);
+  assert.equal(matches({ message, ordinal: 13 }), false);
+  assert.equal(matches({ message, ordinal: NaN }), false);
+  for (const overrides of [
+    { messageUid: "wrong-user" },
+    { sessionId: "other-session" },
+    { dialogProcessId: "other-dialog" },
+    { messageOrigin: "internal" },
+    { role: "assistant" },
+  ]) {
+    assert.equal(matches({ message: { ...message, ...overrides }, ordinal: 10 }), false);
+  }
+});
 
 test("replacement change accepts only its explicit canonical identity fields", () => {
   const command = {

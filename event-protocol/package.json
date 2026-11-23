@@ -21,6 +21,7 @@
     "./tool-timeline": "./src/tool-timeline.js",
     "./activity-timeline": "./src/activity-timeline.js",
     "./thinking-detail-content": "./src/thinking-detail-content.js",
+    "./thinking-detail-projection": "./src/thinking-detail-projection.js",
     "./workflow-runtime-event": "./src/workflow-runtime-event.js",
     "./workflow-session-detail": "./src/workflow-session-detail.js",
     "./plugin-artifact-event": "./src/plugin-artifact-event.js"

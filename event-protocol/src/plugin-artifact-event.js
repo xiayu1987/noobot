@@ -6,12 +6,43 @@
 import { createEventEnvelope, createEventId } from "./envelope.js";
 import { nullishText as text } from "./normalize.js";
 import { deepFreeze, isDeepFrozen } from "@noobot/shared/deep-freeze";
+import { isCanonicalText, stableValue } from "@noobot/shared/value";
 
 const immutableProjections = new WeakMap();
 
 export const PLUGIN_ARTIFACT_EVENT = "plugin.artifact.committed";
 export const PLUGIN_ARTIFACT_FAMILY = "plugin.artifact";
 export const PLUGIN_ARTIFACT_SEQUENCE_DOMAIN = "plugin-artifact";
+
+const artifactRetirementPrefix = "artifactRetirement:";
+
+export function artifactRetirementKey(turnScopeId) {
+  if (!isCanonicalText(turnScopeId)) throw new TypeError("Invalid artifact retirement turn");
+  return `${artifactRetirementPrefix}${turnScopeId}`;
+}
+
+export function isArtifactRetirementKey(key) {
+  if (!key.startsWith(artifactRetirementPrefix)) return false;
+  artifactRetirementKey(key.slice(artifactRetirementPrefix.length));
+  return true;
+}
+
+export function requireCommittedArtifactRetirement(position, tail) {
+  if (!Number.isSafeInteger(tail) || tail < 0) throw new TypeError("Invalid committed outbox tail");
+  if (!Number.isSafeInteger(position) || position < 0)
+    throw new TypeError("Invalid artifact retirement position");
+  if (position > tail) throw new TypeError("Artifact retirement exceeds committed outbox tail");
+  return position;
+}
+
+export async function isCommittedArtifactRetired(readRetirement, event, tail) {
+  if (!Number.isSafeInteger(tail) || tail < 0) throw new TypeError("Invalid committed outbox tail");
+  if (!Number.isSafeInteger(event.ordinal) || event.ordinal < 1 || event.ordinal > tail)
+    throw new TypeError("Artifact event is outside the committed outbox");
+  const { turnScopeId } = event.envelope.identity;
+  const through = await readRetirement(artifactRetirementKey(turnScopeId));
+  return through !== null && event.ordinal <= requireCommittedArtifactRetirement(through, tail);
+}
 
 export const PLUGIN_ARTIFACT_SCHEMA_VERSION = 2;
 export const PLUGIN_ARTIFACT_OPERATIONS = Object.freeze(["created", "replaced"]);
@@ -286,6 +317,19 @@ export function requirePluginArtifactProjection(current, identity = current) {
   return current;
 }
 
+export function requirePluginArtifactAuthority(current, envelope, identity = current) {
+  requirePluginArtifactProjection(current, identity);
+  if (current === null || !validatePluginArtifactEnvelope(envelope).valid)
+    throw new TypeError("Plugin artifact requires its authoritative event");
+  const expected = projectPluginArtifact(envelope);
+  if (
+    Object.keys(expected).some((key) => key !== "data" && current[key] !== expected[key]) ||
+    JSON.stringify(stableValue(current.data)) !== JSON.stringify(stableValue(expected.data))
+  )
+    throw new TypeError("Plugin artifact projection disagrees with its authoritative event");
+  return current;
+}
+
 export function createPluginArtifactQueryResult(current) {
   requirePluginArtifactProjection(current);
   if (current === null) {
@@ -308,16 +352,21 @@ export function reducePluginArtifact(current, envelope) {
   if (!decision.allowed) return { applied: false, reason: decision.reason, artifact: current };
   return {
     applied: true,
-    artifact: Object.freeze({
-      pluginId: payload.pluginId,
-      artifactType: payload.artifactType,
-      artifactId: payload.artifactId,
-      revision: payload.revision,
-      operation: payload.operation,
-      data: payload.data,
-      eventId: envelope.identity.eventId,
-    }),
+    artifact: projectPluginArtifact(envelope),
   };
+}
+
+function projectPluginArtifact(envelope) {
+  const { payload } = envelope;
+  return Object.freeze({
+    pluginId: payload.pluginId,
+    artifactType: payload.artifactType,
+    artifactId: payload.artifactId,
+    revision: payload.revision,
+    operation: payload.operation,
+    data: payload.data,
+    eventId: envelope.identity.eventId,
+  });
 }
 
 export function projectPluginArtifacts(events) {

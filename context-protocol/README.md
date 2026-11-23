@@ -33,6 +33,16 @@ Reusing an ID with a changed delta or predecessor rejects with
 continues to describe the ordered message facts; its revision supplies the
 predecessor evidence, without a duplicate persisted predecessor field.
 
+Checkpoint revisions and receipt counts are non-negative safe integers; receipt
+revisions start at one. A request predecessor must be below
+`Number.MAX_SAFE_INTEGER` so its successor remains exact. Revision exhaustion
+rejects as `TURN_SUMMARY_CHECKPOINT_REQUEST_INVALID` at request admission.
+Both storage readers consume the shared state validation contract.
+
+The checkpoint request contains transaction facts only. The calling Session
+service uses persistence context and submission state as runtime options;
+neither is part of the request, digest, or persisted evidence.
+
 Replay validates lifecycle and checkpoint ownership before returning the original
 receipt. Turn completion or admission of a later turn does not invalidate that
 receipt. Terminal persistence and active-turn restrictions apply to new commits.

@@ -87,6 +87,8 @@ test("migrates v11 dialog order and summary receipts into write-time facts", () 
     },
   };
 
+  const [legacyReceipt] = source.turnSummaryCheckpoints.t1.receipts;
+  delete legacyReceipt.retainedMessageUids;
   const result = migrateReleased(source);
 
   assert.ok(result.migrations.includes("session-write-time-dialog-facts-v12"));
@@ -106,6 +108,23 @@ test("migrates v11 dialog order and summary receipts into write-time facts", () 
   assert.deepEqual(
     result.document.turnSummaryCheckpoints.t1.receipts.map((item) => item.checkpointId),
     ["live"],
+  );
+  assert.deepEqual(result.document.turnSummaryCheckpoints.t1.receipts[0], {
+    ...legacyReceipt,
+    retainedMessageUids: [],
+  });
+  assert.throws(
+    () =>
+      migrateReleased({
+        ...source,
+        turnSummaryCheckpoints: {
+          t1: {
+            ...source.turnSummaryCheckpoints.t1,
+            receipts: [{ ...legacyReceipt, retainedMessageUids: null }],
+          },
+        },
+      }),
+    (error) => error.code === "INVALID_TURN_SUMMARY_CHECKPOINT_STATE",
   );
   const repeated = migrateReleased({
     ...result.document,

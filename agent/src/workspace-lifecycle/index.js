@@ -17,19 +17,17 @@ import { ERROR_CODE } from "../shared/errors/constants.js";
 import { FileMutationCoordinator } from "../shared/storage/file-mutation-coordinator.js";
 import { applyWorkspaceAssets } from "./assets.js";
 import {
-  clearSection,
   createSectionBackup,
-  ensureRuntimeDirectories,
-  migrateWorkspaceLayout,
+  prepareWorkspaceLayout,
   repairConfigSection,
   repairMemorySection,
   resolveWorkspaceBackupBase,
-  upgradeWorkspaceLayout,
 } from "./sections.js";
 import { text } from "@noobot/shared/value";
 import { requireStorageService } from "../session/storage-service.js";
 import { retireDirectoryLockIfPresent } from "./directory-lock-retirement.js";
 import { repairSessionContextIndexes } from "./session-immutable-storage-upgrade.js";
+import { recoverWorkspaceAttachmentCatalogs } from "./attachment-catalog-upgrade.js";
 
 const workspaceMutationCoordinator = new FileMutationCoordinator({
   timeoutMessage: "workspace mutation lock timeout",
@@ -119,29 +117,30 @@ async function runWorkspaceOperation({
   storageService,
   reportProgress,
   readSessionOperationInput,
+  targetStorageBudget,
+  startupStorage,
+  signal,
 }) {
   const backupBase = resolveWorkspaceBackupBase(base);
   const backup = createSectionBackup(backupBase, base);
   const selected = new Set(sections);
   await mkdir(base, { recursive: true });
-  if (operation === WORKSPACE_OPERATION.RESET) {
-    for (const section of sections) await clearSection({ base, section, backup });
-  }
-  const report = { operation, layoutMigrations: await migrateWorkspaceLayout({ base, backup }) };
-  report.layoutUpgrades = await upgradeWorkspaceLayout({
+  const layout = await prepareWorkspaceLayout({
     base,
     backupBase,
+    resetSections: operation === WORKSPACE_OPERATION.RESET ? sections : [],
     created,
     scopedSessionRoots,
     storageService,
     reportProgress,
     readSessionOperationInput,
+    targetStorageBudget,
+    startupStorage,
+    signal,
   });
-  await ensureRuntimeDirectories(base);
-  if (
-    operation === WORKSPACE_OPERATION.REPAIR &&
-    !report.layoutUpgrades.some((upgrade) => upgrade.failed)
-  ) {
+  const report = { operation, ...layout };
+  if (operation === WORKSPACE_OPERATION.REPAIR) {
+    await recoverWorkspaceAttachmentCatalogs(base);
     report.sessionContextIndexes = await repairSessionContextIndexes({
       base,
       scopedSessionRoots,
@@ -170,13 +169,14 @@ async function runWorkspaceOperation({
 }
 
 async function withWorkspace(options, operation, sections) {
-  if (!Array.isArray(options?.scopedSessionRoots) || !options.scopedSessionRoots.length) {
-    throw new TypeError("workspace lifecycle requires scopedSessionRoots");
-  }
-  const storageService = requireStorageService(options.storageService, "workspace lifecycle");
   const { base, assetPackageBase, mutationLockPath } = await resolveWorkspacePaths(options);
   return workspaceMutationCoordinator.run(mutationLockPath, async () => {
     const existed = await requireWorkspaceDirectory(base);
+    if (existed && operation === WORKSPACE_OPERATION.CREATE) return { base };
+    if (!Array.isArray(options.scopedSessionRoots) || !options.scopedSessionRoots.length) {
+      throw new TypeError("workspace lifecycle requires scopedSessionRoots");
+    }
+    const storageService = requireStorageService(options.storageService, "workspace lifecycle");
     const effectiveOperation =
       !existed && operation === WORKSPACE_OPERATION.REPAIR ? WORKSPACE_OPERATION.CREATE : operation;
     const report = await runWorkspaceOperation({
@@ -190,18 +190,16 @@ async function withWorkspace(options, operation, sections) {
       storageService,
       reportProgress: options.onProgress,
       readSessionOperationInput: options.readSessionOperationInput,
+      targetStorageBudget: options.targetStorageBudget,
+      startupStorage: options.startupStorage,
+      signal: options.signal,
     });
     return { base, report };
   });
 }
 
 export async function ensureUserWorkspace(options) {
-  const { base, mutationLockPath } = await resolveWorkspacePaths(options);
-  const existed = await workspaceMutationCoordinator.run(mutationLockPath, () =>
-    requireWorkspaceDirectory(base),
-  );
-  if (existed) return base;
-  return (await repairUserWorkspace(options)).base;
+  return (await withWorkspace(options, WORKSPACE_OPERATION.CREATE, normalizeSections())).base;
 }
 
 export function repairUserWorkspace(options) {

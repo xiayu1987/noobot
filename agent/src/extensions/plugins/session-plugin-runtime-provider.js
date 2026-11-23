@@ -41,6 +41,10 @@ function runtimeDescriptor(loadedPlugins) {
   });
 }
 
+export async function collectSessionPluginRoots(options) {
+  return resolveScopedSessionRoots(await collectNoobotPluginScopedSessionRootDeclarations(options));
+}
+
 export async function createSessionPluginRuntimeBundle({ pluginRootDir = "" } = {}) {
   const rootOptions = text(pluginRootDir) ? { pluginRootDir: String(pluginRootDir).trim() } : {};
   const loadedPlugins = await getNoobotPluginRuntime({
@@ -54,8 +58,6 @@ export async function createSessionPluginRuntimeBundle({ pluginRootDir = "" } = 
   }
   reportRuntimeLifecycle(loadedPlugins);
 
-  const scopedSessionRoots = resolveScopedSessionRoots(
-    await collectNoobotPluginScopedSessionRootDeclarations(rootOptions),
-  );
+  const scopedSessionRoots = await collectSessionPluginRoots(rootOptions);
   return { loadedPlugins, pluginRuntime: runtimeDescriptor(loadedPlugins), scopedSessionRoots };
 }

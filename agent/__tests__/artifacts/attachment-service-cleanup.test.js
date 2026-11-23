@@ -5,41 +5,43 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pruneOrphanScopedAttachments } from "../../src/artifacts/service/attachment-service-cleanup.js";
-import { attachScopedRoot } from "../../src/artifacts/service/attachment-storage-layout.js";
+import { deleteScopedAttachmentsBySessionIds } from "../../src/artifacts/service/attachment-service-cleanup.js";
+import { attachScopeRoot } from "../../src/artifacts/service/attachment-storage-layout.js";
 
-for (const preserveOtherSource of [false, true]) {
-  test(`source cleanup removes selected attachments and preserves remaining sources: ${preserveOtherSource}`, async (t) => {
-    const workspaceRoot = await mkdtemp(path.join(tmpdir(), "attachment-cleanup-"));
-    t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
-    const root = attachScopedRoot(path.join(workspaceRoot, "user"));
-    const orphan = path.join(root, "orphan");
-    const retained = path.join(root, "retained", "user");
-    await mkdir(path.join(orphan, "user"), { recursive: true });
-    await mkdir(retained, { recursive: true });
-    await writeFile(path.join(orphan, "user", "selected.txt"), "selected");
-    await writeFile(path.join(retained, "keep.txt"), "kept");
-    if (preserveOtherSource) {
-      await mkdir(path.join(orphan, "tool"));
-      await writeFile(path.join(orphan, "tool", "other.txt"), "other");
-    }
-    const request = { userId: "user", keepSessionIds: ["retained"], attachmentSources: ["user"] };
-    const service = { globalConfig: { workspaceRoot } };
-    assert.deepEqual(await pruneOrphanScopedAttachments(service, request), {
-      deletedSessionIds: ["orphan"],
+test("cleanup uses the same session identity as attachment persistence", async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "attachment-cleanup-"));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  const userId = "user";
+  const service = { globalConfig: { workspaceRoot } };
+  const basePath = path.join(workspaceRoot, userId);
+  const retainedId = "branch/a%";
+  const deletedId = "branch/b%";
+  const scopePath = (sessionId) =>
+    attachScopeRoot(basePath, { sessionId, attachmentSource: "user" });
+  await mkdir(scopePath(retainedId), { recursive: true });
+  await mkdir(scopePath(deletedId), { recursive: true });
+  assert.deepEqual(
+    await deleteScopedAttachmentsBySessionIds(service, { userId, sessionIds: [deletedId] }),
+    {
+      deletedSessionIds: [deletedId],
       deletedCount: 1,
-    });
-    await assert.rejects(readdir(path.join(orphan, "user")), { code: "ENOENT" });
-    assert.equal(await readFile(path.join(retained, "keep.txt"), "utf8"), "kept");
-    if (preserveOtherSource)
-      assert.equal(await readFile(path.join(orphan, "tool", "other.txt"), "utf8"), "other");
-    else await assert.rejects(readdir(orphan), { code: "ENOENT" });
-    assert.deepEqual(await pruneOrphanScopedAttachments(service, request), {
-      deletedSessionIds: [],
-      deletedCount: 0,
-    });
-  });
-}
+    },
+  );
+  await assert.rejects(readdir(scopePath(deletedId)), { code: "ENOENT" });
+  await assert.rejects(
+    deleteScopedAttachmentsBySessionIds(service, { userId, sessionIds: [retainedId, ".."] }),
+    TypeError,
+  );
+  assert.deepEqual(await readdir(scopePath(retainedId)), []);
+  assert.deepEqual(
+    await deleteScopedAttachmentsBySessionIds(service, { userId, sessionIds: [retainedId] }),
+    {
+      deletedSessionIds: [retainedId],
+      deletedCount: 1,
+    },
+  );
+  await assert.rejects(readdir(scopePath(retainedId)), { code: "ENOENT" });
+});

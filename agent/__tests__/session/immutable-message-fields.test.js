@@ -12,7 +12,7 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
 import { upgradeImmutableMessageFields } from "../../src/session/session-artifact-session/immutable-message-fields-upgrade.js";
 import { readImmutableDisplayProjection } from "../../src/session/session-artifact-session/immutable-display-projection.js";
 import {
@@ -128,6 +128,7 @@ test("message updates retain untouched model references and replace or delete ex
         dialogProcessId: "d1",
         turnScopeId: "t1",
         expectedContentReference: receipt.contentReference,
+        owner: receipt.owner,
         metadata: {
           modelAdditionalKwargs: {
             reasoning: { type: "reasoning", encrypted_content: "replaced" },

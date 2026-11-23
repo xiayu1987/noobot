@@ -9,7 +9,7 @@ import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_UPGRADE_OWNER } from "@noobot/worksp
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
 import { isMissingPersistencePathError } from "../shared/storage/json-file-reader.js";
 import { text } from "@noobot/shared/value";
-import { parseWorkspaceSessionTombstones } from "@noobot/workspace-protocol/session-store";
+import { parseWorkspaceSessionDeletionState } from "@noobot/workspace-protocol/session-store";
 import { quarantineMigrationUnit } from "./migration-quarantine.js";
 import { ignoreSessionProgress } from "./session-directory-walk.js";
 
@@ -136,16 +136,21 @@ export async function upgradeSessionLifecycle({
 }) {
   const upgradedAt = new Date().toISOString();
   const tombstoneFile = path.join(base, WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE);
-  const tombstoneSessions = parseWorkspaceSessionTombstones({
+  const deletionState = parseWorkspaceSessionDeletionState({
     raw: await readTextOrNull(tombstoneFile),
     file: tombstoneFile,
   });
+  const tombstoneSessions = { ...deletionState.sessions };
   const { plans, quarantined } = await planRecords({ base, tombstoneSessions });
   const deleted = plans.filter((plan) => plan.deletedAtMs !== null);
   for (const plan of deleted) tombstoneSessions[plan.sessionId] = plan.deletedAtMs;
   if (deleted.length) {
     await mkdir(path.dirname(tombstoneFile), { recursive: true });
-    await writeJson(tombstoneFile, { sessions: tombstoneSessions, updatedAt: upgradedAt });
+    await writeJson(tombstoneFile, {
+      ...deletionState,
+      sessions: tombstoneSessions,
+      updatedAt: upgradedAt,
+    });
   }
   const retired = [];
   for (const plan of plans) {

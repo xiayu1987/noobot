@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { persistSessionDeletionMarkers } from "../helpers/session-services.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { rm } from "node:fs/promises";
@@ -66,7 +67,7 @@ test("run context uses accepted authority facts without materializing message bo
         session.getSessionRunContext({ ...payload, turnScopeId: "missing-turn" }),
         { code: "TURN_LIFECYCLE_TURN_NOT_FOUND" },
       );
-      await repo.markSessionsDeleted("u1", ["s1"]);
+      await persistSessionDeletionMarkers(repo, "u1", ["s1"]);
       await assert.rejects(session.getSessionRunContext(payload), { code: "SESSION_DELETED" });
     },
   );

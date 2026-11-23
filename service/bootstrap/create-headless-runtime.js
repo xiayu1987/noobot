@@ -24,20 +24,20 @@ import {
 } from "../services/startup-context-service.js";
 import { buildWorkspaceTree } from "../services/workspace-tree-service.js";
 
-function createConnectorRuntime({ getBot, workspaceRootPath, connectorSecretVault }) {
+function createConnectorRuntime({ serviceBotAccess, workspaceRootPath, connectorSecretVault }) {
   const connectorRuntime = new ConnectorRuntime({
     repository: {
-      list: (userId) => getBot().session.listConnectorInstances({ userId }),
-      get: (payload) => getBot().session.getConnectorInstance(payload),
-      create: (payload) => getBot().session.createConnectorInstance(payload),
-      update: (payload) => getBot().session.updateConnectorInstance(payload),
-      delete: (payload) => getBot().session.deleteConnectorInstance(payload),
-      readLegacy: (userId) => getBot().session.readLegacyConnectorInstances({ userId }),
-      migrateLegacy: (payload) => getBot().session.migrateLegacyConnectorInstances(payload),
+      list: (userId) => serviceBotAccess.session.listConnectorInstances({ userId }),
+      get: (payload) => serviceBotAccess.session.getConnectorInstance(payload),
+      create: (payload) => serviceBotAccess.session.createConnectorInstance(payload),
+      update: (payload) => serviceBotAccess.session.updateConnectorInstance(payload),
+      delete: (payload) => serviceBotAccess.session.deleteConnectorInstance(payload),
+      readLegacy: (userId) => serviceBotAccess.session.readLegacyConnectorInstances({ userId }),
+      migrateLegacy: (payload) => serviceBotAccess.session.migrateLegacyConnectorInstances(payload),
     },
     secretStore: connectorSecretVault,
     workspaceRoot: workspaceRootPath(),
-    resolveUserWorkspacePath: (userId) => getBot().getWorkspacePath(userId),
+    resolveUserWorkspacePath: serviceBotAccess.getWorkspacePath,
   });
   connectorSecretVault.setWorkspaceRoot(workspaceRootPath());
   registerBuiltinConnectorInstances(connectorRuntime);
@@ -92,7 +92,7 @@ export async function createHeadlessRuntime({
     connectorAccessPort,
   });
   connectorRuntime = createConnectorRuntime({
-    getBot: appDependencies.getBot,
+    serviceBotAccess: appDependencies.serviceBotAccess,
     workspaceRootPath: appDependencies.workspaceRootPath,
     connectorSecretVault,
   });

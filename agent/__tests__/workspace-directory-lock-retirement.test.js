@@ -18,6 +18,7 @@ import { ensureUserWorkspace } from "../src/workspace-lifecycle/index.js";
 import { FileMutationCoordinator } from "../src/shared/storage/file-mutation-coordinator.js";
 import { withTemp } from "./session/session-artifact-store-v2.test-helpers.js";
 import { TEST_STORAGE_SERVICE as storageService } from "./helpers/storage-service.js";
+import { createTestPartitionStorageBudget } from "./helpers/partition-journal-cases.js";
 
 const scopedSessionRoots = ["runtime/agent/session", "runtime/plugin-data/demo/session"];
 const retiredPaths = [
@@ -72,7 +73,13 @@ test("v26 upgrades to v27 only after directory retirement succeeds", async () =>
     const file = await state(base, 26);
     const lockPath = path.join(base, retiredPaths[0]);
     await oldLock(lockPath, ACTIVE_OWNER);
-    const options = { base, created: false, scopedSessionRoots, storageService };
+    const options = {
+      base,
+      created: false,
+      scopedSessionRoots,
+      storageService,
+      targetStorageBudget: createTestPartitionStorageBudget(),
+    };
     await assert.rejects(upgradeWorkspaceLayout(options), { code: "DIRECTORY_LOCK_OWNER_ALIVE" });
     assert.equal(JSON.parse(await readFile(file)).version, 26);
     await writeOwner(lockPath, ABANDONED_OWNER);

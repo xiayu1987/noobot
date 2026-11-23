@@ -6,6 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  projectThinkingDetailContentFragment as thinkingContentFragment,
+  mergeThinkingDetailContentFragments as mergeContentFragments,
   THINKING_DETAIL_CONTENT_KIND,
   isThinkingDetailContentFact,
   isThinkingDetailInjectedMessage,
@@ -308,6 +310,59 @@ test("projects plugin-declared activity kinds as plugin_activity facts carrying 
     ],
   );
   assert.equal(timeline.every(isThinkingDetailContentFact), true);
+});
+
+test("detail fragments merge later injection and activity revisions across pages", () => {
+  const injection = message({
+    messageUid: "cross-page-injection",
+    role: "user",
+    type: "message",
+    injectedMessage: true,
+    injectedBy: "harness",
+    relayCorrelationId: "rc_page",
+  });
+  const relay = relayActivity({
+    eventId: "relayed",
+    activityId: "relay",
+    relayCorrelationId: "rc_page",
+  });
+  const first = relayActivity({ eventId: "before", activityId: "updated", sequence: 2 });
+  const latest = relayActivity({ eventId: "after", activityId: "updated", sequence: 3 });
+  const messages = [message({ role: "assistant" }), injection];
+  const pages = [
+    thinkingContentFragment({
+      messages: messages.slice(0, 1),
+      activityTimeline: [relay, first],
+      after: 0,
+    }),
+    thinkingContentFragment({ messages: [injection], activityTimeline: [latest], after: 1 }),
+  ];
+  assert.ok(
+    mergeContentFragments([pages[0]]).thinkingContentTimeline.some(
+      ({ contentId }) => contentId === "event:relayed",
+    ),
+  );
+  const { thinkingContentTimeline: merged } = mergeContentFragments(pages);
+  assert.deepEqual(merged, projectThinkingDetailContentTimeline(messages, [relay, first, latest]));
+  assert.deepEqual(
+    new Set(merged.map(({ contentId }) => contentId)),
+    new Set(["message:cross-page-injection", "event:after"]),
+  );
+  assert.equal(
+    merged.find(({ sourceMessageUid }) => sourceMessageUid === injection.messageUid).sequence,
+    2,
+  );
+});
+
+test("detail fragments preserve first occurrence when activity revisions tie on sequence", () => {
+  const first = relayActivity({ eventId: "first", activityId: "first", sequence: 2 });
+  const second = relayActivity({ eventId: "second", activityId: "second", sequence: 1 });
+  const revised = { ...second, eventId: "second-revised", sequence: 2 };
+  const { activityTimeline } = mergeContentFragments([
+    thinkingContentFragment({ messages: [], activityTimeline: [first, second], after: 0 }),
+    thinkingContentFragment({ messages: [], activityTimeline: [revised], after: 0 }),
+  ]);
+  assert.deepEqual(activityTimeline, [first, revised]);
 });
 
 test("plugin activity relayed as an injected message is superseded by that message", () => {

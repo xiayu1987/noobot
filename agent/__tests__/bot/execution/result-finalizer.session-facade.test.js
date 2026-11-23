@@ -27,7 +27,7 @@ function createRealFacade(calls) {
   });
 }
 
-test("finalizeAgentTurn locates existing child sessions through the real facade", async () => {
+test("finalizeAgentTurn flushes the child scope without reading history through the facade", async () => {
   const calls = [];
   const session = createRealFacade(calls);
   let finalizePayload = null;
@@ -47,7 +47,7 @@ test("finalizeAgentTurn locates existing child sessions through the real facade"
       finalizePayload = payload;
       assert.deepEqual(calls, [], "creating the finalization port must not read history");
       await payload.turnPersistence.flush();
-      await payload.turnPersistence.readResultMessages();
+      assert.deepEqual(await payload.turnPersistence.readResultTransfers(), []);
       return { ok: true };
     },
     userId: "u1",
@@ -64,14 +64,10 @@ test("finalizeAgentTurn locates existing child sessions through the real facade"
 
   assert.deepEqual(
     calls.map(([name]) => name),
-    ["flush", "getSessionTurns"],
+    ["flush"],
   );
-  for (const [, payload] of calls.filter(([name]) => name !== "flush")) {
-    assert.equal(Object.hasOwn(payload, "parentSessionId"), false);
-    assert.equal(payload.persistenceContext.sessionId, "child-1");
-  }
   assert.equal(finalizePayload.parentSessionId, "parent-1");
-  const [, turnQuery] = calls.find(([name]) => name === "getSessionTurns");
-  assert.equal(turnQuery.turnScopeId, "turn-1");
-  assert.equal(turnQuery.dialogProcessId, "dp-1");
+  assert.equal(finalizePayload.sessionId, "child-1");
+  assert.equal(finalizePayload.turnScopeId, "turn-1");
+  assert.equal(finalizePayload.dialogProcessId, "dp-1");
 });

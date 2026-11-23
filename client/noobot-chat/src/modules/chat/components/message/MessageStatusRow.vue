@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import {
   isTerminalStatusStepState,
   resolveStatusStepLabelKey,
@@ -32,6 +32,16 @@ const props = defineProps({
 });
 const { translate } = useLocale();
 const isRunning = computed(() => !isTerminalStatusStepState(props.statusStepState));
+const sweepCompleted = ref(false);
+watch(
+  () => props.statusStepState,
+  (state, previous) => {
+    sweepCompleted.value =
+      state === STATUS_STEP_TERMINAL.COMPLETED &&
+      Boolean(previous) &&
+      !isTerminalStatusStepState(previous);
+  },
+);
 const stepView = computed(() => {
   const terminal = isTerminalStatusStepState(props.statusStepState)
     ? props.statusStepState
@@ -51,7 +61,10 @@ const stepView = computed(() => {
   <div
     v-if="statusStepState"
     class="message-status-steps"
-    :class="[`is-${stepView.finishStatus}`, { 'is-running': isRunning }]"
+    :class="[
+      `is-${stepView.finishStatus}`,
+      { 'is-running': isRunning, 'noobot-thinking-sweep': isRunning },
+    ]"
     role="status"
     aria-live="polite"
   >
@@ -64,7 +77,14 @@ const stepView = computed(() => {
         :aria-current="step.status === 'process' ? 'step' : undefined"
       >
         <span class="message-status-steps__dot" aria-hidden="true" />
-        <span class="message-status-steps__title">{{ step.title }}</span>
+        <span
+          class="message-status-steps__title noobot-thinking-sweep-text"
+          :class="{
+            'noobot-thinking-sweep-once':
+              sweepCompleted && step.key === STATUS_STEP_TERMINAL.COMPLETED,
+          }"
+          >{{ step.title }}</span
+        >
       </li>
     </ol>
   </div>

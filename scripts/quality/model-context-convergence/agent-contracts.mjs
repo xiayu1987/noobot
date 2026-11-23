@@ -123,10 +123,13 @@ export const AGENT_CONTRACTS = Object.freeze([
   {
     file: "agent/src/session/services/session-message-service/turn-summary-checkpoint.js",
     required: [
-      ["checkpoint request delegates to protocol", /parseTurnSummaryCheckpointRequest\(payload\)/],
       [
-        "checkpoint service commits messages and checkpoint through one immutable transaction",
-        /this\.sessionRepo\.withSessionReader\([\s\S]*?async \(reader, scope, commitChanges\) =>[\s\S]*?submission\.submit\(\{[\s\S]*?expectedGeneration:\s*reader\.generation,[\s\S]*?changes:\s*\{\s*messages:\s*request\.messages\.map\([\s\S]*?summaryCheckpoints:\s*\[\{\s*\.\.\.request,\s*persistenceContext:\s*undefined\s*\}\][\s\S]*?commit:\s*commitChanges,/,
+        "checkpoint request is constructed by protocol",
+        /const request = parseTurnSummaryCheckpointRequest\(payload\);/,
+      ],
+      [
+        "checkpoint service commits messages and checkpoint through one session transaction",
+        /this\.sessionRepo\.withSessionCommit\([\s\S]*?async \(\{ prepareRequest, scope, commitChanges \}\) =>[\s\S]*?submission\.submit\(\{[\s\S]*?prepare:\s*\(\) =>\s*prepareRequest\(\{[\s\S]*?changes:\s*\{\s*messages:\s*request\.messages\.map\([\s\S]*?summaryCheckpoints:\s*\[request\][\s\S]*?commit:\s*commitChanges,/,
       ],
     ],
     forbidden: [
@@ -140,8 +143,8 @@ export const AGENT_CONTRACTS = Object.freeze([
     file: "agent/src/session/session-artifact-session/commit-session-changes.js",
     required: [
       [
-        "immutable commit delegates checkpoint preparation to its transaction adapter",
-        /prepareImmutableSummaryCheckpoint\(\{\s*store,\s*get:\s*read,\s*getManyMetadata:\s*\(collection, keys\) => plan\.getManyMetadata\(collection, keys\),\s*checkpoint,\s*committedAt:\s*input\.committedAt,/,
+        "immutable commit delegates checkpoint preparation to its transaction plan",
+        /prepareImmutableSummaryCheckpoint\(\{\s*store,\s*plan,\s*checkpoint,\s*committedAt:\s*input\.committedAt,\s*\}\)/,
       ],
     ],
   },
@@ -154,7 +157,15 @@ export const AGENT_CONTRACTS = Object.freeze([
       ],
       [
         "checkpoint transaction delegates to protocol",
-        /applyTurnSummaryCheckpoint\(session, request, committedAt\)/,
+        /applyIndexedTurnSummaryCheckpoint\(\s*session,\s*request,\s*committedAt,/,
+      ],
+      [
+        "checkpoint reads tool pair membership from its transaction plan",
+        /plan\.getMany\("toolPairs", keys\)/,
+      ],
+      [
+        "checkpoint rejects missing tool pair indexes",
+        /if \(!pairs\.get\(key\)\) throw immutableStorageError\("Selected message has no tool pair index"\)/,
       ],
     ],
   },
@@ -173,6 +184,10 @@ export const AGENT_CONTRACTS = Object.freeze([
       [
         "checkpoint preserves tool pair closure",
         /assertSummarizedToolPairClosure\(session\.messages, request\.summarizedMessageUids\)/,
+      ],
+      [
+        "indexed checkpoint preserves tool pair closure",
+        /assertSummaryCheckpointToolPairSelection\(key, pairs\.get\(key\), count\)/,
       ],
     ],
   },

@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, utimes } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
@@ -22,7 +22,7 @@ const writerSource = `
   import { rename } from "node:fs/promises";
   import { writeSync } from "node:fs";
   import path from "node:path";
-  import { commitSessionChanges } from ${JSON.stringify(moduleUrl("../../src/session/session-artifact-session/commit-session-changes.js"))};
+  import { commitSessionChanges } from ${JSON.stringify(moduleUrl("../helpers/commit-immutable-session-fixture.js"))};
   import { setFsAdapter } from ${JSON.stringify(moduleUrl("../../src/shared/storage/fs-adapter.js"))};
   const input = [];
   for await (const chunk of process.stdin) input.push(chunk);
@@ -206,9 +206,6 @@ for (const stage of ["before-head", "after-head", "before-response"]) {
       assert.equal(crashed.generation, initial.generation + Number(committed));
       const eventId = await assertBusinessState(reopened, crashed, request, committed);
       await assertBusinessState(reopened, initial, request, false);
-      if (stage === "before-response")
-        await assert.rejects(readFile(store.lockPath), { code: "ENOENT" });
-      else await utimes(store.lockPath, new Date(0), new Date(0));
       const recovered = await runWriter(t, request);
       assert.equal(recovered.replayed, committed);
       assert.equal(recovered.generation, initial.generation + 1);

@@ -47,9 +47,23 @@ function visit(value, output, seen) {
   else Object.values(value).forEach((item) => visit(item, output, seen));
 }
 
+const capturedEnvelopes = new WeakMap();
+
+function envelopesForFrame(record) {
+  const cached = capturedEnvelopes.get(record);
+  if (cached !== undefined) return cached;
+  const envelopes = [];
+  visit(decodeWebSocketPayload(record.payload), envelopes, new Set());
+
+  if (Object.isFrozen(record)) capturedEnvelopes.set(record, envelopes);
+  return envelopes;
+}
+
 export function findVersionedEnvelopes(records = []) {
   const output = [];
-  for (const frame of decodedFrames(records)) visit(frame.decoded, output, new Set());
+  for (const frame of records) {
+    for (const envelope of envelopesForFrame(frame)) output.push(envelope);
+  }
   return output;
 }
 
@@ -80,6 +94,44 @@ export function findLifecycleReceipts(records = []) {
   return findVersionedEnvelopes(records).filter(
     (item) => item.action === "turn.lifecycle.received",
   );
+}
+
+export function createCapturedFrameLog() {
+  const records = [];
+  const listeners = new Set();
+  return {
+    records,
+    append(frame) {
+      records.push(frame);
+      for (const listener of listeners) listener(frame);
+    },
+    async waitForMatch(select, timeoutMs) {
+      for (const frame of records) {
+        const match = select(frame);
+        if (match) return match;
+      }
+      return new Promise((resolve, reject) => {
+        const settle = (complete, value) => {
+          clearTimeout(timer);
+          listeners.delete(listener);
+          complete(value);
+        };
+        const listener = (frame) => {
+          try {
+            const match = select(frame);
+            if (match) settle(resolve, match);
+          } catch (error) {
+            settle(reject, error);
+          }
+        };
+        const timer = setTimeout(
+          () => settle(reject, new Error("Timed out waiting for captured protocol evidence")),
+          timeoutMs,
+        );
+        listeners.add(listener);
+      });
+    },
+  };
 }
 
 export async function waitForCaptured(predicate, { timeoutMs = 30000, intervalMs = 100 } = {}) {

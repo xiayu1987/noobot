@@ -5,10 +5,9 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, open, readdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, open, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { setTimeout as delay } from "node:timers/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -30,12 +29,16 @@ test(
       "../../src/session/authority-outbox-store/outbox-journal.js",
       import.meta.url,
     ).href;
+    const coordinatorUrl = new URL(
+      "../../src/session/session-mutation-coordinator.js",
+      import.meta.url,
+    ).href;
     const record = {
       op: "attempt",
       eventId: "event-process",
       attemptedAt: "2026-10-30T00:00:00.000Z",
     };
-    let result;
+    let child;
     let exit;
     await sessionMutationCoordinator.run(
       resolveSessionArtifactMutationLock(sessionDir),
@@ -43,7 +46,7 @@ test(
         const file = authorityOutboxJournalPath(sessionDir);
         await mkdir(path.dirname(file), { recursive: true });
         await writeFile(file, "{partial", "utf8");
-        const child = spawn(
+        child = spawn(
           process.execPath,
           [
             "--import",
@@ -52,25 +55,33 @@ test(
             "-e",
             `
       import { readAuthorityOutboxRecords } from ${JSON.stringify(moduleUrl)};
-      process.send(await readAuthorityOutboxRecords(process.argv[1]));
+      import { sessionMutationCoordinator } from ${JSON.stringify(coordinatorUrl)};
+      import assert from "node:assert/strict";
+      import { once } from "node:events";
+      const timing = sessionMutationCoordinator.readTiming;
+      sessionMutationCoordinator.readTiming = () => ({ timeoutMs: 100, pollMs: 5 });
+      await assert.rejects(readAuthorityOutboxRecords(process.argv[1]), { code: "SESSION_MUTATION_BUSY" });
+      sessionMutationCoordinator.readTiming = timing;
+      const retry = once(process, "message");
+      process.send({ blocked: true });
+      await retry;
+      process.send(await readAuthorityOutboxRecords(process.argv[1]), () => process.disconnect());
     `,
             sessionDir,
           ],
           { stdio: ["ignore", "ignore", "pipe", "ipc"] },
         );
         t.after(() => child.kill());
-        result = once(child, "message");
         exit = once(child, "exit");
-        const prefix = `${path.basename(sessionDir)}.mutation-lock.wait-`;
-        const deadline = Date.now() + 5000;
-        while (!(await readdir(path.dirname(sessionDir))).some((name) => name.startsWith(prefix))) {
-          assert.ok(Date.now() < deadline, "child must wait on the session mutation file lock");
-          await delay(5);
-        }
+        const [blocked] = await Promise.race([once(child, "message"), exit]);
+        assert.deepEqual(blocked, { blocked: true });
         await writeFile(file, `${JSON.stringify(record)}\n`, "utf8");
       },
     );
-    assert.deepEqual((await result)[0], [record]);
+    const result = once(child, "message");
+    child.send({ retry: true });
+    const [records] = await Promise.race([result, exit]);
+    assert.deepEqual(records, [record]);
     assert.equal((await exit)[0], 0);
   },
 );

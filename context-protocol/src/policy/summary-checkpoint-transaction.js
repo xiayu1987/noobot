@@ -31,38 +31,49 @@ function checkpointConflict(message, code) {
   return error;
 }
 
-function toolPairKey(message, callId) {
-  return [resolveSessionMessageRecordDialogProcessId(message), message.turnScopeId, callId].join(
-    "\u0000",
+export function summaryCheckpointEffectMessageUids(receipt) {
+  return new Set([...receipt.persistedMessageUids, ...receipt.summarizedMessageUids]);
+}
+
+export function summaryCheckpointToolPairMemberships(message) {
+  const pairs = new Map();
+  if (!message) return pairs;
+  const dialogProcessId = resolveSessionMessageRecordDialogProcessId(message);
+  const key = (id) => JSON.stringify([dialogProcessId, message.turnScopeId, id]);
+  for (const call of resolveContextToolCalls(message)) {
+    const id = resolveContextToolCallDeclarationId(call);
+    if (id) pairs.set(key(id), "declaration");
+  }
+  const result = resolveContextToolResultCallId(message);
+  if (result) pairs.set(key(result), "result");
+  return pairs;
+}
+
+export function assertSummaryCheckpointToolPairSelection(key, pair, selectedCount) {
+  if (!pair.ownerUid || selectedCount === 0 || selectedCount === pair.resultCount + 1) return;
+  throw checkpointConflict(
+    `summary checkpoint splits tool call pair: ${JSON.parse(key)[2]}`,
+    SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_TOOL_PAIR_SPLIT,
   );
+}
+
+function collectToolPairMemberships(pairs, message, selected) {
+  for (const [key, role] of summaryCheckpointToolPairMemberships(message)) {
+    const pair = pairs.get(key) ?? { ownerUid: "", resultCount: 0, selectedCount: 0 };
+    if (role === "declaration") pair.ownerUid = message.messageUid;
+    else pair.resultCount += 1;
+    if (selected) pair.selectedCount += 1;
+    pairs.set(key, pair);
+  }
 }
 
 function assertSummarizedToolPairClosure(messages, summarizedMessageUids) {
   const summarizedSet = new Set(summarizedMessageUids);
-  const callOwnerById = new Map();
-  const resultUidsByCallId = new Map();
-  for (const message of messages) {
-    const messageUid = message.messageUid;
-    for (const call of resolveContextToolCalls(message)) {
-      const callId = resolveContextToolCallDeclarationId(call);
-      if (callId) callOwnerById.set(toolPairKey(message, callId), messageUid);
-    }
-    const resultCallId = resolveContextToolResultCallId(message);
-    if (!resultCallId) continue;
-    const pairKey = toolPairKey(message, resultCallId);
-    if (!resultUidsByCallId.has(pairKey)) resultUidsByCallId.set(pairKey, []);
-    resultUidsByCallId.get(pairKey).push(messageUid);
-  }
-  for (const [pairKey, ownerUid] of callOwnerById) {
-    const pairUids = [ownerUid, ...(resultUidsByCallId.get(pairKey) ?? [])];
-    const selectedCount = pairUids.filter((messageUid) => summarizedSet.has(messageUid)).length;
-    if (selectedCount === 0 || selectedCount === pairUids.length) continue;
-    const callId = pairKey.slice(pairKey.lastIndexOf("\u0000") + 1);
-    throw checkpointConflict(
-      `summary checkpoint splits tool call pair: ${callId}`,
-      SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_TOOL_PAIR_SPLIT,
-    );
-  }
+  const pairs = new Map();
+  for (const message of messages)
+    collectToolPairMemberships(pairs, message, summarizedSet.has(message.messageUid));
+  for (const [key, pair] of pairs)
+    assertSummaryCheckpointToolPairSelection(key, pair, pair.selectedCount);
 }
 
 function resolveDuplicateCheckpoint(currentState, request) {
@@ -157,15 +168,43 @@ function markCheckpointMessages(messages, request) {
 }
 
 export function applyTurnSummaryCheckpoint(session, request, committedAt) {
+  const prepared = prepareCheckpoint(session, request);
+  if (prepared.duplicate) return prepared.duplicate;
+  assertSummarizedToolPairClosure(session.messages, request.summarizedMessageUids);
+  return commitCheckpoint(session, request, committedAt, prepared.currentState);
+}
+
+export async function applyIndexedTurnSummaryCheckpoint(session, request, committedAt, readPairs) {
+  const prepared = prepareCheckpoint(session, request);
+  if (prepared.duplicate) return prepared.duplicate;
+  const selected = new Set(request.summarizedMessageUids);
+  const counts = new Map();
+  for (const message of session.messages) {
+    if (!selected.has(message.messageUid)) continue;
+    for (const key of summaryCheckpointToolPairMemberships(message).keys())
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  if (counts.size) {
+    const pairs = await readPairs([...counts.keys()]);
+    for (const [key, count] of counts)
+      assertSummaryCheckpointToolPairSelection(key, pairs.get(key), count);
+  }
+  return commitCheckpoint(session, request, committedAt, prepared.currentState);
+}
+
+function prepareCheckpoint(session, request) {
   assertSummaryCheckpointTurnOwnership(session, request);
   const currentState = readTurnSummaryCheckpointState(session, request);
   const duplicate = resolveDuplicateCheckpoint(currentState, request);
-  if (duplicate) return duplicate;
+  if (duplicate) return { duplicate };
   assertSummaryCheckpointTargetsTurn(session, request);
   assertCheckpointRevision(currentState.checkpointRevision, request);
   assertSummaryCheckpointDisposition(request);
   assertCheckpointMessagesResolved(session.messages, request);
-  assertSummarizedToolPairClosure(session.messages, request.summarizedMessageUids);
+  return { currentState };
+}
+
+function commitCheckpoint(session, request, committedAt, currentState) {
   const { nextMessages, markedCount } = markCheckpointMessages(session.messages, request);
   const checkpointRevision = currentState.checkpointRevision + 1;
   const receipt = {

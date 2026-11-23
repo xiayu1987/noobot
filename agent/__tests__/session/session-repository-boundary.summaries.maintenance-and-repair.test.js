@@ -10,11 +10,14 @@ import path from "node:path";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 
 import {
+  executeEmptySessionCleanup,
+  createTestPartitionSessionServices,
   createTestSessionServices,
   provisionTestSession,
   commitTestSessionChanges,
 } from "../helpers/session-services.js";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
+import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
 import { SESSIONS_SUMMARY_SCHEMA_VERSION } from "@noobot/session-protocol/sessions-summary";
 import { contentDigest } from "../../src/session/session-artifact-session/immutable-object-store.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
@@ -411,13 +414,19 @@ test("Session reads reject an unsupported immutable format without rewriting it"
       code: "SESSION_IMMUTABLE_STORAGE_INVALID",
     });
     await assert.rejects(
-      repository.commitChanges(userId, sessionId, {
-        persistenceContext,
-        expectedGeneration: 1,
-        operationId: "unsupported-format",
-        committedAt: repository.now(),
-        changes: { sessionMetadata: { customTitle: "must not write" } },
-      }),
+      repository.withSessionReader(
+        userId,
+        sessionId,
+        async ({ reader, commitChanges }) =>
+          commitChanges(
+            await reader.prepareRequest({
+              operationId: "unsupported-format",
+              committedAt: repository.now(),
+              changes: { sessionMetadata: { customTitle: "must not write" } },
+            }),
+          ),
+        { persistenceContext },
+      ),
       { code: "SESSION_IMMUTABLE_STORAGE_INVALID" },
     );
     assert.equal(await readFile(manifestFile, "utf8"), legacyManifest);
@@ -433,7 +442,7 @@ test("deleting one session does not invalidate another session display summary",
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createTestSessionServices({ workspaceRoot });
+    await using runtime = createTestPartitionSessionServices({ workspaceRoot });
     for (const sessionId of ["kept", "deleted"]) {
       await provisionTestSession(runtime, {
         userId,
@@ -473,11 +482,14 @@ test("deleting one session does not invalidate another session display summary",
       "runtime",
       "session",
       "kept",
-      "head.json",
+      PARTITION_JOURNAL_HEAD_FILE,
     );
     const persistedHead = await readFile(keptSummaryFile, "utf8");
 
-    await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionIds: ["deleted"] });
+    await runtime.sessionTreeService.deleteSessionBranch(
+      { userId, sessionIds: ["deleted"] },
+      executeEmptySessionCleanup,
+    );
     const display = await runtime.sessionCrudService.getSessionDisplayData({
       userId,
       sessionId: "kept",

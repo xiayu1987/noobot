@@ -18,9 +18,56 @@ import {
   requireSessionContentProjection,
   selectSessionContentMessages,
   selectMainSessionDetailEntry,
+  selectSessionDetailBlockingEntry,
 } from "../src/index.js";
+import { selectBranchDialogMessages } from "../src/aggregate/session-detail.js";
 
 const INVALID = { code: SESSION_ERROR_CODE.SESSION_DETAIL_PAYLOAD_INVALID };
+
+test("branch detail rejects conflicting parent and session claims", () => {
+  const collect = (sessions) =>
+    selectBranchDialogMessages({
+      sessionId: "root-session",
+      rootDialogProcessIds: ["root-dialog"],
+      sessions,
+    });
+  const message = { dialogProcessId: "child-dialog", parentDialogProcessId: "root-dialog" };
+  assert.throws(
+    () =>
+      collect([
+        { sessionId: "child", messages: [message, { ...message, parentDialogProcessId: "other" }] },
+      ]),
+    INVALID,
+  );
+  assert.throws(
+    () =>
+      collect([
+        { sessionId: "child", messages: [message] },
+        { sessionId: "other-child", messages: [message] },
+      ]),
+    INVALID,
+  );
+  assert.throws(
+    () =>
+      collect([
+        { sessionId: "child", messages: [{ ...message, parentDialogProcessId: "child-dialog" }] },
+      ]),
+    INVALID,
+  );
+});
+
+const STATS = Object.freeze({
+  messageCount: 4,
+  displayMessageCount: 1,
+  injectedMessageCount: 1,
+  thinkingMessageCount: 0,
+  toolLogCount: 2,
+  displayToolLogCount: 0,
+  unassignedToolArtifactCount: 0,
+  conflictedToolArtifactCount: 0,
+  attachmentCount: 0,
+  hasToolDetails: true,
+});
 
 test("partial content projection preserves references and distinguishes omitted messages", () => {
   const partial = Object.freeze({ sessionId: "s-1", title: "updated" });
@@ -81,6 +128,7 @@ function availableEntry(overrides = {}) {
     turnLifecycleSnapshot: snapshot(sessionId),
     sessionArtifactEvents: [{ identity: { eventId: "artifact-1", sessionId } }],
     messages: [{ role: "user" }],
+    stats: STATS,
     availability: "available",
     ...overrides,
   };
@@ -117,6 +165,44 @@ test("available detail entry is projected from the display summary without extra
   assert.equal(isAvailableSessionDetailEntry(entry), true);
   assert.deepEqual(entry, availableEntry());
   assert.throws(() => createAvailableSessionDetailEntry(null), INVALID);
+});
+
+test("detail entries require authoritative global statistics and cannot disguise a partial display", () => {
+  const entry = availableEntry();
+  assert.equal(entry.stats.messageCount, 4);
+  assert.equal(entry.messages.length, 1);
+  assert.deepEqual(collectSessionDetailEntryErrors(entry), []);
+  const { stats: _stats, ...missing } = entry;
+  assert.ok(collectSessionDetailEntryErrors(missing).includes("missing_stats"));
+  for (const stats of [
+    null,
+    {},
+    { ...STATS, messageCount: -1 },
+    { ...STATS, hasToolDetails: false },
+    { ...STATS, extra: 1 },
+  ]) {
+    assert.ok(
+      collectSessionDetailEntryErrors(availableEntry({ stats })).includes("invalid_display_stats"),
+    );
+  }
+  assert.ok(
+    collectSessionDetailEntryErrors(availableEntry({ messages: [] })).includes(
+      "display_message_count_mismatch",
+    ),
+  );
+});
+test("detail reports malformed rows independently of invalid global statistics", () => {
+  const invalidStats = { ...STATS, hasToolDetails: false };
+  for (const messages of [null, [null], Array(1)]) {
+    assert.deepEqual(
+      collectSessionDetailEntryErrors(availableEntry({ stats: invalidStats, messages })),
+      ["invalid_messages", "invalid_display_stats"],
+    );
+  }
+  assert.deepEqual(
+    collectSessionDetailEntryErrors(availableEntry({ stats: invalidStats, messages: [] })),
+    ["invalid_display_stats"],
+  );
 });
 
 test("detail entry rejects snapshot and artifact events owned by another session", () => {
@@ -162,6 +248,16 @@ test("detail document requires a single main entry and unique entries", () => {
       }),
     INVALID,
   );
+});
+
+test("full detail is blocked by any unreadable branch entry and prioritizes the main failure", () => {
+  const root = availableEntry();
+  const child = unavailableEntry();
+  const brokenRoot = unavailableEntry({ sessionId: root.sessionId, parentSessionId: "" });
+  const detail = (sessions) => createSessionDetailDocument({ sessionId: root.sessionId, sessions });
+  assert.equal(selectSessionDetailBlockingEntry(detail([root])), null);
+  assert.equal(selectSessionDetailBlockingEntry(detail([root, child])), child);
+  assert.equal(selectSessionDetailBlockingEntry(detail([child, brokenRoot])), brokenRoot);
 });
 
 test("missing detail document carries no entries and has no main entry", () => {

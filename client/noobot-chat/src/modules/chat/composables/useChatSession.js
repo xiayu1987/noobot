@@ -586,6 +586,7 @@ export function useChatSession({
     renameSession: chatList.renameSession,
     fetchSessions: chatList.fetchSessions,
     fetchThinkingDetail: chatList.fetchThinkingDetail,
+    releaseThinkingDetail: chatList.releaseThinkingDetail,
     selectSession: chatList.selectSession,
     send: sendWithComposerActionState,
     stopSending: stopSendingWithComposerActionState,

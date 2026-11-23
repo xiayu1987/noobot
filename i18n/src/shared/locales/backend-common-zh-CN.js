@@ -130,7 +130,7 @@ export const BACKEND_COMMON_ZH_CN = {
   "ws.unknownError": "未知错误",
   "ws.userInteractionTimeout": "用户交互超时",
   "agent.phaseSummaryPrompt":
-    "请仅输出用于继续当前任务的阶段小结：目标与用户约束、已完成事项及证据、变更文件与关键定位、验证结果、未完成事项与下一步。合并已有小结，保留后续必需的事实和标识；区分已验证事实与待验证内容。不要调用工具或继续执行任务。",
+    "请仅输出用于继续当前任务的阶段小结结果：目标与用户约束、已完成事项及证据、变更文件与关键定位、验证结果、未完成事项与下一步。合并已有小结，保留后续必需的事实和标识；区分已验证事实与待验证内容。注：此请求是协助请求，无需执行工具。",
   "agent.taskCheckPrompt":
     "已达到周期任务检查阈值。本次模型调用可按需调用 task_check 留下任务检查切片，但不强制调用；本提示只出现本次。调用时 checkContent 必须严格使用唯一文本协议：NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n简短任务检查摘要\n[DETAILS]\n当前目标、进展、偏移风险和遗漏\n[NEXT_ACTION]\n明确的下一步动作。所有段落必须非空，不得增加、重复或调整段落。",
 };

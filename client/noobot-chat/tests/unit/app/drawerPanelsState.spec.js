@@ -35,7 +35,7 @@ describe("drawerPanelsState", () => {
       thinkingDetailsMessageItem: { id: "m1" },
       thinkingDetailsAllMessages: [{ id: "m1" }],
       thinkingDetailsRuntime: { startedAt: "start", finishedAt: "finish", terminal: true },
-      getThinkingDetailsTitle: (messageItem) => `thinking:${messageItem.id}`,
+      getThinkingDetailsTitle: () => "Thinking Details",
       handleWorkspaceReset,
     });
 
@@ -67,7 +67,7 @@ describe("drawerPanelsState", () => {
     });
     expect(panels[2]).toMatchObject({
       model: thinkingDetailsVisible,
-      title: "thinking:m1",
+      title: "Thinking Details",
       component: components.ThinkingPanel,
       props: {
         messageItem: { id: "m1" },

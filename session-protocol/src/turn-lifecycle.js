@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { text as clean, isCanonicalText, isObjectLike, isPlainObject } from "@noobot/shared/value";
+import { authorityOutboxSequenceKey } from "@noobot/event-protocol/outbox";
+import { SESSION_SEQUENCE_DOMAIN } from "@noobot/event-protocol/turn-snapshot";
 import { normalizeExecutionIdentity } from "./execution-lifecycle.js";
 import { projectTurnLifecycleRuntimeEvent } from "./runtime-event.js";
 import {
@@ -55,6 +57,23 @@ import {
   TURN_RECOVERY_ACTION,
 } from "./lifecycle/turn-recovery.js";
 
+export function sessionLifecycleSequenceKey(sessionId) {
+  return authorityOutboxSequenceKey(SESSION_SEQUENCE_DOMAIN, sessionId);
+}
+
+export async function readSessionEventSequenceFloor({
+  sessionId,
+  domain,
+  scopeId,
+  readLifecycleHead,
+  readStoredFloor,
+}) {
+  const key = authorityOutboxSequenceKey(domain, scopeId);
+  if (key === sessionLifecycleSequenceKey(sessionId))
+    return requireTurnLifecycleHeader(await readLifecycleHead()).sequence;
+  return readStoredFloor(key);
+}
+
 export {
   deriveAuthoritativeTurnCapabilities,
   isSettlingTurnEvent,
@@ -91,8 +110,55 @@ export const TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION = 1;
 export const TURN_LIFECYCLE_RECEIPT_ACTION = "turn.lifecycle.received";
 export const TURN_SNAPSHOT_TERMINAL_LIMIT = Object.freeze({ DEFAULT: 10, MAX: 100 });
 
+export function requireTurnLifecycleHeader(header) {
+  if (
+    !isPlainObject(header) ||
+    !Number.isSafeInteger(header.sequence) ||
+    header.sequence < 0 ||
+    (header.activeTurnScopeId !== "" && !isCanonicalText(header.activeTurnScopeId))
+  )
+    throw Object.assign(new TypeError("Invalid indexed lifecycle header"), {
+      code: "TURN_LIFECYCLE_RECORD_INVALID",
+    });
+  return { sequence: header.sequence, activeTurnScopeId: header.activeTurnScopeId };
+}
+
 export function isTurnSnapshotTerminalLimit(value) {
   return Number.isInteger(value) && value >= 0 && value <= TURN_SNAPSHOT_TERMINAL_LIMIT.MAX;
+}
+
+export function requireTurnLifecycleSourceSelection(options = {}) {
+  if (
+    !isPlainObject(options) ||
+    Object.keys(options).some((key) => key !== "terminalLimit" && key !== "reconcileTurnScopeIds")
+  )
+    throw new TypeError("Invalid lifecycle source selection");
+  const { terminalLimit = TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT, reconcileTurnScopeIds = [] } =
+    options;
+  if (
+    !isTurnSnapshotTerminalLimit(terminalLimit) ||
+    !Array.isArray(reconcileTurnScopeIds) ||
+    reconcileTurnScopeIds.length > TURN_SNAPSHOT_TERMINAL_LIMIT.MAX ||
+    !Array.from(reconcileTurnScopeIds).every(isCanonicalTurnScopeId) ||
+    new Set(reconcileTurnScopeIds).size !== reconcileTurnScopeIds.length
+  )
+    throw new TypeError("Invalid lifecycle source selection");
+  return { terminalLimit, reconcileTurnScopeIds: [...reconcileTurnScopeIds] };
+}
+
+export async function readTurnLifecycleReplacements({ sequence, turnScopeIds, read, invalid }) {
+  const replacements = [];
+  for (const turnScopeId of turnScopeIds) {
+    const replacement = await read(turnScopeId);
+    if (replacement === null) continue;
+    if (
+      replacement?.turnScopeId !== turnScopeId ||
+      collectTurnReplacementTombstoneErrors(replacement, sequence).length
+    )
+      throw invalid("Invalid lifecycle replacement record");
+    replacements.push([turnScopeId, replacement]);
+  }
+  return Object.fromEntries(replacements);
 }
 
 export function isTurnSnapshotKnownSequence(value) {
@@ -327,6 +393,7 @@ export function createTurnLifecycleEnvelope({
   });
   const failureErrors = collectTurnFailureErrors(failure);
   if (failureErrors.length) throw new TypeError(failureErrors.join(","));
+  const continuation = normalizeTurnContinuationSource(continuationSource);
   const envelope = {
     protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
     eventType: clean(eventType),
@@ -352,10 +419,10 @@ export function createTurnLifecycleEnvelope({
     startedAt,
     finishedAt,
     occurredAt,
-    capabilities: isObjectLike(capabilities) ? capabilities : undefined,
-    failure: failure === null ? undefined : failure,
+    ...(isObjectLike(capabilities) ? { capabilities } : {}),
+    ...(failure === null ? {} : { failure }),
     payload: isObjectLike(payload) ? payload : {},
-    continuationSource: normalizeTurnContinuationSource(continuationSource) || undefined,
+    ...(continuation ? { continuationSource: continuation } : {}),
     continuedByTurnScopeId: requireOptionalCanonicalTurnScopeId(continuedByTurnScopeId),
     executionId: executionIdentity.executionId,
     executionKind: executionIdentity.executionKind,

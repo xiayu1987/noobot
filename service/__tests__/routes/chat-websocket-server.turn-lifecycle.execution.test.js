@@ -286,20 +286,22 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
         }
         return result;
       },
-      async getPendingAuthorityEvents({ consumerId } = {}) {
-        return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
-      },
-      async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
-        for (const eventId of eventIds) {
+      async prepareAuthorityEventDelivery({ consumerId }) {
+        const events = listPendingAuthorityEvents(eventOutbox, { consumerId });
+        for (const { eventId } of events) {
           const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
             eventId,
             consumerId,
             attemptedAt: new Date().toISOString(),
           });
-          if (!result.found) return { recorded: false, reason: result.reason };
+          assert.equal(result.found, true);
           eventOutbox = result.outbox;
         }
-        return { recorded: true };
+        return {
+          found: true,
+          events: listPendingAuthorityEvents(eventOutbox, { consumerId }),
+          hasMore: false,
+        };
       },
       async compactAuthorityEvents({ retainDeliveredAfter }) {
         const result = compactAuthorityEventOutbox(normalizeAuthorityEventOutbox(eventOutbox), {
@@ -328,6 +330,7 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
         }
         return {
           acknowledged: result.found,
+          drained: listPendingAuthorityEvents(eventOutbox, { consumerId }).length === 0,
           deduplicated: result.deduplicated,
           reason: result.reason,
         };
@@ -335,6 +338,7 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
     },
   };
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({
+    runNewOperation: (operation) => operation(),
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: (eventName, data) => {

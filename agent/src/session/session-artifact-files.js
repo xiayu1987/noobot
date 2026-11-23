@@ -6,9 +6,10 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { text, isFunction } from "@noobot/shared/value";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
+import { SESSION_DOCUMENT_FILE } from "@noobot/session-protocol/session-reader";
 
 export const SESSION_ARTIFACT_FILE_NAMES = Object.freeze({
-  session: "session.json",
+  session: SESSION_DOCUMENT_FILE,
   sessionSummary: "session-summary.json",
   sessionSummaryDetailsDir: "session-summary-details",
   executionReportsDir: "execution-reports",

@@ -16,14 +16,14 @@ export async function renderActiveSessionBeforeReplay({
 }) {
   const existingPromise = getReplayHydrationPromise();
   if (existingPromise) return existingPromise;
-  const { sessionId } = activeSession.value;
+  const sessionId = activeSession.value?.sessionId;
   if (!sessionId) return false;
   const hydrationPromise = (async () => {
     try {
       const detail = await chatList.fetchSessionDetail(sessionId, {
         source: "reconnectProtocolReconcile",
       });
-      const currentActiveSessionId = activeSession.value.sessionId;
+      const currentActiveSessionId = activeSession.value?.sessionId;
       if (!detail.exists || currentActiveSessionId !== sessionId) {
         logResendDebug("hydration.detail.rejected", () => ({
           sessionId,
@@ -36,7 +36,7 @@ export async function renderActiveSessionBeforeReplay({
         sessionId,
         messages: summarizeDebugMessages(activeSession.value.messages),
       }));
-      chatList.applySessionDetail(detail);
+      if (!chatList.applySessionDetail(detail)) return false;
       logResendDebug("hydration.detail.apply.after", () => ({
         sessionId,
         messages: summarizeDebugMessages(activeSession.value.messages),

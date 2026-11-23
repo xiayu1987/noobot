@@ -14,7 +14,7 @@ import { upgradeImmutableCommitIndex } from "../../src/session/session-artifact-
 import { contentDigest } from "../../src/session/session-artifact-session/immutable-object-store.js";
 import { immutableOrderKey } from "../../src/session/session-artifact-session/immutable-order-key.js";
 import { resetFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { forbidRecordReads } from "./helpers/immutable-record-reads.js";
 
 async function fixture(t) {

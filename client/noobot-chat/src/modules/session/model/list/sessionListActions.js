@@ -29,7 +29,10 @@ import {
   compareSessionSummaries,
   requireSessionsSummaryPayload,
 } from "@noobot/session-protocol/sessions-summary";
-import { selectMainSessionDetailEntry } from "@noobot/session-protocol/session-detail";
+import {
+  selectMainSessionDetailEntry,
+  selectSessionDetailBlockingEntry,
+} from "@noobot/session-protocol/session-detail";
 import { observeServerClock } from "../../../chat/model/serverClock.js";
 
 export function createSessionListActions({
@@ -74,17 +77,23 @@ export function createSessionListActions({
     const target = findSessionByAnyIdInList(sessions.value, sessionId);
     if (!target) return;
     const targetPrimaryId = target.sessionId;
-    if (!force && !requireFresh && targetPrimaryId === activeSessionId.value) return;
+    const canReuseListState = !force && !requireFresh;
     if (target.isUnavailable === true) {
       notify({ type: "warning", message: target.unavailableReason.message });
       return;
     }
+    if (
+      canReuseListState &&
+      targetPrimaryId === activeSessionId.value &&
+      !target.detailUnavailableReason
+    )
+      return;
     activeSessionId.value = targetPrimaryId;
     if (target.isLocal) {
       refreshSessionConnectorsAsync(targetPrimaryId);
       return;
     }
-    if (!force && !requireFresh && hasCurrentSessionDetail(target)) {
+    if (canReuseListState && hasCurrentSessionDetail(target)) {
       const detail = requireLoadedSessionDetail(target);
       onSessionDetailApplied({
         detail,
@@ -188,6 +197,13 @@ export function createSessionListActions({
     }
     if (!detail.exists) {
       return { status: "missing" };
+    }
+    const blockingEntry = selectSessionDetailBlockingEntry(detail);
+    if (blockingEntry !== null) {
+      return {
+        status: "failed",
+        failure: reportSessionListRequestFailure(blockingEntry.unavailableReason),
+      };
     }
     return {
       status: "loaded",

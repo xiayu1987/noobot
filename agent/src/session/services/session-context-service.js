@@ -3,12 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isFunction } from "@noobot/shared/value";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { createContextScope, projectContextSource } from "@noobot/context-protocol";
 
 export class SessionContextService {
   constructor({ sessionMessageService }) {
-    if (typeof sessionMessageService?.getSessionContextSource !== "function") {
+    if (!isFunction(sessionMessageService?.getSessionContextSource)) {
       throw new TypeError(
         "SessionContextService requires sessionMessageService.getSessionContextSource",
       );

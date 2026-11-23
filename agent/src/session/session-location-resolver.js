@@ -44,7 +44,6 @@ export class SessionTreeLocationContext {
     this.sessionPathResolver = sessionPathResolver;
     this.userId = text(userId);
     this.sessionId = text(sessionId);
-    this.scopeId = "";
     if (!this.sessionPathResolver || !this.userId || !this.sessionId) {
       throw new TypeError(
         "session tree location requires sessionPathResolver, userId and sessionId",
@@ -77,20 +76,11 @@ export class SessionTreeLocationContext {
 }
 
 export class ScopedSessionLocationResolver {
-  constructor({
-    pathResolver,
-    userId,
-    sessionId,
-    parentSessionId,
-    scopeId,
-    relativeDir,
-    allowedRoot,
-  }) {
+  constructor({ pathResolver, userId, sessionId, parentSessionId, relativeDir, allowedRoot }) {
     this.pathResolver = pathResolver;
     this.userId = text(userId);
     this.sessionId = text(sessionId);
     this.parentSessionId = text(parentSessionId);
-    this.scopeId = text(scopeId);
     this.relativeDir = text(relativeDir);
     this.allowedRoot = text(allowedRoot);
     if (
@@ -98,12 +88,11 @@ export class ScopedSessionLocationResolver {
       !this.userId ||
       !this.sessionId ||
       !this.parentSessionId ||
-      !this.scopeId ||
       !this.relativeDir ||
       !this.allowedRoot
     ) {
       throw new TypeError(
-        "scoped session location requires pathResolver, userId, sessionId, parentSessionId, scopeId, relativeDir and allowedRoot",
+        "scoped session location requires pathResolver, userId, sessionId, parentSessionId, relativeDir and allowedRoot",
       );
     }
     if (path.isAbsolute(this.relativeDir) || path.isAbsolute(this.allowedRoot)) {
@@ -160,7 +149,6 @@ export function createPersistenceContext({ locationResolver }) {
     kind: SESSION_PERSISTENCE_SCOPE_KIND,
     version: SESSION_PERSISTENCE_SCOPE_VERSION,
     scoped,
-    scopeId: locationResolver.scopeId,
     userId: locationResolver.userId,
     sessionId: locationResolver.sessionId,
     locationResolver,

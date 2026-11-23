@@ -545,8 +545,8 @@ function requireCheckpointText(value, field) {
 }
 
 function requireCheckpointInteger(value, field, minimum) {
-  if (!Number.isInteger(value) || value < minimum) {
-    throw invalidCheckpointState(`${field} must be an integer >= ${minimum}`);
+  if (!Number.isSafeInteger(value) || value < minimum) {
+    throw invalidCheckpointState(`${field} must be a safe integer >= ${minimum}`);
   }
   return value;
 }

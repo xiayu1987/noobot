@@ -24,7 +24,7 @@ export function assertSessionFinalizationContext({
   for (const [name, port, methods] of [
     ["lifecycle", lifecycle, ["enterPersisting", "enterMemory"]],
     ["runtimeEventListener", runtimeEventListener, ["onEvent", "flush"]],
-    ["turnPersistence", turnPersistence, ["flush", "readResultMessages"]],
+    ["turnPersistence", turnPersistence, ["flush", "readResultTransfers"]],
   ]) {
     assertFinalizationPort(name, port, methods);
   }

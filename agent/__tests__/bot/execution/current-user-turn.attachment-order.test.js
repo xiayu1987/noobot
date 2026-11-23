@@ -131,9 +131,10 @@ test("accepted user message binds canonical attachments before Context construct
         assert.equal(payload.messageUid, "sm_1");
         assert.equal(payload.expectedAggregateVersion, 1);
         return {
+          messageUid: payload.messageUid,
+          deduplicated: false,
           aggregateVersion: 2,
           attachments: [attachment],
-          userMessage: bound,
         };
       },
     }),

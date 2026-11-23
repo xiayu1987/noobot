@@ -16,13 +16,16 @@ export function createEmptyTurnLifecycle() {
   return { activeTurnScopeId: "", sequence: 0, turns: {}, replacedTurns: {}, commandReceipts: [] };
 }
 
-export function isTurnLifecycleShape(lifecycle) {
+function isTurnLifecycleStateShape(lifecycle) {
   return (
     isPlainObject(lifecycle) &&
     isPlainObject(lifecycle.turns) &&
-    isPlainObject(lifecycle.replacedTurns) &&
-    Array.isArray(lifecycle.commandReceipts)
+    isPlainObject(lifecycle.replacedTurns)
   );
+}
+
+export function isTurnLifecycleShape(lifecycle) {
+  return isTurnLifecycleStateShape(lifecycle) && Array.isArray(lifecycle.commandReceipts);
 }
 
 function collectLifecycleRecordErrors(lifecycle, field, collectRecordErrors, errors) {
@@ -72,13 +75,16 @@ export function collectTurnContinuationRelationErrors(lifecycle, turn) {
   return errors;
 }
 
-export function assertTurnLifecycleRecordIntegrity(lifecycle) {
-  if (!isTurnLifecycleShape(lifecycle)) {
-    throw Object.assign(new TypeError("invalid turn lifecycle: invalid_turn_lifecycle_shape"), {
+function requireValidLifecycle(errors) {
+  if (errors.length) {
+    throw Object.assign(new TypeError(`invalid turn lifecycle: ${errors.join(",")}`), {
       code: "TURN_LIFECYCLE_RECORD_INVALID",
-      protocolErrors: ["invalid_turn_lifecycle_shape"],
+      protocolErrors: errors,
     });
   }
+}
+
+function collectLifecycleStateErrors(lifecycle) {
   const errors = [];
   if (!Number.isInteger(lifecycle.sequence) || lifecycle.sequence < 0) {
     errors.push("invalid_lifecycle_sequence");
@@ -106,18 +112,28 @@ export function assertTurnLifecycleRecordIntegrity(lifecycle) {
   if (Object.keys(lifecycle.turns).some((scope) => Object.hasOwn(lifecycle.replacedTurns, scope))) {
     errors.push("replaced_turn_materialized");
   }
+  return errors;
+}
+
+export function assertTurnLifecycleStateIntegrity(lifecycle) {
+  requireValidLifecycle(
+    isTurnLifecycleStateShape(lifecycle)
+      ? collectLifecycleStateErrors(lifecycle)
+      : ["invalid_turn_lifecycle_shape"],
+  );
+  return lifecycle;
+}
+
+export function assertTurnLifecycleRecordIntegrity(lifecycle) {
+  if (!isTurnLifecycleShape(lifecycle)) requireValidLifecycle(["invalid_turn_lifecycle_shape"]);
+  const errors = collectLifecycleStateErrors(lifecycle);
   const commandIds = new Set();
   for (const receipt of lifecycle.commandReceipts) {
     if (!isCanonicalCommandReceipt(receipt)) errors.push("invalid_command_receipt");
     if (commandIds.has(receipt?.commandId)) errors.push("duplicate_command_receipt");
     commandIds.add(receipt?.commandId);
   }
-  if (errors.length) {
-    throw Object.assign(new TypeError(`invalid turn lifecycle: ${errors.join(",")}`), {
-      code: "TURN_LIFECYCLE_RECORD_INVALID",
-      protocolErrors: errors,
-    });
-  }
+  requireValidLifecycle(errors);
   return lifecycle;
 }
 

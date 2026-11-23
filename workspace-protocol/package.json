@@ -12,6 +12,7 @@
     "./sections": "./src/sections.js",
     "./asset-sync": "./src/asset-sync.js",
     "./layout-migration": "./src/layout-migration.js",
+    "./migration-quarantine": "./src/migration-quarantine.js",
     "./session-tree": "./src/session-tree.js",
     "./session-tombstone": "./src/session-tombstone.js",
     "./session-store": "./src/session-store.js",

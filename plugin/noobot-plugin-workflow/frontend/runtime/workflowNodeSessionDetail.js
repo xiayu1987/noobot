@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { decodeExecutionReport } from "@noobot/session-protocol/execution-report";
+import {
+  prepareThinkingDetailPageTransition,
+  requireSessionPageReleaseResult,
+} from "@noobot/session-protocol/message-read-budget";
+import { readRetainedSessionPage } from "@noobot/session-protocol/retained-session-page";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { buildThinkingDetailPagePayload } from "@noobot/event-protocol/thinking-detail-projection";
 import { isFunction } from "@noobot/shared/value";
 import {
   API_REQUEST_ERROR_CODE,
@@ -194,38 +201,68 @@ export async function fetchWorkflowNodeThinkingDetail({
   props,
   translate,
   rootSessionId,
+  nodeSessionId,
   routeDialogProcessId,
   dialogProcessId,
   turnScopeId,
+  cursor = null,
+  snapshot = null,
 }) {
-  const target = requireWorkflowSessionRequest(
-    {
-      userId: props.userId,
-      sessionId: rootSessionId,
-      routeDialogProcessId,
-      dialogProcessId,
-      turnScopeId,
-    },
-    "thinking-detail",
-  );
-  const response = await requireSessionMethod(
-    props,
-    "getThinkingDetail",
-  )({
-    userId: target.userId,
-    sessionId: target.sessionId,
-    routeDialogProcessId: target.routeDialogProcessId,
+  const limit = QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize;
+  const scope = {
+    userId: props.userId,
+    sessionId: rootSessionId,
+    routeDialogProcessId,
     dialogProcessId,
     turnScopeId,
+    nodeSessionId,
+  };
+  const target = requireWorkflowSessionRequest({ ...scope, cursor, limit }, "thinking-detail");
+  const selection = { sessionId: nodeSessionId, dialogProcessId, turnScopeId, cursor, limit };
+  const validate = prepareThinkingDetailPageTransition(selection, snapshot);
+  const release = requireSessionMethod(props, "releaseThinkingDetail");
+  return readRetainedSessionPage({
+    cursor,
+    async receive() {
+      const response = await requireSessionMethod(props, "getThinkingDetail")(target);
+      return { page: await readApiResponseEnvelope(response), status: response.status };
+    },
+    accept(page, { status }) {
+      const payload = buildThinkingDetailPagePayload(validate(page), selection);
+      if (payload.exists === false)
+        throw new ApiRequestError(translate("workflow.readNodeSessionFailed"), {
+          code: API_REQUEST_ERROR_CODE.NOT_FOUND,
+          status,
+        });
+      return payload;
+    },
+    release: (cursor) => releaseThinkingDetailPage(release, { ...scope, cursor }),
   });
-  const payload = await readApiResponseEnvelope(response);
-  if (payload.exists !== true) {
-    throw new ApiRequestError(translate("workflow.readNodeSessionFailed"), {
-      code: API_REQUEST_ERROR_CODE.NOT_FOUND,
-      status: response.status,
-    });
-  }
-  return payload;
+}
+
+async function releaseThinkingDetailPage(release, selection) {
+  const request = requireWorkflowSessionRequest(selection, "thinking-detail-release");
+  return requireSessionPageReleaseResult(await readApiResponseEnvelope(await release(request)));
+}
+
+export async function releaseWorkflowNodeThinkingDetail({
+  props,
+  rootSessionId,
+  nodeSessionId,
+  routeDialogProcessId,
+  dialogProcessId,
+  turnScopeId,
+  cursor,
+}) {
+  return releaseThinkingDetailPage(requireSessionMethod(props, "releaseThinkingDetail"), {
+    userId: props.userId,
+    sessionId: rootSessionId,
+    nodeSessionId,
+    routeDialogProcessId,
+    dialogProcessId,
+    turnScopeId,
+    cursor,
+  });
 }
 
 export async function fetchWorkflowNodeExecutionReport({

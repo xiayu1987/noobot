@@ -164,7 +164,7 @@ describe("detailMessages", () => {
     ]);
   });
 
-  it("collects child attachments from transfer envelopes for refreshed detail", () => {
+  it("collects grandchild transfer attachments through the committed parent dialog", () => {
     const metasByParent = buildChildAttachmentsByParentDialogProcessId({
       rootSessionId: "root-session",
       rootMessages: [
@@ -190,13 +190,17 @@ describe("detailMessages", () => {
           ],
         },
         {
+          sessionId: "intermediate-session",
+          messages: [{ dialogProcessId: "intermediate-dp", parentDialogProcessId: "root-dp" }],
+        },
+        {
           sessionId: "child-session",
           messages: [
             {
               ts: "2026-01-01T00:00:00.000Z",
               role: RoleEnum.ASSISTANT,
               dialogProcessId: "child-dp",
-              parentDialogProcessId: "root-dp",
+              parentDialogProcessId: "intermediate-dp",
               content: "",
               transferEnvelopes: [
                 {

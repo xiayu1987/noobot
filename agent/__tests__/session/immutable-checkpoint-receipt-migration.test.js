@@ -14,7 +14,7 @@ import { ImmutableObjectStore } from "../../src/session/session-artifact-session
 import { ImmutableRecordStore } from "../../src/session/session-artifact-session/immutable-record-store.js";
 import { CurrentImmutableRecordStore } from "../../src/session/session-artifact-session/immutable-storage-backends.js";
 import { migrateImmutableSessionSegments } from "../../src/session/session-artifact-session/immutable-segment-migration.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
 import { immutableCheckpointKey } from "../../src/session/session-artifact-session/immutable-checkpoint-index.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 
@@ -54,7 +54,11 @@ async function fixture(t, objectStore = CurrentImmutableRecordStore, corrupt = (
     operationId: "seed",
     changes: [
       { collection: "metadata", key: "session", value: { sessionId: source.sessionId } },
-      { collection: "messages", key: "existing", value: { message: message("existing") } },
+      {
+        collection: "messages",
+        key: "existing",
+        value: { ordinal: 1, turnOrdinal: 1, message: message("existing") },
+      },
     ],
   });
   const checkpoint = {
@@ -100,10 +104,10 @@ async function fixture(t, objectStore = CurrentImmutableRecordStore, corrupt = (
   };
   const evidence = { expectedGeneration: 1, input: { changes: request.changes, committedAt } };
   const changes = [
-    ...checkpoint.messages.map((value) => ({
+    ...checkpoint.messages.map((value, index) => ({
       collection: "messages",
       key: value.messageUid,
-      value: { message: structuredClone(value) },
+      value: { ordinal: index + 2, turnOrdinal: index + 2, message: structuredClone(value) },
     })),
     {
       collection: "checkpoints",
@@ -137,6 +141,64 @@ async function fixture(t, objectStore = CurrentImmutableRecordStore, corrupt = (
   return { source, request, evidence, sessionDir, migrate };
 }
 
+test("offline upgrade binds a legacy duplicate after its active checkpoint is deleted", async (t) => {
+  const { request, evidence, sessionDir, migrate } = await fixture(t);
+  await migrate();
+  const original = await commitSessionChanges(request);
+  const store = await ImmutableSessionStore.open({ sessionDir });
+  const head = await store.snapshot();
+  const { receipt } = await store.readCommittedOperation(head, request.operationId);
+  const duplicate = {
+    ...request,
+    expectedGeneration: head.generation,
+    operationId: "legacy-checkpoint-duplicate",
+  };
+  await store.transact({
+    expectedGeneration: duplicate.expectedGeneration,
+    operationId: duplicate.operationId,
+    input: evidence.input,
+    prepare: async () => ({
+      changes: [],
+      result: {
+        summaryCheckpoints: receipt.result.summaryCheckpoints.map((checkpoint) => ({
+          ...checkpoint,
+          committed: false,
+          deduplicated: true,
+          reason: "duplicate_checkpoint",
+        })),
+      },
+    }),
+  });
+  const key = immutableCheckpointKey("turn", "cp");
+  await store.commit({
+    expectedGeneration: head.generation + 1,
+    operationId: "remove-checkpoint",
+    changes: [{ collection: "checkpoints", key, remove: true }],
+  });
+  const before = await store.snapshot();
+  assert.equal(await store.get(before, "checkpointCommits", key), null);
+  await assert.rejects(commitSessionChanges(duplicate), {
+    code: "SESSION_IMMUTABLE_INDEX_UPGRADE_REQUIRED",
+  });
+  assert.deepEqual(await store.snapshot(), before);
+  await migrate(() => assert.fail("The stored receipt already contains the required identities"));
+  const upgraded = await ImmutableSessionStore.open({ sessionDir });
+  const after = await upgraded.snapshot();
+  assert.equal(after.generation, before.generation);
+  const persisted = await upgraded.readCommittedOperation(after, duplicate.operationId);
+  assert.equal(
+    persisted.receipt.result.summaryCheckpoints[0].originGeneration,
+    original.generation,
+  );
+  const replay = await commitSessionChanges(duplicate);
+  assert.equal(replay.replayed, true);
+  assert.deepEqual(
+    replay.result.summaryCheckpoints[0].messageReceipts,
+    original.result.summaryCheckpoints[0].messageReceipts,
+  );
+  assert.deepEqual(await upgraded.snapshot(), after);
+});
+
 for (const objectStore of [
   ImmutableObjectStore,
   ImmutableRecordStore,
@@ -152,8 +214,14 @@ for (const objectStore of [
     assert.equal(outcome.replayed, true);
     assert.equal(outcome.generation, 2);
     assert.deepEqual(
-      outcome.result.summaryCheckpoints[0].messageReceipts.map((item) => item.messageUid),
-      ["first", "second"],
+      outcome.result.summaryCheckpoints[0].messageReceipts.map(({ messageUid, owner }) => [
+        messageUid,
+        owner,
+      ]),
+      [
+        ["first", 2],
+        ["second", 3],
+      ],
     );
     assert.ok(
       outcome.result.summaryCheckpoints[0].messageReceipts.every((item) => item.generation === 2),

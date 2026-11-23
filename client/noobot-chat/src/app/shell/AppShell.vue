@@ -180,6 +180,7 @@ const {
   newSession,
   fetchSessions,
   fetchThinkingDetail,
+  releaseThinkingDetail,
   selectSession,
   deleteSession,
   renameSession,
@@ -293,6 +294,8 @@ const { openOpenVSCode } = useOpenVSCodeAction({
 
 const {
   thinkingDetailsVisible,
+  thinkingDetailsFetcher,
+  thinkingDetailsReleaser,
   thinkingDetailsMessageItem,
   thinkingDetailsAllMessages,
   closeThinkingDetailsPanel,
@@ -302,6 +305,7 @@ const {
   activeSession,
   activeSessionId,
   fetchThinkingDetail,
+  releaseThinkingDetail,
   notify: notifyUi,
   translate,
   closeAllDrawers,
@@ -503,6 +507,8 @@ const drawerPanels = computed(() =>
     thinkingDetailsMessageItem: thinkingDetailsMessageItem.value || {},
     thinkingDetailsAllMessages: thinkingDetailsAllMessages.value,
     thinkingDetailsRuntime: thinkingDetailsRuntime.value,
+    thinkingDetailsFetcher: thinkingDetailsFetcher.value,
+    thinkingDetailsReleaser: thinkingDetailsReleaser.value,
     getThinkingDetailsTitle,
     handleWorkspaceReset,
   }),

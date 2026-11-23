@@ -7,6 +7,7 @@
 import { emitEvent } from "../../events/index.js";
 import { assertSessionFinalizationContext } from "@noobot/agent-transport-protocol/session-finalization";
 import { assertAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
+import { createSessionExecutionMessageSource } from "@noobot/agent-transport-protocol/session-execution-result";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { requireDialogProcessKey } from "@noobot/session-protocol";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
@@ -47,6 +48,11 @@ export class SessionExecutionFinalizer {
     });
     requireDialogProcessKey(dialogProcessId);
     assertAgentTurnResult(agentResult);
+    const messageSource = createSessionExecutionMessageSource({
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
+    });
     const thinkingFinishedAt = this.now();
     lifecycle.enterPersisting();
     await turnPersistence.flush();
@@ -60,7 +66,7 @@ export class SessionExecutionFinalizer {
       persistenceScope,
     });
 
-    const turnMessages = await turnPersistence.readResultMessages();
+    const transferEnvelopes = await turnPersistence.readResultTransfers();
     lifecycle.enterMemory();
     const memoryPostProcessAsyncEnabled =
       this.memoryPostProcessService.resolveMemoryPostProcessAsyncEnabled(userConfig);
@@ -119,7 +125,8 @@ export class SessionExecutionFinalizer {
       caller,
       answer: agentResult.output,
       traces: agentResult.traces,
-      messages: turnMessages,
+      messageSource,
+      transferEnvelopes,
       dialogProcessId,
       turnScopeId,
     };

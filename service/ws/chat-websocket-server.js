@@ -20,8 +20,7 @@ export { recordServiceWebSocketSendFailure, recordServiceWebSocketRuntimeError }
 export function registerChatWebSocketServer(
   server,
   {
-    bot,
-    getBot,
+    serviceBotAccess,
     resolveRequestLocale,
     resolveAuthByApiKey,
     mapAgentRunCommand,
@@ -31,11 +30,6 @@ export function registerChatWebSocketServer(
     translateText,
   } = {},
 ) {
-  const resolveBot = () => {
-    if (typeof getBot === "function") return getBot();
-    return bot;
-  };
-
   const webSocketServer = new WebSocketServer({ noServer: true });
 
   registerWebSocketUpgrade(server, webSocketServer, {
@@ -50,7 +44,7 @@ export function registerChatWebSocketServer(
     createChatConnectionHandler({
       consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
       closePolicy: CONNECTION_CLOSE_POLICY.DETACH_RUN,
-      resolveBot,
+      serviceBotAccess,
       normalizeLocale,
       defaultLocale,
       translateText,

@@ -12,6 +12,14 @@
 
 `mergeAttachmentsByIdentity(existing, incoming, { onConflict })` 必须显式提供冲突策略。相同身份的记录通过 `onConflict({ existing, incoming })` 合并，返回值作为该身份的结果；调用方按需解构字段，不使用位置占位参数。
 
+## 已提交附件引用的元数据读取
+
+会话消息确定引用了哪些附件，附件存储确定这些身份的当前元数据。`readAttachmentMetadata({ userId, identities })` 接收完整身份数组，按请求顺序返回等长的当前记录数组；已确认不存在的位置为 `null`。读取不打开文件正文，不使用请求或历史消息携带的路径、名称等字段填补记录。跨作用域批读不承诺共享快照。
+
+入轮和会话详情通过 `readRequiredAttachmentMetadata` 使用此端口。任一请求身份未找到时报 `ATTACHMENT_METADATA_MISSING`；存储读取失败、结果数量错误或返回身份与同位置请求不符时报 `ATTACHMENT_METADATA_UNREADABLE`。不会发布部分结果；会话详情将受影响条目标记为不可用并保留原因代码。这两个状态不用于表示文件正文可读性或跨会话归属。
+
+入轮新上传携带字符串 `contentBase64` 并走入库。没有上传正文时，输入必须是当前会话的完整附件身份；请求携带的元数据不参与补全。已入库上传使用入库回执，既有身份使用存储返回的当前记录。
+
 ## 历史数据迁移
 
 运行时只接受 canonical identity、descriptor 和 persisted record，不从 snake_case 字段、路径或文件特征推断身份。历史 `attachments.json` 必须在启动当前版本前离线转换：
@@ -27,6 +35,10 @@ node scripts/migrate-attachment-record-v1.mjs \
 第一条命令只扫描并报告；写入模式必须指定独立备份目录。迁移脚本是历史记录转换的唯一入口，运行时协议不会降级解析旧结构。
 
 运行测试：`npm run -w @noobot/attachment-protocol test`
+
+工作区布局 v45 以每个会话、来源下的 `attachments.sqlite` 保存当前记录和待发布正文。工作区升级读取已转换的协议记录，原子发布并核对目录，备份源索引后才移除原文件。旧索引仍存在时，在线读写返回 `ATTACHMENT_CATALOG_UPGRADE_REQUIRED`。升级使用正式工作区准备流程。
+
+解析结果关联请求携带源、目标附件身份。附件仓储检查双方的删除标记，读取已发布记录，并将当时的目标展示字段记录为关联快照。已发布记录的正文缺失或大小不符时，正文接口报告 `ATTACHMENT_BODY_UNAVAILABLE`。
 
 ## 文件预览契约
 

@@ -32,10 +32,64 @@ import {
 } from "@noobot/session-protocol";
 import { isFunction } from "@noobot/shared/value";
 import { readServerClock } from "@noobot/session-protocol/server-clock";
+import { createSessionReaderAccess } from "@noobot/session-protocol/session-reader";
+import { immutableSessionReaderAccess } from "./session-artifact-session/immutable-reader-access.js";
+import { PartitionJournalOwner } from "./partition-storage/partition-journal-owner.js";
+import { createPartitionSessionReaderAccess } from "./partition-storage/partition-reader-access.js";
+import { createWorkspaceAdmission } from "../workspace-lifecycle/workspace-admission.js";
+import { sessionPageWorkspaceScope } from "@noobot/session-protocol/message-read-budget";
 export {
   SESSION_GENERATED_DATA_DIRS,
   resolveSessionGeneratedDataRoot,
 } from "./session-generated-data.js";
+
+export function createPartitionSessionServices(
+  globalConfig,
+  {
+    now,
+    attachmentService,
+    scopedSessionRoots,
+    journalLimits,
+    maxJournals,
+    assertWorkspaceStorageReady,
+  },
+) {
+  const owner = new PartitionJournalOwner({
+    durableAncestor: globalConfig.workspaceRoot,
+    limits: journalLimits,
+    maxJournals,
+  });
+  const partition = createPartitionSessionReaderAccess({
+    acquireJournal: owner.acquire.bind(owner),
+    withJournalRemoval: owner.withRemoval.bind(owner),
+  });
+  const runtime = assembleSessionServices(
+    globalConfig,
+    {
+      now,
+      attachmentService,
+      scopedSessionRoots,
+      sessionReaderAccess: partition,
+      assertWorkspaceStorageReady,
+    },
+    [(workspacePath) => owner.releaseWorkspace(workspacePath)],
+  );
+  let completion;
+  const close = () => {
+    if (!completion) {
+      owner.stopAdmissions();
+      completion = runtime
+        .close()
+        .then(() => owner.close())
+        .catch((cause) => {
+          completion = undefined;
+          throw cause;
+        });
+    }
+    return completion;
+  };
+  return { ...runtime, close, [Symbol.asyncDispose]: close };
+}
 
 function createSessionLifecycleAccess(sessionRepository) {
   return {
@@ -76,7 +130,6 @@ function createSessionPersistenceContextFactory({
         userId,
         sessionId,
         parentSessionId: scope.parentSessionId,
-        scopeId: scope.scopeId,
         relativeDir: scope.relativeDir,
         allowedRoot: scope.allowedRoot,
       }),
@@ -84,9 +137,14 @@ function createSessionPersistenceContextFactory({
   };
 }
 
-export function createSessionServices(
+export function createSessionServices(globalConfig, dependencies) {
+  return assembleSessionServices(globalConfig, dependencies, []);
+}
+
+function assembleSessionServices(
   globalConfig,
-  { now, attachmentService, scopedSessionRoots },
+  { now, attachmentService, scopedSessionRoots, sessionReaderAccess, assertWorkspaceStorageReady },
+  workspaceStorageReleases,
 ) {
   if (!isFunction(now)) throw new TypeError("createSessionServices requires now function");
   if (!isFunction(attachmentService?.ingest)) {
@@ -95,6 +153,7 @@ export function createSessionServices(
   if (!Array.isArray(scopedSessionRoots) || !scopedSessionRoots.length) {
     throw new TypeError("createSessionServices requires scopedSessionRoots");
   }
+  const readerAccess = createSessionReaderAccess(sessionReaderAccess);
   const pathResolver = new PathResolver(globalConfig);
   const storageService = new StorageService({
     atomicRenameRetryDelaysMs: ATOMIC_RENAME_RETRY_DELAYS_MS,
@@ -119,6 +178,7 @@ export function createSessionServices(
     sessionPathResolver,
     sessionTreeRepository,
     storageService,
+    sessionReaderAccess: readerAccess,
     now,
   });
 
@@ -134,6 +194,7 @@ export function createSessionServices(
   const sessionTreeService = new SessionTreeService({
     sessionRepo: sessionRepository,
     treeRepo: sessionTreeRepository,
+    scopedSessionRoots,
   });
 
   const sessionCrudService = new SessionCrudService({
@@ -151,7 +212,8 @@ export function createSessionServices(
   });
 
   const executionReadService = new ExecutionReadService({
-    sessionCrudService,
+    sessionRepo: sessionRepository,
+    scopedSessionRoots,
     now,
   });
 
@@ -161,10 +223,30 @@ export function createSessionServices(
     executionRepo: executionRepository,
   });
 
-  const scopedArtifactReader = createScopedSessionArtifactReader({ storageService });
+  const scopedArtifactReader = createScopedSessionArtifactReader({
+    storageService,
+    sessionReaderAccess: sessionRepository.sessionReaderAccess,
+    pageSnapshots: sessionRepository.pageSnapshots,
+    assertAuthorityActive: sessionRepository.assertSessionWritable.bind(sessionRepository),
+    withDeletionFence: sessionRepository.withSessionDeletionFence.bind(sessionRepository),
+  });
+
+  const releaseRetainedState = async (userId) => {
+    await sessionRepository.pageSnapshots.releaseScopes([sessionPageWorkspaceScope(userId)]);
+    for (const release of workspaceStorageReleases) {
+      await release(pathResolver.resolveBasePath(userId));
+    }
+  };
+  const workspaceAdmission = createWorkspaceAdmission(
+    releaseRetainedState,
+    assertWorkspaceStorageReady &&
+      ((userId) => assertWorkspaceStorageReady(pathResolver.resolveBasePath(userId), userId)),
+  );
 
   return {
     now,
+    close: () => sessionRepository.close(),
+    workspaceAdmission,
     pathResolver,
     sessionPathResolver,
     ...createSessionLifecycleAccess(sessionRepository),
@@ -246,6 +328,30 @@ export function createSessionFacade(runtime) {
       return readServerClock(runtime.now);
     },
 
+    readSessionAggregateVersion(selection) {
+      return sessionCrudService.readSessionAggregateVersion(selection);
+    },
+
+    getSessionDetailStart(selection) {
+      return sessionCrudService.getSessionDetailStart(selection);
+    },
+
+    getSessionDisplayPage(selection) {
+      return sessionCrudService.getSessionDisplayPage(selection);
+    },
+
+    releaseSessionDisplayPage(selection) {
+      return sessionCrudService.releaseSessionDisplayPage(selection);
+    },
+
+    getSessionDisplayArtifactPage(selection) {
+      return sessionCrudService.getSessionDisplayArtifactPage(selection);
+    },
+
+    releaseSessionDisplayArtifactPage(selection) {
+      return sessionCrudService.releaseSessionDisplayArtifactPage(selection);
+    },
+
     async getSessionDisplayData(payload = {}) {
       return sessionCrudService.getSessionDisplayData(payload);
     },
@@ -254,8 +360,8 @@ export function createSessionFacade(runtime) {
       return sessionCrudService.getSessionThinkingDetail(payload);
     },
 
-    async getAllSessionsData({ userId, failures }) {
-      return sessionCrudService.getAllSessionsData({ userId, failures });
+    async releaseSessionThinkingDetail(payload) {
+      return sessionCrudService.releaseSessionThinkingDetail(payload);
     },
 
     async getAllSessionSummaries({ userId }) {
@@ -338,8 +444,8 @@ export function createSessionFacade(runtime) {
       return sessionMessageService.getPendingAuthorityEvents(bindPersistenceScope(payload));
     },
 
-    async recordAuthorityEventAttempts(payload = {}) {
-      return sessionMessageService.recordAuthorityEventAttempts(bindPersistenceScope(payload));
+    async prepareAuthorityEventDelivery(payload = {}) {
+      return sessionMessageService.prepareAuthorityEventDelivery(bindPersistenceScope(payload));
     },
 
     async acknowledgeAuthorityEvents(payload = {}) {
@@ -378,8 +484,15 @@ export function createSessionFacade(runtime) {
       return sessionMessageService.recordUserMetaParsedResult(bindPersistenceScope(payload));
     },
 
-    async getSessionTurns(payload = {}) {
-      return sessionMessageService.getSessionTurns(bindPersistenceScope(payload));
+    async getSessionTurnMessagePage(payload = {}) {
+      return sessionMessageService.getSessionTurnMessagePage(bindPersistenceScope(payload));
+    },
+
+    async withSessionDialogMessageRecords(payload, consume) {
+      return sessionMessageService.withSessionDialogMessageRecords(
+        bindPersistenceScope(payload),
+        consume,
+      );
     },
 
     async getSessionContextSource(payload = {}) {
@@ -388,6 +501,10 @@ export function createSessionFacade(runtime) {
 
     async getSessionMessageSources(payload) {
       return sessionMessageService.getSessionMessageSources(bindPersistenceScope(payload));
+    },
+
+    async getSessionMessageContentPage(payload) {
+      return sessionMessageService.getSessionMessageContentPage(bindPersistenceScope(payload));
     },
 
     async getTurnSummaryCheckpointState(payload = {}) {
@@ -418,20 +535,44 @@ export function createSessionFacade(runtime) {
       return executionLogService.getExecutionReport(bindPersistenceScope(payload));
     },
 
-    async readScopedSessionSnapshot({ sessionDir }) {
-      return scopedArtifactReader.readScopedSessionSnapshot({ sessionDir });
+    async readScopedSessionSnapshot(selection) {
+      return scopedArtifactReader.readScopedSessionSnapshot(selection);
     },
 
-    async readScopedThinkingDetail({ sessionDir, turnScopeId, dialogProcessId }) {
-      return scopedArtifactReader.readScopedThinkingDetail({
-        sessionDir,
-        turnScopeId,
-        dialogProcessId,
-      });
+    readScopedDetailStart(selection) {
+      return scopedArtifactReader.readScopedDetailStart(selection);
     },
 
-    async readScopedExecutionReport({ sessionDir, dialogProcessId }) {
-      return scopedArtifactReader.readScopedExecutionReport({ sessionDir, dialogProcessId });
+    readScopedDisplayPage(selection) {
+      return scopedArtifactReader.readScopedDisplayPage(selection);
+    },
+
+    releaseScopedDisplayPage(selection) {
+      return scopedArtifactReader.releaseScopedDisplayPage(selection);
+    },
+
+    readScopedDisplayArtifactPage(selection) {
+      return scopedArtifactReader.readScopedDisplayArtifactPage(selection);
+    },
+
+    releaseScopedDisplayArtifactPage(selection) {
+      return scopedArtifactReader.releaseScopedDisplayArtifactPage(selection);
+    },
+
+    readScopedMessageContentPage(selection) {
+      return scopedArtifactReader.readScopedMessageContentPage(selection);
+    },
+
+    async readScopedThinkingDetail(selection) {
+      return scopedArtifactReader.readScopedThinkingDetail(selection);
+    },
+
+    async releaseScopedThinkingDetail(selection) {
+      return scopedArtifactReader.releaseScopedThinkingDetail(selection);
+    },
+
+    async readScopedExecutionReport(selection) {
+      return scopedArtifactReader.readScopedExecutionReport(selection);
     },
 
     async getContextProjection(payload = {}) {
@@ -482,8 +623,8 @@ export function createSessionFacade(runtime) {
       return connectorInstanceRepository.migrateLegacy(payload);
     },
 
-    async deleteSessionBranch({ userId, sessionIds }) {
-      return sessionTreeService.deleteSessionBranch({ userId, sessionIds });
+    async deleteSessionBranch({ userId, sessionIds }, cleanup) {
+      return sessionTreeService.deleteSessionBranch({ userId, sessionIds }, cleanup);
     },
   };
 }
@@ -545,4 +686,5 @@ export {
 export { readSessionThinkingDetail } from "./session-thinking-detail.js";
 export { createScopedSessionArtifactReader } from "./session-scoped-artifact-reader.js";
 export { openSessionArtifactReader } from "./session-artifact-session/immutable-session-reader.js";
+export { immutableSessionReaderAccess };
 export { withSessionArtifactReadFence } from "./session-artifact-files.js";

@@ -11,17 +11,6 @@ import { listJsonLineFilesNewestFirst } from "./transports/jsonl.js";
 
 export const SERVICE_STARTUP_SOURCE = "service";
 
-export function requireServiceWorkspacePreparation(report) {
-  if (!report || !Array.isArray(report.failures))
-    throw new TypeError("Service workspace preparation requires an explicit failure report");
-  if (report.failures.length)
-    throw Object.assign(new Error("Service workspace preparation failed"), {
-      code: "SERVICE_WORKSPACE_PREPARATION_FAILED",
-      report,
-    });
-  return report;
-}
-
 export const SERVICE_STARTUP_EVENTS = Object.freeze({
   CONTEXT_LOADED: "service.startup.context.loaded",
   CONFIG_DIAGNOSTIC: "service.startup.config.diagnostic",

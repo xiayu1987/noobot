@@ -22,20 +22,20 @@ import {
   immutableStorageError,
   IMMUTABLE_CLEANUP_PLAN,
 } from "@noobot/session-protocol/immutable-storage";
+import { requireSessionOperationId } from "@noobot/session-protocol/session-changes";
 import {
   immutablePageReferences,
   immutableCommitReferenceEdges,
   immutableOperationReceiptReferenceEdges,
   immutableCollectionValueReferenceEdges,
   immutableValueIndexLayout,
-  requireImmutableOperationId,
-  requireImmutableOperationReceipt,
   isImmutableValueBytePage,
   requireImmutableValueBytePage,
   requireImmutableValueBranchChildren,
   requireImmutableValueParts,
   isImmutableValuePartsPage,
 } from "@noobot/session-protocol/immutable-storage-graph";
+import { requireImmutableOperationReceipt } from "@noobot/session-protocol/immutable-operation-receipt";
 import { writeDurableReplacement, syncStorageDirectory } from "./immutable-object-store.js";
 import { ImmutableRecordStore } from "./immutable-record-store.js";
 import {
@@ -67,7 +67,7 @@ export class ImmutableLocationRetirement {
   }
 
   async load(head, create = true) {
-    requireImmutableOperationId(this.options.operationId);
+    requireSessionOperationId(this.options.operationId);
     let handle;
     try {
       handle = await fsOpen(this.file, "r");
@@ -367,7 +367,7 @@ export class ImmutableLocationRetirement {
 
   async run() {
     const head = await this.store.snapshot();
-    requireImmutableOperationId(this.options.operationId);
+    requireSessionOperationId(this.options.operationId);
     const receipt = await this.store.objects.withSnapshot(head, async () => {
       const reference = await this.store.index.get(head.operations, this.options.operationId);
       return reference === null

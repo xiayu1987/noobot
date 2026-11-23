@@ -12,21 +12,33 @@ export function createRuntimeConfigService({
   readWorkspaceConfigParams,
   globalConfigBuilder,
   BotManager,
+  createSessionRuntime,
   now,
   setGlobalConfigRaw,
   setGlobalConfig,
+  getBot,
   setBot,
+  withBotRetirement,
   connectorAccessPort,
 } = {}) {
   const connectorPort = assertConnectorAccessPort(connectorAccessPort);
+  if (!isFunction(createSessionRuntime))
+    throw new TypeError("createRuntimeConfigService requires createSessionRuntime");
   if (!isFunction(now)) throw new TypeError("createRuntimeConfigService requires now function");
-  async function rebuildRuntimeConfig() {
+  if (!isFunction(getBot)) throw new TypeError("createRuntimeConfigService requires getBot");
+  if (!isFunction(withBotRetirement))
+    throw new TypeError("createRuntimeConfigService requires withBotRetirement");
+  let pending = Promise.resolve();
+  async function rebuild() {
     if (!globalConfigBuilder || !isFunction(globalConfigBuilder.build)) {
       throw new Error("[runtime-config-service] globalConfigBuilder.build is required");
     }
     const paramsPayload = await readWorkspaceConfigParams({ createIfMissing: true });
     const configParams = paramsPayload.values || {};
-    const builtConfig = await globalConfigBuilder.build({ configParams });
+    const builtConfig = await globalConfigBuilder.build({
+      configParams,
+      requirePartitionStorage: true,
+    });
 
     const persistedGlobalConfig = builtConfig?.persistedConfig;
     const resolvedGlobalConfig = builtConfig?.resolvedConfig || {};
@@ -38,17 +50,43 @@ export function createRuntimeConfigService({
       startupContext,
       pluginRuntimeBundle,
       connectorAccessPort: connectorPort,
+      createSessionRuntime,
       now,
     });
-    setGlobalConfigRaw(persistedGlobalConfig);
-    setGlobalConfig(resolvedGlobalConfig);
-    setBot(bot);
+    try {
+      await withBotRetirement(async () => {
+        const previous = getBot();
+        if (previous !== null) await previous.close();
+        setGlobalConfigRaw(persistedGlobalConfig);
+        setGlobalConfig(resolvedGlobalConfig);
+        setBot(bot);
+      });
+    } catch (cause) {
+      try {
+        await bot.close();
+      } catch (cleanup) {
+        throw new AggregateError(
+          [cause, cleanup],
+          "Runtime replacement and candidate cleanup failed",
+        );
+      }
+      throw cause;
+    }
     return {
       bot,
       globalConfigRaw: persistedGlobalConfig,
       globalConfig: resolvedGlobalConfig,
       configParams,
     };
+  }
+
+  function rebuildRuntimeConfig() {
+    const result = pending.then(rebuild);
+    pending = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   return {

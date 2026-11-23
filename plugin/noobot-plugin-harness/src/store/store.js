@@ -4,47 +4,29 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs/promises";
+import { syncDirectory } from "@noobot/platform-compatibility/file-system";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import path from "node:path";
-import {
-  HARNESS_FILES,
-  HARNESS_FLUSH_REASONS,
-  HARNESS_TERMINAL_RUN_STATUSES,
-} from "../core/constants.js";
+import { HARNESS_FLUSH_REASONS, HARNESS_TERMINAL_RUN_STATUSES } from "../core/constants.js";
 import { createHarnessJsonlFlushStrategySchema } from "../core/options.js";
 import { ensureIntervalCleanupTask } from "../utils/cleanup-scheduler.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { randomUUID } from "node:crypto";
 import { isPlainObject, text } from "@noobot/shared/value";
 import { rotatedPluginLogName, isRotatedPluginLogName } from "@noobot/plugin-protocol/log-artifact";
+import { findDeletedRunSession, withHarnessRunsMutation } from "./run-mutation.js";
 
 const manifestCache = new Map();
 const manifestWriteTimers = new Map();
-const manifestLastAccessed = new Map();
+const pendingJsonlRuns = new Map();
+const runWriteQueues = new Map();
+const MISSING_MANIFEST = Symbol("missing harness manifest");
 
 function cleanupStaleManifests() {
   const now = Date.now();
-  for (const [key, lastAccess] of manifestLastAccessed.entries()) {
-    if (now - lastAccess <= TIME_THRESHOLDS.harness.manifestCacheMaxAgeMs) continue;
-    const timer = manifestWriteTimers.get(key);
-    if (timer) {
-      clearTimeout(timer);
-      manifestWriteTimers.delete(key);
-    }
-    const cached = manifestCache.get(key);
-    if (cached) {
-      writeJsonValidated(key, cached)
-        .then(() => {
-          manifestCache.delete(key);
-          manifestLastAccessed.delete(key);
-        })
-        .catch((err) => {
-          console.warn(`[harness] Manifest cleanup write failed for ${key}: ${err.message}`);
-        });
-      continue;
-    }
-    manifestCache.delete(key);
-    manifestLastAccessed.delete(key);
+  for (const [key, entry] of manifestCache) {
+    if (now - entry.updatedAt <= TIME_THRESHOLDS.harness.manifestCacheMaxAgeMs) continue;
+    void flushManifestDebounced(key);
   }
 }
 
@@ -57,19 +39,46 @@ export async function updateManifestCached(
   mergeFn,
   debounceMs = TIME_THRESHOLDS.harness.manifestDebounceMs,
 ) {
-  if (!paths?.manifest) return;
+  return withRunWrite(paths, (manifest) =>
+    updateManifestLocked({
+      paths,
+      ctx,
+      patch,
+      options,
+      capabilityRuntime,
+      mergeFn,
+      debounceMs,
+      manifest,
+    }),
+  );
+}
+
+async function updateManifestLocked({
+  paths,
+  ctx,
+  patch,
+  options,
+  capabilityRuntime,
+  mergeFn,
+  debounceMs,
+  manifest,
+}) {
   const key = paths.manifest;
   ensureIntervalCleanupTask(
     "harness_manifest_cache_cleanup",
     cleanupStaleManifests,
     TIME_THRESHOLDS.harness.manifestCleanupIntervalMs,
   );
-  manifestLastAccessed.set(key, Date.now());
-  let current = manifestCache.get(key);
-  if (!current) current = await readJson(key, {});
+  const current = manifestCache.get(key)?.value ?? manifest;
 
   const next = mergeFn(current, ctx, patch, options, capabilityRuntime);
-  manifestCache.set(key, next);
+  if (
+    next.sessionId !== paths.sessionId ||
+    (next.parentSessionId ?? null) !== paths.parentSessionId
+  ) {
+    throw new Error(`Harness manifest must preserve ownership: ${paths.runDir}`);
+  }
+  manifestCache.set(key, { run: paths, value: next, updatedAt: Date.now() });
 
   const existingTimer = manifestWriteTimers.get(key);
   if (existingTimer) clearTimeout(existingTimer);
@@ -81,7 +90,6 @@ export async function updateManifestCached(
     manifestWriteTimers.delete(key);
     await writeJsonValidated(key, next);
     manifestCache.delete(key);
-    manifestLastAccessed.delete(key);
   } else if (debounceMs > 0) {
     manifestWriteTimers.set(
       key,
@@ -90,39 +98,36 @@ export async function updateManifestCached(
   } else {
     await writeJsonValidated(key, next);
     manifestCache.delete(key);
-    manifestLastAccessed.delete(key);
   }
 }
 
 async function flushManifestDebounced(key) {
-  manifestWriteTimers.delete(key);
-  const cached = manifestCache.get(key);
-  if (!cached) return;
   try {
-    await writeJsonValidated(key, cached);
-    manifestCache.delete(key);
-    manifestLastAccessed.delete(key);
+    await flushManifest(key);
   } catch (err) {
     console.warn(`[harness] Manifest debounced write failed for ${key}: ${err.message}`);
   }
 }
 
-export async function flushAllManifests() {
-  const entries = Array.from(manifestCache.entries());
-  for (const [key, value] of entries) {
-    const timer = manifestWriteTimers.get(key);
-    if (timer) {
-      clearTimeout(timer);
+async function flushManifest(key) {
+  const run = manifestCache.get(key)?.run;
+  if (!run) return;
+  await withRunWrite(
+    run,
+    async () => {
+      const entry = manifestCache.get(key);
+      if (!entry) return;
+      clearTimeout(manifestWriteTimers.get(key));
       manifestWriteTimers.delete(key);
-    }
-    try {
-      await writeJsonValidated(key, value);
+      await writeJsonValidated(key, entry.value);
       manifestCache.delete(key);
-      manifestLastAccessed.delete(key);
-    } catch (err) {
-      console.error(`[harness] Failed to flush manifest ${key}:`, err.message);
-    }
-  }
+    },
+    { buffered: true },
+  );
+}
+
+export async function flushAllManifests() {
+  for (const key of [...manifestCache.keys()]) await flushManifest(key);
 }
 
 const jsonlBuffers = new Map();
@@ -131,11 +136,9 @@ const jsonlFlushTimers = new Map();
 const jsonlFlushFailures = new Map();
 const jsonlFlushStrategies = new Map();
 const tmpCleanupLastRunByFile = new Map();
-const runWriteOperations = new Map();
-const jsonlOperations = new Map();
 
 function isMissingPathError(error) {
-  return error?.code === "ENOENT" || error?.code === "ENOTDIR";
+  return error?.code === "ENOENT";
 }
 
 async function unlinkIfPresent(filePath) {
@@ -146,44 +149,108 @@ async function unlinkIfPresent(filePath) {
   }
 }
 
-function resolveRunWriteLockPath(targetPath = "") {
-  const dir = path.dirname(text(targetPath));
-  if (!dir || dir === ".") return "";
-  return path.join(dir, HARNESS_FILES.RUN_WRITE_LOCK);
-}
-
-async function serializeOperation(operations, key, operation) {
-  const previous = operations.get(key);
+async function withRunWrite(run, operation, { buffered = false } = {}) {
+  const previous = runWriteQueues.get(run.runDir);
   const current = (async () => {
-    if (previous) await previous.catch(() => undefined);
-    return operation();
+    if (previous) await previous;
+    return withHarnessRunsMutation(run.basePath, () => executeRunWrite(run, operation, buffered));
   })();
-  operations.set(key, current);
+  const settled = current.then(
+    () => undefined,
+    () => undefined,
+  );
+  runWriteQueues.set(run.runDir, settled);
   try {
     return await current;
   } finally {
-    if (operations.get(key) === current) operations.delete(key);
+    if (runWriteQueues.get(run.runDir) === settled) runWriteQueues.delete(run.runDir);
   }
 }
 
-async function withRunWriteLock(targetPath, operation) {
-  const lockPath = resolveRunWriteLockPath(targetPath);
-  if (!lockPath) return operation();
-  const runDir = path.dirname(lockPath);
-  return serializeOperation(runWriteOperations, runDir, () => executeRunWrite(lockPath, operation));
+async function assertRunSessionActive(run) {
+  const deletedSessionId = await findDeletedRunSession(run);
+  if (deletedSessionId) {
+    throw Object.assign(new Error(`Harness run belongs to deleted session ${deletedSessionId}`), {
+      code: "SESSION_DELETED",
+    });
+  }
 }
 
-async function executeRunWrite(lockPath, operation) {
-  const runDir = path.dirname(lockPath);
-  await fs.mkdir(runDir, { recursive: true });
-  await fs.writeFile(lockPath, String(Date.now()), "utf-8");
+function assertRunOwnership(run, manifest) {
+  if (
+    !isPlainObject(manifest) ||
+    manifest.sessionId !== run.sessionId ||
+    (manifest.parentSessionId ?? null) !== run.parentSessionId
+  )
+    throw new Error(`Harness run ownership mismatch: ${run.runDir}`);
+}
+
+export function initializeRun(run) {
+  return withHarnessRunsMutation(run.basePath, async () => {
+    await assertRunSessionActive(run);
+    const manifest = await readJson(run.manifest, MISSING_MANIFEST);
+    if (manifest !== MISSING_MANIFEST) {
+      assertRunOwnership(run, manifest);
+      return;
+    }
+    await publishRun(run);
+  });
+}
+
+async function publishRun(run) {
+  const runsDir = path.dirname(run.runDir);
+  const stagingDir = path.join(path.dirname(runsDir), ".run-publication");
+  const sync = (directory) => syncDirectory({ directory, open: fs.open });
+  await fs.mkdir(runsDir, { recursive: true });
+  await fs.rm(stagingDir, { recursive: true, force: true });
+  await fs.mkdir(stagingDir);
+  await fs.writeFile(
+    path.join(stagingDir, path.basename(run.manifest)),
+    JSON.stringify({ sessionId: run.sessionId, parentSessionId: run.parentSessionId }),
+    { flag: "wx", flush: true },
+  );
+  await sync(stagingDir);
+  await fs.rename(stagingDir, run.runDir);
+  await sync(runsDir);
+  await sync(path.dirname(runsDir));
+}
+
+async function executeRunWrite(run, operation, buffered) {
+  let manifest;
   try {
-    return await operation();
-  } finally {
-    await runBestEffort(() => unlinkIfPresent(lockPath), {
-      operationName: "harnessStore.removeRunWriteLock",
-      context: { lockPath },
-    });
+    await assertRunSessionActive(run);
+    manifest = await readJson(run.manifest, MISSING_MANIFEST);
+    if (manifest === MISSING_MANIFEST)
+      throw Object.assign(new Error(`Harness run is not present: ${run.runDir}`), {
+        code: "HARNESS_RUN_NOT_FOUND",
+      });
+    assertRunOwnership(run, manifest);
+  } catch (error) {
+    if (error.code !== "SESSION_DELETED" && error.code !== "HARNESS_RUN_NOT_FOUND") throw error;
+    discardRunBuffers(run.runDir);
+    if (buffered) return;
+    throw error;
+  }
+  return operation(manifest);
+}
+
+export function discardRunBuffers(runDir) {
+  for (const key of manifestCache.keys()) {
+    if (path.dirname(key) !== runDir) continue;
+    clearTimeout(manifestWriteTimers.get(key));
+    manifestWriteTimers.delete(key);
+    manifestCache.delete(key);
+  }
+  for (const key of pendingJsonlRuns.keys()) {
+    if (path.dirname(key) !== runDir) continue;
+    clearJsonlFlushTimer(key);
+    jsonlBuffers.delete(key);
+    jsonlFlushFailures.delete(key);
+    jsonlFlushStrategies.delete(key);
+    pendingJsonlRuns.delete(key);
+  }
+  for (const key of tmpCleanupLastRunByFile.keys()) {
+    if (path.dirname(key) === runDir) tmpCleanupLastRunByFile.delete(key);
   }
 }
 
@@ -291,19 +358,17 @@ async function removeStaleTmpFile(tmpPath, now) {
   return 0;
 }
 
-export async function appendJsonlBuffered(filePath, record, flushStrategy, flushHint = {}) {
+export async function appendJsonlBuffered(run, filePath, record, flushStrategy, flushHint = {}) {
+  requireRunArtifactPath(run, filePath);
   if (!filePath || !record) throw new TypeError("JSONL append requires a path and record");
   const strategy = normalizeFlushStrategy(flushStrategy);
   const line = JSON.stringify(record);
   if (typeof line !== "string" || estimateUtf8Bytes(line) > strategy.maxBufferBytes)
     throw new RangeError("JSONL record exceeds buffer capacity");
-  return serializeOperation(jsonlOperations, filePath, () =>
-    appendJsonlRecord(filePath, line, strategy, flushHint),
-  );
+  return withRunWrite(run, () => appendJsonlRecord({ run, filePath, line, strategy, flushHint }));
 }
 
-async function appendJsonlRecord(filePath, line, strategy, flushHint) {
-  jsonlFlushStrategies.set(filePath, strategy);
+async function appendJsonlRecord({ run, filePath, line, strategy, flushHint }) {
   let buffer = jsonlBuffers.get(filePath);
   if (
     buffer &&
@@ -321,6 +386,7 @@ async function appendJsonlRecord(filePath, line, strategy, flushHint) {
 
   buffer.push(line);
   jsonlFlushStrategies.set(filePath, strategy);
+  pendingJsonlRuns.set(filePath, run);
 
   const reason = text(flushHint?.reason).toLowerCase();
   const shouldFlushByReason =
@@ -336,9 +402,9 @@ async function appendJsonlRecord(filePath, line, strategy, flushHint) {
 }
 
 async function flushJsonlBuffer(filePath, strategy) {
-  return serializeOperation(jsonlOperations, filePath, () =>
-    flushJsonlBufferLocked(filePath, strategy),
-  );
+  const run = pendingJsonlRuns.get(filePath);
+  if (!run) return;
+  return withRunWrite(run, () => flushJsonlBufferLocked(filePath, strategy), { buffered: true });
 }
 
 async function flushJsonlBufferLocked(filePath, strategy) {
@@ -351,6 +417,7 @@ async function flushJsonlBufferLocked(filePath, strategy) {
     jsonlFlushFailures.delete(filePath);
     jsonlBuffers.delete(filePath);
     jsonlFlushStrategies.delete(filePath);
+    pendingJsonlRuns.delete(filePath);
   } catch (err) {
     console.error(`[harness] JSONL flush failed for ${filePath}:`, err.message);
     const retries = Number(jsonlFlushFailures.get(filePath) || 0) + 1;
@@ -385,27 +452,30 @@ export async function readJson(filePath, fallback = null) {
   }
 }
 
-export async function writeJson(filePath, data) {
-  await writeJsonValidated(filePath, data);
+export async function writeJson(run, filePath, data) {
+  requireRunArtifactPath(run, filePath);
+  await withRunWrite(run, () => writeJsonValidated(filePath, data));
+}
+
+function requireRunArtifactPath(run, filePath) {
+  if (path.dirname(filePath) !== run.runDir || filePath === run.manifest) {
+    throw new TypeError("harness write requires a run artifact path other than the manifest");
+  }
 }
 
 async function writeJsonValidated(filePath, data) {
   const content = JSON.stringify(data, null, 2);
-  const dir = path.dirname(filePath);
   const tmpPath = `${filePath}.tmp.${randomUUID()}`;
 
-  await withRunWriteLock(filePath, async () => {
-    await fs.mkdir(dir, { recursive: true });
-    await cleanupStaleTmpFilesForTarget(filePath);
+  await cleanupStaleTmpFilesForTarget(filePath);
 
-    try {
-      await fs.writeFile(tmpPath, content, "utf-8");
-      await verifyJsonWrite(tmpPath, content);
-      await fs.rename(tmpPath, filePath);
-    } finally {
-      await unlinkIfPresent(tmpPath);
-    }
-  });
+  try {
+    await fs.writeFile(tmpPath, content, "utf-8");
+    await verifyJsonWrite(tmpPath, content);
+    await fs.rename(tmpPath, filePath);
+  } finally {
+    await unlinkIfPresent(tmpPath);
+  }
 }
 
 async function verifyJsonWrite(tmpPath, content) {
@@ -487,9 +557,6 @@ async function rotateJsonlIfNeeded(filePath, content, strategy) {
 }
 
 async function appendFileValidated(filePath, content, strategy) {
-  await withRunWriteLock(filePath, async () => {
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await rotateJsonlIfNeeded(filePath, content, strategy);
-    await fs.appendFile(filePath, content, "utf-8");
-  });
+  await rotateJsonlIfNeeded(filePath, content, strategy);
+  await fs.appendFile(filePath, content, "utf-8");
 }

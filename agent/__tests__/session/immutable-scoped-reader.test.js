@@ -98,3 +98,28 @@ test("accepted reads drain before the canonical lock admits a competing operatio
   await competitor;
   assert.equal(competitorEntered, true);
 });
+
+test("current readback sees publication without advancing the predecessor reader", async (t) => {
+  const { options, store } = await fixture(t);
+  let escapedReadCurrent;
+  let escapedCurrent;
+  await withImmutableSessionReader(options, async (before, _commit, readCurrent) => {
+    escapedReadCurrent = readCurrent;
+    const outcome = await store.commit({
+      expectedGeneration: before.generation,
+      operationId: "update-facts",
+      changes: [{ collection: "metadata", key: "facts", value: { messageCount: 2 } }],
+    });
+    await readCurrent(async (current) => {
+      escapedCurrent = current;
+      assert.equal(current.generation, outcome.generation);
+      assert.deepEqual(await current.readFacts(), { messageCount: 2 });
+    });
+    await assert.rejects(escapedCurrent.readFacts(), { code: "SESSION_READER_CLOSED" });
+    assert.deepEqual(await before.readFacts(), { messageCount: 1 });
+  });
+  await assert.rejects(
+    escapedReadCurrent(() => assert.fail()),
+    { code: "SESSION_READER_CLOSED" },
+  );
+});

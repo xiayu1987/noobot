@@ -124,3 +124,24 @@ test("graph contract distinguishes pointers from opaque content and rejects inva
     invalid,
   );
 });
+
+test("context source graph validates its bounded directory and count through one contract", () => {
+  const reference = "a".repeat(64);
+  const descriptor = { count: 2, root: reference, directory: { ordinals: [1, 5] } };
+  const read = (value) => immutableValueIndexReferences("contextSources", "turn", value);
+  assert.deepEqual(read(descriptor), [{ reference, role: "messages", count: 2 }]);
+  assert.deepEqual(read({ count: 0, root: null, directory: { ordinals: [] } }), [
+    { reference: null, role: "messages", count: 0 },
+  ]);
+  for (const value of [
+    { count: 2, root: reference },
+    { ...descriptor, extra: true },
+    { ...descriptor, count: 1 },
+    { ...descriptor, count: 3 },
+    { ...descriptor, directory: { ordinals: [5, 1] } },
+    { ...descriptor, directory: { slots: [] } },
+    { ...descriptor, directory: { slots: [0, 1, 2] } },
+    { ...descriptor, root: null },
+  ])
+    assert.throws(() => read(value), invalid);
+});

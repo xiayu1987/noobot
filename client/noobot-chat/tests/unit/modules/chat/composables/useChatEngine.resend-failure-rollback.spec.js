@@ -174,7 +174,7 @@ describe("useChatEngine.resend failure rollback", () => {
     expect(activeSession.value.messages).toEqual([first, target]);
   });
 
-  it("rejects a committed detail that still materializes deleted message UIDs", async () => {
+  it("rejects a committed detail that still materializes deleted messages", async () => {
     logStateMachineDebug.mockClear();
     const staleFirst = {
       messageUid: "stale-user",
@@ -209,8 +209,7 @@ describe("useChatEngine.resend failure rollback", () => {
         replacementDialogProcessId: `dialog:${turnScopeId}`,
         messages: [staleFirst, staleTarget, replacementUser],
       });
-      body.deletedMessageUids = [staleFirst.messageUid, staleTarget.messageUid];
-      body.projection.deletedMessageUids = body.deletedMessageUids;
+      body.projection.messageSuffix.previousMessageCount = 2;
       body.displayMessages.push(staleFirst, staleTarget);
       return jsonResponse({ ok: true, ...body });
     });

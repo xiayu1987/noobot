@@ -17,6 +17,7 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   messageItem: { type: Object, default: () => ({}) },
   translate: { type: Function, default: (key = "") => key },
+  onCopy: { type: Function, default: null },
   onDelete: { type: Function, default: null },
   onResend: { type: Function, default: null },
 });
@@ -109,7 +110,7 @@ async function handleDelete() {
 </script>
 
 <template>
-  <div v-if="visible" class="monotonic-message-actions" :class="{ editing }">
+  <div v-if="visible || onCopy" class="monotonic-message-actions" :class="{ editing }">
     <MonotonicEditCard
       v-if="editing"
       ref="editCardRef"
@@ -129,9 +130,11 @@ async function handleDelete() {
       v-else
       :disabled="disabled"
       :operating="operating"
-      :show-resend="!!onResend"
-      :show-delete="!!onDelete"
+      :show-copy="!!onCopy"
+      :show-resend="visible && !!onResend"
+      :show-delete="visible && !!onDelete"
       :t="t"
+      @copy="onCopy?.()"
       @edit="handleEdit"
       @delete="handleDelete"
     />

@@ -81,10 +81,10 @@ export function createModelActivity(
   const activity = {
     activityId,
     activityKind,
-    purpose,
-    pluginFlow,
-    chain,
-    relayCorrelationId,
+    ...(purpose === undefined ? {} : { purpose }),
+    ...(pluginFlow === undefined ? {} : { pluginFlow }),
+    ...(chain === undefined ? {} : { chain }),
+    ...(relayCorrelationId === undefined ? {} : { relayCorrelationId }),
   };
   if (!hasEventListener(eventListener)) {
     return { callbacks: undefined, complete: async () => null };

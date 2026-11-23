@@ -10,11 +10,14 @@ import { createHash, randomUUID } from "node:crypto";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { HTTP_STATUS } from "noobot-agent/constants";
+import { contributionsForSurface, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
+import { createSessionNotFoundError } from "@noobot/session-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   WORKSPACE_PATH_SEGMENT_PATTERN,
   resolvePluginAssetsRelativePath,
-  resolvePluginDataRelativePath,
+  resolvePluginScopedSessionRelativePath,
+  resolvePluginScopedSessionRoots,
 } from "@noobot/workspace-protocol";
 import { text, isFunction, isPlainObject } from "@noobot/shared/value";
 
@@ -155,10 +158,12 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
       try {
         stats = await fs.stat(filePath);
       } catch (error) {
-        if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
+        if (error?.code === "ENOENT") return null;
         throw error;
       }
-      if (!stats.isFile()) return null;
+      if (!stats.isFile()) {
+        throw new TypeError(`workspace asset version must be a regular file: ${filePath}`);
+      }
       return Object.freeze({
         size: stats.size,
         stream: createReadStream(filePath),
@@ -198,44 +203,113 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
 
 const SCOPED_SESSION_READ_METHODS = Object.freeze([
   "readScopedSessionSnapshot",
+  "readScopedMessageContentPage",
   "readScopedThinkingDetail",
+  "releaseScopedThinkingDetail",
   "readScopedExecutionReport",
 ]);
 
-function createPluginSessionPort({ bot, pluginId, translateText }) {
+function createPluginSessionPort({ bot, manifest, translateText }) {
   for (const method of SCOPED_SESSION_READ_METHODS) {
     if (!isFunction(bot.session?.[method])) {
       throw new TypeError(`plugin session port requires bot.session.${method}`);
     }
   }
-  const normalizedPluginId = requireAssetToken(pluginId, assetIdPattern, "plugin ID");
+  const pluginId = manifest.id;
+  const declarations = contributionsForSurface(manifest, PLUGIN_SURFACE.AGENT)?.scopedSessionRoots;
+  const roots = resolvePluginScopedSessionRoots({
+    pluginId,
+    scopedSessionRoots: declarations ?? [],
+  });
   function resolveSessionDir({ userId, segments, locale = "" }) {
     const workspacePath = bot.getWorkspacePath(userId);
     let relativeDir;
-    if (!Array.isArray(segments)) throw new TypeError("plugin session segments must be an array");
     try {
-      relativeDir = resolvePluginDataRelativePath(normalizedPluginId, ...segments);
+      relativeDir = resolvePluginScopedSessionRelativePath({ pluginId, roots, segments });
     } catch (cause) {
       throw new Error(translateText("common.notFound", locale), { cause });
     }
+    if (relativeDir === null) throw createSessionNotFoundError({ userId });
     return { outputDir: path.resolve(workspacePath, relativeDir) };
   }
   return Object.freeze({
-    async readSnapshot({ userId, segments, locale }) {
+    async readSnapshot({ userId, authoritySessionId, segments, locale }) {
       const { outputDir } = resolveSessionDir({ userId, segments, locale });
-      return bot.session.readScopedSessionSnapshot({ sessionDir: outputDir });
+      return bot.session.readScopedSessionSnapshot({
+        userId,
+        authoritySessionId,
+        sessionDir: outputDir,
+      });
     },
-    async readThinkingDetail({ userId, segments, dialogProcessId, turnScopeId, locale }) {
+    async readMessageContentPage({
+      userId,
+      authoritySessionId,
+      sessionId,
+      segments,
+      request,
+      locale,
+    }) {
+      const { outputDir } = resolveSessionDir({ userId, segments, locale });
+      return bot.session.readScopedMessageContentPage({
+        userId,
+        authoritySessionId,
+        sessionId,
+        sessionDir: outputDir,
+        request,
+      });
+    },
+    async readThinkingDetail({
+      userId,
+      authoritySessionId,
+      sessionId,
+      segments,
+      dialogProcessId,
+      turnScopeId,
+      cursor,
+      limit,
+      locale,
+    }) {
       const { outputDir } = resolveSessionDir({ userId, segments, locale });
       return bot.session.readScopedThinkingDetail({
+        userId,
+        authoritySessionId,
+        sessionId,
         sessionDir: outputDir,
         turnScopeId,
         dialogProcessId,
+        cursor,
+        limit,
       });
     },
-    async readExecutionReport({ userId, segments, dialogProcessId, locale }) {
+    async releaseThinkingDetail({
+      userId,
+      authoritySessionId,
+      sessionId,
+      segments,
+      dialogProcessId,
+      turnScopeId,
+      cursor,
+      locale,
+    }) {
       const { outputDir } = resolveSessionDir({ userId, segments, locale });
-      return bot.session.readScopedExecutionReport({ sessionDir: outputDir, dialogProcessId });
+      return bot.session.releaseScopedThinkingDetail({
+        userId,
+        authoritySessionId,
+        sessionId,
+        sessionDir: outputDir,
+        turnScopeId,
+        dialogProcessId,
+        cursor,
+      });
+    },
+    async readExecutionReport({ userId, authoritySessionId, segments, dialogProcessId, locale }) {
+      const { outputDir } = resolveSessionDir({ userId, segments, locale });
+      return bot.session.readScopedExecutionReport({
+        userId,
+        authoritySessionId,
+        sessionDir: outputDir,
+        dialogProcessId,
+      });
     },
   });
 }
@@ -255,8 +329,8 @@ export function createPluginServicePorts({ bot, translateText }) {
       },
     }),
     sessions: Object.freeze({
-      forPlugin(pluginId) {
-        return createPluginSessionPort({ bot, pluginId, translateText });
+      forPlugin(manifest) {
+        return createPluginSessionPort({ bot, manifest, translateText });
       },
     }),
   });

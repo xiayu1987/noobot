@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createWorkspaceAdmission } from "../../src/workspace-lifecycle/workspace-admission.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MemoryPostProcessService } from "../../src/bot/execution/memory-postprocess.js";
@@ -20,11 +21,12 @@ const run = {
 
 function harness(appendExecutionLogs) {
   const service = new MemoryPostProcessService({
+    workspaceAdmission: createWorkspaceAdmission(async () => {}),
     globalConfig: {},
     now: () => "2026-01-01T00:00:00.000Z",
     session: {
-      async getSessionTurns() {
-        return [];
+      async withSessionDialogMessageRecords(_payload, consume) {
+        return consume([]);
       },
       appendExecutionLogs,
     },

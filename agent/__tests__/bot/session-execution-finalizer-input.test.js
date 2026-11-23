@@ -48,7 +48,7 @@ function setup() {
       async flush() {
         effects.push("messages");
       },
-      async readResultMessages() {
+      async readResultTransfers() {
         effects.push("result");
         return [];
       },
@@ -60,7 +60,13 @@ function setup() {
 test("an explicit empty agent result completes without inventing a message", async () => {
   const { finalizer, payload, effects } = setup();
   const result = await finalizer.finalizeRunSession(payload);
-  assert.deepEqual(result.messages, []);
+  assert.equal(Object.hasOwn(result, "messages"), false);
+  assert.deepEqual(result.messageSource, {
+    sessionId: "s1",
+    dialogProcessId: "dp1",
+    turnScopeId: "turn-1",
+  });
+  assert.deepEqual(result.transferEnvelopes, []);
   assert.equal(result.answer, "");
   assert.ok(effects.indexOf("messages") < effects.indexOf("result"));
   assert.ok(effects.includes("report"));

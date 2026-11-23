@@ -13,7 +13,7 @@ import {
   contentDigest,
 } from "../../src/session/session-artifact-session/immutable-object-store.js";
 import { ImmutableRadixIndex } from "../../src/session/session-artifact-session/immutable-radix-index.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 
 const INVALID = { code: "SESSION_IMMUTABLE_STORAGE_INVALID" };
 

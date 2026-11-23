@@ -66,6 +66,19 @@ export function detailEntryWithLifecycle({
     turnLifecycleSnapshot,
     sessionArtifactEvents: [],
     messages,
+    stats: {
+      messageCount: messages.length,
+      displayMessageCount: messages.length,
+      injectedMessageCount: 0,
+      thinkingMessageCount: messages.filter((message) => message.hasThinkingDetails === true)
+        .length,
+      toolLogCount: 0,
+      displayToolLogCount: 0,
+      unassignedToolArtifactCount: 0,
+      conflictedToolArtifactCount: 0,
+      attachmentCount: 0,
+      hasToolDetails: false,
+    },
   });
 }
 
@@ -169,16 +182,8 @@ export function messageDeleteResponse({
   deduplicated,
 }) {
   const result = { deletedCount, anchorIndex, deletedTurnScopeIds };
-  const deletedMessageUids = Array.from(
-    { length: deletedCount },
-    (_, index) => `deleted-fixture:${index}`,
-  );
   return createMessageDeleteResponse({
-    receiptResult: result,
-    commandId,
-    committedAggregateVersion: aggregateVersion,
     deduplicated,
-    deletedMessageUids,
     sessionId,
     generation: 10,
     displayMessages: [],
@@ -194,9 +199,12 @@ export function messageDeleteResponse({
         result,
       },
       baseAggregateVersion: aggregateVersion - 1,
+      messageSuffix: {
+        firstOrdinal: anchorIndex + 1,
+        previousMessageCount: anchorIndex + deletedCount,
+      },
       metadata: { sessionId, parentSessionId: "", aggregateVersion, updatedAt: FIXTURE_UPDATED_AT },
       lifecycleHead: { sequence: 0, activeTurnScopeId: "" },
-      deletedMessageUids,
       messages: [],
       turns: deletedTurnScopeIds.map((key) => ({ key, value: null })),
       replacements: [],

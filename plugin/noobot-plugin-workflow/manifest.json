@@ -52,6 +52,15 @@
           "auth": "connected_user"
         },
         {
+          "id": "workflow.thinking-detail-release",
+          "method": "DELETE",
+          "paths": [
+            "/internal/workflow/session/:userId/:sessionId/:dialogProcessId/thinking-detail",
+            "/api/internal/workflow/session/:userId/:sessionId/:dialogProcessId/thinking-detail"
+          ],
+          "auth": "connected_user"
+        },
+        {
           "id": "workflow.execution-report",
           "method": "GET",
           "paths": [
@@ -108,6 +117,10 @@
       },
       {
         "method": "GET",
+        "path": "/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId/thinking-detail"
+      },
+      {
+        "method": "DELETE",
         "path": "/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId/thinking-detail"
       },
       {

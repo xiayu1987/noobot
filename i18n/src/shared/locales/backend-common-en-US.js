@@ -132,7 +132,7 @@ export const BACKEND_COMMON_EN_US = {
   "ws.unknownError": "unknown error",
   "ws.userInteractionTimeout": "user interaction timeout",
   "agent.phaseSummaryPrompt":
-    "Output only a phase summary for continuing the current task: goal and user constraints, completed work and evidence, changed files and key locations, validation results, unfinished work and next actions. Merge prior summaries and preserve facts and identifiers needed later. Distinguish verified facts from unverified claims. Do not call tools or continue the task.",
+    "Provide only the phase summary needed to continue the current task: goal and user constraints, completed work and evidence, changed files and key locations, validation results, unfinished work and next steps. Merge existing summaries and preserve the facts and identifiers needed later. Distinguish verified facts from items that still need verification. Note: This is a request for assistance; no tool use is needed.",
   "agent.taskCheckPrompt":
     "The periodic task-check threshold has been reached. For this model call, you may call task_check to leave a task-check slice, but the call is optional; this prompt appears only for this call. If called, checkContent must strictly use the single text protocol: NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort task-check abstract\n[DETAILS]\nCurrent goal, progress, drift risks, and omissions\n[NEXT_ACTION]\nSpecific next action. Every section must be non-empty; do not add, repeat, or reorder sections.",
 };

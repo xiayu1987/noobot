@@ -6,13 +6,17 @@
 import assert from "node:assert/strict";
 import { resolveModelLibraryProvider } from "@noobot/model-protocol";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import fs, { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { promisify } from "node:util";
-import { ensureWorkspaceConfigParamsCatalog } from "../scripts/project-launcher/config-sync.js";
+import {
+  ensureWorkspaceConfigParamsCatalog,
+  syncUserConfigs,
+} from "../scripts/project-launcher/config-sync.js";
 import {
   listConversationModelOptions,
   parseTemplateVariableName,
@@ -22,6 +26,29 @@ import {
 const execFileAsync = promisify(execFile);
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const launcherPath = path.resolve(testDir, "../scripts/project-launcher.js");
+
+test("config synchronization propagates a workspace scan failure and can retry after repair", async (t) => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "noobot-config-scan-"));
+  t.after(() => rm(workspace, { recursive: true, force: true }));
+  const failure = Object.assign(new Error("workspace scan blocked"), { code: "ENOTDIR" });
+  const readDirectory = fs.readdir.bind(fs);
+  const fault = t.mock.method(fs, "readdir", async (directory, options) => {
+    if (directory === workspace) throw failure;
+    return readDirectory(directory, options);
+  });
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(
+      syncUserConfigs({ workspaceRootAbsolutePath: workspace }),
+      (error) => error === failure,
+    );
+  } finally {
+    fault.mock.restore();
+    syncBuiltinESMExports();
+  }
+  assert.deepEqual(await fs.readdir(workspace), []);
+  await syncUserConfigs({ workspaceRootAbsolutePath: workspace });
+});
 
 test("project launcher offers only conversation models from the model library", () => {
   const keys = listConversationModelOptions().map((option) => option.key);

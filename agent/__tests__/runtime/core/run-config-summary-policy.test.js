@@ -63,8 +63,16 @@ test("task check threshold requires the explicit frontend threshold mode", () =>
   assert.equal(resolveTaskCheckLoopTurns(), TURN_THRESHOLDS.agent.taskCheckLoopTurns);
 });
 
-test("phase summary loop threshold preserves the builtin default when absent", () => {
+test("phase summary resolves the configured threshold for each scenario", () => {
   assert.equal(resolvePhaseSummaryLoopTurns(), TURN_THRESHOLDS.agent.phaseSummaryLoopTurns);
+  for (const [scenario, expected] of [
+    ["full", TURN_THRESHOLDS.agent.phaseSummaryLoopTurns],
+    ["text", TURN_THRESHOLDS.agent.phaseSummaryTextLoopTurns],
+    ["programming", TURN_THRESHOLDS.agent.phaseSummaryProgrammingLoopTurns],
+    ["custom", TURN_THRESHOLDS.agent.phaseSummaryLoopTurns],
+  ]) {
+    assert.equal(resolvePhaseSummaryLoopTurns({ runConfig: { scenario } }), expected);
+  }
 });
 
 test("summary and task check reject declared invalid thresholds even when the gate is closed", () => {

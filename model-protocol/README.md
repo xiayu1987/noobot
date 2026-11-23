@@ -62,7 +62,8 @@ unknown/unregistered provider errors retry unchanged within the transport budget
 Transport, mode-change and empty-response retries use `resolveModelRetryDelay` for exponential
 backoff; a valid provider `Retry-After` is a minimum wait, not a separate retry budget.
 Exponential delays are capped by `TIME_THRESHOLDS.model.maxRetryDelayMs` (60 seconds by default).
-A provider minimum above this limit ends with an explicit protocol failure; it is never shortened.
+A provider minimum above this limit is never shortened: automatic recovery stops and preserves
+the original failure. HTTP 524 is classified as a timeout, including for generic gateways.
 The clock port contract is `sleep(ms, { signal })`: cancellation rejects immediately and releases
 the timer and listener. All recovery waits use the invocation signal.
 `options.signal`, `options.callbacks` and `options.streaming` are executor-owned controls;

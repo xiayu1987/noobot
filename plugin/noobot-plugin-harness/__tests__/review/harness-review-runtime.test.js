@@ -331,6 +331,11 @@ test("harness promptPolicy false still traces before_llm_call", async () => {
     },
   );
 
+  await hookManager.emit("agent.before_context_build", {
+    userId: "u15",
+    sessionId: "s15",
+    dialogProcessId: "dp15",
+  });
   await hookManager.emit("agent.before_llm_call", {
     executionScope: "primary",
     userId: "u15",

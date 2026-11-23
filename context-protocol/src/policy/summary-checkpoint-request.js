@@ -45,6 +45,7 @@ function checkpointDigest({
   retainedMessageUids,
   messages,
   messageContentAppends = [],
+  messageContentReplacements,
   messageMetadataUpdates = [],
 }) {
   return createHash("sha256")
@@ -57,6 +58,7 @@ function checkpointDigest({
         retainedMessageUids,
         messages,
         ...(messageContentAppends.length ? { messageContentAppends } : {}),
+        ...(messageContentReplacements === undefined ? {} : { messageContentReplacements }),
         ...(messageMetadataUpdates.length ? { messageMetadataUpdates } : {}),
       }),
     )
@@ -64,8 +66,10 @@ function checkpointDigest({
 }
 
 function requireCheckpointRevision(value) {
-  if (!Number.isSafeInteger(value) || value < 0)
-    throw invalidRequest("expectedCheckpointRevision must be a non-negative safe integer");
+  if (!Number.isSafeInteger(value) || value < 0 || value >= Number.MAX_SAFE_INTEGER)
+    throw invalidRequest(
+      "expectedCheckpointRevision must be a non-negative safe integer with a safe successor",
+    );
   return value;
 }
 
@@ -104,7 +108,6 @@ export function parseTurnSummaryCheckpointRequest(payload) {
   const request = {
     userId: requireRequestText(payload.userId, "userId"),
     sessionId: requireRequestText(payload.sessionId, "sessionId"),
-    persistenceContext: payload.persistenceContext,
     dialogProcessId: requireDialogProcessKey(payload.dialogProcessId),
     turnScopeId: requireCanonicalTurnScopeId(payload.turnScopeId),
     checkpointId: requireRequestText(payload.checkpointId, "checkpointId"),
@@ -117,6 +120,9 @@ export function parseTurnSummaryCheckpointRequest(payload) {
     retainedMessageUids: requireMessageUids(payload.retainedMessageUids, "retainedMessageUids"),
     messages: payload.messages,
     messageContentAppends: payload.messageContentAppends ?? [],
+    ...(Object.hasOwn(payload, "messageContentReplacements")
+      ? { messageContentReplacements: payload.messageContentReplacements }
+      : {}),
     messageMetadataUpdates: payload.messageMetadataUpdates ?? [],
   };
   if (!Array.isArray(request.messages)) throw invalidRequest("messages must be an array");
@@ -128,16 +134,15 @@ export function parseTurnSummaryCheckpointRequest(payload) {
     if (completeMessageUids.has(uid)) throw invalidRequest("complete message UIDs must be unique");
     completeMessageUids.add(uid);
   }
-  requireSessionChanges({
-    messages: request.messages,
-    messageContentAppends: request.messageContentAppends,
-    messageMetadataUpdates: request.messageMetadataUpdates,
+  const { messages, messageContentAppends, messageContentReplacements, messageMetadataUpdates } =
+    request;
+  const changes = requireSessionChanges({
+    messages,
+    messageContentAppends,
+    ...(Object.hasOwn(request, "messageContentReplacements") ? { messageContentReplacements } : {}),
+    messageMetadataUpdates,
   });
-  for (const message of [
-    ...request.messages,
-    ...request.messageContentAppends,
-    ...request.messageMetadataUpdates,
-  ]) {
+  for (const message of Object.values(changes).flat()) {
     if (!isPlainObject(message)) throw invalidRequest("messages[] must be an object");
     const uid = requireRequestText(message.messageUid, "messages[].messageUid");
     if (!persisted.has(uid))

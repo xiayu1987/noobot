@@ -48,3 +48,34 @@ jobs:
 
       - name: Build production clients
         run: npm run build
+
+  windows-session-storage:
+    name: Native Windows session storage
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26.9.0
+          cache: npm
+
+      - name: Set up npm
+        run: npm install --global npm@12.0.2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify native storage durability and scoped locks
+        run: >-
+          node scripts/run-with-isolated-tmp.mjs node --test
+          agent/__tests__/session/execution-log-windows-durability.test.js
+          agent/__tests__/session/immutable-windows-durability.test.js
+          agent/__tests__/session/scoped-session-repositories.test.js
+          agent/__tests__/workspace-isolated-immutable-migration.test.js
+          agent/__tests__/workspace-session-directory-walk.test.js
+          agent/__tests__/workspace-session-storage-upgrade.test.js
+          session-protocol/__tests__/session-reader-access.test.js

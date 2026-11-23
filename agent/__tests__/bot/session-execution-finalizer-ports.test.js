@@ -27,7 +27,7 @@ test("missing finalization capabilities fail before any persistence or memory ef
     ["runtimeEventListener", "onEvent"],
     ["runtimeEventListener", "flush"],
     ["turnPersistence", "flush"],
-    ["turnPersistence", "readResultMessages"],
+    ["turnPersistence", "readResultTransfers"],
   ]) {
     const payload = createTestSessionFinalizationContext();
     delete payload[port][method];

@@ -7,9 +7,8 @@ import { filePath as path, resolveScopedArtifactPath } from "@noobot/path-resolv
 import { createHash } from "node:crypto";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
-import { readJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
-import { isObjectLike, text } from "@noobot/shared/value";
-import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import { writeJsonWithStorage } from "./artifact-json-io.js";
+import { text } from "@noobot/shared/value";
 
 function resolveSummaryDetailPath(sessionDir = "", file = "") {
   return resolveScopedArtifactPath({
@@ -68,31 +67,4 @@ export async function writeSessionSummaryDetails({ storageService, sessionDir, s
     }
   }
   return summaryPayload;
-}
-
-export async function hydrateSessionSummaryDetails({ storageService, sessionDir, payload }) {
-  const messages = (Array.isArray(payload?.messages) ? payload.messages : []).map(
-    async (message) => {
-      const ref = message?.thinkingDetailRef;
-      if (!isObjectLike(ref)) return message;
-      const detail = await readJsonWithStorage({
-        storageService,
-        artifactPath: resolveSummaryDetailPath(sessionDir, ref.file),
-      });
-      if (
-        detail.presentationMessageId !== text(message?.presentationMessageId) ||
-        summaryDetailHash(detail) !== ref.contentHash
-      ) {
-        const error = new Error(`session summary detail does not match its reference: ${ref.file}`);
-        error.code = SESSION_ERROR_CODE.SUMMARY_DETAIL_REFERENCE_MISMATCH;
-        throw error;
-      }
-      return {
-        ...message,
-        toolTimeline: detail.toolTimeline,
-        activityTimeline: detail.activityTimeline,
-      };
-    },
-  );
-  return { ...payload, messages: await Promise.all(messages) };
 }

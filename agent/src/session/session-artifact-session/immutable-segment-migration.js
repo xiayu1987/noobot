@@ -7,7 +7,7 @@ import { filePath as path } from "@noobot/path-resolver";
 import { readFilePrefix } from "@noobot/shared/read-file-prefix";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { fsOpen, fsLstat, fsRm } from "../../shared/storage/fs-adapter.js";
-import { resolveSessionArtifactMutationLock } from "../session-artifact-files.js";
+import { withImmutableAuthorityMutation } from "../session-storage-authority.js";
 import {
   IMMUTABLE_CURRENT_SESSION_FORMAT,
   IMMUTABLE_SEGMENT_SESSION_FORMAT,
@@ -26,7 +26,6 @@ import {
   immutablePageReferencePaths,
   immutableCommitReferenceEdges,
   immutableOperationReceiptReferenceEdges,
-  requireImmutableOperationReceipt,
   immutableCollectionValueReferenceEdges,
   requireImmutableValueParts,
   isImmutableValuePartsPage,
@@ -37,6 +36,7 @@ import {
   IMMUTABLE_COMMIT_ORIGIN_COLLECTIONS,
   createImmutableCommitOrigin,
 } from "@noobot/session-protocol/immutable-storage-graph";
+import { requireImmutableOperationReceipt } from "@noobot/session-protocol/immutable-operation-receipt";
 import { ImmutableValueStore } from "./immutable-value-store.js";
 import { ImmutableSegmentStore } from "./immutable-segment-store.js";
 import { ImmutableRecordStore } from "./immutable-record-store.js";
@@ -45,9 +45,8 @@ import { ImmutableLocatedMigrationWriter } from "./immutable-located-migration-w
 import { immutableOfflineBackend } from "./immutable-storage-backends.js";
 import { ImmutableSessionStore } from "./immutable-session-store.js";
 import { auditImmutableSnapshot } from "./immutable-session-audit.js";
-import { readImmutableReaderRetentions } from "./immutable-reader-retention.js";
+import { assertImmutableMigrationRetentionsReleased } from "./immutable-reader-retention.js";
 import { writeDurableReplacement, syncStorageDirectory } from "./immutable-storage-io.js";
-import { sessionMutationCoordinator } from "../session-mutation-coordinator.js";
 import {
   needsCheckpointReceiptMigration,
   migrateCheckpointReceipts,
@@ -385,7 +384,7 @@ export async function migrateImmutableSessionSegments({
     ![IMMUTABLE_SEGMENT_SESSION_FORMAT, ImmutableLocatedRecordStore.format].includes(targetFormat)
   )
     throw new TypeError("Unsupported migration target format");
-  return sessionMutationCoordinator.run(resolveSessionArtifactMutationLock(sessionDir), () =>
+  return withImmutableAuthorityMutation(sessionDir, () =>
     migrateSegmentsLocked({
       sessionDir,
       signal,
@@ -434,11 +433,7 @@ async function migrateSegmentsLocked({
       };
     }
   }
-  const retainedSnapshots = await readImmutableReaderRetentions(source, head, signal);
-  if (retainedSnapshots.length)
-    throw Object.assign(new Error("Release retained readers before offline storage migration"), {
-      code: "SESSION_STORAGE_MIGRATION_READERS_ACTIVE",
-    });
+  await assertImmutableMigrationRetentionsReleased(source, head, signal);
   const before = await auditImmutableSnapshot({
     store: source,
     snapshot: head,

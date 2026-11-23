@@ -26,6 +26,20 @@ const FIELDS = new Set([
   "producer",
   "createdAt",
 ]);
+
+const LINK_FIELDS = new Set(["userId", "sourceIdentity", "targetIdentity", "producerId"]);
+
+export function requireParsedAttachmentLink(value) {
+  const link = requirePlainObject(value, "invalid_attachment_relation_request");
+  assertKnownFields(link, LINK_FIELDS, "unknown_attachment_relation_request_field");
+  return freezeDefined({
+    userId: requireNonEmptyString(link.userId, "invalid_attachment_access_user_id"),
+    sourceIdentity: parseAttachmentIdentity(link.sourceIdentity),
+    targetIdentity: parseAttachmentIdentity(link.targetIdentity),
+    producerId: requireNonEmptyString(link.producerId, "invalid_attachment_relation_producer_id"),
+  });
+}
+
 export function parseAttachmentRelation(value) {
   const s = requirePlainObject(value, "invalid_attachment_relation");
   assertKnownFields(s, FIELDS, "unknown_attachment_relation_field");

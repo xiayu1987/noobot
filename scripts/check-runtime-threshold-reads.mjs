@@ -5,8 +5,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { spawnSync } from "node:child_process";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse as parseSfc } from "@vue/compiler-sfc";
 import { RUNTIME_PARAM_CATALOG } from "@noobot/shared/runtime-params";
+import { isPlainObject } from "@noobot/shared/value";
 import { DEVELOPMENT_THRESHOLDS } from "./lib/development-thresholds.mjs";
 import {
   addHit,
@@ -99,13 +101,13 @@ async function measureModuleScopeReads(measurement) {
   }
 }
 
-function workspaceExportFiles(workspace, declared) {
-  const entries = typeof declared === "string" ? { ".": declared } : declared;
-  return Object.entries(entries).flatMap(([subpath, target]) => {
-    if (typeof target !== "string") {
-      throw new TypeError(`${workspace} exports ${subpath} must map to a file path string`);
-    }
-    return /\.m?js$/.test(target) ? [`${workspace}/${target.replace(/^\.\//, "")}`] : [];
+function workspaceExportFiles({ name, exports: declared }) {
+  const keys = isPlainObject(declared) ? Object.keys(declared) : [];
+  const subpaths = keys.filter((key) => key.startsWith("."));
+  return (subpaths.length ? subpaths : ["."]).flatMap((subpath) => {
+    const specifier = subpath === "." ? name : name + subpath.slice(1);
+    const file = fileURLToPath(import.meta.resolve(specifier));
+    return /\.m?js$/.test(file) ? [file] : [];
   });
 }
 
@@ -113,8 +115,8 @@ async function libraryExportFiles() {
   const files = [];
   for (const workspace of await readRootWorkspacePaths(repositoryRoot)) {
     if (ENTRY_WORKSPACES.has(workspace) || workspace.startsWith("client/")) continue;
-    const { exports: declared } = await readRepositoryJson(`${workspace}/package.json`);
-    if (declared) files.push(...workspaceExportFiles(workspace, declared));
+    const manifest = await readRepositoryJson(`${workspace}/package.json`);
+    if (manifest.exports) files.push(...workspaceExportFiles(manifest));
   }
   return files;
 }
@@ -128,7 +130,7 @@ process.exit(0);
 function importFailureInFreshProcess(file) {
   const child = spawnSync(
     process.execPath,
-    ["--input-type=module", "-e", IMPORT_PROBE, `file://${repositoryRoot}/${file}`],
+    ["--input-type=module", "-e", IMPORT_PROBE, pathToFileURL(file).href],
     {
       cwd: repositoryRoot,
       encoding: "utf8",
@@ -146,7 +148,7 @@ async function measureImportsWithoutSnapshot(measurement) {
     if (!message.startsWith(SNAPSHOT_MISSING_MESSAGE)) {
       throw new Error(`${file} failed to import for an unrelated reason: ${message}`);
     }
-    addHit(measurement, { file, message });
+    addHit(measurement, { file: file.slice(repositoryRoot.length + 1), message });
   }
 }
 

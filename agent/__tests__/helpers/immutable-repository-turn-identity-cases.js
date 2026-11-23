@@ -3,13 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { submitTestSessionRequest } from "./session-services.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
 export function registerImmutableTurnIdentityTests({ fixture, message, ts }) {
   test("reused user turn identity reads only the first indexed turn message", async (t) => {
     const { runtime, repository, persistenceContext } = await fixture(t);
-    const before = await repository.requireSessionReader("u1", "s1", { persistenceContext });
+    await using before = await repository.requireSessionReader("u1", "s1", { persistenceContext });
     const tail = Array.from({ length: 256 }, (_, index) => {
       const record = message(`tail-${index}`);
       delete record.userMessageId;
@@ -21,35 +22,35 @@ export function registerImmutableTurnIdentityTests({ fixture, message, ts }) {
         presentationMessageId: "presentation-t1",
       };
     });
-    await repository.commitChanges("u1", "s1", {
+    await submitTestSessionRequest(
+      repository,
+      "u1",
+      "s1",
+      await before.prepareRequest({
+        operationId: "seed-reuse",
+        committedAt: ts,
+        changes: { messages: [message("anchor"), ...tail] },
+      }),
       persistenceContext,
-      expectedGeneration: before.generation,
-      operationId: "seed-reuse",
-      committedAt: ts,
-      changes: { messages: [message("anchor"), ...tail] },
-    });
+    );
     const requestedUids = [];
     const openReader = repository.requireSessionReader.bind(repository);
     t.mock.method(repository, "requireSessionReader", async (...args) => {
       const reader = await openReader(...args);
       return {
         ...reader,
-        async readTurnPage(options) {
-          assert.ok(["t1", "missing"].includes(options.turnScopeId));
-          assert.deepEqual(options, { turnScopeId: options.turnScopeId, limit: 1 });
-          const page = await reader.readTurnPage(options);
-          if (options.turnScopeId === "missing") assert.equal(page, null);
-          else {
-            assert.equal(page.records.length, 1);
-            requestedUids.push(...page.records.map((record) => record.message.messageUid));
-          }
-          return page;
+        async readFirstTurnMessage(turnScopeId) {
+          assert.ok(["t1", "missing"].includes(turnScopeId));
+          const message = await reader.readFirstTurnMessage(turnScopeId);
+          if (turnScopeId === "missing") assert.equal(message, null);
+          else requestedUids.push(message.messageUid);
+          return message;
+        },
+        async readTurnPage() {
+          assert.fail("Turn identity must use the bounded first-message read");
         },
       };
     });
-    t.mock.method(repository, "requireTurnView", () =>
-      assert.fail("whole turn reads are forbidden"),
-    );
     const request = {
       userId: "u1",
       sessionId: "s1",

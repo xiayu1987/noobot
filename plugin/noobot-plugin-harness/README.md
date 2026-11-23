@@ -53,13 +53,25 @@ The plugin is non-invasive: it is attached through Noobot hooks, and hook errors
 
 ## Session delete cleanup hook
 
-Harness listens to `after_session_delete`.
-When this hook is emitted with `deletedSessionIds` (or fallback `sessionId`), harness will:
+Harness handles `service.after_session_delete` using the authoritative
+`deletedSessionIds`, workspace path and `deletionKey` defined by the
+[Hook protocol](../../hook-protocol/README.md#session-deletion-hooks).
 
-1. flush in-memory manifest/jsonl buffers
-2. delete matching `runtime/plugin-data/harness/runs/*` records by run-id or manifest `sessionId`
+Run admission, artifact writes and cleanup share one workspace-scoped mutation
+lock. New runs publish their manifest ownership before diagnostic artifacts.
+Cleanup matches only the manifest's required `sessionId` and optional
+`parentSessionId`; directory names do not establish session ownership.
 
-`service/routes/session-routes.js` emits this hook after `deleteSessionBranch` succeeds.
+Matching runs are atomically renamed to a deletion staging namespace before
+recursive removal. Cleanup discards their pending manifest/JSONL buffers and
+leaves unrelated buffers intact. Retried cleanup resumes staged removals even
+when a partial removal has already deleted the manifest. Non-directory entries,
+missing published manifests, invalid ownership and I/O failures reject cleanup
+and retain the pending deletion stage. A missing runs directory is empty.
+
+The service invokes the hook as the persisted branch deletion operation's
+plugin stage. Only successful completion confirms that stage; failed or
+interrupted cleanup retries with the recorded targets and handler IDs.
 
 ## Enable from runConfig
 

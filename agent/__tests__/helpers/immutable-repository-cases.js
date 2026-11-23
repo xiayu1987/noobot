@@ -3,10 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { submitTestSessionRequest } from "./session-services.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { writeFile } from "node:fs/promises";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import {
+  CONTEXT_READ_LIMITS,
+  CONTEXT_BUDGET_ERROR,
+} from "@noobot/session-protocol/context-read-budget";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { upgradeImmutableContextIndexes } from "../../src/session/session-artifact-session/immutable-context-index-upgrade.js";
 
@@ -14,19 +19,23 @@ export function registerImmutableContextRepositoryTests({ fixture, message, ts }
   test("context history uses indexed dialogs and pins its committed generation", async (t) => {
     const { repository, persistenceContext, scope } = await fixture(t);
     const initial = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-    await repository.commitChanges("u1", "s1", {
+    await submitTestSessionRequest(
+      repository,
+      "u1",
+      "s1",
+      await initial.prepareRequest({
+        operationId: "history",
+        committedAt: ts,
+        changes: {
+          messages: [1, 2, 3].map((number) => ({
+            ...message(`m${number}`),
+            dialogProcessId: `d${number}`,
+            turnScopeId: `t${number}`,
+          })),
+        },
+      }),
       persistenceContext,
-      expectedGeneration: initial.generation,
-      operationId: "history",
-      committedAt: ts,
-      changes: {
-        messages: [1, 2, 3].map((number) => ({
-          ...message(`m${number}`),
-          dialogProcessId: `d${number}`,
-          turnScopeId: `t${number}`,
-        })),
-      },
-    });
+    );
     const pinned = await repository.requireSessionReader("u1", "s1", { persistenceContext });
     await writeFile(scope.sessionFile, "invalid legacy manifest");
     const query = {
@@ -39,13 +48,17 @@ export function registerImmutableContextRepositoryTests({ fixture, message, ts }
       source.messages.map((item) => item.messageUid),
       ["m2"],
     );
-    await repository.commitChanges("u1", "s1", {
+    await submitTestSessionRequest(
+      repository,
+      "u1",
+      "s1",
+      await pinned.prepareRequest({
+        operationId: "later-history",
+        committedAt: ts,
+        changes: { messages: [{ ...message("m4"), dialogProcessId: "d4", turnScopeId: "t4" }] },
+      }),
       persistenceContext,
-      expectedGeneration: pinned.generation,
-      operationId: "later-history",
-      committedAt: ts,
-      changes: { messages: [{ ...message("m4"), dialogProcessId: "d4", turnScopeId: "t4" }] },
-    });
+    );
     assert.deepEqual(
       (await pinned.readContextSource(query)).messages.map((item) => item.messageUid),
       ["m2"],
@@ -60,16 +73,61 @@ export function registerImmutableContextRepositoryTests({ fixture, message, ts }
     await assert.rejects(pinned.readContextSource({ ...query, historyLimit: -1 }), /nonnegative/);
   });
 
+  test("context budget survives the service and repository boundary without fallback", async (t) => {
+    const { runtime, repository, persistenceContext } = await fixture(t);
+    await using initial = await repository.requireSessionReader("u1", "s1", { persistenceContext });
+    await submitTestSessionRequest(
+      repository,
+      "u1",
+      "s1",
+      await initial.prepareRequest({
+        operationId: "history-budget",
+        committedAt: ts,
+        changes: { messages: [message("budget-message")] },
+      }),
+      persistenceContext,
+    );
+    const request = {
+      userId: "u1",
+      sessionId: "s1",
+      persistenceContext,
+      scope: {},
+      historyLimit: 1,
+      limits: { ...CONTEXT_READ_LIMITS, bytes: 1 },
+    };
+    await assert.rejects(runtime.sessionMessageService.getSessionContextSource(request), {
+      code: CONTEXT_BUDGET_ERROR,
+      dimension: "bytes",
+      limit: 1,
+    });
+    await assert.rejects(
+      runtime.sessionMessageService.getSessionContextSource({ ...request, limits: { bytes: 1 } }),
+      /explicit bounded work limits/,
+    );
+    const source = await runtime.sessionMessageService.getSessionContextSource({
+      ...request,
+      limits: CONTEXT_READ_LIMITS,
+    });
+    assert.deepEqual(
+      source.messages.map((entry) => entry.messageUid),
+      ["budget-message"],
+    );
+  });
+
   test("offline context index upgrade publishes its version with rebuilt indexes", async (t) => {
     const { repository, persistenceContext, scope } = await fixture(t);
     const initial = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-    await repository.commitChanges("u1", "s1", {
+    await submitTestSessionRequest(
+      repository,
+      "u1",
+      "s1",
+      await initial.prepareRequest({
+        operationId: "seed-upgrade",
+        committedAt: ts,
+        changes: { messages: [message("m1")] },
+      }),
       persistenceContext,
-      expectedGeneration: initial.generation,
-      operationId: "seed-upgrade",
-      committedAt: ts,
-      changes: { messages: [message("m1")] },
-    });
+    );
     const store = new ImmutableSessionStore({ sessionDir: scope.sessionDir, sessionId: "s1" });
     const head = await store.snapshot();
     const facts = await store.get(head, "metadata", "facts");

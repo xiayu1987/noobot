@@ -10,6 +10,9 @@ import {
   reducePluginArtifact,
 } from "@noobot/event-protocol/plugin-artifact-event";
 import {
+  assertAuthorityEventSequenceAdvance,
+  assertNewAuthorityEventScope,
+  assertUncommittedAuthorityEvent,
   authorityOutboxSequenceKey,
   normalizeAuthorityEventOutbox,
 } from "@noobot/event-protocol/outbox";
@@ -44,26 +47,13 @@ export async function appendImmutableEvent(store, plan, source) {
   const metadata = await plan.get("metadata", "session");
   const header = await requireImmutableOutboxIndex(plan);
   if (!metadata || !header) throw immutableStorageError("Immutable events are not initialized");
-  if (
-    event.envelope.identity.sessionId !== sessionId ||
-    (Object.hasOwn(event.envelope.payload, "parentSessionId") &&
-      event.envelope.payload.parentSessionId !== metadata.parentSessionId)
-  )
-    throw new TypeError("Authority event session ownership mismatch");
-  if (Object.keys(event.deliveries).length)
-    throw new TypeError("New authority events cannot contain delivery acknowledgements");
-  if (await plan.get("events", event.eventId))
-    throw Object.assign(new Error("Authority event ID is already committed"), {
-      code: "SESSION_EVENT_CONFLICT",
-    });
+  assertNewAuthorityEventScope(event, { sessionId, parentSessionId: metadata.parentSessionId });
+  assertUncommittedAuthorityEvent(await plan.get("events", event.eventId));
   const key = immutableEventSequenceKey(event.envelope);
   const floor = (await plan.get("eventSequences", key)) ?? 0;
   if (!Number.isSafeInteger(floor) || floor < 0)
     throw immutableStorageError("Invalid immutable event sequence floor");
-  if (event.envelope.ordering.sequence <= floor)
-    throw Object.assign(new Error("Authority event sequence must advance its scope"), {
-      code: "SESSION_EVENT_SEQUENCE_CONFLICT",
-    });
+  assertAuthorityEventSequenceAdvance(event.envelope, floor);
   const ordinal = header.sequence + 1;
   if (
     !Number.isSafeInteger(header.sequence) ||

@@ -219,9 +219,8 @@ export function createModelRequestExecutor({
           return;
         }
         const classification = classify(error);
-        await observe(
-          MODEL_INVOCATION_EVENT.FAILED,
-          projectModelInvocationFailure({
+        await observe(MODEL_INVOCATION_EVENT.FAILED, {
+          ...projectModelInvocationFailure({
             attemptCount: totalAttempts,
             message: String(error?.message ?? error),
             code: text(error?.code) || null,
@@ -235,7 +234,13 @@ export function createModelRequestExecutor({
                 error: attemptError,
               })),
           }),
-        );
+          recoveryContext: {
+            outputObserved: attemptState.outputObserved,
+            maxTotalAttempts: retry.maxTotalAttempts,
+            transportMaxAttempts: retry.transport.maxAttempts,
+            retryAfterMs: classification.retryAfterMs ?? null,
+          },
+        });
       };
       const respond = async (output, result) => {
         const response = createModelResponse({
@@ -464,6 +469,7 @@ export function createModelRequestExecutor({
           baseDelayMs: retry.transport.baseDelayMs,
           retryAfterMs: classification.retryAfterMs,
         });
+        if (delayMs === null) return false;
         streaming = nextStreaming;
         await observe(MODEL_INVOCATION_EVENT.STREAMING_MODE_RETRY, {
           attempt: totalAttempts,

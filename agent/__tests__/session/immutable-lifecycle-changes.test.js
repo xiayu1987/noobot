@@ -12,8 +12,13 @@ import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapte
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { IMMUTABLE_MESSAGE_TAIL_VERSION } from "../../src/session/session-artifact-session/immutable-message-tail-index.js";
 import { prepareImmutableTurnCommit } from "../../src/session/session-artifact-session/immutable-lifecycle-changes.js";
+import { ImmutableSessionChanges } from "../../src/session/session-artifact-session/immutable-message-changes.js";
 import { immutableLifecycleCommandKey } from "../../src/session/session-artifact-session/immutable-command-index.js";
-import { IMMUTABLE_ARTIFACT_EVENT_INDEX_VERSION } from "@noobot/session-protocol/immutable-storage-graph";
+import { IMMUTABLE_TITLE_INDEX_VERSION } from "@noobot/session-protocol/immutable-storage";
+import {
+  IMMUTABLE_ARTIFACT_EVENT_INDEX_VERSION,
+  IMMUTABLE_CONTEXT_INDEX_VERSION,
+} from "@noobot/session-protocol/immutable-storage-graph";
 import {
   readImmutableMessage,
   readImmutableTurnPage,
@@ -32,6 +37,7 @@ async function fixture(t) {
     expectedGeneration: 0,
     operationId: "initialize",
     changes: [
+      { collection: "contextDialogRanges", key: "root", value: { ordinals: [] } },
       {
         collection: "metadata",
         key: "messageTailIndex",
@@ -46,6 +52,7 @@ async function fixture(t) {
         collection: "metadata",
         key: "facts",
         value: {
+          contextIndexVersion: IMMUTABLE_CONTEXT_INDEX_VERSION,
           messageCount: 0,
           messageSequence: 0,
           turnSequence: 0,
@@ -57,7 +64,11 @@ async function fixture(t) {
       },
       { collection: "metadata", key: "lifecycle", value: { sequence: 0, activeTurnScopeId: "" } },
       { collection: "metadata", key: "commandIndex", value: { version: 1 } },
-      { collection: "metadata", key: "titleIndex", value: { version: 1, root: null } },
+      {
+        collection: "metadata",
+        key: "titleIndex",
+        value: { version: IMMUTABLE_TITLE_INDEX_VERSION, root: null },
+      },
       { collection: "metadata", key: "events", value: { sequence: 0, outboxIndexVersion: 1 } },
       {
         collection: "metadata",
@@ -119,15 +130,17 @@ async function commit(store, request, messages = [], operationId = request.comma
     expectedGeneration: snapshot.generation,
     operationId,
     input: { event: request, messages },
-    prepare: ({ get, getMetadata, input }) =>
-      prepareImmutableTurnCommit({
+    prepare: async ({ get, getMany, getMetadata, input }) => {
+      const plan = new ImmutableSessionChanges(get, { getMany, getMetadata });
+      const result = await prepareImmutableTurnCommit({
         store,
-        get,
-        getMetadata,
+        plan,
         ...input,
         now: () => timestamp,
         createEventId: () => `event:${request.commandId}`,
-      }),
+      });
+      return { abort: !result.applied, changes: plan.changes(), result };
+    },
   });
 }
 

@@ -9,7 +9,7 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   SESSION_TREE_ERROR,
   WORKSPACE_LAYOUT,
-  collectSessionTreeBranch,
+  collectSessionTreeBranches,
   createSessionTreeNode,
   createSessionTreePlacement,
   normalizeSessionTree,
@@ -189,16 +189,26 @@ test("requireSessionTreeNode returns the registered node and rejects missing one
   );
 });
 
-test("collectSessionTreeBranch returns the session and all descendants breadth-first", () => {
-  assert.deepEqual(collectSessionTreeBranch(tree, "rootA"), [
+test("collectSessionTreeBranches visits each descendant once across overlapping roots and scoped sessions", () => {
+  assert.deepEqual(collectSessionTreeBranches(tree, ["rootA", "branchB"]), [
     "rootA",
     "branchB",
     "siblingD",
     "leafC",
   ]);
-  assert.deepEqual(collectSessionTreeBranch(tree, "leafC"), ["leafC"]);
+  assert.deepEqual(
+    collectSessionTreeBranches(
+      tree,
+      ["leafC"],
+      [
+        { sessionId: "scoped", parentSessionId: "leafC" },
+        { sessionId: "nested", parentSessionId: "scoped" },
+      ],
+    ),
+    ["leafC", "scoped", "nested"],
+  );
   assert.throws(
-    () => collectSessionTreeBranch(tree, ""),
+    () => collectSessionTreeBranches(tree, [""]),
     (error) => error.code === SESSION_TREE_ERROR.SESSION_ID_REQUIRED,
   );
 });
@@ -226,6 +236,19 @@ test("placeSessionTreeChain requires the exact parent for registered and new ses
     () => place("newE", "ghost"),
     (error) => error.code === SESSION_TREE_ERROR.PARENT_MISSING,
   );
+});
+
+test("tree membership uses registered node identities even for object property names", () => {
+  const absent = treeOf();
+  assert.throws(() => resolveSessionTreeChain(absent, "constructor"), {
+    code: SESSION_TREE_ERROR.NODE_MISSING,
+  });
+  assert.throws(() => requireSessionTreeNode(absent, "constructor"), {
+    code: SESSION_TREE_ERROR.NODE_MISSING,
+  });
+  assert.deepEqual(placeSessionTreeChain(absent, node("constructor", "")), ["constructor"]);
+  const registered = treeOf(node("constructor", ""), node("toString", "constructor"));
+  assert.deepEqual(resolveSessionTreeChain(registered, "toString"), ["constructor", "toString"]);
 });
 
 test("session ids must be workspace path segments and are never rewritten", () => {

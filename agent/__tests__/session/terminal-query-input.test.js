@@ -7,6 +7,26 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { SessionCrudService } from "../../src/session/services/session-crud-service.js";
 
+test("terminal query rejects a repository response without the indexed turn", async () => {
+  const service = new SessionCrudService({
+    sessionRepo: {
+      async findTurnTerminalSource() {
+        return { turnLifecycle: { turns: {} }, turnTimings: [], aggregateVersion: 1 };
+      },
+    },
+    now: () => "2026-01-01T00:00:00.000Z",
+  });
+  await assert.rejects(
+    service.resolveTurnTerminalState({
+      userId: "user",
+      commandId: "read",
+      sessionId: "s1",
+      turnScopeId: "turn-1",
+    }),
+    TypeError,
+  );
+});
+
 test("terminal query rejects malformed identity before repository access", async () => {
   const service = new SessionCrudService({
     sessionRepo: {},

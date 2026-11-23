@@ -41,7 +41,7 @@ function resolveRuntimeStoragePath(basePath, identity, value) {
   return assertScopedStoragePath(basePath, identity, candidate);
 }
 
-function resolvePersistedStorageRef(basePath, identity, value) {
+export function resolvePersistedStorageRef(basePath, identity, value) {
   const ref = safeStr(value);
   if (!ref) throw new Error("attachment_storage_ref_required");
   if (ref.includes("\\") || isAbsolutePathAnyPlatform(ref)) {

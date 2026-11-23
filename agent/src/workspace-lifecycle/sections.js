@@ -4,7 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 import { existsSync } from "node:fs";
-import { access, cp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  cp,
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import {
   CONFIG_DOCUMENT_SCOPE,
@@ -20,7 +30,8 @@ import {
   WORKSPACE_RUNTIME_DIRECTORIES,
   WORKSPACE_SECTION,
   WORKSPACE_SECTIONS,
-  createEmptySessionTree,
+  assertWorkspaceLayoutReady,
+  createWorkspaceMaintenanceError,
   parseWorkspaceLayoutState,
   planWorkspaceLayoutMigrations,
   planWorkspaceLayoutUpgrades,
@@ -28,7 +39,7 @@ import {
 } from "@noobot/workspace-protocol";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
 import { repairWorkspaceMemoryDocuments } from "../memory/storage/repair.js";
-import { upgradeSessionStorage } from "./session-storage-upgrade.js";
+import { ensureSessionTree, upgradeSessionStorage } from "./session-storage-upgrade.js";
 import { upgradeSessionLifecycle } from "./session-lifecycle-upgrade.js";
 import { upgradeSessionTransferEnvelopes } from "./session-transfer-envelope-upgrade.js";
 import { upgradeModelContextSnapshots } from "./model-context-snapshot-upgrade.js";
@@ -42,11 +53,22 @@ import { upgradeSessionScriptExitCodes } from "./session-script-exit-code-upgrad
 import { upgradeSessionLegacyMcpResults } from "./session-legacy-mcp-result-upgrade.js";
 import { upgradeSessionResultOverflow } from "./session-result-overflow-upgrade.js";
 import { upgradeSessionCheckpointIdentity } from "./session-checkpoint-identity-upgrade.js";
-import { quarantineMigrationUnit, releaseQuarantinedUnits } from "./migration-quarantine.js";
+import {
+  assertWorkspaceQuarantineEmpty,
+  completeQuarantineRestores,
+  quarantineMigrationUnit,
+  recordQuarantineRestoreFailure,
+  restoreQuarantinedUnits,
+} from "./migration-quarantine.js";
 import { ignoreSessionProgress, readSessionDirectory } from "./session-directory-walk.js";
 import { retireWorkspaceDirectoryLocks } from "./directory-lock-retirement.js";
 import { upgradeSessionPhaseSummaries } from "./session-phase-summary-upgrade.js";
 import { upgradeSessionImmutableStorage } from "./session-immutable-storage-upgrade.js";
+import { upgradeAttachmentCatalogs } from "./attachment-catalog-upgrade.js";
+import { upgradeSessionPartitionStorage } from "./migrate-workspace-sessions-to-partition.js";
+import { upgradeWorkspacePartitionFormat } from "./upgrade-workspace-partition-format.js";
+import { withExclusiveWorkspaceStorage } from "./workspace-storage-lock.js";
+import { writeDurableJsonFile } from "../shared/storage/durable-file.js";
 
 const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.DIRECTORY_LOCK_RETIREMENT]: retireWorkspaceDirectoryLocks,
@@ -66,6 +88,9 @@ const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_CHECKPOINT_IDENTITY]: upgradeSessionCheckpointIdentity,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_PHASE_SUMMARY]: upgradeSessionPhaseSummaries,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE]: upgradeSessionImmutableStorage,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.ATTACHMENT_CATALOG]: upgradeAttachmentCatalogs,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_PARTITION_STORAGE]: upgradeSessionPartitionStorage,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_PARTITION_FORMAT]: upgradeWorkspacePartitionFormat,
 });
 
 const QUARANTINE_RETRY_OWNERS = Object.freeze([
@@ -80,10 +105,10 @@ const QUARANTINE_RETRY_OWNERS = Object.freeze([
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_SCRIPT_EXIT_CODE,
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LEGACY_MCP_RESULT,
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_RESULT_OVERFLOW,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_CHECKPOINT_IDENTITY,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_PHASE_SUMMARY,
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE,
 ]);
-
-const retriedQuarantines = new Set();
 
 async function pathExists(filePath) {
   try {
@@ -95,7 +120,7 @@ async function pathExists(filePath) {
   }
 }
 
-export async function migrateWorkspaceLayout({ base, backup }) {
+async function migrateWorkspaceLayout({ base, backup }) {
   const actions = planWorkspaceLayoutMigrations({
     exists: (relativePath) => existsSync(path.join(base, relativePath)),
   });
@@ -120,10 +145,21 @@ async function readInstalledLayoutVersion(base, created) {
   }
 }
 
+export async function assertWorkspaceStorageReady(base, userId) {
+  try {
+    const version = await readInstalledLayoutVersion(base, false);
+    if (version === WORKSPACE_LAYOUT_VERSION) return await assertWorkspaceQuarantineEmpty(base);
+    if (!(await pathExists(base))) return;
+  } catch (cause) {
+    throw Object.assign(createWorkspaceMaintenanceError(userId), { cause });
+  }
+  throw createWorkspaceMaintenanceError(userId);
+}
+
 async function writeLayoutVersion(base, version) {
   const statePath = path.join(base, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE);
   await mkdir(path.dirname(statePath), { recursive: true });
-  await writeConfigDocumentText(statePath, renderWorkspaceLayoutState({ version }));
+  await writeDurableJsonFile(statePath, renderWorkspaceLayoutState({ version }));
 }
 
 function createUpgradeProgress(reportProgress, { upgradeId, upgradeIndex, upgradeCount }) {
@@ -144,78 +180,137 @@ async function prepareLayoutUpgrades(upgrades, options) {
   return prepared;
 }
 
-export async function upgradeWorkspaceLayout({
-  base,
-  backupBase,
-  created,
-  scopedSessionRoots,
-  storageService,
-  reportProgress = ignoreSessionProgress,
-  readSessionOperationInput,
-}) {
+async function withLayoutUpgrade(options, operation) {
+  const { base, created, signal } = options;
+  signal?.throwIfAborted();
   const installedVersion = await readInstalledLayoutVersion(base, created);
+  if (created || installedVersion === WORKSPACE_LAYOUT_VERSION) return operation(installedVersion);
+  return withExclusiveWorkspaceStorage(options, async () =>
+    operation(await readInstalledLayoutVersion(base, created)),
+  );
+}
+
+export function upgradeWorkspaceLayout(options) {
+  return withLayoutUpgrade(options, (version) => applyLayoutUpgrades(options, version));
+}
+
+export function prepareWorkspaceLayout(options) {
+  return withLayoutUpgrade(options, async (version) => {
+    const { base, backupBase, resetSections } = options;
+    const backup = createSectionBackup(backupBase, base);
+    for (const section of resetSections) await clearSection({ base, section, backup });
+    const layoutMigrations = await migrateWorkspaceLayout({ base, backup });
+    const layoutUpgrades = await applyLayoutUpgrades(options, version);
+    assertWorkspaceLayoutReady(layoutUpgrades);
+    await ensureRuntimeDirectories(base);
+    const sessionTreeRecovery = await ensureSessionTree({ base, backupBase });
+    return { layoutMigrations, layoutUpgrades, sessionTreeRecovery };
+  });
+}
+
+async function applyLayoutUpgrades(options, installedVersion) {
+  const { base, created, signal, reportProgress = ignoreSessionProgress } = options;
+  if (installedVersion === WORKSPACE_LAYOUT_VERSION) {
+    await assertWorkspaceQuarantineEmpty(base);
+    if (created) await writeLayoutVersion(base, installedVersion);
+    return [];
+  }
   const applied = [];
   const upgrades = planWorkspaceLayoutUpgrades({ installedVersion });
-  const prepared = await prepareLayoutUpgrades(upgrades, {
-    base,
-    backupBase,
-    scopedSessionRoots,
-    storageService,
-    readSessionOperationInput,
-  });
+  options = { ...options, reportProgress };
+  const prepared = await prepareLayoutUpgrades(upgrades, options);
+  let prerequisitesRetried = false;
   for (const [index, upgrade] of upgrades.entries()) {
-    try {
-      const result = prepared.has(upgrade.id)
-        ? prepared.get(upgrade.id)
-        : await LAYOUT_UPGRADE_HANDLERS[upgrade.owner]({
-            base,
-            backupBase,
-            scopedSessionRoots,
-            storageService,
-            readSessionOperationInput,
-            onSessionProcessed: createUpgradeProgress(reportProgress, {
-              upgradeId: upgrade.id,
-              upgradeIndex: index + 1,
-              upgradeCount: upgrades.length,
-            }),
-          });
-      await writeLayoutVersion(base, upgrade.toVersion);
-      applied.push({ id: upgrade.id, toVersion: upgrade.toVersion, result });
-    } catch (error) {
-      applied.push({
-        id: upgrade.id,
-        toVersion: upgrade.toVersion,
-        failed: { code: String(error?.code || ""), message: String(error?.message || error) },
-      });
+    signal?.throwIfAborted();
+    const retryPrerequisites =
+      !prerequisitesRetried &&
+      upgrade.owner === WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE;
+    if (
+      retryPrerequisites &&
+      !(await appendQuarantineRetries({ ...options, beforeImmutable: true }, applied))
+    )
       return applied;
-    }
+    prerequisitesRetried ||= retryPrerequisites;
+    const advanced = await applyLayoutUpgradeStep({
+      options,
+      prepared,
+      applied,
+      upgrade,
+      upgradeIndex: index + 1,
+      upgradeCount: upgrades.length,
+    });
+    if (!advanced) return applied;
   }
-  const statePath = path.join(base, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE);
-  if (created || !(await pathExists(statePath))) {
-    await writeLayoutVersion(base, WORKSPACE_LAYOUT_VERSION);
-  }
-  applied.push(
-    ...(await retryQuarantinedUnits({
-      base,
-      backupBase,
-      scopedSessionRoots,
-      storageService,
-      reportProgress,
-      readSessionOperationInput,
-    })),
-  );
   return applied;
+}
+
+async function appendQuarantineRetries(options, applied) {
+  const retried = await retryQuarantinedUnits(options);
+  applied.push(...retried);
+  return !retried.some((item) => item.failed);
+}
+
+async function applyLayoutUpgradeStep({
+  options,
+  prepared,
+  applied,
+  upgrade,
+  upgradeIndex,
+  upgradeCount,
+}) {
+  const { base, signal, reportProgress } = options;
+  const { id, owner, toVersion } = upgrade;
+  try {
+    if (
+      owner === WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_PARTITION_STORAGE &&
+      !(await appendQuarantineRetries(options, applied))
+    )
+      return false;
+    const result = prepared.has(id)
+      ? prepared.get(id)
+      : await LAYOUT_UPGRADE_HANDLERS[owner]({
+          ...options,
+          onSessionProcessed: createUpgradeProgress(reportProgress, {
+            upgradeId: id,
+            upgradeIndex,
+            upgradeCount,
+          }),
+        });
+    signal?.throwIfAborted();
+    await writeLayoutVersion(base, toVersion);
+    applied.push({ id, toVersion, result });
+    return true;
+  } catch (error) {
+    signal?.throwIfAborted();
+    applied.push({ id, toVersion, failed: describeLayoutFailure(error) });
+    return false;
+  }
+}
+
+function describeLayoutFailure(error) {
+  return {
+    code: String(error?.code || ""),
+    message: String(error?.message || error),
+    ...(error?.details === undefined ? {} : { details: error.details }),
+  };
 }
 
 async function hasReleasedLegacySession(base, released) {
   for (const relativePath of released) {
-    const directory = await readSessionDirectory(path.join(base, relativePath));
-    if (directory.manifest && !directory.immutable) return true;
+    const restoredPath = path.join(base, relativePath);
+
+    const entry = await lstat(restoredPath).catch((error) => {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    });
+    if (!entry?.isDirectory()) continue;
+    const directory = await readSessionDirectory(restoredPath);
+    if (directory.legacyDocument) return true;
   }
   return false;
 }
 
-async function recordQuarantineRetryFailure({ base, owner, key, id, error }) {
+async function recordQuarantineRetryFailure({ base, owner, id, error, released }) {
   const quarantine =
     owner === WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE
       ? await quarantineMigrationUnit({
@@ -225,7 +320,7 @@ async function recordQuarantineRetryFailure({ base, owner, key, id, error }) {
           error,
         })
       : null;
-  if (quarantine) retriedQuarantines.delete(key);
+  if (!quarantine) await recordQuarantineRestoreFailure({ base, kind: owner, released, error });
   return {
     id,
     failed: { code: String(error?.code || ""), message: String(error?.message || error) },
@@ -240,18 +335,18 @@ async function retryQuarantinedUnits({
   storageService,
   reportProgress,
   readSessionOperationInput,
+  beforeImmutable = false,
 }) {
   const retried = [];
   let legacySessionsReleased = false;
   for (const owner of QUARANTINE_RETRY_OWNERS) {
-    const key = `${base}\u0000${owner}`;
-    if (retriedQuarantines.has(key)) continue;
-    retriedQuarantines.add(key);
+    const immutableRetry = owner === WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE;
+    if (beforeImmutable && immutableRetry) break;
     const id = `quarantine-retry:${owner}`;
+    const released = [];
     try {
-      const released = await releaseQuarantinedUnits({ base, kind: owner });
+      await restoreQuarantinedUnits({ base, kind: owner, released });
 
-      const immutableRetry = owner === WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE;
       if (!released.length && !(immutableRetry && legacySessionsReleased)) continue;
       const result = await LAYOUT_UPGRADE_HANDLERS[owner]({
         base,
@@ -265,13 +360,16 @@ async function retryQuarantinedUnits({
           upgradeCount: 1,
         }),
       });
-      if (!immutableRetry && !legacySessionsReleased) {
-        legacySessionsReleased = await hasReleasedLegacySession(base, released);
-      }
+      legacySessionsReleased ||=
+        !immutableRetry && (await hasReleasedLegacySession(base, released));
       retried.push({ id, released, result });
     } catch (error) {
-      retried.push(await recordQuarantineRetryFailure({ base, owner, key, id, error }));
+      retried.push(await recordQuarantineRetryFailure({ base, owner, id, error, released }));
     }
+    if (retried.at(-1)?.failed) return retried;
+  }
+  if (!beforeImmutable) {
+    for (const kind of QUARANTINE_RETRY_OWNERS) await completeQuarantineRestores({ base, kind });
   }
   return retried;
 }
@@ -280,15 +378,6 @@ export async function ensureRuntimeDirectories(base) {
   for (const relativePath of WORKSPACE_RUNTIME_DIRECTORIES) {
     await mkdir(path.join(base, relativePath), { recursive: true });
   }
-  const treeFile = path.join(base, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
-  if (await pathExists(treeFile)) return;
-  await writeFileAtomic({
-    filePath: treeFile,
-    content: `${JSON.stringify(createEmptySessionTree(), null, 2)}\n`,
-    writeFile,
-    rename,
-    remove: rm,
-  });
 }
 
 export async function repairMemorySection(base, fallbackLocale) {
@@ -390,7 +479,7 @@ async function clearRuntimeSection(base) {
   }
 }
 
-export async function clearSection({ base, section, backup }) {
+async function clearSection({ base, section, backup }) {
   const definition = WORKSPACE_SECTIONS[section];
   if (section === WORKSPACE_SECTION.RUNTIME) return clearRuntimeSection(base);
   for (const relativePath of definition.paths) {

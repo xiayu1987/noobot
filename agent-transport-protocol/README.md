@@ -27,7 +27,7 @@ Main-Agent phase summarization and periodic task checking use one per-run policy
 ```js
 preferences: {
   summaryPolicy: {
-    phaseSummaryLoopTurns: 20, // positive integer; defaults to 20
+    phaseSummaryLoopTurns: 30, // optional positive integer override
     taskCheckLoopTurns: 10 // positive integer; defaults to 10
   }
 }

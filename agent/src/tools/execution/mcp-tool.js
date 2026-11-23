@@ -13,7 +13,6 @@ import {
   getRuntimeFromAgentContext,
   getChildRunParentSessionIdFromAgentContext,
 } from "../../context/agent-context-accessor.js";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { appendMcpErrorLog } from "../../observability/index.js";
@@ -25,7 +24,7 @@ import { TOOL_POLICY_MODE, TOOL_EVENT_NAME, TOOL_NAME } from "../constants/index
 import { text, isFunction } from "@noobot/shared/value";
 
 function buildMcpTaskResult({ detachedRun, mcpName, parentSessionId, mcpToolset }) {
-  const { answer, traces, messages } = detachedRun.result;
+  const { answer, traces, dialogProcessId } = detachedRun.result;
   const usedTools = Array.from(new Set(traces.map((item) => text(item.tool)).filter(Boolean)));
   return toToolJsonResult(
     TOOL_NAME.CALL_MCP_TASK,
@@ -39,9 +38,8 @@ function buildMcpTaskResult({ detachedRun, mcpName, parentSessionId, mcpToolset 
       summary: {
         answerLength: answer.length,
         traceCount: traces.length,
-        messageCount: messages.length,
         usedTools,
-        dialogProcessId: resolveContextMessageDialogProcessId(detachedRun.result),
+        dialogProcessId,
       },
       error: "",
     },

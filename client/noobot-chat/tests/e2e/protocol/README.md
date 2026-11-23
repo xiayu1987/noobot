@@ -85,8 +85,7 @@ The current scenario set is defined by `specs/*.spec.js` and checked against the
 policy when Playwright loads its configuration. Every spec must import `test` and `expect`
 from `fixtures/noobot.fixture.js`. Permanent `test.skip` entries and placeholder scenarios
 without business assertions are forbidden. PBE-058 uses the versioned mixed-session workload;
-see the [performance guide](../../../../../scripts/e2e-docker/PERFORMANCE.md) for its isolated runner,
-reports, and gates.
+see the [performance guide](../../../../../docs/session-storage-architecture.md#5-性能与容量不变量) for the architecture-level performance criteria.
 
 ## 中文
 
@@ -184,4 +183,4 @@ Playwright 配置加载时校验策略表与全部 spec 的 PBE 编号一一闭�
 当前场景集合由 `specs/*.spec.js` 定义，Playwright 加载配置时校验它与观测策略表一致。
 新增用例必须从 `fixtures/noobot.fixture.js` 导入 `test` 和 `expect`，共用同一捕获和审计链。
 禁止提交永久 `test.skip` 或无业务断言的占位测试。PBE-058 使用版本化混合会话负载；
-隔离运行入口、报告和门禁见[性能运行说明](../../../../../scripts/e2e-docker/PERFORMANCE.md)。
+性能约束见[存储架构](../../../../../docs/session-storage-architecture.md#5-性能与容量不变量)。

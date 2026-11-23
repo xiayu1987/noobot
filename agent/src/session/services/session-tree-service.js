@@ -6,13 +6,26 @@
 import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
-import { collectSessionTreeBranch } from "@noobot/workspace-protocol/session-tree";
-import { text } from "@noobot/shared/value";
+import { collectSessionTreeBranches } from "@noobot/workspace-protocol/session-tree";
+import {
+  requireSessionBranchDeletionExecutor,
+  SESSION_DELETION_STAGE,
+  sessionBranchDeletionKey,
+} from "@noobot/workspace-protocol/session-tombstone";
+
+const STAGE = SESSION_DELETION_STAGE;
+
+function deletionDirectories(targets) {
+  return targets
+    .map(({ directory }) => directory)
+    .sort((left, right) => right.length - left.length);
+}
 
 export class SessionTreeService {
-  constructor({ sessionRepo, treeRepo } = {}) {
+  constructor({ sessionRepo, treeRepo, scopedSessionRoots } = {}) {
     this.sessionRepo = sessionRepo;
     this.treeRepo = treeRepo;
+    this.scopedSessionRoots = scopedSessionRoots;
   }
 
   async getSessionTree({ userId }) {
@@ -24,94 +37,123 @@ export class SessionTreeService {
     return this.treeRepo.resolveRootSessionIdFromTree(sessionId, tree);
   }
 
-  collectBranchSessionIds(sessionId = "", sessionTree = null) {
-    return collectSessionTreeBranch(sessionTree, sessionId);
-  }
-
-  collectBranchesSessionIds(rootSessionIds = [], sessionTree = null) {
-    const collected = new Set();
-    for (const rootSessionId of rootSessionIds) {
-      for (const id of this.collectBranchSessionIds(rootSessionId, sessionTree)) {
-        collected.add(id);
-      }
-    }
-    return [...collected];
-  }
-
   async planSessionBranchDeletion(userId, rootSessionIds) {
     const sessionTree = await this.treeRepo.getTree(userId);
-    const agentScopes = await this.sessionRepo.listAgentSessionScopes(userId);
-    const ids = new Set(this.collectBranchesSessionIds(rootSessionIds, sessionTree));
-    const queue = [...ids];
-    for (let index = 0; index < queue.length; index++) {
-      const children = [...agentScopes].filter(
-        ([, scope]) => scope.parentSessionId === queue[index],
-      );
-      for (const [id] of children) {
-        this.collectBranchSessionIds(id, sessionTree).forEach((childId) => {
-          if (ids.has(childId)) return;
-          ids.add(childId);
-          queue.push(childId);
-        });
-      }
-    }
+    const agentScopes = await this.sessionRepo.listDeclaredSessionScopes(
+      userId,
+      this.scopedSessionRoots,
+    );
+    const scopedSessions = Array.from(agentScopes, ([sessionId, { parentSessionId }]) => ({
+      sessionId,
+      parentSessionId,
+    }));
+    const ids = collectSessionTreeBranches(sessionTree, rootSessionIds, scopedSessions);
     return new Map(
-      [...ids].map((id) => [
+      ids.map((id) => [
         id,
         this.sessionRepo.resolveSessionPersistenceContext(userId, id, { sessionTree, agentScopes }),
       ]),
     );
   }
 
-  async deleteSessionBranch({ userId, sessionIds }) {
-    const rootSessionIds = Array.isArray(sessionIds)
-      ? [...new Set(sessionIds.map((id) => text(id)))]
-      : [];
-    if (!rootSessionIds.length || rootSessionIds.some((id) => !id)) {
+  async recordBranchDeletion(userId, key, roots, executeCleanupStage) {
+    for (const root of roots) await this.sessionRepo.assertSessionWritable(userId, root);
+    let branch = await this.planSessionBranchDeletion(userId, roots);
+    for (;;) {
+      const planned = [...branch.keys()];
+      const recorded = await this.sessionRepo.withSessionLifecycleMutations(
+        userId,
+        planned,
+        async () => {
+          for (const root of roots) await this.sessionRepo.assertSessionWritable(userId, root);
+          const locked = await this.planSessionBranchDeletion(userId, roots);
+          if (branch.size !== locked.size || [...locked.keys()].some((id) => !branch.has(id))) {
+            branch = locked;
+            return null;
+          }
+          const targets = [];
+          for (const [sessionId, persistenceContext] of locked) {
+            targets.push(
+              await this.sessionRepo.resolveSessionDeletionTarget(
+                userId,
+                sessionId,
+                persistenceContext,
+              ),
+            );
+          }
+          const pluginHandlerIds = await executeCleanupStage({
+            userId,
+            deletionKey: key,
+            stage: STAGE.PLAN_PLUGINS,
+            deletedSessionIds: planned,
+          });
+          return this.sessionRepo.recordSessionBranchDeletion(
+            userId,
+            key,
+            targets,
+            pluginHandlerIds,
+          );
+        },
+      );
+      if (recorded) return recorded;
+    }
+  }
+
+  async deleteSessionBranch({ userId, sessionIds }, executeCleanupStage) {
+    requireSessionBranchDeletionExecutor(executeCleanupStage);
+    if (!Array.isArray(sessionIds) || !sessionIds.length) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
         code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
       });
     }
-
-    let toDelete = await this.planSessionBranchDeletion(userId, rootSessionIds);
-    let deletedSessionIds = null;
-    while (!deletedSessionIds) {
-      const planned = [...toDelete.keys()];
-      deletedSessionIds = await this.sessionRepo.withSessionLifecycleMutations(
-        userId,
-        planned,
-        async () => {
-          const lockedBranch = await this.planSessionBranchDeletion(userId, rootSessionIds);
-          const plannedSet = new Set(planned);
-          const branchChanged =
-            lockedBranch.size !== plannedSet.size ||
-            [...lockedBranch.keys()].some((id) => !plannedSet.has(id));
-          if (branchChanged) {
-            toDelete = lockedBranch;
-            return null;
-          }
-          await this.sessionRepo.markSessionsDeleted(userId, planned);
-          for (const id of planned) {
-            await this.sessionRepo.delete(userId, id, {
-              persistenceContext: lockedBranch.get(id),
-            });
-          }
-          await this.treeRepo.withLock(userId, async () => {
-            const sessionTree = await this.treeRepo.getTree(userId);
-            const nextNodes = {};
-            for (const [id, node] of Object.entries(sessionTree.nodes)) {
-              if (!plannedSet.has(id)) nextNodes[id] = node;
-            }
-            await this.treeRepo.saveTree(userId, { nodes: nextNodes });
-          });
-          return planned;
-        },
-      );
-    }
-
-    return {
-      ok: true,
-      deletedSessionIds,
-    };
+    const key = sessionBranchDeletionKey(sessionIds);
+    return this.sessionRepo.withSessionBranchDeletion(userId, key, async () => {
+      let operation = await this.sessionRepo.readSessionBranchDeletion(userId, key);
+      if (!operation)
+        operation = await this.recordBranchDeletion(
+          userId,
+          key,
+          [...new Set(sessionIds)],
+          executeCleanupStage,
+        );
+      const deletedSessionIds = operation.targets.map(({ sessionId }) => sessionId);
+      if (operation.nextStage === STAGE.DIRECTORIES) {
+        await this.sessionRepo.releaseDeletedSessionReads(userId, operation.targets);
+        for (const directory of deletionDirectories(operation.targets)) {
+          await this.sessionRepo.removeDeletedSessionDirectory(userId, directory);
+        }
+        operation = await this.sessionRepo.advanceSessionBranchDeletion(
+          userId,
+          key,
+          operation.nextStage,
+        );
+      }
+      if (operation.nextStage === STAGE.TREE) {
+        const deleting = new Set(deletedSessionIds);
+        await this.treeRepo.updateTree(userId, ({ nodes }) => ({
+          nodes: Object.fromEntries(Object.entries(nodes).filter(([id]) => !deleting.has(id))),
+        }));
+        operation = await this.sessionRepo.advanceSessionBranchDeletion(
+          userId,
+          key,
+          operation.nextStage,
+        );
+      }
+      while (operation.nextStage !== STAGE.COMPLETE) {
+        await executeCleanupStage({
+          userId,
+          deletionKey: key,
+          stage: operation.nextStage,
+          deletedSessionIds,
+          pluginHandlerIds: operation.pluginHandlerIds,
+        });
+        operation = await this.sessionRepo.advanceSessionBranchDeletion(
+          userId,
+          key,
+          operation.nextStage,
+        );
+      }
+      return { ok: true, deletedSessionIds };
+    });
   }
 }

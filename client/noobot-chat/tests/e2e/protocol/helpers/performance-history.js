@@ -4,27 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 import { PERF_HISTORY } from "../../../../../../scripts/mock-model-service/performance-contract.mjs";
-import { createSessionServices, createSessionFacade } from "noobot-agent/session";
-import { AttachmentService } from "noobot-agent/attach";
-import { collectNoobotPluginScopedSessionRootDeclarations } from "@noobot/plugin-runtime";
-import { resolveScopedSessionRoots } from "@noobot/workspace-protocol";
-import { workspaceRoot } from "./persistence-audit.js";
+import { createSessionFacade } from "noobot-agent/session";
 
-export async function seedPerformanceHistory({ userId, sessionId }) {
+const HISTORY_MESSAGES_PER_STORAGE_BATCH = 2;
+
+export async function seedPerformanceHistory(runtime, { userId, sessionId }) {
   const {
     turns: historyTurns,
     checkpointsPerTurn,
     messagesPerCheckpoint,
     minimumContentBytes,
   } = PERF_HISTORY;
-  const globalConfig = { workspaceRoot: workspaceRoot() };
-  const runtime = createSessionServices(globalConfig, {
-    now: () => new Date().toISOString(),
-    attachmentService: new AttachmentService(globalConfig),
-    scopedSessionRoots: resolveScopedSessionRoots(
-      await collectNoobotPluginScopedSessionRootDeclarations(),
-    ),
-  });
   const session = createSessionFacade(runtime);
   const contentBytes =
     Math.ceil(minimumContentBytes / (historyTurns * checkpointsPerTurn * messagesPerCheckpoint)) +
@@ -56,7 +46,14 @@ export async function seedPerformanceHistory({ userId, sessionId }) {
         };
       });
       let startedAt = performance.now();
-      await session.appendTurns({ userId, sessionId, persistenceScope: null, turns });
+      for (let index = 0; index < turns.length; index += HISTORY_MESSAGES_PER_STORAGE_BATCH) {
+        await session.appendTurns({
+          userId,
+          sessionId,
+          persistenceScope: null,
+          turns: turns.slice(index, index + HISTORY_MESSAGES_PER_STORAGE_BATCH),
+        });
+      }
       timing.appendMs += performance.now() - startedAt;
       persistedMessageUids.push(...turns.map((message) => message.messageUid));
       startedAt = performance.now();
@@ -76,14 +73,17 @@ export async function seedPerformanceHistory({ userId, sessionId }) {
       timing.checkpointMs += performance.now() - startedAt;
     }
     const verificationStartedAt = performance.now();
-    const query = {
+    const persistenceContext = runtime.createSessionPersistenceContext({
       userId,
       sessionId,
       persistenceScope: null,
-      turnScopeId,
-      dialogProcessId: turnScopeId,
-    };
-    const state = await session.getTurnSummaryCheckpointState(query);
+    });
+    await using reader = await runtime.repositories.sessionRepository.requireSessionReader(
+      userId,
+      sessionId,
+      { persistenceContext },
+    );
+    const state = await reader.readCheckpointState(turnScopeId);
     if (
       state.checkpointRevision !== checkpointsPerTurn ||
       state.receipts.length !== checkpointsPerTurn
@@ -97,25 +97,29 @@ export async function seedPerformanceHistory({ userId, sessionId }) {
       )
         throw new Error("performance history checkpoint identity mismatch");
       historyCheckpoints += 1;
+    }
+    for (
+      let offset = 0;
+      offset < persistedMessageUids.length;
+      offset += HISTORY_MESSAGES_PER_STORAGE_BATCH
+    ) {
       const messageUids = persistedMessageUids.slice(
-        checkpoint * messagesPerCheckpoint,
-        (checkpoint + 1) * messagesPerCheckpoint,
+        offset,
+        offset + HISTORY_MESSAGES_PER_STORAGE_BATCH,
       );
-      const sources = await session.getSessionMessageSources({
-        ...query,
-        turnScopeIds: [turnScopeId],
-        messageUids,
-      });
-      if (sources.length !== messageUids.length)
+      const records = await reader.readMessages({ messageUids });
+      if (records.length !== messageUids.length)
         throw new Error("performance history message count mismatch");
-      for (let index = 0; index < sources.length; index += 1) {
-        const message = sources[index];
+      for (const [index, record] of records.entries()) {
+        const messageUid = messageUids[index];
+        if (record === null)
+          throw new Error(`performance history message is missing: ${messageUid}`);
+        const { message } = record;
         if (
-          message.messageUid !== messageUids[index] ||
+          message.messageUid !== messageUid ||
           message.turnScopeId !== turnScopeId ||
           message.dialogProcessId !== turnScopeId ||
           message.summarized !== true ||
-          typeof message.content !== "string" ||
           message.content !== content
         )
           throw new Error("performance history message identity or content mismatch");

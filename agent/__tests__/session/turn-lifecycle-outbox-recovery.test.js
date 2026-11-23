@@ -7,8 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { readFile, readdir, rename, utimes } from "node:fs/promises";
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { readFile, rename } from "node:fs/promises";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import { createSessionFacade } from "../../src/session/index.js";
 import { createTestSessionServices } from "../helpers/session-services.js";
@@ -205,15 +204,6 @@ for (const stage of ["acceptance", "terminal"]) {
       );
       assert.equal(child.error, undefined, child.stderr);
       assert.equal(child.signal, "SIGKILL", child.stderr);
-      const abandoned = new Date(Date.now() - 2 * TIME_THRESHOLDS.fileMutation.lockStaleMs);
-      const entries = await readdir(h.root, { recursive: true, withFileTypes: true });
-      const locks = entries.filter(
-        (entry) => entry.isFile() && /\.(mutation-)?lock$/.test(entry.name),
-      );
-      assert.ok(locks.length > 0, "killed writer must leave its lock behind");
-      for (const entry of locks) {
-        await utimes(path.join(entry.parentPath, entry.name), abandoned, abandoned);
-      }
       const bytes = await readFile(h.headPath, "utf8");
       const restarted = h.restart();
       const pending = await restarted.getPendingAuthorityEvents({ ...owner, consumerId });
@@ -227,7 +217,7 @@ for (const stage of ["acceptance", "terminal"]) {
   );
 }
 
-test("compacted and explicitly removed lifecycle events are not recreated from receipts", async (t) => {
+test("compacted lifecycle events are not recreated from receipts", async (t) => {
   const h = await setup(t);
   const accepted = await h.facade.applyTurnLifecycleEvent(action());
   const receipt = deliveryReceiptOf(accepted.envelope);
@@ -244,23 +234,22 @@ test("compacted and explicitly removed lifecycle events are not recreated from r
   });
   assert.equal(compacted.removed, 1, JSON.stringify(compacted));
   assert.deepEqual((await h.facade.getPendingAuthorityEvents({ ...owner, consumerId })).events, []);
-  await h.facade.applyTurnLifecycleEvent({
+  const started = await h.facade.applyTurnLifecycleEvent({
     ...event(TURN_EVENT.PROCESSING_STARTED, "started", 1, { phase: TURN_PHASE.PROCESSING }),
     ...owner,
     dialogProcessId: accepted.dialogProcessId,
   });
-  const persistenceContext = h.sessionRepo.treePersistenceContext(owner.userId, owner.sessionId);
-  const reader = await h.sessionRepo.requireSessionReader(owner.userId, owner.sessionId, {
-    persistenceContext,
+  const delivered = await h.facade.acknowledgeAuthorityEvents({
+    ...owner,
+    consumerId,
+    acknowledgements: [deliveryReceiptOf(started.envelope)],
   });
-  const removed = await h.sessionRepo.commitChanges(owner.userId, owner.sessionId, {
-    persistenceContext,
-    expectedGeneration: reader.generation,
-    operationId: "remove-turn-outbox",
-    committedAt: "2026-07-19T00:00:00.000Z",
-    changes: { outboxTurnRemoval: { turnScopeIds: ["t1"] } },
+  assert.equal(delivered.delivered, 1);
+  const removed = await h.facade.compactAuthorityEvents({
+    ...owner,
+    retainDeliveredAfter: "2999-01-01T00:00:00.000Z",
   });
-  assert.equal(removed.result.outboxTurnRemoval.removed, 1);
+  assert.equal(removed.removed, 1);
   const replay = await h.restart().applyTurnLifecycleEvent(action());
   assert.equal(replay.deduplicated, true);
   assert.deepEqual(

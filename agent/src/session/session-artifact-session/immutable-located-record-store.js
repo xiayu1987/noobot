@@ -41,10 +41,10 @@ import { ImmutableSegmentStore } from "./immutable-segment-store.js";
 import { ImmutableTransactionGraph } from "./immutable-transaction-graph.js";
 import {
   ImmutableRadixIndex,
-  readImmutableIndexPage,
   readImmutableIndexPages,
+  validateImmutableIndexPage,
 } from "./immutable-radix-index.js";
-import { recordStorageWork } from "./storage-transaction.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 import { ImmutableValueStore } from "./immutable-value-store.js";
 import { runStorageBatch } from "./storage-batch-results.js";
 import {
@@ -73,10 +73,10 @@ class LocationPages {
   async readPage(reference) {
     this.requireReference(reference);
     const staged = this.owner.writes.getStore()?.records.records.get(reference);
-    return this.owner.decodeLocationPage(
-      staged ?? (await this.owner.loadPhysical(reference)),
-      reference,
-    );
+    if (staged !== undefined) return this.owner.decodeLocationPage(staged, reference);
+    const bytes = await this.owner.loadPhysical(reference);
+    recordStorageWork("immutableLocationPageReadBytes", bytes.length);
+    return this.owner.decodeLocationPage(bytes, reference);
   }
 
   async readIndexPage(reference, prefix) {
@@ -90,7 +90,10 @@ class LocationPages {
   async putIndexPage(page, prefix) {
     const bytes = this.owner.encodeLocationPage(page);
     this.owner.requireLocationPagePath(page, prefix);
-    const reference = this.owner.batch("publishing").records.stage(bytes);
+    const records = this.owner.batch("publishing").records;
+    const before = records.bytes;
+    const reference = records.stage(bytes);
+    recordStorageWork("immutableLocationPageStagedBytes", records.bytes - before);
     this.owner.rememberIndexPage(reference, prefix, "physical", page);
     return reference;
   }
@@ -115,8 +118,8 @@ export class ImmutableLocatedRecordStore extends ImmutableValueStore {
     return requireImmutableLocationPagePath(page, prefix);
   }
 
-  constructor(sessionDir) {
-    super();
+  constructor(sessionDir, objectRead) {
+    super(objectRead);
     this.segments = new ImmutableSegmentStore(sessionDir);
     this.writes = new AsyncLocalStorage();
     this.snapshots = new AsyncLocalStorage();
@@ -347,19 +350,30 @@ export class ImmutableLocatedRecordStore extends ImmutableValueStore {
     }
   }
 
-  async readIndexPage(reference, prefix) {
-    this.requireReference(reference);
+  activeReadBatch() {
     const batch = this.writes.getStore();
     if (batch && !batch.active) throw new Error("Located durability batch has ended");
-    if (batch?.graph.objects.has(reference))
-      return this.readCachedIndexPage(reference, prefix, "staged", () =>
-        this.readIndexEntry(reference, prefix),
+    return batch;
+  }
+
+  async readIndexPage(reference, prefix) {
+    this.requireReference(reference);
+    const staged = this.activeReadBatch()?.graph.objects.get(reference);
+    const location = staged === undefined ? await this.locateCommittedRecord(reference) : "staged";
+    return this.readResolvedIndexPage(reference, prefix, location, staged);
+  }
+
+  readResolvedIndexPage(reference, prefix, location, staged) {
+    return this.readCachedIndexPage(reference, prefix, location, async () => {
+      recordStorageWork("immutableIndexPageReads");
+      const bytes = await this.readLocatedObject(reference, location, staged);
+      const page = validateImmutableIndexPage(
+        decodeImmutableJsonBytes(bytes, reference),
+        prefix,
+        this.requireReference.bind(this),
       );
-    const { locationRoot } = this.snapshot();
-    const location = await this.locateRecord(locationRoot, reference);
-    return this.readCachedIndexPage(reference, prefix, location, () =>
-      this.readIndexEntry(reference, prefix),
-    );
+      return { page, size: bytes.length };
+    });
   }
 
   async putIndexPage(page, prefix) {
@@ -372,13 +386,26 @@ export class ImmutableLocatedRecordStore extends ImmutableValueStore {
     const pages = [];
     for (let offset = 0; offset < nodes.length; offset += IMMUTABLE_VALUE_READ_BATCH_RECORDS) {
       const selected = nodes.slice(offset, offset + IMMUTABLE_VALUE_READ_BATCH_RECORDS);
-      const batch = this.writes.getStore();
-      if (batch && !batch.active) throw new Error("Located durability batch has ended");
+      const batch = this.activeReadBatch();
+      for (const { reference } of selected) this.requireReference(reference);
       const committed = selected
         .filter(({ reference }) => !batch?.graph.objects.has(reference))
         .map(({ reference }) => reference);
-      if (committed.length) await this.locateRecords(this.snapshot().locationRoot, committed);
-      pages.push(...(await readImmutableIndexPages(this, selected)));
+      const locations = committed.length
+        ? await this.locateRecords(this.snapshot().locationRoot, committed)
+        : new Map();
+      pages.push(
+        ...(await readImmutableIndexPages(
+          {
+            readIndexPage: (reference, prefix) => {
+              const staged = batch?.graph.objects.get(reference);
+              const location = staged === undefined ? locations.get(reference) : "staged";
+              return this.readResolvedIndexPage(reference, prefix, location, staged);
+            },
+          },
+          selected,
+        )),
+      );
     }
     return pages;
   }
@@ -388,11 +415,6 @@ export class ImmutableLocatedRecordStore extends ImmutableValueStore {
       page: freezeImmutableIndexPage(page),
       size: Buffer.byteLength(JSON.stringify(page)),
     });
-  }
-
-  async readIndexEntry(reference, prefix) {
-    const page = await readImmutableIndexPage(this, reference, prefix);
-    return { page, size: Buffer.byteLength(JSON.stringify(page)) };
   }
 
   async readCachedIndexPage(reference, prefix, snapshotRoot, load) {
@@ -427,14 +449,19 @@ export class ImmutableLocatedRecordStore extends ImmutableValueStore {
   }
 
   async loadPhysical(reference) {
-    return this.repairedPhysical(reference) ?? this.segments.read(reference);
+    return this.repairedPhysical(reference) ?? this.#readSegment(reference);
+  }
+
+  #readSegment(reference) {
+    this.repairs.getStore()?.signal?.throwIfAborted();
+    return this.segments.read(reference);
   }
 
   async readPhysical(reference) {
     const repaired = this.repairedPhysical(reference);
     if (repaired !== undefined) return repaired;
     const entry = await this.readScopedEntry(reference, async () => ({
-      bytes: await this.segments.read(reference),
+      bytes: await this.#readSegment(reference),
     }));
     return entry.shared ? Buffer.from(entry.bytes) : entry.bytes;
   }
@@ -527,22 +554,29 @@ export class ImmutableLocatedRecordStore extends ImmutableValueStore {
     return locations;
   }
 
+  readLocatedObject(reference, location, staged) {
+    return this.readObject(reference, this.#loadObject, location, staged);
+  }
+
+  #loadObject(location, staged) {
+    return staged === undefined ? this.readPhysical(location) : Buffer.from(staged);
+  }
+
+  locateCommittedRecord(reference) {
+    return this.locateRecord(this.snapshot().locationRoot, reference);
+  }
+
   async read(reference) {
     this.requireReference(reference);
-    const batch = this.writes.getStore();
-    if (batch && !batch.active) throw new Error("Located durability batch has ended");
-    const staged = batch?.graph.objects.get(reference);
-    if (staged !== undefined) return Buffer.from(staged);
-    const { locationRoot } = this.snapshot();
-    const location = await this.locateRecord(locationRoot, reference);
-    return this.readPhysical(location);
+    const staged = this.activeReadBatch()?.graph.objects.get(reference);
+    const location = staged === undefined ? await this.locateCommittedRecord(reference) : "staged";
+    return this.readLocatedObject(reference, location, staged);
   }
 
   async readMany(references) {
     const unique = [...new Set(references)];
     for (const reference of unique) this.requireReference(reference);
-    const batch = this.writes.getStore();
-    if (batch && !batch.active) throw new Error("Located durability batch has ended");
+    const batch = this.activeReadBatch();
     const committed = unique.filter((reference) => !batch?.graph.objects.has(reference));
     const locations = committed.length
       ? await this.locateRecords(this.snapshot().locationRoot, committed)
@@ -551,12 +585,10 @@ export class ImmutableLocatedRecordStore extends ImmutableValueStore {
     const records = new Map(unique.map((reference) => [reference, undefined]));
     await runStorageBatch(unique, async (reference) => {
       const staged = batch?.graph.objects.get(reference);
-      if (staged !== undefined) {
-        records.set(reference, Buffer.from(staged));
-        return;
-      }
-      const location = locations.get(reference);
-      records.set(reference, await this.readPhysical(location));
+      records.set(
+        reference,
+        await this.readLocatedObject(reference, locations.get(reference), staged),
+      );
     });
     return records;
   }

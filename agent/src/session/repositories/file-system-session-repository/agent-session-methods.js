@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
+import { AGENT_SCOPED_SESSION_ROOTS, isWorkspacePathSegment } from "@noobot/workspace-protocol";
 import {
-  IMMUTABLE_SESSION_FORMAT_FILE,
-  IMMUTABLE_SESSION_HEAD_FILE,
-} from "@noobot/session-protocol/immutable-storage";
-import { AGENT_SCOPED_SESSION_ROOTS } from "@noobot/workspace-protocol";
-import { assertSessionScopeIdentity } from "@noobot/session-protocol";
+  isSessionDeletionStagingName,
+  SESSION_DELETION_STAGE,
+  sessionTombstoneBranchDeletions,
+} from "@noobot/workspace-protocol/session-tombstone";
+import { readSessionDirectory } from "../../../workspace-lifecycle/session-directory-walk.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { fatalSystemError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
@@ -18,8 +19,6 @@ import {
   createPersistenceContext,
   ScopedSessionLocationResolver,
 } from "../../session-location-resolver.js";
-import { ImmutableSessionStore } from "../../session-artifact-session/immutable-session-store.js";
-import { immutableStorageError } from "../../session-artifact-session/immutable-object-store.js";
 import { sessionTreeNodeMissingError } from "./access-methods.js";
 
 function persistenceOwnerConflictError(sessionId, owners) {
@@ -30,6 +29,30 @@ function persistenceOwnerConflictError(sessionId, owners) {
 }
 
 class AgentSessionMethods {
+  _recordScopedSession(scopes, sessionId, scope) {
+    const existing = scopes.get(sessionId);
+    if (existing)
+      throw persistenceOwnerConflictError(sessionId, [existing.relativeDir, scope.relativeDir]);
+    scopes.set(sessionId, scope);
+  }
+
+  _createDeclaredSessionScope({ userId, sessionId, parentSessionId, relativeDir, allowedRoot }) {
+    const locationResolver = new ScopedSessionLocationResolver({
+      pathResolver: this.pathResolver,
+      userId,
+      sessionId,
+      parentSessionId,
+      relativeDir,
+      allowedRoot,
+    });
+    return {
+      allowedRoot,
+      relativeDir,
+      parentSessionId,
+      persistenceContext: createPersistenceContext({ locationResolver }),
+    };
+  }
+
   async _listAgentRootEntries(userId, allowedRoot) {
     const basePath = this.pathResolver.resolveBasePath(userId);
     try {
@@ -44,54 +67,88 @@ class AgentSessionMethods {
     const basePath = this.pathResolver.resolveBasePath(userId);
     const relativeDir = path.join(allowedRoot, sessionId);
     const sessionDir = path.join(basePath, relativeDir);
-    const hasHead = await this.storageService.exists(
-      path.join(sessionDir, IMMUTABLE_SESSION_HEAD_FILE),
-    );
-    if (
-      !hasHead &&
-      !(await this.storageService.exists(path.join(sessionDir, IMMUTABLE_SESSION_FORMAT_FILE)))
-    )
-      return null;
-    const store = await ImmutableSessionStore.open({ sessionDir, sessionId });
-    const snapshot = await store.snapshot();
-    const session = await store.get(snapshot, "metadata", "session");
-    if (!session) throw immutableStorageError("Immutable session metadata is missing");
-    assertSessionScopeIdentity({ session, sessionId, parentSessionId: session.parentSessionId });
-    const locationResolver = new ScopedSessionLocationResolver({
-      pathResolver: this.pathResolver,
+    const session = await this.sessionReaderAccess.readPlacement({ sessionDir, sessionId });
+    if (session === null) return null;
+    return this._createDeclaredSessionScope({
       userId,
       sessionId,
       parentSessionId: session.parentSessionId,
-      scopeId: `agent:${sessionId}`,
       relativeDir,
       allowedRoot,
     });
-    return {
-      allowedRoot,
-      parentSessionId: session.parentSessionId,
-      persistenceContext: createPersistenceContext({ locationResolver }),
-    };
   }
 
-  async _collectAgentRootScopes(userId, allowedRoot, scopes) {
+  async _collectAgentRootScopes(userId, allowedRoot, scopes, excludedDirectories) {
     const entries = await this._listAgentRootEntries(userId, allowedRoot);
-    for (const entry of entries.filter((item) => item.isDirectory())) {
+    for (const entry of entries) {
+      if (!entry.isDirectory() || isSessionDeletionStagingName(entry.name)) continue;
+      if (excludedDirectories.has(path.join(allowedRoot, entry.name))) continue;
       const scope = await this._readAgentSessionScope(userId, allowedRoot, entry.name);
       if (scope === null) continue;
-      const existing = scopes.get(entry.name);
-      if (existing) {
-        throw persistenceOwnerConflictError(entry.name, [existing.allowedRoot, allowedRoot]);
-      }
-      scopes.set(entry.name, scope);
+      this._recordScopedSession(scopes, entry.name, scope);
     }
   }
 
-  async listAgentSessionScopes(userId) {
+  async listAgentSessionScopes(userId, excludedDirectories = new Set()) {
     const scopes = new Map();
     for (const allowedRoot of AGENT_SCOPED_SESSION_ROOTS) {
-      await this._collectAgentRootScopes(userId, allowedRoot, scopes);
+      await this._collectAgentRootScopes(userId, allowedRoot, scopes, excludedDirectories);
     }
     return scopes;
+  }
+
+  async listDeclaredSessionScopes(userId, scopedSessionRoots, excludedDirectories = new Set()) {
+    const scopes = await this.listAgentSessionScopes(userId, excludedDirectories);
+    const base = this.pathResolver.resolveBasePath(userId);
+    const scan = async (allowedRoot, relativeDir) => {
+      if (excludedDirectories.has(relativeDir)) return;
+      const sessionDir = path.join(base, relativeDir);
+      const { authority, children } = await readSessionDirectory(sessionDir);
+      if (authority !== null) {
+        const placement = await this.sessionReaderAccess.readPlacement({ sessionDir });
+        if (placement !== null) {
+          this._recordScopedSession(
+            scopes,
+            placement.sessionId,
+            this._createDeclaredSessionScope({ userId, relativeDir, allowedRoot, ...placement }),
+          );
+        }
+      }
+      for (const child of children) {
+        if (isWorkspacePathSegment(child.name))
+          await scan(allowedRoot, path.join(relativeDir, child.name));
+      }
+    };
+    for (const root of scopedSessionRoots) {
+      if (!AGENT_SCOPED_SESSION_ROOTS.includes(root)) await scan(root, root);
+    }
+    return scopes;
+  }
+
+  async listExecutionSessionScopes(userId, scopedSessionRoots) {
+    const deletionState = await this._readDeletedSessions(userId);
+    const excludedDirectories = new Set(
+      Object.values(sessionTombstoneBranchDeletions(deletionState))
+        .filter(({ nextStage }) => nextStage === SESSION_DELETION_STAGE.DIRECTORIES)
+        .flatMap(({ targets }) => targets.map(({ directory }) => path.join(...directory))),
+    );
+    const sessionTree = await this.sessionTreeRepository.getTree(userId);
+    const agentScopes = await this.listDeclaredSessionScopes(
+      userId,
+      scopedSessionRoots,
+      excludedDirectories,
+    );
+    const { sessions: deleted } = deletionState;
+    const ids = new Set([...Object.keys(sessionTree.nodes), ...agentScopes.keys()]);
+    return Array.from(ids)
+      .filter((sessionId) => !Object.hasOwn(deleted, sessionId))
+      .map((sessionId) => ({
+        sessionId,
+        persistenceContext: this.resolveSessionPersistenceContext(userId, sessionId, {
+          sessionTree,
+          agentScopes,
+        }),
+      }));
   }
 
   resolveSessionPersistenceContext(userId, sessionId, { sessionTree, agentScopes }) {

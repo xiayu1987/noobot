@@ -9,8 +9,25 @@ import { TURN_EVENT } from "./lifecycle/turn-event.js";
 import { TURN_ACTION } from "./lifecycle/turn-action.js";
 import { acceptedMessageIdentityFieldsFor } from "./identity/message-identity-schema.js";
 import { isMessageOrigin } from "./message-entity-contract.js";
+import { decideAggregateConcurrency } from "./command/session-command.js";
 
 const ACCEPTED_USER_IDENTITY_FIELDS = acceptedMessageIdentityFieldsFor("user");
+
+export function decideTurnAcceptanceVersionAdvance(event, messages) {
+  return (
+    event.eventType === TURN_EVENT.ACTION_ACCEPTED &&
+    messages.some(
+      (message) => message.role === "user" && message.turnCommit?.commandId === event.causationId,
+    )
+  );
+}
+
+export function requireNextTurnAcceptanceVersion(aggregateVersion) {
+  const decision = decideAggregateConcurrency({ expectedAggregateVersion: null, aggregateVersion });
+  if (!decision.allowed || !Number.isSafeInteger(decision.nextAggregateVersion))
+    throw new TypeError("Invalid aggregate version for turn acceptance");
+  return decision.nextAggregateVersion;
+}
 
 function collectAcceptedDialogProcessErrors(event) {
   if (event.sessionCaller === SESSION_CALLER.USER) {

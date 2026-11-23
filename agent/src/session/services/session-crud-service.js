@@ -4,17 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
-import {
-  resolveAuthoritativeTurnTerminal,
-  resolveIndexedTurnTerminal,
-} from "@noobot/authoritative-state/application";
+import { resolveIndexedTurnTerminal } from "@noobot/authoritative-state/application";
 import {
   SESSION_NOT_FOUND_REASON,
-  createSessionArtifactNotFoundError,
-  createSessionUnavailableReason,
   createTurnTerminalResolution,
   requireTurnTerminalResolutionIdentity,
   requireAcceptedTurnRecord,
+  requireSessionAggregateVersion,
 } from "@noobot/session-protocol";
 import { requireTurnLookupKey } from "@noobot/session-protocol/turn-lookup-key";
 import {
@@ -22,8 +18,10 @@ import {
   createMissingSessionDetailDocument,
   createSessionDetailDocument,
 } from "@noobot/session-protocol/session-detail";
-import { buildThinkingDetailPayload } from "../session-thinking-detail.js";
-import { requireSessionTreeNode } from "@noobot/workspace-protocol/session-tree";
+import {
+  collectSessionTreeBranches,
+  requireSessionTreeNode,
+} from "@noobot/workspace-protocol/session-tree";
 import { projectSessionAttachmentState } from "./session-attachment-projection.js";
 import { isFunction, text } from "@noobot/shared/value";
 
@@ -82,14 +80,65 @@ export class SessionCrudService {
     return this.sessionRepo.locateSessionScope(userId, sessionId, persistenceContext);
   }
 
-  async getSessionThinkingDetail({ userId, sessionId, turnScopeId, dialogProcessId }) {
+  async readSessionAggregateVersion({ userId, sessionId }) {
+    await using reader = await this.sessionRepo.requireSessionReader(userId, sessionId, {
+      persistenceContext: this.sessionRepo.treePersistenceContext(userId, sessionId),
+    });
+    const { aggregateVersion } = await reader.readMetadata();
+    return requireSessionAggregateVersion(aggregateVersion);
+  }
+
+  async getSessionDetailStart({ userId, request }) {
+    return this.sessionRepo.readSessionDetailStart(userId, request, {
+      persistenceContext: this.sessionRepo.treePersistenceContext(userId, request.sessionId),
+    });
+  }
+
+  async getSessionDisplayPage({ userId, request }) {
+    return this.sessionRepo.readSessionDisplayPage(userId, request, {
+      persistenceContext: this.sessionRepo.treePersistenceContext(userId, request.sessionId),
+    });
+  }
+
+  async releaseSessionDisplayPage({ userId, request }) {
+    return this.sessionRepo.releaseSessionDisplayPage(userId, request);
+  }
+
+  async getSessionDisplayArtifactPage({ userId, request }) {
+    return this.sessionRepo.readSessionDisplayArtifactPage(userId, request, {
+      persistenceContext: this.sessionRepo.treePersistenceContext(userId, request.sessionId),
+    });
+  }
+
+  async releaseSessionDisplayArtifactPage({ userId, request }) {
+    return this.sessionRepo.releaseSessionDisplayArtifactPage(userId, request);
+  }
+
+  async getSessionThinkingDetail({
+    userId,
+    sessionId,
+    turnScopeId,
+    dialogProcessId,
+    cursor,
+    limit,
+    maxBytes,
+  }) {
     const lookupKey = requireTurnLookupKey({ turnScopeId, dialogProcessId });
     const persistenceContext = this.sessionRepo.treePersistenceContext(userId, sessionId);
-    const turn = await this.sessionRepo.readSessionTurn(userId, sessionId, {
+    return this.sessionRepo.readSessionThinkingDetail(userId, sessionId, {
       lookupKey,
+      cursor,
+      limit,
+      maxBytes,
       persistenceContext,
     });
-    return buildThinkingDetailPayload(turn);
+  }
+
+  async releaseSessionThinkingDetail({ userId, sessionId, turnScopeId, dialogProcessId, cursor }) {
+    return this.sessionRepo.releaseSessionThinkingDetail(userId, sessionId, {
+      lookupKey: requireTurnLookupKey({ turnScopeId, dialogProcessId }),
+      cursor,
+    });
   }
 
   async resolveTurnTerminalState({
@@ -104,25 +153,17 @@ export class SessionCrudService {
       persistenceContext,
       turnScopeId: identity.turnScopeId,
     });
-    if (!source) {
+    if (source === null) {
       return createTurnTerminalResolution({
         ...identity,
         reason: SESSION_NOT_FOUND_REASON,
         generatedAt: this.now(),
       });
     }
-    if (Object.hasOwn(source, "turn"))
-      return resolveIndexedTurnTerminal({
-        turn: source.turn,
-        turnTimings: source.turnTimings,
-        aggregateVersion: source.aggregateVersion,
-        generatedAt: this.now(),
-        ...identity,
-      });
-    return resolveAuthoritativeTurnTerminal({
-      lifecycle: source.turnLifecycle,
+    return resolveIndexedTurnTerminal({
+      turn: source.turn,
       turnTimings: source.turnTimings,
-      aggregateVersion: source.aggregateVersion,
+      aggregateVersion: requireSessionAggregateVersion(source.aggregateVersion),
       generatedAt: this.now(),
       ...identity,
     });
@@ -133,10 +174,7 @@ export class SessionCrudService {
     if (!Object.hasOwn(sessionTree.nodes, sessionId)) {
       return createMissingSessionDetailDocument({ sessionId });
     }
-    const branchSessionIds = this.sessionTreeService.collectBranchSessionIds(
-      sessionId,
-      sessionTree,
-    );
+    const branchSessionIds = collectSessionTreeBranches(sessionTree, [sessionId]);
     const sessions = [];
     for (const branchSessionId of branchSessionIds) {
       sessions.push(
@@ -150,51 +188,21 @@ export class SessionCrudService {
   }
 
   async _readSessionDetailEntry(userId, node) {
-    let summary;
+    let projected;
     try {
-      summary = await this.sessionRepo.readSessionDisplaySummary(userId, node.sessionId, {
+      const summary = await this.sessionRepo.readSessionDisplaySummary(userId, node.sessionId, {
         persistenceContext: this.sessionRepo.treePersistenceContext(userId, node.sessionId),
+        includeThinkingTimeline: true,
+      });
+      projected = await projectSessionAttachmentState({
+        attachmentService: this.attachmentService,
+        userId,
+        session: summary,
       });
     } catch (error) {
       return this.sessionRepo.buildUnavailableSessionSummary(node, error);
     }
-    return createAvailableSessionDetailEntry(
-      await projectSessionAttachmentState({
-        attachmentService: this.attachmentService,
-        userId,
-        session: summary,
-      }),
-    );
-  }
-
-  async getAllSessionsData({ userId, failures }) {
-    const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
-    const sessionIds = await this.listSessionIds({ userId });
-    const reads = await Promise.all(
-      sessionIds.map(async (sessionId) => {
-        requireSessionTreeNode(sessionTree, sessionId);
-        try {
-          const bundle = await this.getSessionBundle({
-            userId,
-            sessionId,
-            persistenceContext: this.sessionRepo.treePersistenceContext(userId, sessionId),
-          });
-          if (!bundle.exists) throw createSessionArtifactNotFoundError("session manifest");
-          return { session: bundle.session };
-        } catch (error) {
-          return { failure: { sessionId, ...createSessionUnavailableReason(error) } };
-        }
-      }),
-    );
-    const sessionList = [];
-    for (const read of reads) {
-      if (read.failure) failures.push(read.failure);
-      else sessionList.push(read.session);
-    }
-    sessionList.sort((leftSession, rightSession) =>
-      rightSession.updatedAt.localeCompare(leftSession.updatedAt),
-    );
-    return sessionList;
+    return createAvailableSessionDetailEntry(projected);
   }
 
   async getAllSessionSummaries({ userId }) {

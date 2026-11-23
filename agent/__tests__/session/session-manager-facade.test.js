@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { executeEmptySessionCleanup } from "../helpers/session-services.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -138,7 +139,7 @@ test("createSessionFacade resolves authority outbox access from the protocol per
   };
   const methods = [
     "getPendingAuthorityEvents",
-    "recordAuthorityEventAttempts",
+    "prepareAuthorityEventDelivery",
     "acknowledgeAuthorityEvents",
     "compactAuthorityEvents",
   ];
@@ -157,7 +158,7 @@ test("createSessionFacade resolves authority outbox access from the protocol per
   const identity = { userId: "u1", sessionId: "child-session", persistenceScope };
 
   await session.getPendingAuthorityEvents(identity);
-  await session.recordAuthorityEventAttempts({ ...identity, eventIds: ["event-1"] });
+  await session.prepareAuthorityEventDelivery(identity);
   await session.acknowledgeAuthorityEvents({
     ...identity,
     acknowledgements: [{ eventId: "event-1" }],
@@ -256,8 +257,8 @@ test("createSessionFacade should delegate message and tree methods", async () =>
         appendCaptured = payload;
         return { turns: payload.turns };
       },
-      async getSessionTurns() {
-        return [{ role: "user", content: "hi" }];
+      async getSessionTurnMessagePage() {
+        return { records: [{ message: { role: "user", content: "hi" } }], nextCursor: null };
       },
     },
   });
@@ -268,12 +269,15 @@ test("createSessionFacade should delegate message and tree methods", async () =>
     sessionId: "s1",
     turns: [{ role: "user", content: "hi" }],
   });
-  const turns = await session.getSessionTurns({ userId: "u1", sessionId: "s1" });
-  const deleted = await session.deleteSessionBranch({ userId: "u1", sessionIds: ["s2"] });
+  const page = await session.getSessionTurnMessagePage({ userId: "u1", sessionId: "s1" });
+  const deleted = await session.deleteSessionBranch(
+    { userId: "u1", sessionIds: ["s2"] },
+    executeEmptySessionCleanup,
+  );
 
   assert.equal(appendCaptured.sessionId, "s1");
   assert.equal(appendCaptured.persistenceContext.kind, "test-context");
-  assert.equal(turns.length, 1);
+  assert.equal(page.records.length, 1);
   assert.deepEqual(deleteCaptured, { userId: "u1", sessionIds: ["s2"] });
   assert.equal(deleted.ok, true);
 });

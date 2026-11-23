@@ -15,7 +15,7 @@ import {
   getSystemRuntimeFromRuntime,
   resolveRuntimeTurnScopeId,
 } from "../../context/agent-context-accessor.js";
-import { text } from "@noobot/shared/value";
+import { isFunction, text } from "@noobot/shared/value";
 
 function inlineMediaPayload(contentPart, url) {
   const sourceData = text(contentPart.source?.data);
@@ -64,7 +64,7 @@ export async function fetchRemoteMediaArtifact(
 ) {
   const normalizedUrl = text(url);
   if (!normalizedUrl || !/^https?:\/\//i.test(normalizedUrl)) return null;
-  if (typeof fetchImpl !== "function") return null;
+  if (!isFunction(fetchImpl)) return null;
 
   try {
     const response = await fetchImpl(normalizedUrl);

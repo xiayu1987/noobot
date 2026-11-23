@@ -10,31 +10,59 @@ import { isSessionDetailEntryCurrent, SESSION_ERROR_CODE } from "../src/index.js
 test("detail freshness uses the document version and its declared session", () => {
   const entry = { sessionId: "s1", aggregateVersion: 2, generation: 9, availability: "available" };
   assert.equal(
-    isSessionDetailEntryCurrent(entry, { sessionId: "s1", aggregateVersion: 2, generation: 9 }),
+    isSessionDetailEntryCurrent(entry, {
+      sessionId: "s1",
+      aggregateVersion: 2,
+      knownGeneration: 9,
+    }),
     true,
   );
   assert.equal(
-    isSessionDetailEntryCurrent(entry, { sessionId: "s1", aggregateVersion: 3, generation: 9 }),
+    isSessionDetailEntryCurrent(entry, {
+      sessionId: "s1",
+      aggregateVersion: 3,
+      knownGeneration: 9,
+    }),
     false,
   );
   assert.equal(
-    isSessionDetailEntryCurrent(entry, { sessionId: "s1", aggregateVersion: 1, generation: 8 }),
+    isSessionDetailEntryCurrent(entry, {
+      sessionId: "s1",
+      aggregateVersion: 1,
+      knownGeneration: 8,
+    }),
     true,
   );
   assert.equal(
-    isSessionDetailEntryCurrent(entry, { sessionId: "s1", aggregateVersion: 2, generation: 10 }),
+    isSessionDetailEntryCurrent(entry, {
+      sessionId: "s1",
+      aggregateVersion: 2,
+      knownGeneration: 10,
+    }),
     false,
   );
   assert.equal(
-    isSessionDetailEntryCurrent(entry, { sessionId: "s1", aggregateVersion: 2, generation: null }),
+    isSessionDetailEntryCurrent(entry, {
+      sessionId: "s1",
+      aggregateVersion: 2,
+      knownGeneration: null,
+    }),
     true,
   );
   assert.equal(
-    isSessionDetailEntryCurrent(entry, { sessionId: "s2", aggregateVersion: 2, generation: 9 }),
+    isSessionDetailEntryCurrent(entry, {
+      sessionId: "s2",
+      aggregateVersion: 2,
+      knownGeneration: 9,
+    }),
     false,
   );
   assert.equal(
-    isSessionDetailEntryCurrent(undefined, { sessionId: "s1", aggregateVersion: 2, generation: 9 }),
+    isSessionDetailEntryCurrent(undefined, {
+      sessionId: "s1",
+      aggregateVersion: 2,
+      knownGeneration: 9,
+    }),
     false,
   );
 });
@@ -43,7 +71,7 @@ test("unavailable details do not establish a message projection version", () => 
   assert.equal(
     isSessionDetailEntryCurrent(
       { sessionId: "s1", availability: "unavailable" },
-      { sessionId: "s1", aggregateVersion: 2, generation: 9 },
+      { sessionId: "s1", aggregateVersion: 2, knownGeneration: 9 },
     ),
     false,
   );
@@ -54,7 +82,11 @@ test("invalid version inputs fail instead of becoming a cache miss", () => {
   for (const aggregateVersion of [undefined, null, -1, 1.5, "2"]) {
     assert.throws(
       () =>
-        isSessionDetailEntryCurrent(entry, { sessionId: "s1", aggregateVersion, generation: 9 }),
+        isSessionDetailEntryCurrent(entry, {
+          sessionId: "s1",
+          aggregateVersion,
+          knownGeneration: 9,
+        }),
       {
         code: SESSION_ERROR_CODE.SESSION_DETAIL_PAYLOAD_INVALID,
       },
@@ -66,7 +98,7 @@ test("invalid version inputs fail instead of becoming a cache miss", () => {
           {
             sessionId: "s1",
             aggregateVersion: 2,
-            generation: 9,
+            knownGeneration: 9,
           },
         ),
       { code: SESSION_ERROR_CODE.SESSION_DETAIL_PAYLOAD_INVALID },
@@ -75,7 +107,11 @@ test("invalid version inputs fail instead of becoming a cache miss", () => {
   for (const generation of [undefined, 0, -1, 1.5, "9", Number.MAX_SAFE_INTEGER + 1]) {
     assert.throws(
       () =>
-        isSessionDetailEntryCurrent(entry, { sessionId: "s1", aggregateVersion: 2, generation }),
+        isSessionDetailEntryCurrent(entry, {
+          sessionId: "s1",
+          aggregateVersion: 2,
+          knownGeneration: generation,
+        }),
       {
         code: SESSION_ERROR_CODE.SESSION_DETAIL_PAYLOAD_INVALID,
       },
@@ -84,7 +120,7 @@ test("invalid version inputs fail instead of becoming a cache miss", () => {
       () =>
         isSessionDetailEntryCurrent(
           { ...entry, generation },
-          { sessionId: "s1", aggregateVersion: 2, generation: null },
+          { sessionId: "s1", aggregateVersion: 2, knownGeneration: null },
         ),
       {
         code: SESSION_ERROR_CODE.SESSION_DETAIL_PAYLOAD_INVALID,

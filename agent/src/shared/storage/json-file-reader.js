@@ -17,7 +17,7 @@ export const PERSISTED_JSON_READ_ERROR_CODE = Object.freeze({
 });
 
 export function isMissingPersistencePathError(error) {
-  return error?.code === "ENOENT" || error?.code === "ENOTDIR";
+  return error?.code === "ENOENT";
 }
 
 function createPersistedJsonReadError(filePath, cause) {

@@ -9,6 +9,7 @@ import net from "node:net";
 import fs from "node:fs/promises";
 import { WebSocket } from "ws";
 import { registerChatWebSocketServer } from "../../ws/chat-websocket-server.js";
+import { createServiceBotAccess } from "../../services/service-bot-access.js";
 import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
@@ -220,8 +221,10 @@ async function listenChatWebSocketServer({ bot, resolveAuthByApiKey }) {
     normalizeLocale: (locale = "") => String(locale || "zh-CN"),
     defaultLocale: "zh-CN",
   });
+  let currentBot = bot;
+  const serviceBotAccess = createServiceBotAccess({ getBot: () => currentBot });
   const registered = registerChatWebSocketServer(server, {
-    getBot: () => bot,
+    serviceBotAccess,
     resolveRequestLocale: () => "zh-CN",
     resolveAuthByApiKey,
     mapAgentRunCommand,
@@ -234,6 +237,11 @@ async function listenChatWebSocketServer({ bot, resolveAuthByApiKey }) {
     server,
     bot,
     registered,
+    replaceBot: (candidate, beforePublish) =>
+      serviceBotAccess.withRetirement(async () => {
+        await beforePublish();
+        currentBot = candidate;
+      }),
     address: (...args) => server.address(...args),
   };
 }
@@ -309,23 +317,22 @@ export async function startServerWithWs({
           : {}),
       };
     },
-    getPendingAuthorityEvents: async ({ consumerId } = {}) => ({
-      found: true,
-      events: listPendingAuthorityEvents(authorityEventOutbox, { consumerId }),
-    }),
-    recordAuthorityEventAttempts: async ({ consumerId, eventIds = [] } = {}) => {
-      let recorded = 0;
-      for (const eventId of eventIds) {
+    async prepareAuthorityEventDelivery({ consumerId }) {
+      const events = listPendingAuthorityEvents(authorityEventOutbox, { consumerId });
+      for (const { eventId } of events) {
         const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, {
           eventId,
           consumerId,
           attemptedAt: new Date().toISOString(),
         });
-        if (!result.found) return { recorded: false, reason: result.reason, attempted: recorded };
+        if (!result.found) throw new Error(result.reason);
         authorityEventOutbox = result.outbox;
-        recorded += 1;
       }
-      return { recorded: true, attempted: recorded };
+      return {
+        found: true,
+        events: listPendingAuthorityEvents(authorityEventOutbox, { consumerId }),
+        hasMore: false,
+      };
     },
     acknowledgeAuthorityEvents: async ({ consumerId, acknowledgements = [] } = {}) => {
       let delivered = 0;
@@ -344,7 +351,11 @@ export async function startServerWithWs({
         authorityEventOutbox = result.outbox;
         delivered += 1;
       }
-      return { acknowledged: true, delivered };
+      return {
+        acknowledged: true,
+        delivered,
+        drained: listPendingAuthorityEvents(authorityEventOutbox, { consumerId }).length === 0,
+      };
     },
     compactAuthorityEvents: async ({ retainDeliveredAfter }) => {
       const result = compactAuthorityEventOutbox(
@@ -360,6 +371,7 @@ export async function startServerWithWs({
     },
   };
   const testBot = {
+    runWorkspaceOperation: (_userId, operation) => operation(),
     resolveExecutionIntent: async ({ turnScopeId }) =>
       createAcceptedAgentExecutionIdentity({ turnScopeId }),
     runSession: async (payload) => {

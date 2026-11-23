@@ -15,12 +15,15 @@ import { SessionMessageService } from "../../src/session/services/session-messag
 import { text } from "@noobot/shared/value";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
+import {
+  createImmutableSession,
+  initializeImmutableSession,
+} from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import {
   openImmutableSessionReader,
   withImmutableSessionReader,
 } from "../../src/session/session-artifact-session/immutable-session-reader.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { immutableSessionReaderAccess } from "../../src/session/session-artifact-session/immutable-reader-access.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import {
   fullSessionTurnViews,
@@ -57,6 +60,18 @@ function harness(initial = {}) {
   });
   let saveFailure = null;
   let outboxFailure = false;
+  const scope = { sessionDir, sessionId: "s1", parentSessionId: "" };
+  const persist = async (request, commit, refresh) => {
+    if (saveFailure) {
+      const error = saveFailure;
+      saveFailure = null;
+      throw error;
+    }
+    if (outboxFailure) throw new Error("outbox_commit_failed");
+    const result = await commit(request);
+    persisted = await refresh();
+    return result;
+  };
   const repo = {
     async withSessionMutation(_u, _s, operation) {
       return operation(await this.locateSessionScope());
@@ -71,38 +86,44 @@ function harness(initial = {}) {
       await initialized;
       return openImmutableSessionReader({ sessionDir, sessionId: "s1", parentSessionId: "" });
     },
+    async withSessionOutboxMutation(_u, _s, plan) {
+      await initialized;
+      return immutableSessionReaderAccess.withOutboxMutation(scope, async (reader) => {
+        const complete = await plan(reader);
+        return (commit) =>
+          complete((request) =>
+            persist(request, commit, async () => {
+              await using current = await openImmutableSessionReader(scope);
+              return current.exportSession();
+            }),
+          );
+      });
+    },
     async withSessionReader(_u, _s, operation) {
       await initialized;
-      return withImmutableSessionReader(
-        { sessionDir, sessionId: "s1", parentSessionId: "" },
-        (reader) =>
-          operation(reader, { resolvedParentSessionId: "", sessionDir }, (request) =>
-            this.commitChanges(_u, _s, request),
-          ),
+      return withImmutableSessionReader(scope, (reader, commitChanges, readCurrent) =>
+        operation({
+          reader,
+          scope: { resolvedParentSessionId: "", sessionDir },
+          commitChanges: (request) =>
+            persist(request, commitChanges, () =>
+              readCurrent((current) => current.exportSession()),
+            ),
+          readCurrent,
+        }),
       );
     },
-    async findImmutableSessionReader() {
+    async findSessionReader() {
       return this.requireSessionReader();
     },
     async findById() {
       return normalizeSessionEntity(structuredClone(persisted));
     },
-    async findTurnTerminalSource() {
+    async findTurnLifecycleSource() {
       return {
         ...structuredClone(persisted),
         messageTurnScopeIds: persisted.messages.map((message) => message.turnScopeId),
       };
-    },
-    async commitChanges(_u, sessionId, request) {
-      if (saveFailure) {
-        const error = saveFailure;
-        saveFailure = null;
-        throw error;
-      }
-      if (outboxFailure) throw new Error("outbox_commit_failed");
-      const result = await commitSessionChanges({ ...request, sessionDir, sessionId });
-      persisted = await (await this.requireSessionReader()).exportSession();
-      return result;
     },
   };
   return {
@@ -170,37 +191,43 @@ function newSessionHarness() {
       if (!persisted) throw createSessionNotFoundError({ userId: "u1", sessionId: "s1" });
       return withImmutableSessionReader(
         { sessionDir, sessionId: "s1", parentSessionId: "" },
-        (reader) =>
-          operation(reader, { resolvedParentSessionId: "", sessionDir }, (request) =>
-            this.commitChanges(_u, _s, request),
-          ),
+        (reader, commitChanges, readCurrent) =>
+          operation({
+            reader,
+            scope: { resolvedParentSessionId: "", sessionDir },
+            commitChanges: async (request) => {
+              const result = await commitChanges(request);
+              persisted = await readCurrent((current) => current.exportSession());
+              return result;
+            },
+            readCurrent,
+          }),
       );
     },
-    async findImmutableSessionReader() {
+    async findSessionReader() {
       return persisted ? this.requireSessionReader() : null;
     },
-    async recoverImmutableSessionPlacement() {
-      return this.findImmutableSessionReader();
+    async recoverSessionPlacement() {
+      return this.findSessionReader();
     },
     async findById() {
       return persisted ? normalizeSessionEntity(structuredClone(persisted)) : null;
     },
-    async createImmutableSession(_u, session, { authorityEvents }) {
+    async createStoredSession(_u, session, { initialTurn, scopedMetadata }) {
       assert.equal(persisted, null);
-      await initializeImmutableSession({
-        sessionDir,
+      const result = await createImmutableSession({
+        scope: { sessionDir, sessionId: "s1", parentSessionId: "" },
         session,
         operationId: "test-initial-creation",
-        authorityEvents,
-        outbox: authorityEvents,
+        initialTurn,
+        scopedMetadata,
       });
-      persisted = await (
-        await openImmutableSessionReader({ sessionDir, sessionId: "s1", parentSessionId: "" })
-      ).exportSession();
-    },
-    async commitChanges(_u, sessionId, request) {
-      const result = await commitSessionChanges({ ...request, sessionDir, sessionId });
-      persisted = await (await this.requireSessionReader()).exportSession();
+      await using reader = await openImmutableSessionReader({
+        sessionDir,
+        sessionId: "s1",
+        parentSessionId: "",
+      });
+      persisted = await reader.exportSession();
       return result;
     },
   };

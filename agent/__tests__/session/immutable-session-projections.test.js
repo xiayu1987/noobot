@@ -11,8 +11,13 @@ import { tmpdir } from "node:os";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createSessionPersistenceScope } from "@noobot/session-protocol";
 import { AGENT_SCOPED_SESSION_ROOTS } from "@noobot/workspace-protocol";
-import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
+import {
+  createTestSessionServices,
+  provisionTestSession,
+  submitTestSessionRequest,
+} from "../helpers/session-services.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
+import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 
 const ts = "2026-01-01T00:00:00.000Z";
 
@@ -29,29 +34,28 @@ async function fixture(t) {
   });
   const persistenceContext = repository.treePersistenceContext("u1", "s1");
   const scope = await repository.requireSessionScope("u1", "s1", persistenceContext);
-  const reader = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-  const request = {
-    persistenceContext,
-    expectedGeneration: reader.generation,
+  const command = {
     operationId: "rename",
     committedAt: ts,
     changes: { sessionMetadata: { customTitle: "committed title" } },
   };
-  return { runtime, repository, persistenceContext, scope, request, workspaceRoot };
+  return { runtime, repository, persistenceContext, scope, command, workspaceRoot };
 }
 
 test("incremental commits and replay do not enumerate or project the session list", async (t) => {
-  const { repository, request, persistenceContext } = await fixture(t);
+  const { repository, command, persistenceContext } = await fixture(t);
+  await using reader = await repository.requireSessionReader("u1", "s1", { persistenceContext });
+  const request = await reader.prepareRequest(command);
   const list = t.mock.method(repository, "listSessionIds", () =>
     assert.fail("commit listed sessions"),
   );
   const project = t.mock.method(repository, "_buildSessionSummaryFromReader", () =>
     assert.fail("commit rebuilt list projection"),
   );
-  await repository.commitChanges("u1", "s1", request);
+  await submitTestSessionRequest(repository, "u1", "s1", request, persistenceContext);
   const committed = await repository.requireSessionReader("u1", "s1", { persistenceContext });
   assert.equal((await committed.readMetadata()).customTitle, "committed title");
-  await repository.commitChanges("u1", "s1", request);
+  await submitTestSessionRequest(repository, "u1", "s1", request, persistenceContext);
   assert.equal(
     (await repository.requireSessionReader("u1", "s1", { persistenceContext })).generation,
     committed.generation,
@@ -62,7 +66,7 @@ test("incremental commits and replay do not enumerate or project the session lis
 });
 
 test("settings update is visible from the committed head without a second projection write", async (t) => {
-  const { repository, persistenceContext, request } = await fixture(t);
+  const { repository, persistenceContext, command } = await fixture(t);
   const project = t.mock.method(repository, "_buildSessionSummaryFromReader");
   await repository.updateSessionSettings("u1", "s1", {
     persistenceContext,
@@ -71,11 +75,36 @@ test("settings update is visible from the committed head without a second projec
   assert.equal(project.mock.callCount(), 0);
   assert.equal((await repository.readSessionsSummary("u1")).sessions[0].title, "settings title");
   const reader = await repository.requireSessionReader("u1", "s1", { persistenceContext });
-  const next = { ...request, expectedGeneration: reader.generation };
-  await repository.commitChanges("u1", "s1", next);
+  const next = await reader.prepareRequest(command);
+  await submitTestSessionRequest(repository, "u1", "s1", next, persistenceContext);
   const beforeReplay = project.mock.callCount();
-  await repository.commitChanges("u1", "s1", next);
+  await submitTestSessionRequest(repository, "u1", "s1", next, persistenceContext);
   assert.equal(project.mock.callCount(), beforeReplay);
+});
+
+test("list and detail ignore a stored automatic title without a committed title candidate", async (t) => {
+  const {
+    runtime: { sessionCrudService },
+    scope,
+  } = await fixture(t);
+  const store = new ImmutableSessionStore({ sessionDir: scope.sessionDir, sessionId: "s1" });
+  const before = await store.snapshot();
+  const metadata = await store.get(before, "metadata", "session");
+  await store.commit({
+    expectedGeneration: before.generation,
+    operationId: "seed-legacy-title",
+    changes: [
+      {
+        collection: "metadata",
+        key: "session",
+        value: { ...metadata, autoTitle: "legacy title " },
+      },
+    ],
+  });
+  const list = await sessionCrudService.getAllSessionSummaries({ userId: "u1" });
+  const detail = await sessionCrudService.getSessionDisplayData({ userId: "u1", sessionId: "s1" });
+  assert.equal(list.sessions[0].title, "s1");
+  assert.equal(detail.sessions[0].title, "s1");
 });
 
 test("list read turns asynchronous immutable metadata failure into an unavailable entry", async (t) => {

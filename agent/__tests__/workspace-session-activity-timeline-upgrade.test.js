@@ -234,9 +234,55 @@ for (const [name, evidence, reason] of [
   });
 }
 
-test("v21 quarantines guidance facts missing activityId without inferring it from eventId", async () => {
+test("v21 migrates projected legacy facts with verified ownership", async () => {
   await withBase(async (options) => {
-    const fact = { ...guidanceFact };
+    const { activityId, ...guidance } = guidanceFact;
+    const main = {
+      ...guidance,
+      eventId: "old-main",
+      eventType: "main_model_content",
+      activityKind: "",
+      purpose: "",
+      pluginFlow: "",
+      chain: "",
+    };
+    const identified = {
+      ...main,
+      eventId: "new-main-event",
+      activityKind: "main_model_analysis",
+      activityId: "main-activity",
+    };
+    const sessionDir = await writeSession(options.base, {
+      messages: [message("u1", [guidance, main, identified])],
+      evidence: [],
+    });
+    const result = await upgradeSessionActivityTimeline(options);
+    assert.deepEqual(result.quarantined, []);
+    assert.equal(result.sessions.length, 1);
+    const manifest = await readJson(path.join(sessionDir, "session.json"));
+    const checkpoint = await readJson(
+      path.join(sessionDir, manifest.turnOrder[0].summarySnapshots[0].file),
+    );
+    assert.deepEqual(checkpoint.records[0].message.activityTimeline, [
+      { ...guidanceFact, activityId: guidance.eventId },
+      {
+        ...main,
+        eventType: "model_analysis_delta",
+        activityKind: "main_model_analysis",
+        activityId: main.eventId,
+      },
+      { ...identified, eventType: "model_analysis_delta" },
+    ]);
+    assert.deepEqual(await upgradeSessionActivityTimeline(options), {
+      sessions: [],
+      quarantined: [],
+    });
+  });
+});
+
+test("v21 quarantines guidance facts missing activityId with mismatched ownership", async () => {
+  await withBase(async (options) => {
+    const fact = { ...guidanceFact, presentationMessageId: "another-message" };
     delete fact.activityId;
     const sessionDir = await writeSession(options.base, {
       messages: [message("u1", [guidanceFact]), message("u2"), message("u3", [fact])],

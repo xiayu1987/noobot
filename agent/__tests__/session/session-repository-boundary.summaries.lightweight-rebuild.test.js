@@ -4,14 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
+import { buildThinkingDetailPayload } from "@noobot/event-protocol/thinking-detail-projection";
 import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+import { selectSessionDetailBlockingEntry } from "@noobot/session-protocol/session-detail";
 
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { readFile, writeFile, rm } from "node:fs/promises";
 
-import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
+import {
+  createTestSessionServices,
+  provisionTestSession,
+  submitTestSessionRequest,
+} from "../helpers/session-services.js";
 import { normalizeMessageEntity } from "../../src/session/entities/message-entity.js";
 import {
   withTempWorkspace,
@@ -23,6 +29,35 @@ import {
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
+
+async function readToolTurn(service, selection, generation) {
+  const messages = [];
+  let cursor = null;
+  let messageCount;
+  try {
+    do {
+      const page = await service.getSessionThinkingDetail({ ...selection, cursor, limit: 1 });
+      cursor = page.nextCursor;
+      assert.equal(page.exists, true);
+      assert.equal(page.generation, generation);
+      messageCount ??= page.messageCount;
+      assert.equal(page.messageCount, messageCount);
+      assert.equal(page.messages.length, 1);
+      assert.equal(page.messages[0].turnScopeId, selection.turnScopeId);
+      messages.push(...page.messages);
+      assert.ok(messages.length <= messageCount);
+    } while (cursor !== null);
+  } finally {
+    if (cursor) await service.releaseSessionThinkingDetail({ ...selection, cursor });
+  }
+  assert.equal(messages.length, messageCount);
+  const { messageItem } = buildThinkingDetailPayload({
+    ...selection,
+    contentRevision: String(generation),
+    messages,
+  });
+  return { messageCount, messageItem };
+}
 
 test("immutable display projection preserves chat content without a second persisted summary", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
@@ -45,6 +80,33 @@ test("immutable display projection preserves chat content without a second persi
       sessionId: "B",
       parentSessionId: "A",
       caller: SESSION_CALLER.USER,
+    });
+
+    const [userAttachment] = await runtime.attachmentService.ingest({
+      userId,
+      sessionId: "B",
+      attachmentSource: "user",
+      attachments: [
+        {
+          name: "a.txt",
+          mimeType: "text/plain",
+          contentBase64: Buffer.alloc(12).toString("base64"),
+        },
+      ],
+    });
+    const [pluginAttachment] = await runtime.attachmentService.ingestGeneratedArtifacts({
+      userId,
+      sessionId: "B",
+      attachmentSource: "model",
+      artifacts: [
+        {
+          name: "harness-plan-text.txt",
+          mimeType: "text/plain",
+          contentBase64: Buffer.alloc(123).toString("base64"),
+        },
+      ],
+      owner: { type: "plugin", id: "harness-plugin" },
+      generationSource: "harness_plan",
     });
 
     const userContentTail = "__USER_CONTENT_COMPLETE_TAIL__";
@@ -105,7 +167,7 @@ test("immutable display projection preserves chat content without a second persi
           content: longUserContent,
           attachments: [
             {
-              attachmentId: "att-1",
+              attachmentId: userAttachment.attachmentId,
               sessionId: "B",
               attachmentSource: "user",
               name: "a.txt",
@@ -172,7 +234,7 @@ test("immutable display projection preserves chat content without a second persi
           content: "plugin attachment result",
           attachments: [
             {
-              attachmentId: "att-plugin-1",
+              attachmentId: pluginAttachment.attachmentId,
               sessionId: "B",
               attachmentSource: "model",
               name: "harness-plan-text.txt",
@@ -322,17 +384,21 @@ test("immutable display projection preserves chat content without a second persi
     const repository = runtime.repositories.sessionRepository;
     const persistenceContext = repository.treePersistenceContext(userId, "B");
     const initial = await repository.requireSessionReader(userId, "B", { persistenceContext });
-    await repository.commitChanges(userId, "B", {
+    await submitTestSessionRequest(
+      repository,
+      userId,
+      "B",
+      await initial.prepareRequest({
+        operationId: "seed-display-messages",
+        committedAt: sessionB.updatedAt,
+        changes: {
+          messages: sessionB.messages.map((message) =>
+            normalizeMessageEntity({ ...message, parentSessionId: sessionB.parentSessionId }),
+          ),
+        },
+      }),
       persistenceContext,
-      expectedGeneration: initial.generation,
-      operationId: "seed-display-messages",
-      committedAt: sessionB.updatedAt,
-      changes: {
-        messages: sessionB.messages.map((message) =>
-          normalizeMessageEntity({ ...message, parentSessionId: sessionB.parentSessionId }),
-        ),
-      },
-    });
+    );
 
     const scopeB = await runtime.repositories.sessionRepository.requireSessionScope(
       userId,
@@ -351,6 +417,17 @@ test("immutable display projection preserves chat content without a second persi
     await assert.rejects(readFile(summaryFile), { code: "ENOENT" });
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.messages.length, 6);
+    for (const message of summary.messages) {
+      if (message.turnPlaceholder === true) {
+        assert.equal(Object.hasOwn(message, "sessionOrdinal"), false);
+        continue;
+      }
+      const index = persistedSession.messages.findIndex(
+        ({ messageUid }) => messageUid === message.messageUid,
+      );
+      assert.ok(index >= 0);
+      assert.equal(message.sessionOrdinal, index + 1);
+    }
     assert.equal(
       summary.messages.every((item) => "turnScopeId" in item),
       true,
@@ -375,27 +452,31 @@ test("immutable display projection preserves chat content without a second persi
       ),
       false,
     );
-    const hydratedSummary = await runtime.repositories.sessionRepository.readSessionDisplaySummary(
-      userId,
-      "B",
-      {
-        persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-          userId,
-          "B",
-        ),
-      },
+    const assistantMessage = summary.messages.find((item) => item.presentationMessageId === "a1");
+    assert.equal(Object.hasOwn(assistantMessage, "toolTimeline"), false);
+    assert.equal(Object.hasOwn(assistantMessage, "activityTimeline"), false);
+    assert.equal(JSON.stringify(summary).includes("ordinary tool result"), false);
+    const readDetail = ({ turnScopeId, dialogProcessId }) =>
+      readToolTurn(
+        runtime.sessionCrudService,
+        { userId, sessionId: "B", turnScopeId, dialogProcessId },
+        initial.generation + 1,
+      );
+    const { messageCount: assistantTurnMessages, messageItem: assistantDetail } =
+      await readDetail(assistantMessage);
+    assert.ok(assistantTurnMessages > 1);
+    assert.equal(assistantDetail.presentationMessageId, "a1");
+    assert.deepEqual(
+      assistantDetail.toolTimeline.map(({ status, call, resultEvent }) => [
+        status,
+        call.eventId,
+        resultEvent.eventId,
+      ]),
+      [["completed", "tool-call-1", "tool-result-1"]],
     );
-    const assistantMessage = hydratedSummary.messages.find(
-      (item) => item.presentationMessageId === "a1",
-    );
-    assert.equal(assistantMessage.toolTimeline.length, 1);
-    assert.equal(assistantMessage.toolTimeline[0].status, "completed");
-    assert.equal("log" in assistantMessage.toolTimeline[0].resultEvent, false);
-    assert.equal(assistantMessage.toolTimeline[0].resultEvent.turnScopeId, undefined);
-    assert.equal("writtenFiles" in assistantMessage.toolTimeline[0].resultEvent, false);
-    assert.equal(
-      JSON.stringify(assistantMessage.toolTimeline).includes("ordinary tool result"),
-      false,
+    assert.deepEqual(
+      assistantDetail.activityTimeline.map(({ eventId, text }) => [eventId, text]),
+      [["activity-1", "full thinking"]],
     );
 
     const userMessage = summary.messages.find((item) => item.userMessageId === "u1");
@@ -405,7 +486,7 @@ test("immutable display projection preserves chat content without a second persi
     assert.equal(userMessage.content.includes(`${userContentTail}…`), false);
     assert.deepEqual(userMessage.attachments, [
       {
-        attachmentId: "att-1",
+        attachmentId: userAttachment.attachmentId,
         sessionId: "B",
         attachmentSource: "user",
         name: "a.txt",
@@ -421,7 +502,7 @@ test("immutable display projection preserves chat content without a second persi
     assert.equal(assistantMessage.content.includes(`${assistantContentTail}…`), false);
     assert.equal(assistantMessage.hasThinkingDetails, true);
     assert.equal(Object.hasOwn(assistantMessage, "thinkingDetailCount"), false);
-    assert.equal(countCanonicalThinkingDetailEvents(assistantMessage), 3);
+    assert.equal(countCanonicalThinkingDetailEvents(assistantDetail), 3);
     assert.equal("realtimeLogs" in assistantMessage, false);
     assert.equal("completedToolLogs" in assistantMessage, false);
     assert.equal("rawMessages" in assistantMessage, false);
@@ -430,7 +511,7 @@ test("immutable display projection preserves chat content without a second persi
     );
     assert.deepEqual(pluginAttachmentAssistant.attachments, [
       {
-        attachmentId: "att-plugin-1",
+        attachmentId: pluginAttachment.attachmentId,
         name: "harness-plan-text.txt",
         mimeType: "text/plain",
         size: 123,
@@ -443,18 +524,29 @@ test("immutable display projection preserves chat content without a second persi
     assert.equal("id" in pluginAttachmentAssistant.attachments[0], false);
     assert.equal("type" in pluginAttachmentAssistant.attachments[0], false);
     assert.equal("source" in pluginAttachmentAssistant.attachments[0], false);
-    const rawToolOnlyAssistantMessage = summary.messages.find(
+    const toolOnlyAssistantMessage = summary.messages.find(
       (item) => item.presentationMessageId === "tool-display-assistant",
     );
-    assert.equal(rawToolOnlyAssistantMessage.toolTimeline.length, 2);
-    assert.equal(Object.hasOwn(rawToolOnlyAssistantMessage, "thinkingDetailRef"), false);
-    const toolOnlyAssistantMessage = hydratedSummary.messages.find(
-      (item) => item.presentationMessageId === "tool-display-assistant",
+    assert.equal(Object.hasOwn(toolOnlyAssistantMessage, "toolTimeline"), false);
+    assert.equal(Object.hasOwn(toolOnlyAssistantMessage, "thinkingDetailRef"), false);
+    const { messageCount: toolOnlyTurnMessages, messageItem: toolOnlyDetail } =
+      await readDetail(toolOnlyAssistantMessage);
+    assert.equal(toolOnlyTurnMessages, 1);
+    assert.deepEqual(
+      toolOnlyDetail.toolTimeline.map(({ status, call, resultEvent }) => [
+        status,
+        call.eventId,
+        resultEvent?.eventId,
+      ]),
+      [
+        ["running", "tool-only-call-1", undefined],
+        ["completed", "tool-only-call-2", "tool-only-result-2"],
+      ],
     );
     assert.equal(toolOnlyAssistantMessage.content, "tool only final answer");
     assert.equal(toolOnlyAssistantMessage.hasThinkingDetails, true);
     assert.equal(Object.hasOwn(toolOnlyAssistantMessage, "thinkingDetailCount"), false);
-    assert.equal(countCanonicalThinkingDetailEvents(toolOnlyAssistantMessage), 3);
+    assert.equal(countCanonicalThinkingDetailEvents(toolOnlyDetail), 3);
     assert.equal("realtimeLogs" in toolOnlyAssistantMessage, false);
     assert.equal("completedToolLogs" in toolOnlyAssistantMessage, false);
     assert.equal(JSON.stringify(summary.messages).includes("tool only result detail"), false);
@@ -535,12 +627,41 @@ test("immutable display projection preserves chat content without a second persi
     await rm(summaryFile);
     assert.deepEqual(
       await repository.readSessionDisplaySummary(userId, "B", { persistenceContext }),
-      hydratedSummary,
+      summary,
     );
     assert.equal(
       (await repository.requireSessionReader(userId, "B", { persistenceContext })).generation,
       initial.generation + 1,
     );
     await assert.rejects(readFile(summaryFile), { code: "ENOENT" });
+
+    const summariesBeforeAttachmentDeletion =
+      await runtime.sessionCrudService.getAllSessionSummaries({ userId });
+    const branchBeforeAttachmentDeletion = await runtime.sessionCrudService.getSessionDisplayData({
+      userId,
+      sessionId: "A",
+    });
+    assert.equal(selectSessionDetailBlockingEntry(branchBeforeAttachmentDeletion), null);
+    await runtime.attachmentService.deleteScopedAttachmentsBySessionIds({
+      userId,
+      sessionIds: ["B"],
+    });
+    const afterAttachmentDeletion = await runtime.sessionCrudService.getSessionDisplayData({
+      userId,
+      sessionId: "A",
+    });
+    assert.equal(
+      afterAttachmentDeletion.sessions.find((entry) => entry.sessionId === "A").availability,
+      "available",
+    );
+    const unavailable = afterAttachmentDeletion.sessions.find((entry) => entry.sessionId === "B");
+    assert.equal(unavailable.availability, "unavailable");
+    assert.equal(unavailable.unavailableReason.code, "ATTACHMENT_METADATA_MISSING");
+    assert.equal(Object.hasOwn(unavailable, "messages"), false);
+    assert.equal(selectSessionDetailBlockingEntry(afterAttachmentDeletion), unavailable);
+    assert.deepEqual(
+      await runtime.sessionCrudService.getAllSessionSummaries({ userId }),
+      summariesBeforeAttachmentDeletion,
+    );
   });
 });

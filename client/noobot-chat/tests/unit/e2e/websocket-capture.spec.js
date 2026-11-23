@@ -3,8 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { describe, expect, it } from "vitest";
-import { findAgentCommands } from "../../e2e/protocol/helpers/websocket-capture.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+  createCapturedFrameLog,
+  findAgentCommands,
+} from "../../e2e/protocol/helpers/websocket-capture.js";
 
 describe("protocol websocket capture", () => {
   it("ignores agent-transport debug summaries before deduplicating real commands", () => {
@@ -38,5 +41,24 @@ describe("protocol websocket capture", () => {
     };
 
     expect(findAgentCommands([debugFrame, commandFrame])).toEqual([command]);
+  });
+
+  it("times out once and detaches the selector", async () => {
+    vi.useFakeTimers();
+    try {
+      const frames = createCapturedFrameLog();
+      const select = vi.fn(() => null);
+      const failure = expect(frames.waitForMatch(select, 30)).rejects.toThrow(
+        "Timed out waiting for captured protocol evidence",
+      );
+      frames.append({ payload: "unrelated" });
+      await vi.advanceTimersByTimeAsync(30);
+      await failure;
+      frames.append({ payload: "late" });
+      expect(select).toHaveBeenCalledOnce();
+      expect(frames.records).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

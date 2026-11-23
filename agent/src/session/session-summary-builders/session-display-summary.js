@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSessionTurnLifecycleSnapshot } from "../session-turn-read-model.js";
-import { buildSessionDisplayMessages } from "./display-message-list.js";
-import { buildSessionDisplayStats } from "./display-summary-stats.js";
+import { buildSessionDisplayEntries } from "./display-message-list.js";
+import { buildSessionDisplayStats, countSessionDisplaySources } from "./display-summary-stats.js";
 import { attachSessionToolArtifacts } from "./display-tool-artifacts.js";
 import { resolveSessionTitle } from "../entities/session-message-facts.js";
 import {
@@ -100,11 +100,36 @@ function buildTurnLifecycleSnapshot({ session, sessionId, lifecycle }) {
   });
 }
 
-export function buildSessionDisplayProjection(session, { selectToolTimeline } = {}) {
+export function buildSessionDisplayProjection(session, options) {
+  return buildSessionDisplayProjectionFromCounts(
+    session,
+    countSessionDisplaySources(session.messages),
+    options,
+  );
+}
+
+function buildSessionDisplayRows(session, options) {
+  const entries = buildSessionDisplayEntries({
+    ...options,
+    messages: session.messages,
+    lifecycle: session.turnLifecycle,
+  });
+  const displayMessages = entries.map(({ row }) => row);
+  const toolArtifactStats = attachSessionToolArtifacts(session, displayMessages, session.sessionId);
+  return { entries, toolArtifactStats };
+}
+
+export function buildSessionDisplayRowsAndStats(session, sourceCounts, options) {
+  const { entries, toolArtifactStats } = buildSessionDisplayRows(session, options);
+  const displayMessages = entries.map(({ row }) => row);
+  const stats = buildSessionDisplayStats({ sourceCounts, displayMessages, ...toolArtifactStats });
+  return { entries, stats };
+}
+
+export function buildSessionDisplayProjectionFromCounts(session, sourceCounts, options) {
   const context = createDisplaySummaryContext(session);
-  const { messages, turnTimings, sessionId, lifecycle } = context;
-  const displayMessages = buildSessionDisplayMessages({ messages, lifecycle, selectToolTimeline });
-  const toolArtifactStats = attachSessionToolArtifacts(session, displayMessages, sessionId);
+  const { turnTimings, sessionId } = context;
+  const { entries, stats } = buildSessionDisplayRowsAndStats(session, sourceCounts, options);
   const summary = {
     sessionId,
     parentSessionId: session.parentSessionId,
@@ -116,8 +141,8 @@ export function buildSessionDisplayProjection(session, { selectToolTimeline } = 
     turnTimings,
     turnLifecycleSnapshot: buildTurnLifecycleSnapshot(context),
     sessionArtifactEvents: session.sessionArtifactEvents,
-    messages: displayMessages,
-    stats: buildSessionDisplayStats({ messages, displayMessages, ...toolArtifactStats }),
+    messages: entries.map(({ row }) => row),
+    stats,
   };
   assertValidTransferEnvelopes(summary);
   return summary;

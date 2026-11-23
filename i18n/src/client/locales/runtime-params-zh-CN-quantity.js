@@ -4,7 +4,35 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  sessionPageSnapshots: {
+    readers: {
+      name: "会话分页快照读取器上限",
+      description: "会话分页快照可同时保留的读取器数量上限。",
+    },
+  },
+  partitionStorage: {
+    entityPageWriteVectorLimit: {
+      name: "实体分页写入向量上限",
+      description: "持久化分区实体分页时单次向量写入的缓冲区数量上限。",
+    },
+    recordReadConcurrency: {
+      name: "分区记录读取并发数",
+      description: "分区集合批次中同时读取记录的数量上限。",
+    },
+  },
   immutableStorage: {
+    entityDirectoryMaxEntries: {
+      name: "实体目录分页条目上限",
+      description: "分区实体目录单页条目数量的协议上限。",
+    },
+    journalJsonMaxDepth: {
+      name: "日志 JSON 嵌套上限",
+      description: "分区日志 JSON 值嵌套深度的协议上限。",
+    },
+    authorityOutboxPageSize: {
+      name: "权威事件发件箱分页上限",
+      description: "单次发件箱分页读取或确认事件数量的协议上限。",
+    },
     cleanupFilterMaxEntries: {
       name: "清理过滤批次上限",
       description: "单次清理过滤批次最多检查的已捕获清单条目数。",
@@ -12,10 +40,6 @@ export default {
     recordIoConcurrency: {
       name: "记录读写并发数",
       description: "单次不可变存储批次中同时执行记录操作的最大数量。",
-    },
-    turnAcceptancePageSize: {
-      name: "轮接收消息分页大小",
-      description: "读取确立轮接收事实的首条消息。",
     },
     messagePageSize: { name: "消息分页上限", description: "单次存储分页最多读取的消息数。" },
     messageReadPageSize: {
@@ -294,10 +318,6 @@ export default {
     thinkingDetailVirtualOverscan: {
       name: "客户端思考详情虚拟预渲染",
       description: "客户端思考详情虚拟预渲染使用的数量阈值。",
-    },
-    thinkingDetailRetryLimit: {
-      name: "客户端思考详情重试上限",
-      description: "客户端思考详情重试上限使用的数量阈值。",
     },
     frameHealthTopScriptLimit: {
       name: "客户端帧健康检查排行脚本上限",

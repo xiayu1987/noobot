@@ -8,10 +8,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertOptionalHookManager,
-  collectSessionDeletionHookResult,
-  createSessionDeletionHookResult,
+  requireSessionDeletionHookCompletion,
   createHookManager,
-  mergeSessionDeletionIds,
   HookExecutionError,
   HOOK_OUTCOME_STATUS,
   HOOK_CANCELLATION_MODE,
@@ -19,27 +17,13 @@ import {
   requireHookPointDescriptor,
 } from "../src/index.js";
 
-test("session deletion hook results expose explicit related session identities", () => {
-  const result = createSessionDeletionHookResult({
-    deletedRelatedSessionIds: ["node-1", "node-1", " node-2 ", ""],
-    retainedRelatedSessionIds: ["node-3"],
-  });
-  assert.deepEqual(result.deletedRelatedSessionIds, ["node-1", "node-2"]);
-  assert.deepEqual(result.retainedRelatedSessionIds, ["node-3"]);
-  assert.deepEqual(
-    collectSessionDeletionHookResult({
-      outcomes: [{ status: "ok", value: result }],
-    }),
-    {
-      deletedRelatedSessionIds: ["node-1", "node-2"],
-      retainedRelatedSessionIds: ["node-3"],
-    },
+test("session deletion handlers complete without returning ownership claims", () => {
+  requireSessionDeletionHookCompletion({ outcomes: [] });
+  requireSessionDeletionHookCompletion({ outcomes: [{ handlerId: "cleanup", value: undefined }] });
+  assert.throws(
+    () => requireSessionDeletionHookCompletion({ outcomes: [{ handlerId: "cleanup", value: {} }] }),
+    /must complete without returning session ownership claims/,
   );
-  assert.deepEqual(mergeSessionDeletionIds(["root", "node-1"], ["node-1", "node-2"]), [
-    "root",
-    "node-1",
-    "node-2",
-  ]);
 });
 
 test("session deletion reports hook failures instead of returning successful cleanup", async () => {
@@ -56,11 +40,6 @@ test("session deletion reports hook failures instead of returning successful cle
     manager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {}),
     (error) => error instanceof HookExecutionError && error.cause === cause,
   );
-  assert.throws(
-    () => collectSessionDeletionHookResult({ outcomes: [{ status: "failed", error: cause }] }),
-    (error) => error instanceof HookExecutionError && error.cause === cause,
-  );
-  assert.throws(() => collectSessionDeletionHookResult({}), TypeError);
 });
 
 test("hook point descriptors own cancellation policy", () => {

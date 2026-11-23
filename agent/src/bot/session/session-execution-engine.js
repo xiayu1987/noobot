@@ -17,6 +17,7 @@ import { createRunConfigPluginPreparer } from "./session-plugin-runtime-adapter.
 import { prepareTurnInput, prepareAgentTurnExecution } from "./turn-execution-preparer.js";
 import { isFunction } from "@noobot/shared/value";
 import { commitSummaryCheckpoint } from "./summary-checkpoint-committer.js";
+import { PendingOperations } from "../../shared/pending-operations.js";
 
 const ENGINE_DEPENDENCY_FIELDS = Object.freeze([
   "globalConfig",
@@ -26,6 +27,7 @@ const ENGINE_DEPENDENCY_FIELDS = Object.freeze([
   "skill",
   "configService",
   "workspaceService",
+  "workspaceAdmission",
   "errorLogger",
   "botManager",
   "agentRunner",
@@ -56,6 +58,7 @@ function assertEngineDependencies(dependencies) {
 export class SessionExecutionEngine {
   constructor(dependencies) {
     assertEngineDependencies(dependencies);
+    this.operations = new PendingOperations();
     this._assignCoreDependencies(dependencies);
     this._initializeCoreServices();
     this._initializeRuntimeServices();
@@ -71,6 +74,7 @@ export class SessionExecutionEngine {
     skill,
     configService,
     workspaceService,
+    workspaceAdmission,
     errorLogger,
     botManager,
     agentRunner,
@@ -84,6 +88,7 @@ export class SessionExecutionEngine {
     this.skill = skill;
     this.configService = configService;
     this.workspaceService = workspaceService;
+    this.workspaceAdmission = workspaceAdmission;
     this.errorLogger = errorLogger;
     this.botManager = botManager;
     this.agentRunner = agentRunner;
@@ -97,6 +102,7 @@ export class SessionExecutionEngine {
       globalConfig: this.globalConfig,
     });
     this.memoryPostProcessService = new MemoryPostProcessService({
+      workspaceAdmission: this.workspaceAdmission,
       globalConfig: this.globalConfig,
       session: this.session,
       memory: this.memory,
@@ -184,7 +190,6 @@ export class SessionExecutionEngine {
       appendAgentMessages: (payload = {}) => this.turnPersister.appendAgentMessages(payload),
       bindSessionTurnAttachments: (payload = {}) => this.session.bindTurnAttachments(payload),
       assertReusedUserTurnIdentity: (payload = {}) => this._assertReusedUserTurnIdentity(payload),
-      getSessionTurns: (payload = {}) => this.session.getSessionTurns(payload),
       finalizeRunSession: (payload) => this._finalizeRunSession(payload),
       saveExecutionReport: (payload = {}) => this.session.saveExecutionReport(payload),
       getExecutionTurnLogs: (payload = {}) => this.session.getExecutionTurnLogs(payload),
@@ -225,14 +230,16 @@ export class SessionExecutionEngine {
   }
 
   async resolveExecutionIntent({ userId = "", runConfig = {}, turnScopeId = "" } = {}) {
-    const basePath = await this.workspaceService.ensureUserWorkspace(userId);
-    const userConfig = await this.configService.loadUserConfig(basePath);
-    const scenarioResolvedRunConfig = this._resolveScenarioRunConfig(runConfig, userConfig);
-    return this.runConfigPluginPreparer.resolveExecutionIntent({
-      userId,
-      runConfig: scenarioResolvedRunConfig,
-      userConfig,
-      turnScopeId,
+    return this._runInWorkspace(userId, async () => {
+      const basePath = await this.workspaceService.ensureUserWorkspace(userId);
+      const userConfig = await this.configService.loadUserConfig(basePath);
+      const scenarioResolvedRunConfig = this._resolveScenarioRunConfig(runConfig, userConfig);
+      return this.runConfigPluginPreparer.resolveExecutionIntent({
+        userId,
+        runConfig: scenarioResolvedRunConfig,
+        userConfig,
+        turnScopeId,
+      });
     });
   }
 
@@ -250,6 +257,7 @@ export class SessionExecutionEngine {
 
   _createDetachedSubSessionRunner() {
     return createDetachedSubSessionRunner({
+      runInWorkspace: (userId, operation) => this._runInWorkspace(userId, operation),
       workspaceService: this.workspaceService,
       configService: this.configService,
       sessionRunner: this.runner,
@@ -305,7 +313,16 @@ export class SessionExecutionEngine {
     return this.finalizer.finalizeRunSession(payload);
   }
 
+  _runInWorkspace(userId, operation) {
+    return this.operations.run(() => this.workspaceAdmission.run(userId, operation));
+  }
+
   async runSession(payload) {
-    return this.runner.runSession(payload);
+    return this._runInWorkspace(payload?.userId, () => this.runner.runSession(payload));
+  }
+
+  async close() {
+    await this.operations.close();
+    await this.memoryPostProcessService.drain();
   }
 }

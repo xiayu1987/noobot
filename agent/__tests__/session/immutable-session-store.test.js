@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { contentDigest } from "../../src/session/session-artifact-session/immutable-object-store.js";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import { resetFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import { committedPhysicalRecord, forbidRecordReads } from "./helpers/immutable-record-reads.js";
 
@@ -371,21 +371,15 @@ test("commit batches segment durability before head publication including prepar
   const directorySyncs = new Map();
   let published = false;
   setFsAdapter({
-    open: async (file, flags) => {
-      const handle = await open(file, flags);
-      return {
-        read: (...args) => handle.read(...args),
-        stat: (...args) => handle.stat(...args),
-        write: (...args) => handle.write(...args),
-        truncate: (...args) => handle.truncate(...args),
-        writeFile: (...args) => handle.writeFile(...args),
-        sync: async () => {
-          await handle.sync();
-          if (flags === "r") directorySyncs.set(file, (directorySyncs.get(file) ?? 0) + 1);
-          else synchronizedFiles.add(file);
-        },
-        close: () => handle.close(),
+    open: async (file, flags, mode) => {
+      const handle = await open(file, flags, mode);
+      const sync = handle.sync.bind(handle);
+      handle.sync = async () => {
+        await sync();
+        if (flags === "r") directorySyncs.set(file, (directorySyncs.get(file) ?? 0) + 1);
+        else synchronizedFiles.add(file);
       };
+      return handle;
     },
     rename: async (source, target) => {
       if (

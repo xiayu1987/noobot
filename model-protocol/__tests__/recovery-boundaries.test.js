@@ -13,10 +13,7 @@ test("exponential retry delay is capped without shortening provider minimum wait
   assert.equal(resolveModelRetryDelay({ attempt: 10000, baseDelayMs: 250 }), limit);
   assert.equal(resolveModelRetryDelay({ attempt: 1, baseDelayMs: 250, retryAfterMs: 2000 }), 2000);
   for (const retryAfterMs of [limit + 1, 3000000000, Infinity])
-    assert.throws(() => resolveModelRetryDelay({ attempt: 1, baseDelayMs: 250, retryAfterMs }), {
-      kind: "protocol",
-      message: "provider retry wait exceeds the allowed budget",
-    });
+    assert.equal(resolveModelRetryDelay({ attempt: 1, baseDelayMs: 250, retryAfterMs }), null);
 });
 
 test("media generation rejects a contradictory total retry budget", () => {

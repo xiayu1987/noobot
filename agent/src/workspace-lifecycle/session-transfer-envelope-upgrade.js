@@ -78,7 +78,7 @@ async function readTextOrNull(filePath) {
   try {
     return await readFile(filePath, "utf8");
   } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
+    if (error?.code === "ENOENT") return null;
     throw error;
   }
 }
@@ -87,7 +87,7 @@ async function listEntries(directory) {
   try {
     return await readdir(directory, { withFileTypes: true });
   } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return [];
+    if (error?.code === "ENOENT") return [];
     throw error;
   }
 }

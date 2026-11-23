@@ -9,6 +9,7 @@ import { WORKFLOW_SCENARIO, WORKFLOW_STRATEGIES } from "./strategies/workflow-st
 import { registerToolInputPolicies } from "./policies/tool-input-policies.js";
 import { registerToolOutputPolicies } from "./policies/tool-output-policies.js";
 import { text } from "@noobot/shared/value";
+import { TransferEnvelopeInputError } from "./errors.js";
 
 export const SEMANTIC_TRANSFER_REGISTRATION = Object.freeze({
   SCENARIOS: Object.freeze({
@@ -117,17 +118,29 @@ export function assertSemanticTransferRegistration({
   category = "",
   businessPoint = "",
 } = {}) {
-  const registered = scenarios.get(requireText(scenario, "semantic_transfer_scenario_required"));
-  if (!registered) throw new Error(`semantic_transfer_scenario_not_registered:${scenario}`);
-  const normalizedStrategy = requireText(strategy, "semantic_transfer_strategy_required");
+  const normalizedScenario = text(scenario);
+  if (!normalizedScenario)
+    throw new TransferEnvelopeInputError("semantic_transfer_scenario_required");
+  const registered = scenarios.get(normalizedScenario);
+  if (!registered)
+    throw new TransferEnvelopeInputError(`semantic_transfer_scenario_not_registered:${scenario}`);
+  const normalizedStrategy = text(strategy);
+  if (!normalizedStrategy)
+    throw new TransferEnvelopeInputError("semantic_transfer_strategy_required");
   if (!registered.strategies.includes(normalizedStrategy)) {
-    throw new Error(`semantic_transfer_strategy_not_registered:${scenario}:${normalizedStrategy}`);
+    throw new TransferEnvelopeInputError(
+      `semantic_transfer_strategy_not_registered:${scenario}:${normalizedStrategy}`,
+    );
   }
-  if (text(category) || text(businessPoint)) {
-    const points = registered.categories?.[text(category)];
-    if (!points || !points.includes(text(businessPoint))) {
-      throw new Error(
-        `semantic_transfer_business_point_not_registered:${scenario}:${text(category)}:${text(businessPoint)}`,
+  const categoryKey = text(category);
+  const pointKey = text(businessPoint);
+  if (categoryKey || pointKey) {
+    if (
+      !Object.hasOwn(registered.categories, categoryKey) ||
+      !registered.categories[categoryKey].includes(pointKey)
+    ) {
+      throw new TransferEnvelopeInputError(
+        `semantic_transfer_business_point_not_registered:${scenario}:${categoryKey}:${pointKey}`,
       );
     }
   }

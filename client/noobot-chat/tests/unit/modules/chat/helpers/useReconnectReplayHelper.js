@@ -196,8 +196,9 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
   if (currentRun) s1.currentRun = { ...currentRun, sessionId: "s-1" };
   const sessions = ref([s1, s2]);
   const activeSessionId = ref(activeId);
-  const activeSession = computed(() =>
-    sessions.value.find((sessionItem) => sessionItem.sessionId === activeSessionId.value),
+  const activeSession = computed(
+    () =>
+      sessions.value.find((sessionItem) => sessionItem.sessionId === activeSessionId.value) ?? null,
   );
   const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
   const runtimeView = computed(() =>

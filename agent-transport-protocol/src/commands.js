@@ -11,7 +11,10 @@ import {
   EXECUTION_QUERY_COMMAND_TYPES,
   RUN_COMMAND_TYPES,
 } from "./constants.js";
-import { isExecutionQueryTargetValid } from "@noobot/session-protocol/execution-lifecycle";
+import {
+  isExecutionQueryId,
+  isExecutionQueryTargetValid,
+} from "@noobot/session-protocol/execution-lifecycle";
 import {
   isTurnSnapshotKnownSequence,
   isTurnSnapshotTerminalLimit,
@@ -417,8 +420,7 @@ function validateInteractionResponseCommand(command, errors) {
 function validateExecutionQueryCommand(command, commandType, errors) {
   if (!validateNestedObject(command.query, QUERY_KEYS, "query", errors)) return;
   for (const key of QUERY_KEYS) {
-    const value = command.query[key];
-    if (typeof value !== "string" || value !== value.trim()) {
+    if (!isExecutionQueryId(command.query[key])) {
       errors.push(`invalid_query_field:${key}`);
     }
   }

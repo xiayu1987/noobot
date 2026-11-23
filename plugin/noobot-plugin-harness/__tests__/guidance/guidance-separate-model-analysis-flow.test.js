@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { appendMessage } from "../../src/core/message-store.js";
 import { clearAuxiliarySnapshotsForContext } from "../../src/capabilities/handlers/shared/model/auxiliary-snapshot-store.js";
 import { canonicalizeTestContextMessage } from "../helpers/context-message.js";
+import { buildGuidanceAnalysisPromptText } from "../../src/capabilities/handlers/shared/workflow/guidance-prompts.js";
 
 import {
   createGuidanceHandler,
@@ -90,7 +91,14 @@ test("separate_model analysis uses aligned agent context then user request and u
     String(analysisRequest?.content || ""),
     /根据当前执行结果|current execution result/i,
   );
-  assert.match(String(analysisRequest?.content || ""), /不要自己执行|do not execute/i);
+  assert.match(
+    String(analysisRequest?.content || ""),
+    /处理建议方案|recommended approach for addressing them/i,
+  );
+  assert.match(
+    String(analysisRequest?.content || ""),
+    /此请求是协助请求，无需执行工具|this is an assistance request; no tool execution is needed/i,
+  );
   assert.match(
     String(analysisRequest?.content || ""),
     /如无变化、信息不够判断，请回复“分析中”|if nothing has changed or there is insufficient information to make a judgment, reply with "Analyzing"/i,
@@ -108,6 +116,33 @@ test("separate_model analysis uses aligned agent context then user request and u
     true,
   );
 });
+
+for (const locale of ["zh-CN", "en-US"]) {
+  test(`analysis prompt includes recommended actions and assistance scope in ${locale}`, () => {
+    const prompt = buildGuidanceAnalysisPromptText({ locale });
+    if (locale === "zh-CN") {
+      assert.match(prompt, /接下来该做什么，处理建议方案。并具有明确的指引性。/);
+      assert.match(prompt, /避免固定模板、分点或机械套话。/);
+      assert.match(prompt, /如无变化、信息不够判断，请回复“分析中”。/);
+      assert.ok(prompt.endsWith("注：此请求是协助请求，无需执行工具。"));
+    } else {
+      assert.match(
+        prompt,
+        /what should be done next, and the recommended approach for addressing them/,
+      );
+      assert.match(prompt, /Provide clear actionable guidance/);
+      assert.match(prompt, /Avoid fixed templates, bullet points, or mechanical phrasing/);
+      assert.match(
+        prompt,
+        /If nothing has changed or there is insufficient information to make a judgment, reply with "Analyzing"/,
+      );
+      assert.ok(
+        prompt.endsWith("Note: this is an assistance request; no tool execution is needed."),
+      );
+    }
+    assert.doesNotMatch(prompt, /不要自己执行任务|Do not execute the task yourself/i);
+  });
+}
 
 test("separate_model analysis relays canonical Responses continuation output to the main context", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });

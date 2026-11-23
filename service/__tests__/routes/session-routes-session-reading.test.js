@@ -36,17 +36,12 @@ function appendTestExecutionLog({ sessionDir, executionLog }) {
 
 test("session-routes: sessions 列表只读取并返回概要", async () => {
   const app = express();
-  let fullDataCalled = false;
   registerSessionRoutes(app, {
     bot: {
       session: {
         readServerNow: () => TEST_MESSAGE_TS,
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-        getAllSessionsData: async () => {
-          fullDataCalled = true;
-          return [{ sessionId: "full", messages: [{ role: "user", content: "full" }] }];
-        },
         getAllSessionSummaries: async () => ({
           schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION,
           updatedAt: "2026-05-14T00:02:00.000Z",
@@ -81,7 +76,6 @@ test("session-routes: sessions 列表只读取并返回概要", async () => {
     assert.equal(payload.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION);
     assert.equal(payload.updatedAt, "2026-05-14T00:02:00.000Z");
     assert.equal(payload.serverNow, TEST_MESSAGE_TS);
-    assert.equal(fullDataCalled, false);
     assert.equal(payload.sessions.length, 1);
     assert.equal(payload.sessions[0].sessionId, "s1");
     assert.equal("messages" in payload.sessions[0], false);
@@ -108,7 +102,6 @@ test("session-routes: session 详情只返回 detail 协议文档，拒绝任何
         },
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-        getAllSessionsData: async () => [],
       },
       getAttachmentById: async () => null,
     },
@@ -275,7 +268,6 @@ test("session-routes: thinking-detail 原样透传 Turn 查找键，不在路由
         },
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-        getAllSessionsData: async () => [],
       },
       getAttachmentById: async () => null,
     },
@@ -285,14 +277,21 @@ test("session-routes: thinking-detail 原样透传 Turn 查找键，不在路由
 
   await withTestServer(app, async (baseUrl) => {
     const response = await fetch(
-      `${baseUrl}/internal/session/u1/s1/thinking-detail?dialogProcessId=dp-1&turnScopeId=${encodeURIComponent(" turn-1")}`,
+      `${baseUrl}/internal/session/u1/s1/thinking-detail?dialogProcessId=dp-1&turnScopeId=${encodeURIComponent(" turn-1")}&cursor=null&limit=1`,
     );
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.equal(payload.exists, true);
     assert.deepEqual(detailCalls, [
-      { userId: "u1", sessionId: "s1", dialogProcessId: "dp-1", turnScopeId: " turn-1" },
+      {
+        userId: "u1",
+        sessionId: "s1",
+        dialogProcessId: "dp-1",
+        turnScopeId: " turn-1",
+        cursor: null,
+        limit: 1,
+      },
     ]);
   });
 });

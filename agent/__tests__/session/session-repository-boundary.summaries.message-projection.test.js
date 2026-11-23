@@ -17,7 +17,10 @@ import {
   fileToolResultText,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
+import {
+  buildPersistedDisplaySummary,
+  buildPersistedDisplayAndThinking,
+} from "./session-artifact-store-v2.test-helpers.js";
 
 test("session display summary projects persisted userMessageId and messageUid without identity fallback", async () => {
   const summary = await buildPersistedDisplaySummary({
@@ -124,115 +127,135 @@ test("session display summary rejects an active Turn without canonical presentat
 });
 
 test("session display summary does not duplicate an active Turn with persisted assistant facts", async () => {
-  const summary = await buildPersistedDisplaySummary({
-    sessionId: "active-turn-with-facts",
-    aggregateVersion: 0,
-    messages: [
-      {
-        attachments: [],
-        role: "assistant",
-        type: "tool_call",
-        tool_calls: [{ id: "call-1", name: "read_file", args: {}, type: "tool_call" }],
-        content: "",
-        modelMessageId: "model-tool-call",
-        presentationMessageId: "presentation-active",
-        chatPresentation: false,
-        turnScopeId: "turn-active",
-        activityTimeline: [
-          canonicalActivity({
-            eventId: "thinking-1",
-            text: "working",
-            sequenceScopeId: "model-tool-call",
-            sessionId: "active-turn-with-facts",
+  const { summary, detail } = await buildPersistedDisplayAndThinking(
+    {
+      sessionId: "active-turn-with-facts",
+      aggregateVersion: 0,
+      messages: [
+        {
+          attachments: [],
+          role: "assistant",
+          type: "tool_call",
+          tool_calls: [{ id: "call-1", name: "read_file", args: {}, type: "tool_call" }],
+          content: "",
+          modelMessageId: "model-tool-call",
+          presentationMessageId: "presentation-active",
+          chatPresentation: false,
+          turnScopeId: "turn-active",
+          activityTimeline: [
+            canonicalActivity({
+              eventId: "thinking-1",
+              text: "working",
+              sequenceScopeId: "model-tool-call",
+              sessionId: "active-turn-with-facts",
+              turnScopeId: "turn-active",
+              presentationMessageId: "presentation-active",
+            }),
+          ],
+        },
+      ],
+      turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
+        sequence: 1,
+        activeTurnScopeId: "turn-active",
+        turns: {
+          "turn-active": turnRecord({
+            revision: 1,
+            sequence: 1,
             turnScopeId: "turn-active",
             presentationMessageId: "presentation-active",
+            dialogProcessId: "dialog-active",
+            state: "processing",
+            startedAt: "2026-07-31T02:00:00.000Z",
           }),
-        ],
-      },
-    ],
-    turnLifecycle: {
-      ...createEmptyTurnLifecycle(),
-      sequence: 1,
-      activeTurnScopeId: "turn-active",
-      turns: {
-        "turn-active": turnRecord({
-          revision: 1,
-          sequence: 1,
-          turnScopeId: "turn-active",
-          presentationMessageId: "presentation-active",
-          dialogProcessId: "dialog-active",
-          state: "processing",
-          startedAt: "2026-07-31T02:00:00.000Z",
-        }),
+        },
       },
     },
-  });
+    "turn-active",
+  );
 
   assert.equal(summary.messages.length, 1);
   assert.equal(summary.messages[0].presentationMessageId, "presentation-active");
   assert.equal(Object.hasOwn(summary.messages[0], "thinkingDetailCount"), false);
-  assert.equal(countCanonicalThinkingDetailEvents(summary.messages[0]), 1);
-  assert.equal(summary.messages[0].activityTimeline.length, 1);
+  assert.equal(summary.messages[0].hasThinkingDetails, true);
+  assert.equal(Object.hasOwn(summary.messages[0], "activityTimeline"), false);
+  assert.equal(countCanonicalThinkingDetailEvents(detail), 1);
+  assert.deepEqual(
+    detail.activityTimeline.map(({ eventId }) => eventId),
+    ["thinking-1"],
+  );
   assert.notEqual(summary.messages[0].turnPlaceholder, true);
 });
 
 test("session display summary projects one explicit assistant presentation from many model messages", async () => {
-  const summary = await buildPersistedDisplaySummary({
-    sessionId: "assistant-presentation-session",
-    aggregateVersion: 0,
-    messages: [
-      {
-        attachments: [],
-        role: "assistant",
-        type: "tool_call",
-        tool_calls: [{ id: "tool-1", name: "read_file", args: {}, type: "tool_call" }],
-        content: "",
-        messageUid: "sm-tool-call",
-        modelMessageId: "model-tool-call",
-        presentationMessageId: "presentation-1",
-        chatPresentation: false,
-        turnScopeId: "turn-1",
-        activityTimeline: [
-          canonicalActivity({
-            eventId: "thinking-1",
-            text: "working",
-            sequenceScopeId: "model-tool-call",
-            sessionId: "assistant-presentation-session",
-            turnScopeId: "turn-1",
-            presentationMessageId: "presentation-1",
-          }),
-        ],
-        toolTimeline: [
-          canonicalToolTimelineItem({
-            toolCallId: "tool-1",
-            tool: "read_file",
-            args: { filePath: "notes.txt" },
-            call: { eventId: "tool-call-1", sequence: 2 },
-            result: fileToolResultText("notes.txt", { content: "notes" }),
-            success: true,
-            resultEvent: { eventId: "tool-result-1", sequence: 3 },
-          }),
-        ],
-      },
-      {
-        attachments: [],
-        role: "assistant",
-        type: "message",
-        content: "final answer",
-        messageUid: "sm-final",
-        modelMessageId: "model-final",
-        presentationMessageId: "presentation-1",
-        chatPresentation: true,
-        turnScopeId: "turn-1",
-      },
-    ],
-  });
+  const { summary, detail } = await buildPersistedDisplayAndThinking(
+    {
+      sessionId: "assistant-presentation-session",
+      aggregateVersion: 0,
+      messages: [
+        {
+          attachments: [],
+          role: "assistant",
+          type: "tool_call",
+          tool_calls: [{ id: "tool-1", name: "read_file", args: {}, type: "tool_call" }],
+          content: "",
+          messageUid: "sm-tool-call",
+          modelMessageId: "model-tool-call",
+          presentationMessageId: "presentation-1",
+          chatPresentation: false,
+          turnScopeId: "turn-1",
+          activityTimeline: [
+            canonicalActivity({
+              eventId: "thinking-1",
+              text: "working",
+              sequenceScopeId: "model-tool-call",
+              sessionId: "assistant-presentation-session",
+              turnScopeId: "turn-1",
+              presentationMessageId: "presentation-1",
+            }),
+          ],
+          toolTimeline: [
+            canonicalToolTimelineItem({
+              toolCallId: "tool-1",
+              tool: "read_file",
+              args: { filePath: "notes.txt" },
+              call: { eventId: "tool-call-1", sequence: 2 },
+              result: fileToolResultText("notes.txt", { content: "notes" }),
+              success: true,
+              resultEvent: { eventId: "tool-result-1", sequence: 3 },
+            }),
+          ],
+        },
+        {
+          attachments: [],
+          role: "assistant",
+          type: "message",
+          content: "final answer",
+          messageUid: "sm-final",
+          modelMessageId: "model-final",
+          presentationMessageId: "presentation-1",
+          chatPresentation: true,
+          turnScopeId: "turn-1",
+        },
+      ],
+    },
+    "turn-1",
+  );
 
   assert.equal(summary.messages.length, 1);
   assert.equal(Object.hasOwn(summary.messages[0], "thinkingDetailCount"), false);
-  assert.equal(countCanonicalThinkingDetailEvents(summary.messages[0]), 3);
-  assert.equal(summary.messages[0].activityTimeline.length, 1);
-  assert.equal(summary.messages[0].toolTimeline.length, 1);
+  assert.equal(summary.messages[0].hasThinkingDetails, true);
+  assert.equal(Object.hasOwn(summary.messages[0], "activityTimeline"), false);
+  assert.equal(Object.hasOwn(summary.messages[0], "toolTimeline"), false);
+  assert.equal(countCanonicalThinkingDetailEvents(detail), 3);
+  assert.deepEqual(
+    detail.activityTimeline.map(({ eventId }) => eventId),
+    ["thinking-1"],
+  );
+  assert.deepEqual(
+    detail.toolTimeline.map(({ call, resultEvent }) => [call.eventId, resultEvent.eventId]),
+    [["tool-call-1", "tool-result-1"]],
+  );
   assert.deepEqual(
     (({ presentationMessageId, messageUid, modelMessageId, content }) => ({
       presentationMessageId,

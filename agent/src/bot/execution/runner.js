@@ -40,7 +40,6 @@ export class SessionExecutionRunner {
     appendAgentMessages,
     bindSessionTurnAttachments,
     assertReusedUserTurnIdentity,
-    getSessionTurns,
     finalizeRunSession,
     saveExecutionReport,
     getExecutionTurnLogs,
@@ -72,7 +71,6 @@ export class SessionExecutionRunner {
     this.appendAgentMessages = appendAgentMessages;
     this.bindSessionTurnAttachments = bindSessionTurnAttachments;
     this.assertReusedUserTurnIdentity = assertReusedUserTurnIdentity;
-    this.getSessionTurns = getSessionTurns;
     this.finalizeRunSession = finalizeRunSession;
     this.saveExecutionReport = saveExecutionReport;
     this.getExecutionTurnLogs = getExecutionTurnLogs;
@@ -266,7 +264,6 @@ export class SessionExecutionRunner {
         dialogProcessId,
         resolvedTurnScopeId,
         dispatchRuntime,
-        getSessionTurns: this.getSessionTurns,
         userMessageUid: currentUserMessage.messageUid,
         finalizeRunSession: this.finalizeRunSession,
         userId,

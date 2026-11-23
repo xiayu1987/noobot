@@ -9,6 +9,7 @@ import express from "express";
 import { SUPER_ADMIN_ROLE } from "#agent/utils";
 import { registerConnectorRoutes } from "../../routes/connectors-routes.js";
 import { createAuthService, USER_SCOPE_POLICY } from "../../services/auth-service.js";
+import { createServiceBotAccess } from "../../services/service-bot-access.js";
 import { withTestServer } from "./session-routes.helpers.js";
 
 function createHarness({ auth = { userId: "alice", role: "user" } } = {}) {
@@ -110,6 +111,8 @@ function createHarness({ auth = { userId: "alice", role: "user" } } = {}) {
       },
     },
   };
+  let currentBot = bot;
+  const access = createServiceBotAccess({ getBot: () => currentBot });
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -121,12 +124,27 @@ function createHarness({ auth = { userId: "alice", role: "user" } } = {}) {
 
   app.param("userId", administrableUserScopeParam);
   registerConnectorRoutes(app, {
-    bot,
+    bot: access,
+    runBotOperation: access.runOperation,
     connectorRuntime,
     translateText: (key) => key,
     ownerOnlyUserScopeParam: createUserScopeParam(USER_SCOPE_POLICY.OWNER_ONLY),
   });
-  return { app, records, runtime, selections, catalog, lifecycleCalls, bot, connectorRuntime };
+  const replaceBot = (nextBot) =>
+    access.withRetirement(() => {
+      currentBot = nextBot;
+    });
+  return {
+    app,
+    records,
+    runtime,
+    selections,
+    catalog,
+    lifecycleCalls,
+    bot,
+    connectorRuntime,
+    replaceBot,
+  };
 }
 
 test("connector catalog exposes only runtime-registered instance definitions", async () => {
@@ -167,6 +185,51 @@ test("connector routes require the owner-only guard", () => {
     () => registerConnectorRoutes(express(), { bot: {}, connectorRuntime: {} }),
     /ownerOnlyUserScopeParam/,
   );
+});
+
+test("connector routes require a retained Bot operation", () => {
+  assert.throws(
+    () => registerConnectorRoutes(express(), { ownerOnlyUserScopeParam() {} }),
+    /runBotOperation/,
+  );
+});
+
+test("connector selection cleanup retains the original Bot while replacement drains", async () => {
+  const { app, bot, replaceBot, selections } = createHarness();
+  const entered = Promise.withResolvers();
+  const resume = Promise.withResolvers();
+  const list = bot.session.listSessionIds;
+  bot.session.listSessionIds = async () => {
+    entered.resolve();
+    await resume.promise;
+    return list();
+  };
+
+  await withTestServer(app, async (baseUrl) => {
+    const url = `${baseUrl}/internal/connectors/alice`;
+    const pending = fetch(`${url}/con_db`, { method: "DELETE" });
+    await entered.promise;
+    const replacement = replaceBot({
+      session: { getRootSessionSelectedConnectorIds: async () => ["con_mail"] },
+    });
+    try {
+      const rejected = await fetch(`${url}/sessions/root-a`);
+      assert.equal(rejected.status, 503);
+      assert.equal((await rejected.json()).errorCode, "RUNTIME_CLOSED");
+    } finally {
+      resume.resolve();
+      await replacement;
+    }
+    const completed = await pending;
+    assert.equal(completed.status, 200);
+    assert.equal((await completed.json()).updatedSessionCount, 2);
+    assert.deepEqual(selections.get("root-a"), []);
+    assert.deepEqual(selections.get("root-b"), ["con_mail"]);
+
+    const next = await fetch(`${url}/sessions/root-a`);
+    assert.equal(next.status, 200);
+    assert.deepEqual((await next.json()).selectedConnectorIds, ["con_mail"]);
+  });
 });
 
 test("connector routes expose public metadata without credentials", async () => {

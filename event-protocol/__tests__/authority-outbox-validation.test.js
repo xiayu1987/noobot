@@ -7,9 +7,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createEventEnvelope } from "../src/envelope.js";
 import {
+  AUTHORITY_OUTBOX_PAGE_LIMIT,
   acknowledgeAuthorityEventDelivery,
   assertAuthorityOutboxRequest,
   assertAuthorityOutboxJournalRecord,
+  assertAuthorityEventSequenceAdvance,
+  assertNewAuthorityEventScope,
+  assertUncommittedAuthorityEvent,
   authorityEventConsumerDelivery,
   listPendingAuthorityEvents,
   migrateLegacyUnownedAttemptRecords,
@@ -41,6 +45,33 @@ function entry() {
     }),
   };
 }
+
+test("authority event admission rejects foreign scope and prefilled delivery state", () => {
+  const source = entry();
+  const scope = { sessionId: "s1", parentSessionId: "parent" };
+  assert.doesNotThrow(() => assertNewAuthorityEventScope(source, scope));
+  assert.throws(
+    () => assertNewAuthorityEventScope(source, { ...scope, sessionId: "foreign" }),
+    /ownership mismatch/,
+  );
+  const foreignParent = structuredClone(source);
+  foreignParent.envelope.payload.parentSessionId = "foreign";
+  assert.throws(() => assertNewAuthorityEventScope(foreignParent, scope), /ownership mismatch/);
+  source.deliveries.browser = authorityEventConsumerDelivery(source, "browser");
+  assert.throws(() => assertNewAuthorityEventScope(source, scope), /delivery acknowledgements/);
+});
+
+test("authority event admission requires a new ID and advancing scope sequence", () => {
+  const source = entry();
+  assert.doesNotThrow(() => assertUncommittedAuthorityEvent(null));
+  assert.throws(() => assertUncommittedAuthorityEvent(source), { code: "SESSION_EVENT_CONFLICT" });
+  assert.doesNotThrow(() => assertAuthorityEventSequenceAdvance(source.envelope, 0));
+  for (const floor of [1, 2])
+    assert.throws(() => assertAuthorityEventSequenceAdvance(source.envelope, floor), {
+      code: "SESSION_EVENT_SEQUENCE_CONFLICT",
+    });
+});
+
 test("delivery responses use committed facts without recomputing attempts or changing other consumers", () => {
   const source = entry();
   source.deliveries.other = authorityEventConsumerDelivery(source, "other");
@@ -246,10 +277,8 @@ test("outbox request protocol rejects malformed identities and whole invalid del
   for (const [operation, patch] of [
     ["pending", { userId: " u1" }],
     ["pending", { sessionId: "" }],
-    ["pending", { consumerId: "browser " }],
+    ["prepareDelivery", { consumerId: "browser " }],
     ["attempt", { eventIds: [] }],
-    ["attempt", { eventIds: ["event-1", ""] }],
-    ["attempt", { eventIds: ["event-1", "event-1"] }],
     ["ack", { acknowledgements: [ack(), null] }],
     ["ack", { acknowledgements: [ack(), ack()] }],
     ["ack", { acknowledgements: [ack({ sequence: "1" })] }],
@@ -261,6 +290,21 @@ test("outbox request protocol rejects malformed identities and whole invalid del
     );
   }
   assert.deepEqual(assertAuthorityOutboxRequest(owner, "pending"), owner);
+  assert.deepEqual(assertAuthorityOutboxRequest(owner, "prepareDelivery"), owner);
+});
+
+test("outbox acknowledgements are limited to one protocol page", () => {
+  const request = {
+    userId: "u1",
+    sessionId: "s1",
+    consumerId: "browser",
+    acknowledgements: Array.from({ length: AUTHORITY_OUTBOX_PAGE_LIMIT }, (_, index) =>
+      ack({ eventId: `event-${index}`, sequence: index + 1 }),
+    ),
+  };
+  assert.equal(assertAuthorityOutboxRequest(request, "ack"), request);
+  request.acknowledgements.push(ack({ eventId: "extra" }));
+  assert.throws(() => assertAuthorityOutboxRequest(request, "ack"), /must fit one outbox page/);
 });
 
 test("outbox acknowledgement rejects mismatched ordering and keeps the event pending", () => {

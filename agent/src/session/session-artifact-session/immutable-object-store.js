@@ -17,7 +17,7 @@ export {
   syncStorageDirectory,
   writeDurableReplacement,
 } from "./immutable-storage-io.js";
-import { recordStorageWork } from "./storage-transaction.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 import { ImmutableValueStore } from "./immutable-value-store.js";
 import { runStorageBatch } from "./storage-batch-results.js";
 import { ImmutableTransactionGraph } from "./immutable-transaction-graph.js";
@@ -51,8 +51,8 @@ async function readImmutableObjectBytes(file, allowAbsent) {
 export class ImmutableObjectStore extends ImmutableValueStore {
   static format = IMMUTABLE_SESSION_FORMAT;
 
-  constructor(sessionDir) {
-    super();
+  constructor(sessionDir, objectRead) {
+    super(objectRead);
     this.directory = path.join(sessionDir, IMMUTABLE_SESSION_DIRECTORIES.objects);
     this.writeBatches = new AsyncLocalStorage();
   }
@@ -141,6 +141,10 @@ export class ImmutableObjectStore extends ImmutableValueStore {
 
   async read(reference) {
     requireObjectReference(reference);
+    return this.readObject(reference, this.#loadObject, reference);
+  }
+
+  #loadObject(reference) {
     const batch = this.writeBatches.getStore();
     if (batch && !batch.active) throw new Error("Immutable durability batch has ended");
     const staged = batch?.graph.objects.get(reference);

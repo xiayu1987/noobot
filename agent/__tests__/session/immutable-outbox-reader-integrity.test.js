@@ -12,8 +12,9 @@ import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { commitSessionChanges } from "../helpers/commit-immutable-session-fixture.js";
 import {
+  readImmutableOutboxCursor,
   readImmutableOutboxEvent,
   readImmutableOutboxPage,
 } from "../../src/session/session-artifact-session/immutable-outbox.js";
@@ -247,7 +248,7 @@ test("outbox pagination validates only the requested fixed-snapshot positions", 
   );
 });
 
-test("outbox identity lookup reads one fixed-snapshot entry and preserves absence", async (t) => {
+test("outbox identity lookup verifies its fixed-snapshot index and preserves absence", async (t) => {
   const store = await fixture(t);
   const snapshot = await store.snapshot();
   const [item] = (await page(store, snapshot)).events;
@@ -260,11 +261,59 @@ test("outbox identity lookup reads one fixed-snapshot entry and preserves absenc
   };
   const result = await readImmutableOutboxEvent(store, snapshot, item.eventId);
   assert.equal(result.eventId, item.eventId);
-  assert.deepEqual(calls, [["outbox", item.eventId]]);
+  assert.deepEqual(calls, [
+    ["outbox", item.eventId],
+    ["events", item.eventId],
+    ["metadata", "events"],
+    ["eventOrder", "0000000000000001"],
+  ]);
   calls.length = 0;
   assert.equal(await readImmutableOutboxEvent(store, snapshot, "absent"), null);
   assert.deepEqual(calls, [["outbox", "absent"]]);
   assert.deepEqual(await store.snapshot(), snapshot);
+});
+
+test("outbox identity lookup reads imported delivery position from the committed event", async (t) => {
+  const store = await fixture(t);
+  const snapshot = await store.snapshot();
+  const [item] = (await page(store, snapshot)).events;
+  const { ordinal, ...delivery } = item;
+  const get = store.get.bind(store);
+  let corruptIndex = false;
+  store.get = (head, collection, key) => {
+    if (collection === "outbox" && key === item.eventId) return delivery;
+    if (collection === "eventOrder" && corruptIndex) return "another-event";
+    return get(head, collection, key);
+  };
+  assert.deepEqual(await readImmutableOutboxEvent(store, snapshot, item.eventId), {
+    ...delivery,
+    ordinal,
+  });
+  corruptIndex = true;
+  await assert.rejects(readImmutableOutboxEvent(store, snapshot, item.eventId), {
+    code: "SESSION_IMMUTABLE_STORAGE_INVALID",
+    message: "Immutable event ordinal mismatch",
+  });
+});
+
+test("cold outbox cursor lookup rejects a persisted cursor beyond the tail", async (t) => {
+  const store = await fixture(t);
+  const before = await store.snapshot();
+  await store.commit({
+    expectedGeneration: before.generation,
+    operationId: "invalid-cursor-fixture",
+    changes: [
+      { collection: "outboxConsumers", key: "client", value: { consumerId: "client", cursor: 2 } },
+    ],
+  });
+  const reopened = await ImmutableSessionStore.open({ sessionDir: store.sessionDir });
+  const snapshot = await reopened.snapshot();
+  assert.equal(await readImmutableOutboxCursor(reopened, before, "client"), null);
+  await assert.rejects(readImmutableOutboxCursor(reopened, snapshot, "client"), {
+    code: "SESSION_IMMUTABLE_STORAGE_INVALID",
+    message: /Invalid immutable outbox consumer cursor/,
+  });
+  assert.deepEqual(await reopened.snapshot(), snapshot);
 });
 
 for (const kind of ["event key", "session identity"]) {

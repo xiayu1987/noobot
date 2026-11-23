@@ -132,11 +132,10 @@ export async function backwriteParsedAttachment({
   parsedAttachment,
 }) {
   const sourceIdentity = projectAttachmentIdentity(sourceAttachmentMeta);
-  const { identity, name, mimeType, size } = parsedAttachment;
   const updated = await runtime.attachmentService.linkParsedResultToAttachment({
     userId: runtime.systemRuntime.userId,
     sourceIdentity,
-    targetDescriptor: { identity, name, mimeType, ...(size === undefined ? {} : { size }) },
+    targetIdentity: parsedAttachment.identity,
     producerId: TOOL_NAME.MULTIMODAL_PARSE,
   });
   updateRuntimeUserMessageAttachment(runtime, sourceIdentity.attachmentId, updated);

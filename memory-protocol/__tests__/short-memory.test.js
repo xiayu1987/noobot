@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 import {
+  collectShortMemoryRecords,
   excludeShortMemoryItemsBySessionIds,
   sortShortMemoryItems,
   toShortMemoryRecords,
@@ -47,4 +48,24 @@ test("short memory items sort by createdAt and drop deleted sessions", () => {
     excludeShortMemoryItemsBySessionIds(items, [" a "]).map((item) => item.sessionId),
     ["b"],
   );
+});
+
+test("short memory record streams use committed ordinals and reject duplicate or foreign records", async () => {
+  const record = (ordinal, content, overrides = {}) => ({
+    ordinal,
+    message: { sessionId: "s1", dialogProcessId: "d1", role: "user", content, ...overrides },
+  });
+  const capture = (messageRecords) =>
+    collectShortMemoryRecords({ sessionId: "s1", dialogProcessId: "d1", messageRecords });
+  assert.deepEqual(await capture([record(3, "later"), record(1, "first")]), [
+    { role: "user", content: "first" },
+    { role: "user", content: "later" },
+  ]);
+  for (const invalid of [
+    [record(1, "one"), record(1, "duplicate")],
+    [record(0, "invalid")],
+    [record(1, "foreign", { sessionId: "s2" })],
+    [record(1, "foreign", { dialogProcessId: "d2" })],
+  ])
+    await assert.rejects(capture(invalid), TypeError);
 });

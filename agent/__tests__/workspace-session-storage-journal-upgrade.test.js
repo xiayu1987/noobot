@@ -25,7 +25,7 @@ import {
 } from "./helpers/session-identity-upgrade.fixtures.js";
 import { upgradeWorkspaceLayout } from "../src/workspace-lifecycle/sections.js";
 import { readSessionArtifact } from "../src/session/session-artifact-store.js";
-import { observeSessionStorageWork } from "../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../src/session/session-storage-observation.js";
 
 const PREVIOUS_SCHEMA_VERSION = SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION - 1;
 const PREVIOUS_LAYOUT_VERSION = 31;

@@ -20,7 +20,8 @@ import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
 import { withTemp } from "../session/session-artifact-store-v2.test-helpers.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
-import { immutableSessionMethods } from "../../src/session/repositories/file-system-session-repository/immutable-methods.js";
+import { sessionReaderMethods } from "../../src/session/repositories/file-system-session-repository/reader-methods.js";
+import { immutableSessionReaderAccess } from "../../src/session/session-artifact-session/immutable-reader-access.js";
 
 async function withExecutionSession(run) {
   return withTemp(async (sessionDir) => {
@@ -42,7 +43,8 @@ function executionRepositoryFor(sessionDir) {
   return new FileSystemExecutionRepository({
     storageService: TEST_STORAGE_SERVICE,
     sessionRepository: {
-      withSessionReader: immutableSessionMethods.withSessionReader,
+      sessionReaderAccess: immutableSessionReaderAccess,
+      withSessionReader: sessionReaderMethods.withSessionReader,
       async withSessionMutation(_userId, _sessionId, write) {
         return write({ sessionDir, resolvedParentSessionId: "parent" });
       },

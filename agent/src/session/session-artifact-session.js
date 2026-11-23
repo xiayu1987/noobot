@@ -17,10 +17,7 @@ export {
   SESSION_ARTIFACT_PREDECESSOR,
   writeSessionArtifact,
 } from "./session-artifact-session/session-artifact-writer.js";
-export {
-  readSessionDisplaySummaryArtifact,
-  rebuildSessionDisplaySummaryArtifact,
-} from "./session-artifact-session/session-display-artifact.js";
+export { rebuildSessionDisplaySummaryArtifact } from "./session-artifact-session/session-display-artifact.js";
 export {
   appendExecutionLogArtifact,
   readExecutionReportArtifact,

@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import { ImmutableValueStore } from "../../src/session/session-artifact-session/immutable-value-store.js";
 import { IMMUTABLE_VALUE_BLOCK_BYTES as BLOCK_BYTES } from "@noobot/session-protocol/immutable-storage-graph";
+import { createMessageReadBudget } from "@noobot/session-protocol/message-read-budget";
 
 class MemoryValues extends ImmutableValueStore {
   records = new Map();
@@ -34,6 +35,26 @@ class MemoryValues extends ImmutableValueStore {
   }
   linkReferences() {}
 }
+
+test("immutable body materialization charges the published JSON UTF-8 bytes", async () => {
+  const store = new MemoryValues();
+  const content = '首条🙂\n"\\'.repeat(BLOCK_BYTES);
+  const encoded = Buffer.from(JSON.stringify(content));
+  const reference = await store.putValueBytes(encoded);
+  const maxBytes = encoded.byteLength;
+  const materialize = (bytes) =>
+    store.materializeValue(
+      { value: { message: {} }, parts: [{ path: ["message", "content"], reference }] },
+      { budget: createMessageReadBudget(bytes) },
+    );
+  assert.deepEqual(await materialize(maxBytes), { message: { content } });
+  await assert.rejects(materialize(maxBytes - 1), {
+    code: "SESSION_MESSAGE_READ_BUDGET_EXCEEDED",
+    limit: maxBytes - 1,
+    used: 0,
+    requested: maxBytes,
+  });
+});
 
 for (const size of [
   0,
@@ -164,6 +185,24 @@ test("suffix append reads logarithmic descriptors and only the boundary payload"
     await store.readValueBytes(result),
     Buffer.concat([bytes.subarray(0, -1), Buffer.from("appended")]),
   );
+});
+
+test("suffix append does not repeatedly descend from the original root", async (t) => {
+  const store = new MemoryValues();
+  const depth = 8;
+  const bytes = Buffer.alloc(2 ** depth * BLOCK_BYTES - 3, 120);
+  const reference = await store.putValueBytes(bytes);
+  const validate = store.requireReference.bind(store);
+  let referenceChecks = 0;
+  t.mock.method(store, "requireReference", (ref) => {
+    referenceChecks += 1;
+    return validate(ref);
+  });
+  const suffix = Buffer.from("yz");
+  const result = await store.replaceValueSuffix(reference, Buffer.from("x"), suffix);
+  assert.ok(referenceChecks <= 6 * depth + 6, `${referenceChecks} reference checks`);
+  t.mock.restoreAll();
+  assert.equal(result, await store.putValueBytes(Buffer.concat([bytes.subarray(0, -1), suffix])));
 });
 
 test("suffix replacement rejects mismatches and corrupt branch totals", async () => {

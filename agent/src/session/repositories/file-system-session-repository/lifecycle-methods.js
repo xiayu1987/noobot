@@ -9,7 +9,7 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { createSessionDeletedError, createSessionNotFoundError } from "@noobot/session-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
-import { withSessionStorageTransaction } from "../../session-artifact-session/storage-transaction.js";
+import { withSessionReadCache } from "../../session-read-cache.js";
 
 function requireLifecycleSessionKey(sessionId = "") {
   const normalizedSessionId = text(sessionId);
@@ -76,7 +76,7 @@ class SessionLifecycleMethods {
       await this.assertSessionWritable(userId, sessionId);
       const scope = await resolveScope();
       await this._assertParentSessionWritable(userId, scope.resolvedParentSessionId);
-      return withSessionStorageTransaction(scope.sessionDir, () => operation(scope));
+      return withSessionReadCache(scope.sessionDir, () => operation(scope));
     });
   }
 
@@ -91,14 +91,14 @@ class SessionLifecycleMethods {
     return this.withSessionReader(
       userId,
       sessionId,
-      async (reader) => {
-        return await this.commitChanges(userId, sessionId, {
-          persistenceContext,
-          expectedGeneration: reader.generation,
-          operationId: `scoped-metadata:${reader.generation}`,
-          changes: { scopedMetadata: metadata },
-          committedAt: this.now(),
-        });
+      async ({ reader, commitChanges }) => {
+        return commitChanges(
+          await reader.prepareRequest({
+            operationId: `scoped-metadata:${reader.generation}`,
+            changes: { scopedMetadata: metadata },
+            committedAt: this.now(),
+          }),
+        );
       },
       { persistenceContext },
     );

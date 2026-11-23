@@ -28,8 +28,8 @@ import { ImmutableValueStore } from "./immutable-value-store.js";
 export class ImmutableRecordStore extends ImmutableValueStore {
   static format = IMMUTABLE_SEGMENT_SESSION_FORMAT;
 
-  constructor(sessionDir) {
-    super();
+  constructor(sessionDir, objectRead) {
+    super(objectRead);
     this.segments = new ImmutableSegmentStore(sessionDir);
     this.writeBatches = new AsyncLocalStorage();
     this.readScopes = new AsyncLocalStorage();
@@ -160,6 +160,10 @@ export class ImmutableRecordStore extends ImmutableValueStore {
 
   async read(reference) {
     this.requireReference(reference);
+    return this.readObject(reference, this.#loadObject, reference);
+  }
+
+  async #loadObject(reference) {
     const batch = this.writeBatches.getStore();
     if (batch && !batch.active) throw new Error("Immutable durability batch has ended");
     const staged = batch?.graph.objects.get(reference);

@@ -15,6 +15,7 @@ async function appendFsmAudit(paths, payload = {}, options = {}) {
       ? HARNESS_FLUSH_REASONS.ERROR
       : HARNESS_FLUSH_REASONS.NONE;
   await appendJsonlBuffered(
+    paths,
     paths.events,
     {
       kind: "fsm",

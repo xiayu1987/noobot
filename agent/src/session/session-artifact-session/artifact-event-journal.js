@@ -17,7 +17,8 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { open } from "node:fs/promises";
 import { appendJournal } from "./turn-journal-store.js";
 import { createByteLru, fileIdentityOf } from "./verified-snapshot-cache.js";
-import { memoizeArtifactRead, recordStorageWork } from "./storage-transaction.js";
+import { memoizeSessionRead } from "../session-read-cache.js";
+import { recordStorageWork } from "../session-storage-observation.js";
 
 let verifiedJournals = null;
 const eventSizes = new WeakMap();
@@ -72,7 +73,7 @@ export async function readSessionArtifactEvents(sessionDir, manifest) {
   if (index.committedBytes === 0)
     return materializeSessionArtifactJournal([], index, manifest.sessionId);
   const file = path.join(sessionDir, index.file);
-  return memoizeArtifactRead(
+  return memoizeSessionRead(
     JSON.stringify(["artifactEvents", manifest.sessionId, index]),
     file,
     () => readVerifiedEvents(file, index, manifest.sessionId),

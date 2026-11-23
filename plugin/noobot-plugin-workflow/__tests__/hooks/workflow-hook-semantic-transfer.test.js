@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  createExecutionResult,
   createMockBotHookManager,
   createSemanticTransferTool,
   createV2AttachmentTransferEnvelope,
@@ -62,19 +63,10 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
           sessionId: payload.strategy.sessionId,
           dialogProcessId: payload.strategy.dialogProcessId,
           persisted: { outputDir: "/tmp/noobot/workflow/s1/node1" },
-          result: {
-            answer: 'answer-node-done\n\n[Harness-Review]\n{"status":"pass"}',
-            traces: [],
-            dialogProcessId: payload.strategy.dialogProcessId,
-            messages: [
-              {
-                messageUid: "node-message",
-                role: "assistant",
-                content: "message-node-done",
-                type: "message",
-              },
-            ],
-          },
+          result: createExecutionResult(
+            payload.strategy,
+            'answer-node-done\n\n[Harness-Review]\n{"status":"pass"}',
+          ),
         };
       },
     },
@@ -296,19 +288,14 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
         },
         sessionId: "wf-semantic-node-session-1",
         dialogProcessId: "wf_semantic_node_dialog_1",
-        result: {
-          answer: "semantic-node-done",
-          traces: [],
-          dialogProcessId: "wf_semantic_node_dialog_1",
-          messages: [
-            {
-              messageUid: "semantic-message",
-              role: "assistant",
-              content: "semantic-node-done",
-              type: "message",
-            },
-          ],
-        },
+        result: createExecutionResult(
+          {
+            sessionId: "wf-semantic-node-session-1",
+            dialogProcessId: "wf_semantic_node_dialog_1",
+            turnScopeId: payload.strategy.turnScopeId,
+          },
+          "semantic-node-done",
+        ),
       }),
     },
   });
@@ -412,19 +399,14 @@ test("workflow hook routes final attachment summary composition through semantic
         },
         sessionId: "wf-summary-node-session-1",
         dialogProcessId: "wf_summary_node_dialog_1",
-        result: {
-          answer: "summary-node-done",
-          traces: [],
-          dialogProcessId: "wf_summary_node_dialog_1",
-          messages: [
-            {
-              messageUid: "summary-message",
-              role: "assistant",
-              content: "summary-node-done",
-              type: "message",
-            },
-          ],
-        },
+        result: createExecutionResult(
+          {
+            sessionId: "wf-summary-node-session-1",
+            dialogProcessId: "wf_summary_node_dialog_1",
+            turnScopeId: payload.strategy.turnScopeId,
+          },
+          "summary-node-done",
+        ),
       }),
     },
   });

@@ -13,11 +13,7 @@ import {
   validateProtocolEvent,
   reduceAttachmentLifecycle,
 } from "@noobot/event-protocol";
-import {
-  WORKSPACE_LAYOUT_UPGRADES,
-  WORKSPACE_LAYOUT_VERSION,
-  planWorkspaceLayoutUpgrades,
-} from "@noobot/workspace-protocol";
+import { WORKSPACE_LAYOUT_UPGRADES, planWorkspaceLayoutUpgrades } from "@noobot/workspace-protocol";
 import { attachmentLifecycleSequenceScopeId } from "@noobot/attachment-protocol";
 import { buildHarness } from "./session/scoped-session-repositories.fixtures.js";
 import { v9Options, jsonl } from "./helpers/session-identity-upgrade.fixtures.js";
@@ -163,26 +159,20 @@ test("v29 startup isolates current-schema invalid delivery before writer recover
   await writeFile(layoutFile, JSON.stringify({ version: 29 }));
   const invalidBefore = await fileBytes(directories["a-invalid-delivery"]);
   const applied = await upgradeWorkspaceLayout({ ...options, created: false });
-  assert.equal(
-    applied.some((item) => item.failed),
-    false,
-  );
+  assert.equal(applied.at(-1).failed.code, "SESSION_STORAGE_UPGRADE_BLOCKED");
   const upgrade = applied.find((item) => item.toVersion === 30);
   assert.equal(upgrade.result.quarantined.length, 1);
   assert.equal(upgrade.result.sessions.length, 1);
   assert.match(JSON.stringify(upgrade.result.quarantined[0]), /outbox_record_invalid/);
   assert.match(JSON.stringify(upgrade.result.quarantined[0]), /consumerId/);
   assert.deepEqual(await fileBytes(directories["a-invalid-delivery"]), invalidBefore);
-  assert.equal(JSON.parse(await readFile(layoutFile, "utf8")).version, WORKSPACE_LAYOUT_VERSION);
+  assert.equal(JSON.parse(await readFile(layoutFile, "utf8")).version, 45);
   const outbox = await readAuthorityOutbox(directories["z-valid-delivery"]);
   assert.equal(outbox[0].deliveries.c1.attempts, 1);
   assert.equal(validateProtocolEvent(outbox[0].envelope).valid, true);
   const healthyAfter = await fileBytes(directories["z-valid-delivery"]);
   const repeated = await upgradeWorkspaceLayout({ ...options, created: false });
-  assert.equal(
-    repeated.some((item) => item.failed),
-    false,
-  );
+  assert.equal(repeated.at(-1).failed.code, "SESSION_STORAGE_UPGRADE_BLOCKED");
   assert.deepEqual(await fileBytes(directories["a-invalid-delivery"]), invalidBefore);
   assert.deepEqual(await fileBytes(directories["z-valid-delivery"]), healthyAfter);
 });

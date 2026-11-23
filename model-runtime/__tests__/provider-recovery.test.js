@@ -209,15 +209,20 @@ for (const operation of operations) {
   });
 }
 
-for (const code of ["rate_limit_exceeded", "vendor_extension"]) {
-  test(`oversized retry-after prevents ${code} replay and scheduling`, async () => {
-    const ctx = executorWithResponse(openai, () =>
+for (const [operatorId, status, code, kind, retryAfter] of [
+  ["openai", 429, "rate_limit_exceeded", "rate_limit", "3000000"],
+  ["openai", 429, "vendor_extension", "unknown", "3000000"],
+  ["generic", 524, null, "timeout", "120"],
+]) {
+  test(`${operatorId}: oversized retry-after preserves HTTP ${status} ${kind} without replay`, async () => {
+    const ctx = executorWithResponse({ ...openai, operatorId }, () =>
       Response.json(
-        { error: { code, message: "wait" } },
-        { status: 429, headers: { "retry-after": "3000000" } },
+        code ? { error: { code, message: "wait" } } : { title: "Error 524: A timeout occurred" },
+        { status, headers: { "retry-after": retryAfter } },
       ),
     );
-    await assert.rejects(ctx.invoke(), /retry wait exceeds the allowed budget/);
+    await assert.rejects(ctx.invoke(), { status });
+    assert.equal(ctx.events.at(-1).kind, kind);
     assert.equal(ctx.requests.length, 1);
     assert.deepEqual(ctx.sleeps, []);
     assert.equal(

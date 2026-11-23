@@ -61,21 +61,26 @@ for (const failure of ["before publication", "after publication", "lost response
     });
     await runtime.persistCurrentTurnMessages();
     const commits = [];
-    const withSessionReader = repository.withSessionReader.bind(repository);
+    const outcomes = [];
+    const withSessionCommit = repository.withSessionCommit.bind(repository);
     let armed = true;
-    t.mock.method(repository, "withSessionReader", (userId, sessionId, run, options) =>
-      withSessionReader(
+    t.mock.method(repository, "withSessionCommit", (userId, sessionId, run, options) =>
+      withSessionCommit(
         userId,
         sessionId,
-        (reader, scope, commit) =>
-          run(reader, scope, async (request) => {
-            commits.push(request);
-            const result = await commit(request);
-            if (failure === "lost response" && armed) {
-              armed = false;
-              throw new Error("injected response loss");
-            }
-            return result;
+        ({ commitChanges, ...capabilities }) =>
+          run({
+            ...capabilities,
+            commitChanges: async (request) => {
+              commits.push(request);
+              const result = await commitChanges(request);
+              outcomes.push(result);
+              if (failure === "lost response" && armed) {
+                armed = false;
+                throw new Error("injected response loss");
+              }
+              return result;
+            },
           }),
         options,
       ),
@@ -98,21 +103,37 @@ for (const failure of ["before publication", "after publication", "lost response
     );
     resetFsAdapter();
     assert.equal(armed, false, "the intended publication boundary must be reached");
+    const published = failure !== "before publication";
+    {
+      await using reader = await repository.requireSessionReader(
+        identity.userId,
+        identity.sessionId,
+        { persistenceContext },
+      );
+      assert.equal(reader.generation, commits[0].expectedGeneration + Number(published));
+      assert.equal(
+        (await reader.readMessage("m1")).message.content,
+        published ? "initial first" : "initial",
+      );
+    }
     store.appendContentByUid("m1", " concurrent");
     await runtime.persistCurrentTurnMessages();
+    assert.equal(commits.length, 3);
     assert.deepEqual(
       commits[1],
       commits[0],
       "the complete commit request must survive failure unchanged",
     );
-    assert.equal(commits[0].changes.messageContentAppends[0].content, " first");
-    const [pending] = store.readPendingChanges().entries;
-    assert.equal(pending.persisted.message.content, "initial first");
-    assert.equal(pending.contentAppend, " concurrent");
-    await runtime.persistCurrentTurnMessages();
+    assert.equal(commits[0].input.changes.messageContentAppends[0].content, " first");
+    const [retried, next] = outcomes.slice(-2);
+    assert.equal(retried.replayed, published);
+    assert.equal(retried.generation, commits[0].expectedGeneration + 1);
+    if (failure === "lost response") assert.deepEqual(retried, { ...outcomes[0], replayed: true });
+    assert.equal(next.replayed, false);
+    assert.equal(next.generation, retried.generation + 1);
     assert.notEqual(commits[2].operationId, commits[0].operationId);
     assert.equal(commits[2].expectedGeneration, commits[0].expectedGeneration + 1);
-    assert.equal(commits[2].changes.messageContentAppends[0].content, " concurrent");
+    assert.equal(commits[2].input.changes.messageContentAppends[0].content, " concurrent");
     await using reader = await repository.requireSessionReader(
       identity.userId,
       identity.sessionId,
@@ -121,5 +142,7 @@ for (const failure of ["before publication", "after publication", "lost response
     assert.equal(reader.generation, commits[0].expectedGeneration + 2);
     assert.equal((await reader.readMessage("m1")).message.content, "initial first concurrent");
     assert.equal(store.readPendingChanges().entries.length, 0);
+    await runtime.persistCurrentTurnMessages();
+    assert.equal(commits.length, 3, "another flush must not resubmit acknowledged revisions");
   });
 }

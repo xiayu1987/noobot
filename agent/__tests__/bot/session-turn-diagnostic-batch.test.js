@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
+import { createTestMessageCreationBatch } from "../helpers/message-persistence-receipts.js";
 import { useRuntimeEventsEnv } from "../helpers/runtime-events-env.js";
 import {
   EXECUTION_LOG_BATCH_MAX_RECORDS,
@@ -56,11 +57,13 @@ test(
         },
       },
     });
-    const pending = persister.appendAgentMessages({
-      ...input,
-      messages: messages(201),
-      eventListener: { onEvent: ({ event }) => events.push(event) },
-    });
+    const pending = persister.appendAgentMessages(
+      createTestMessageCreationBatch({
+        ...input,
+        messages: messages(201),
+        eventListener: { onEvent: ({ event }) => events.push(event) },
+      }),
+    );
     await started;
     assert.deepEqual(events, []);
     assert.equal(batches.length, 1);
@@ -109,11 +112,13 @@ test("a failed message and diagnostic transaction propagates without retrying or
     },
   });
   await assert.rejects(
-    persister.appendAgentMessages({
-      ...input,
-      messages: messages(201),
-      eventListener: { onEvent: ({ event }) => events.push(event) },
-    }),
+    persister.appendAgentMessages(
+      createTestMessageCreationBatch({
+        ...input,
+        messages: messages(201),
+        eventListener: { onEvent: ({ event }) => events.push(event) },
+      }),
+    ),
     (error) => error === failure,
   );
   assert.equal(calls, 1);
@@ -140,15 +145,17 @@ test("disabled diagnostics do not serialize diagnostic fields, allocate timestam
       },
     },
   });
-  await persister.appendAgentMessages({
-    ...input,
-    messages: [
-      {
-        ...messages(1)[0],
-        modelResponseMetadata: metadata,
-      },
-    ],
-  });
+  await persister.appendAgentMessages(
+    createTestMessageCreationBatch({
+      ...input,
+      messages: [
+        {
+          ...messages(1)[0],
+          modelResponseMetadata: metadata,
+        },
+      ],
+    }),
+  );
   assert.equal(saved, true);
 });
 

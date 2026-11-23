@@ -56,6 +56,17 @@ test("service startup state is pending until the pid records a terminal event", 
   });
 });
 
+test("workspace preparation failure does not determine service readiness", async () => {
+  await tempRoot();
+  const file = startupStateFile();
+  const preparationFailed = line(101, SERVICE_STARTUP_EVENTS.WORKSPACE_PREPARATION_FAILED);
+  await writeLines(file, preparationFailed);
+  assert.equal((await readServiceStartupState({ pid: 101 })).state, SERVICE_STARTUP_STATES.PENDING);
+
+  await writeLines(file, preparationFailed + line(101, SERVICE_STARTUP_EVENTS.LISTEN_STARTED));
+  assert.equal((await readServiceStartupState({ pid: 101 })).state, SERVICE_STARTUP_STATES.READY);
+});
+
 test("service startup state is isolated by pid", async () => {
   await tempRoot();
   const file = startupStateFile();

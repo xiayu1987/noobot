@@ -62,14 +62,14 @@ test("disabled or unreached turn-only thresholds do not scan the model context",
   for (const loopState of [
     {},
     { phaseSummaryLoopTurns: 0, phaseSummaryMessageCharsThreshold: 0 },
-    { phaseSummaryLoopTurns: 20, phaseSummaryMessageCharsThreshold: 0 },
+    { phaseSummaryLoopTurns: 4, phaseSummaryMessageCharsThreshold: 0 },
   ]) {
     assert.equal(await maybeRequestPhaseSummary({ modelState, loopState }), false);
     assert.equal(peekMainFlowPhaseSummary(modelState.runtime), null);
   }
 });
 
-test("phase summary schedules at the character threshold", async () => {
+test("phase summary schedules only above the character threshold", async () => {
   const message = writeContextMessageMetadata(
     { role: "system", content: "0123456789012345" },
     {
@@ -80,6 +80,13 @@ test("phase summary schedules at the character threshold", async () => {
     },
   );
   const modelState = fixture({ messages: [message] });
+  assert.equal(
+    await maybeRequestPhaseSummary({
+      modelState,
+      loopState: { phaseSummaryMessageCharsThreshold: message.content.length },
+    }),
+    false,
+  );
   assert.equal(
     await maybeRequestPhaseSummary({
       modelState,

@@ -69,6 +69,25 @@ does not call the hook error observer, and stops dispatching remaining serial ha
 Cancellation policy belongs to each hook point descriptor. Terminal error and abort observers are
 `detached`, so they can record the terminal fact after the parent execution signal has been cancelled.
 
+### Session deletion hooks
+
+`service.after_session_delete` receives the authoritative `deletedSessionIds`
+and a workspace-scoped `deletionKey`. Handlers clean only their own storage and
+complete without returning session ownership claims. The caller persists the ordered
+handler IDs before dispatch, and replay requires those same registrations. The
+protocol rejects one-shot registrations (`once`) at this point: consuming the
+registration would make a retry of an unconfirmed cleanup impossible. A missing
+handler fails dispatch before any planned handler runs.
+
+Timeout or cancellation signals the active handler but does not acknowledge cleanup
+or release the caller until that handler settles. A handler must await all its writes
+and must not detach background cleanup. An incomplete cleanup fails the hook. Before
+destroying the only ownership evidence for a target, handlers must make the pending
+target recoverable from their own storage. The caller checkpoints the whole ordered
+dispatch, not individual handlers. If any handler fails or the checkpoint is not
+published, the next attempt starts at the first handler with the same `deletionKey` and
+targets. A handler must therefore tolerate replay even when its previous call succeeded.
+
 ## Ownership Boundaries
 
 The protocol package owns Manager behavior and point descriptors. Runtime

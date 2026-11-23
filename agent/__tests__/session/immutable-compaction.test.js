@@ -22,7 +22,7 @@ import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-servi
 import { prepareSessionArtifactCleanupToCompletion as prepareSessionArtifactCleanup } from "../helpers/immutable-cleanup.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import { decodeImmutableRecordReference } from "@noobot/session-protocol/immutable-segment";
-import { observeSessionStorageWork } from "../../src/session/session-artifact-session/storage-transaction.js";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 
 async function fixture(t) {
   const sessionDir = await mkdtemp(path.join(tmpdir(), "immutable-compaction-"));

@@ -267,15 +267,14 @@ export function createRunner({
     const committed = acceptedUserMessages.get(text(payload.turnScopeId)) || {};
     const userMessage = {
       ...committed,
-      ...(result.userMessage || {}),
       attachments: result.attachments || payload.attachments || [],
     };
     acceptedUserMessages.set(text(payload.turnScopeId), userMessage);
     return {
-      ...result,
+      messageUid: payload.messageUid,
+      deduplicated: false,
       aggregateVersion: result.aggregateVersion ?? 2,
       attachments: userMessage.attachments,
-      userMessage,
     };
   };
 

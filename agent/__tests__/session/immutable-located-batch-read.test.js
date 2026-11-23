@@ -15,6 +15,7 @@ import { ImmutableRadixIndex } from "../../src/session/session-artifact-session/
 import { IMMUTABLE_LOCATED_SESSION_FORMAT } from "@noobot/session-protocol/immutable-record-location";
 import { decodeImmutableRecordReference } from "@noobot/session-protocol/immutable-segment";
 import { IMMUTABLE_VALUE_READ_BATCH_RECORDS } from "@noobot/session-protocol/immutable-storage-graph";
+import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 
 async function fixture(t, values) {
   const directory = await mkdtemp(path.join(tmpdir(), "located-batch-read-"));
@@ -347,24 +348,25 @@ test("index updates group committed page locations and preserve the pinned index
     indexed = { ...snapshot, generation: 2, ...reader.publicationHeadFields() };
   });
   const locate = reader.locations.getMany.bind(reader.locations);
-  const readPage = reader.readIndexPage.bind(reader);
   let queries = 0;
-  let pageReads = 0;
-  reader.locations.getMany = (...args) => {
+  const resolved = new Set();
+  reader.locations.getMany = (locationRoot, references) => {
     queries += 1;
-    return locate(...args);
-  };
-  reader.readIndexPage = (...args) => {
-    pageReads += 1;
-    return readPage(...args);
+    for (const reference of references) {
+      assert.ok(!resolved.has(reference), `Repeated location resolution for ${reference}`);
+      resolved.add(reference);
+    }
+    return locate(locationRoot, references);
   };
   const changes = entries.map(([key], i) => [key, roots[(i + 1) % roots.length]]);
   let updated;
   let next;
   await reader.withDurabilityBatch(async () => {
     reader.beginCommit(indexed);
-    updated = await index.setMany(root, changes);
-    assert.ok(queries < pageReads, JSON.stringify({ queries, pageReads }));
+    const measured = await observeSessionStorageWork(() => index.setMany(root, changes));
+    updated = measured.result;
+    assert.ok(queries > 0 && queries < resolved.size, JSON.stringify(measured.work));
+    reader.locations.getMany = locate;
     await reader.publishReachable([updated]);
     next = { ...indexed, generation: 3, ...reader.publicationHeadFields() };
   });

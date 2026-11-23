@@ -5,14 +5,22 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import { HARNESS_FILES, resolveHarnessRunsRelativePath } from "../core/constants.js";
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { text } from "@noobot/shared/value";
+import { hash } from "node:crypto";
+import { syncDirectory } from "@noobot/platform-compatibility/file-system";
+import { isWorkspacePathSegment } from "@noobot/workspace-protocol";
+import { HARNESS_FILES } from "../core/constants.js";
+import { discardRunBuffers } from "../store/store.js";
+import {
+  harnessRunsDirectory,
+  manifestSessionIds,
+  withHarnessRunsMutation,
+} from "../store/run-mutation.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const SESSION_DELETION_DIRECTORY_PREFIX = ".session-deletion-";
 
 function isMissingPathError(error) {
-  return error?.code === "ENOENT" || error?.code === "ENOTDIR";
+  return error?.code === "ENOENT";
 }
 
 async function statIfPresent(targetPath) {
@@ -22,19 +30,6 @@ async function statIfPresent(targetPath) {
     if (isMissingPathError(error)) return null;
     throw error;
   }
-}
-
-async function unlinkIfPresent(targetPath) {
-  try {
-    await fs.unlink(targetPath);
-  } catch (error) {
-    if (!isMissingPathError(error)) throw error;
-  }
-}
-
-function normalizeSessionIds(input) {
-  if (!Array.isArray(input)) throw new TypeError("harness run cleanup sessionIds must be an array");
-  return input.map((item) => text(item)).filter(Boolean);
 }
 
 function assertRetentionOptions(options) {
@@ -50,7 +45,14 @@ function assertRetentionOptions(options) {
 async function listRunDirNames(harnessRunsDir) {
   try {
     const entries = await fs.readdir(harnessRunsDir, { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    return entries.map((entry) => {
+      if (!entry.isDirectory()) {
+        throw new TypeError(
+          `harness run must be a directory: ${path.join(harnessRunsDir, entry.name)}`,
+        );
+      }
+      return entry.name;
+    });
   } catch (error) {
     if (isMissingPathError(error)) return [];
     throw error;
@@ -58,30 +60,7 @@ async function listRunDirNames(harnessRunsDir) {
 }
 
 async function readRunManifest(runDirPath) {
-  const raw = await readFileIfPresent(path.join(runDirPath, HARNESS_FILES.RUN_MANIFEST));
-  if (raw === null) return null;
-  const parsed = JSON.parse(raw);
-  if (!parsed || typeof parsed !== "object")
-    throw new TypeError(`harness run manifest must be an object: ${runDirPath}`);
-  return parsed;
-}
-
-async function readFileIfPresent(filePath) {
-  try {
-    return await fs.readFile(filePath, "utf8");
-  } catch (error) {
-    if (isMissingPathError(error)) return null;
-    throw error;
-  }
-}
-
-async function isRunWriteLocked(runDirPath) {
-  const lockPath = path.join(runDirPath, HARNESS_FILES.RUN_WRITE_LOCK);
-  const stat = await statIfPresent(lockPath);
-  if (!stat) return false;
-  if (Date.now() - stat.mtimeMs <= TIME_THRESHOLDS.harness.runWriteLockStaleMs) return true;
-  await unlinkIfPresent(lockPath);
-  return false;
+  return JSON.parse(await fs.readFile(path.join(runDirPath, HARNESS_FILES.RUN_MANIFEST), "utf8"));
 }
 
 async function readRunActivityMs(runDirPath) {
@@ -111,16 +90,13 @@ function selectExpiredRuns(runs, options) {
   return selected;
 }
 
-async function deleteRunDirs(harnessRunsDir, dirNames) {
-  const result = { deleted: 0, errors: 0, skippedLocked: 0 };
+async function pruneRunDirs(harnessRunsDir, dirNames) {
+  const result = { deleted: 0, errors: 0 };
   for (const dir of dirNames) {
     const target = path.join(harnessRunsDir, dir);
-    if (await isRunWriteLocked(target)) {
-      result.skippedLocked += 1;
-      continue;
-    }
     try {
       await fs.rm(target, { recursive: true, force: true });
+      discardRunBuffers(target);
       result.deleted += 1;
     } catch (error) {
       console.warn(`[harness] Failed to delete run directory ${target}:`, error);
@@ -130,40 +106,62 @@ async function deleteRunDirs(harnessRunsDir, dirNames) {
   return result;
 }
 
-function resolveHarnessRunsDir(basePath) {
-  return path.join(basePath, resolveHarnessRunsRelativePath());
-}
-
 export async function cleanupOldRuns(basePath, options) {
   if (!basePath) throw new TypeError("harness run retention cleanup requires basePath");
   assertRetentionOptions(options);
-  const harnessRunsDir = resolveHarnessRunsDir(basePath);
-  const runs = await collectRunAges(harnessRunsDir, await listRunDirNames(harnessRunsDir));
-  return deleteRunDirs(harnessRunsDir, selectExpiredRuns(runs, options));
+  const harnessRunsDir = harnessRunsDirectory(basePath);
+  return withHarnessRunsMutation(basePath, async () => {
+    const runIds = (await listRunDirNames(harnessRunsDir)).filter(
+      (dir) => !dir.startsWith(SESSION_DELETION_DIRECTORY_PREFIX),
+    );
+    const runs = await collectRunAges(harnessRunsDir, runIds);
+    return pruneRunDirs(harnessRunsDir, selectExpiredRuns(runs, options));
+  });
 }
 
-function manifestSessionIds(manifest) {
-  if (!manifest) return [];
-  return [manifest.sessionId, manifest.parentSessionId, manifest.metadata?.workflowSessionId]
-    .map((value) => text(value))
-    .filter(Boolean);
-}
-
-async function runBelongsToSessions(harnessRunsDir, dir, sessionIds) {
-  if (sessionIds.has(dir)) return true;
-  const manifest = await readRunManifest(path.join(harnessRunsDir, dir));
-  return manifestSessionIds(manifest).some((id) => sessionIds.has(id));
-}
-
-export async function cleanupRunsBySessionIds(basePath, sessionIds) {
+export async function cleanupRunsBySessionIds(basePath, sessionIds, { signal } = {}) {
   if (!basePath) throw new TypeError("harness session cleanup requires basePath");
-  const targetIds = new Set(normalizeSessionIds(sessionIds));
-  if (!targetIds.size) throw new TypeError("harness session cleanup requires sessionIds");
-  const harnessRunsDir = resolveHarnessRunsDir(basePath);
-  const matched = [];
-  for (const dir of await listRunDirNames(harnessRunsDir)) {
-    if (await runBelongsToSessions(harnessRunsDir, dir, targetIds)) matched.push(dir);
+  if (
+    !Array.isArray(sessionIds) ||
+    !sessionIds.length ||
+    !Array.from(sessionIds).every(isWorkspacePathSegment)
+  ) {
+    throw new TypeError("harness session cleanup requires workspace session ids");
   }
-  const result = await deleteRunDirs(harnessRunsDir, matched);
-  return { ...result, matchedRuns: matched.length };
+  return withHarnessRunsMutation(
+    basePath,
+    () => stageAndRemoveRuns(basePath, new Set(sessionIds), signal),
+    {
+      signal,
+    },
+  );
+}
+
+async function stageAndRemoveRuns(basePath, targetIds, signal) {
+  const harnessRunsDir = harnessRunsDirectory(basePath);
+  const entries = await listRunDirNames(harnessRunsDir);
+  if (!entries.length && !(await statIfPresent(harnessRunsDir)))
+    return { deleted: 0, matchedRuns: 0 };
+  const requestHash = hash("sha256", JSON.stringify([...targetIds].sort()));
+  const stagingPrefix = `${SESSION_DELETION_DIRECTORY_PREFIX}${requestHash}-`;
+  const staged = entries.filter((dir) => dir.startsWith(stagingPrefix));
+  for (const runId of entries) {
+    signal?.throwIfAborted();
+    if (runId.startsWith(SESSION_DELETION_DIRECTORY_PREFIX)) continue;
+    const target = path.join(harnessRunsDir, runId);
+    const manifest = await readRunManifest(target);
+    if (!manifestSessionIds(manifest).some((id) => targetIds.has(id))) continue;
+    const name = `${stagingPrefix}${hash("sha256", runId)}`;
+    await fs.rename(target, path.join(harnessRunsDir, name));
+    discardRunBuffers(target);
+    staged.push(name);
+  }
+  const syncRuns = () => syncDirectory({ directory: harnessRunsDir, open: fs.open });
+  await syncRuns();
+  for (const name of staged) {
+    signal?.throwIfAborted();
+    await fs.rm(path.join(harnessRunsDir, name), { recursive: true, force: true });
+  }
+  await syncRuns();
+  return { deleted: staged.length, matchedRuns: staged.length };
 }

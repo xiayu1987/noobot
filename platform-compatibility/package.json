@@ -8,6 +8,7 @@
     ".": "./src/index.js",
     "./platform": "./src/platform.js",
     "./file-system": "./src/file-system.js",
+    "./descriptor-lock": "./src/descriptor-lock.js",
     "./atomic-file-write": "./src/atomic-file-write.js",
     "./process": "./src/process.js",
     "./package.json": "./package.json"
@@ -16,6 +17,7 @@
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   },
   "dependencies": {
-    "@noobot/shared": "file:../shared"
+    "@noobot/shared": "file:../shared",
+    "fs-native-extensions": "1.5.4"
   }
 }

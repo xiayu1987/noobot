@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { SERVICE_STARTUP_PROGRESS_STAGES } from "@noobot/runtime-events";
+import {
+  isWorkspaceLayoutUpgradeFailure,
+  listWorkspaceLayoutQuarantines,
+} from "@noobot/workspace-protocol";
 import { recoverServiceRestartTurns } from "./recover-service-restart-turns.js";
 
 function describeFailure(userId, stage, error) {
@@ -15,33 +19,22 @@ function describeFailure(userId, stage, error) {
   };
 }
 
-function collectLayoutUpgradeFailures(userId, layoutUpgrades = []) {
-  const failures = [];
-  for (const upgrade of layoutUpgrades) {
-    if (upgrade.failed) {
-      failures.push({ userId, stage: upgrade.id, ...upgrade.failed });
-    }
-    for (const unit of upgrade.result?.quarantined || []) {
-      failures.push({
-        userId,
-        stage: upgrade.id,
-        path: unit.path,
-        quarantinePath: unit.quarantinePath,
-        code: unit.error?.code || "",
-        message: unit.error?.message || "",
-      });
-    }
-  }
-  return failures;
-}
-
-export async function prepareUserWorkspaces({ userIds, bot, reportProgress }) {
+export async function prepareUserWorkspaces({
+  userIds,
+  bot,
+  reportProgress,
+  startupStorage,
+  signal,
+}) {
   const failures = [];
   let recoveredTurnCount = 0;
   for (const [index, userId] of userIds.entries()) {
+    signal?.throwIfAborted();
     const userProgress = { userId, userIndex: index + 1, userCount: userIds.length };
     try {
       const { report } = await bot.repairUserWorkspace(userId, {
+        startupStorage,
+        signal,
         onProgress: (upgrade) =>
           reportProgress({
             ...userProgress,
@@ -49,11 +42,19 @@ export async function prepareUserWorkspaces({ userIds, bot, reportProgress }) {
             ...upgrade,
           }),
       });
-      const layoutFailures = collectLayoutUpgradeFailures(userId, report?.layoutUpgrades);
-      failures.push(...layoutFailures);
-      if (layoutFailures.length) continue;
+      failures.push(
+        ...listWorkspaceLayoutQuarantines(report.layoutUpgrades).map((unit) => ({
+          userId,
+          ...unit,
+        })),
+      );
     } catch (error) {
-      failures.push(describeFailure(userId, "workspace", error));
+      signal?.throwIfAborted();
+      if (isWorkspaceLayoutUpgradeFailure(error)) {
+        failures.push(...error.details.failures.map((failure) => ({ userId, ...failure })));
+      } else {
+        failures.push(describeFailure(userId, "workspace", error));
+      }
       continue;
     }
     try {

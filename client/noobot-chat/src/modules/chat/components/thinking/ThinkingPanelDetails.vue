@@ -6,6 +6,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
 import { observeElementOffset, observeElementRect, useVirtualizer } from "@tanstack/vue-virtual";
+import { ArrowRight, Refresh } from "@element-plus/icons-vue";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import {
   BaseEmptyHint,
@@ -25,19 +26,22 @@ import {
 import { useThinkingContentItemRenderers } from "../../composables/thinkingContentItemRenderers.js";
 import { text } from "@noobot/shared/value";
 const props = defineProps({
+  page: { type: Object, default: null },
+  pageLoading: Boolean,
+  pageError: { type: Error, default: null },
   messageItem: { type: Object, required: true },
   userId: { type: String, default: "" },
   translate: { type: Function, required: true },
   isRunning: Boolean,
   groupedToolLogs: { type: Array, default: () => [] },
   thinkingContentItems: { type: Array, default: () => [] },
-  detailCount: { type: Number, default: 0 },
   taskCheckReceipts: { type: Array, default: () => [] },
   getTreePrefix: { type: Function, required: true },
   getDetailKey: { type: Function, required: true },
   isExpanded: { type: Function, required: true },
   toggleExpanded: { type: Function, required: true },
 });
+defineEmits(["next-page", "restart-pages"]);
 const DETAIL_TAB = Object.freeze({
   EXECUTION: "execution",
   THINKING: "thinking",
@@ -242,10 +246,54 @@ watch(
 );
 </script>
 <template>
-  <BaseTabPanelBody class="thinking-details-panel"
-    ><el-tabs v-model="activeDetailTab" class="thinking-details-tabs noobot-tabs"
+  <BaseTabPanelBody class="thinking-details-panel">
+    <div
+      v-if="page || pageError || pageLoading"
+      class="thinking-page-controls"
+      :aria-busy="pageLoading"
+    >
+      <el-button
+        class="noobot-icon-button"
+        size="small"
+        :icon="Refresh"
+        :title="translate('common.refresh')"
+        :aria-label="translate('common.refresh')"
+        :disabled="pageLoading"
+        @click="$emit('restart-pages')"
+      />
+      <BaseMetaLabel
+        v-if="page"
+        class="thinking-page-range"
+        role="status"
+        :text="
+          translate('message.thinkingPageRange', {
+            start: page.count === 0 ? 0 : page.after + 1,
+            end: page.after + page.count,
+            total: page.messageCount,
+          })
+        "
+      />
+      <BaseMetaLabel
+        v-else-if="pageLoading"
+        class="thinking-page-range"
+        role="status"
+        :text="translate('message.thinkingDetailLoading')"
+      />
+      <el-button
+        v-if="page"
+        class="noobot-icon-button"
+        size="small"
+        :icon="ArrowRight"
+        :title="translate('common.nextPage')"
+        :aria-label="translate('common.nextPage')"
+        :disabled="pageLoading || pageError !== null || page.nextCursor === null"
+        @click="$emit('next-page')"
+      />
+    </div>
+    <BaseEmptyHint v-if="pageError" role="alert" :text="pageError.message" />
+    <el-tabs v-model="activeDetailTab" class="thinking-details-tabs noobot-tabs"
       ><el-tab-pane
-        :label="translate('message.executionRecords', { count: detailCount })"
+        :label="translate('message.executionRecords', { count: rendererProjection.length })"
         :name="DETAIL_TAB.EXECUTION"
         ><div
           ref="toolScrollElement"
@@ -286,14 +334,14 @@ watch(
             </div>
           </div>
           <BaseEmptyHint
-            v-if="!detailCount"
+            v-if="!rendererProjection.length"
             :text="translate('message.noToolCalls')"
           /></div></el-tab-pane
       ><el-tab-pane
         :name="DETAIL_TAB.THINKING"
         :label="
           translate('message.thinkingContent', {
-            count: visibleThinkingContentItems.length,
+            count: visibleThinkingContentItems.length + taskCheckItems.length,
           })
         "
         ><BaseTabPanelBody class="thinking-details-scroll-body thinking-details-content-body"
@@ -320,7 +368,7 @@ watch(
             :data-thinking-content-kind="item.activityKind || item.contentKind"
             :title="formatThinkingContentTitle(item, index)"
             :content="String(item.content || '')" /><BaseEmptyHint
-            v-if="!visibleThinkingContentItems.length"
+            v-if="!visibleThinkingContentItems.length && !taskCheckItems.length"
             :text="
               translate('message.noThinkingContent')
             " /></BaseTabPanelBody></el-tab-pane></el-tabs
@@ -328,6 +376,19 @@ watch(
 </template>
 
 <style scoped>
+.thinking-page-controls {
+  display: grid;
+  grid-template-columns: auto minmax(0, max-content) auto;
+  align-items: center;
+  justify-content: start;
+  gap: var(--noobot-space-xs);
+  flex: 0 0 auto;
+}
+.thinking-page-range {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
 .thinking-tool-virtual-space {
   position: relative;
   width: 100%;

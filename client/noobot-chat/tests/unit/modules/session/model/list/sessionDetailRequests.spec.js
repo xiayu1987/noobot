@@ -6,6 +6,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { buildThinkingDetailPayload } from "@noobot/event-protocol/thinking-detail-projection";
 import {
   availableDetailDocument,
   detailResponse,
@@ -20,8 +22,8 @@ const { configureAuthenticatedFetcher } =
   await import("../../../../../../src/infrastructure/http/authenticatedHttpService.js");
 const { createSessionDetailRequests } =
   await import("../../../../../../src/modules/session/model/list/sessionDetailRequests.js");
-const { __resetThinkingDetailCacheForTests, loadThinkingDetail } =
-  await import("../../../../../../src/modules/chat/model/thinkingDetailCache.js");
+const { loadThinkingDetail } =
+  await import("../../../../../../src/modules/chat/model/thinkingDetailRequest.js");
 
 function response(payload, { status = 200 } = {}) {
   return new Response(JSON.stringify(payload), {
@@ -49,45 +51,58 @@ describe("sessionDetailRequests thinking detail", () => {
   });
 
   afterEach(() => {
-    __resetThinkingDetailCacheForTests();
     getSessionThinkingDetailApi.mockReset();
     vi.restoreAllMocks();
   });
 
-  it("preserves a retryable missing-detail result across the session request adapter", async () => {
+  it("propagates missing detail and permits an explicit new request", async () => {
     const detailPayload = {
       ok: true,
       exists: true,
-      messageItem: {
-        role: "assistant",
-        sessionId: "session-eventual-detail",
-        turnScopeId: "client-turn:eventual-detail",
-        thinkingContentTimeline: [
-          {
-            contentId: "message:interjection-uid-command-1",
-            contentKind: "user_interjection",
-            text: "continue with the accepted correction",
-            sequence: 1,
-          },
-        ],
-      },
+      sessionId: "session-eventual-detail",
+      dialogProcessId: "dp-eventual-detail",
+      turnScopeId: "client-turn:eventual-detail",
+      generation: 3,
+      messageCount: 1,
+      nextCursor: null,
+      messages: [
+        {
+          role: "assistant",
+          sessionId: "session-eventual-detail",
+          turnScopeId: "client-turn:eventual-detail",
+          dialogProcessId: "dp-eventual-detail",
+          presentationMessageId: "presentation-eventual-detail",
+          modelMessageId: "model-eventual-detail",
+          messageUid: "message-eventual-detail",
+          thinkingContentTimeline: [
+            {
+              contentId: "message:interjection-uid-command-1",
+              contentKind: "user_interjection",
+              sourceMessageUid: "interjection-uid-command-1",
+              text: "continue with the accepted correction",
+              sequence: 1,
+            },
+          ],
+        },
+      ],
     };
     getSessionThinkingDetailApi
       .mockResolvedValueOnce(response({ ok: true, exists: false }))
       .mockResolvedValueOnce(response(detailPayload));
     const { fetchThinkingDetail } = createRequests();
 
-    const detail = await loadThinkingDetail({
+    const request = {
       sessionId: "session-eventual-detail",
       messageItem: {
         sessionId: "session-eventual-detail",
         turnScopeId: "client-turn:eventual-detail",
         dialogProcessId: "dp-eventual-detail",
       },
-      fetchThinkingDetail,
-      retryLimit: 1,
-      retryDelayMs: 0,
-    });
+      fetchThinkingDetail: (selection) => fetchThinkingDetail({ userId: "admin", ...selection }),
+    };
+    await expect(loadThinkingDetail(request)).rejects.toMatchObject({ code: "not_found" });
+    expect(getSessionThinkingDetailApi).toHaveBeenCalledTimes(1);
+    const detail = await loadThinkingDetail(request);
 
     expect(getSessionThinkingDetailApi).toHaveBeenCalledTimes(2);
     expect(getSessionThinkingDetailApi.mock.calls[0][0]).toEqual({
@@ -95,8 +110,16 @@ describe("sessionDetailRequests thinking detail", () => {
       sessionId: "session-eventual-detail",
       dialogProcessId: "dp-eventual-detail",
       turnScopeId: "client-turn:eventual-detail",
+      cursor: null,
+      limit: QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize,
     });
-    expect(detail).toEqual(detailPayload);
+    expect(detail).toEqual({
+      ...buildThinkingDetailPayload({
+        ...detailPayload,
+        contentRevision: JSON.stringify([detailPayload.sessionId, detailPayload.generation, 0]),
+      }),
+      page: { generation: 3, messageCount: 1, after: 0, count: 1, nextCursor: null },
+    });
   });
 
   it("passes the server failure envelope through unchanged", async () => {
@@ -106,6 +129,7 @@ describe("sessionDetailRequests thinking detail", () => {
     const { fetchThinkingDetail } = createRequests();
 
     const error = await fetchThinkingDetail({
+      userId: "admin",
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "dp-1",
@@ -120,6 +144,7 @@ describe("sessionDetailRequests thinking detail", () => {
     const { fetchThinkingDetail } = createRequests();
 
     const error = await fetchThinkingDetail({
+      userId: "admin",
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "dp-1",
@@ -166,7 +191,7 @@ describe("session detail cache versions", () => {
 
   it("shares an in-flight request only while the session version is unchanged", async () => {
     const sessions = ref([
-      { sessionId: "s1", aggregateVersion: 2, generation: null, loaded: false },
+      { sessionId: "s1", aggregateVersion: 2, knownGeneration: null, loaded: false },
     ]);
     const pending = deferred();
     const getSessionDetailApi = vi.fn().mockReturnValue(pending.promise);
@@ -180,7 +205,9 @@ describe("session detail cache versions", () => {
   });
 
   it("invalidates pending and recent responses when generation advances without a command version change", async () => {
-    const sessions = ref([{ sessionId: "s1", aggregateVersion: 2, generation: 10, loaded: false }]);
+    const sessions = ref([
+      { sessionId: "s1", aggregateVersion: 2, knownGeneration: 10, loaded: false },
+    ]);
     const pending = deferred();
     const getSessionDetailApi = vi
       .fn()
@@ -190,7 +217,7 @@ describe("session detail cache versions", () => {
     const { fetchSessionDetail } = createRequests({ sessions, getSessionDetailApi });
     const old = fetchSessionDetail("s1", { source: "old" });
     const rejected = expect(old).rejects.toThrow(/version is stale/);
-    sessions.value[0].generation = 11;
+    sessions.value[0].knownGeneration = 11;
     const current = await fetchSessionDetail("s1", { source: "new" });
     expect(current.sessions[0].generation).toBe(11);
     pending.resolve(detailResponse(document(2, 10)));
@@ -198,7 +225,7 @@ describe("session detail cache versions", () => {
     expect(await fetchSessionDetail("s1", { source: "cache", reuseRecentlyLoaded: true })).toBe(
       current,
     );
-    sessions.value[0].generation = 12;
+    sessions.value[0].knownGeneration = 12;
     expect(
       (await fetchSessionDetail("s1", { source: "advanced", reuseRecentlyLoaded: true }))
         .sessions[0].generation,
@@ -209,7 +236,7 @@ describe("session detail cache versions", () => {
 
   it("a superseded request cannot clear a newer pending request or return stale facts", async () => {
     const sessions = ref([
-      { sessionId: "s1", aggregateVersion: 2, generation: null, loaded: false },
+      { sessionId: "s1", aggregateVersion: 2, knownGeneration: null, loaded: false },
     ]);
     const oldRequest = deferred();
     const newRequest = deferred();
@@ -235,7 +262,7 @@ describe("session detail cache versions", () => {
 
   it("an older response cannot replace a newer recent response", async () => {
     const sessions = ref([
-      { sessionId: "s1", aggregateVersion: 2, generation: null, loaded: false },
+      { sessionId: "s1", aggregateVersion: 2, knownGeneration: null, loaded: false },
     ]);
     const oldRequest = deferred();
     const getSessionDetailApi = vi
@@ -260,7 +287,7 @@ describe("session detail cache versions", () => {
 
   it("does not reuse cached facts for a recreated session with the same identifier", async () => {
     const sessions = ref([
-      { sessionId: "s1", aggregateVersion: 2, generation: null, loaded: false },
+      { sessionId: "s1", aggregateVersion: 2, knownGeneration: null, loaded: false },
     ]);
     const getSessionDetailApi = vi
       .fn()
@@ -268,7 +295,12 @@ describe("session detail cache versions", () => {
       .mockResolvedValueOnce(detailResponse(document(3)));
     const { fetchSessionDetail } = createRequests({ sessions, getSessionDetailApi });
     await fetchSessionDetail("s1", { source: "original" });
-    sessions.value[0] = { sessionId: "s1", aggregateVersion: 2, generation: null, loaded: false };
+    sessions.value[0] = {
+      sessionId: "s1",
+      aggregateVersion: 2,
+      knownGeneration: null,
+      loaded: false,
+    };
     const result = await fetchSessionDetail("s1", {
       source: "recreated",
       reuseRecentlyLoaded: true,
@@ -281,7 +313,7 @@ describe("session detail cache versions", () => {
     "rejects a pending response after its session is %s",
     async (change) => {
       const sessions = ref([
-        { sessionId: "s1", aggregateVersion: 2, generation: null, loaded: false },
+        { sessionId: "s1", aggregateVersion: 2, knownGeneration: null, loaded: false },
       ]);
       const oldRequest = deferred();
       const newRequest = deferred();
@@ -297,7 +329,7 @@ describe("session detail cache versions", () => {
         sessions.value.push({
           sessionId: "s1",
           aggregateVersion: 2,
-          generation: null,
+          knownGeneration: null,
           loaded: false,
         });
       }
@@ -316,7 +348,7 @@ describe("session detail cache versions", () => {
       {
         sessionId: "s1",
         aggregateVersion: 3,
-        generation: 10,
+        knownGeneration: 10,
         isLocal: false,
         loaded: true,
         sessionDocs: previous.sessions,
@@ -335,7 +367,7 @@ describe("session detail cache versions", () => {
 
   it("does not reuse a recent response after a conflict advances the known version", async () => {
     const sessions = ref([
-      { sessionId: "s1", aggregateVersion: 2, generation: null, loaded: false },
+      { sessionId: "s1", aggregateVersion: 2, knownGeneration: null, loaded: false },
     ]);
     const getSessionDetailApi = vi
       .fn()
@@ -358,7 +390,7 @@ describe("session detail cache versions", () => {
       {
         sessionId: "s1",
         aggregateVersion: 3,
-        generation: 10,
+        knownGeneration: 10,
         isLocal: false,
         loaded: true,
         sessionDocs: current.sessions,

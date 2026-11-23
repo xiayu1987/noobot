@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isFunction } from "@noobot/shared/value";
 import { mkdir } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import {
@@ -30,7 +31,7 @@ async function createProjectionDirectory(directory, sessionDir) {
 }
 
 export async function projectMessageDiagnostics({ storageService, sessionDir, reader, deliver }) {
-  if (typeof deliver !== "function") throw new TypeError("Diagnostic projection requires delivery");
+  if (!isFunction(deliver)) throw new TypeError("Diagnostic projection requires delivery");
   const directory = path.join(sessionDir, MESSAGE_DIAGNOSTIC_PROJECTION_DIRECTORY);
   const file = path.join(directory, MESSAGE_DIAGNOSTIC_CURSOR_FILE);
   const stored = await storageService.readOptionalJson(file);
