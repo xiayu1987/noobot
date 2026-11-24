@@ -62,6 +62,11 @@ function printReport(workspaceRoot, users) {
   for (const { userId, base, units, backups } of users) {
     lines.push("", `[${userId}] ${base} (${units.length} quarantined)`);
     for (const unit of units) {
+      if (unit.sessionStorage) {
+        const { format, status, parentPath } = unit.sessionStorage;
+        lines.push(`    session storage: format=${format} status=${status}`);
+        if (parentPath !== undefined) lines.push(`    parent: ${parentPath}`);
+      }
       lines.push(
         `  - ${unit.kind} ${unit.path}`,
         `    error: ${unit.error.code || "-"} ${unit.error.message}`,

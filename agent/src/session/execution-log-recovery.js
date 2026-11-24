@@ -23,7 +23,7 @@ import {
   readExecutionSegmentInventory,
 } from "./execution-log-inventory.js";
 
-export async function readExecutionSegmentStates({ storageService, sessionDir, signal }) {
+async function readExecutionSegmentStates({ storageService, sessionDir, signal }) {
   const turns = [];
   for (const turn of await readExecutionTurnInventory({ storageService, sessionDir, signal })) {
     const segments = [];

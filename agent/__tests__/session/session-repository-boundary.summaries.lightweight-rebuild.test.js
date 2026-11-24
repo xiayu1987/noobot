@@ -59,7 +59,7 @@ async function readToolTurn(service, selection, generation) {
   return { messageCount, messageItem };
 }
 
-test("immutable display projection preserves chat content without a second persisted summary", async () => {
+test("partition display projection preserves chat content without a second persisted summary", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -383,22 +383,28 @@ test("immutable display projection preserves chat content without a second persi
     );
     const repository = runtime.repositories.sessionRepository;
     const persistenceContext = repository.treePersistenceContext(userId, "B");
-    const initial = await repository.requireSessionReader(userId, "B", { persistenceContext });
-    await submitTestSessionRequest(
-      repository,
-      userId,
-      "B",
-      await initial.prepareRequest({
-        operationId: "seed-display-messages",
-        committedAt: sessionB.updatedAt,
-        changes: {
-          messages: sessionB.messages.map((message) =>
-            normalizeMessageEntity({ ...message, parentSessionId: sessionB.parentSessionId }),
-          ),
-        },
-      }),
-      persistenceContext,
-    );
+    let generation;
+    for (const [index, message] of sessionB.messages.entries()) {
+      await using reader = await repository.requireSessionReader(userId, "B", {
+        persistenceContext,
+      });
+      const result = await submitTestSessionRequest(
+        repository,
+        userId,
+        "B",
+        await reader.prepareRequest({
+          operationId: `seed-display-message:${index}`,
+          committedAt: sessionB.updatedAt,
+          changes: {
+            messages: [
+              normalizeMessageEntity({ ...message, parentSessionId: sessionB.parentSessionId }),
+            ],
+          },
+        }),
+        persistenceContext,
+      );
+      generation = result.generation;
+    }
 
     const scopeB = await runtime.repositories.sessionRepository.requireSessionScope(
       userId,
@@ -460,7 +466,7 @@ test("immutable display projection preserves chat content without a second persi
       readToolTurn(
         runtime.sessionCrudService,
         { userId, sessionId: "B", turnScopeId, dialogProcessId },
-        initial.generation + 1,
+        generation,
       );
     const { messageCount: assistantTurnMessages, messageItem: assistantDetail } =
       await readDetail(assistantMessage);
@@ -631,7 +637,7 @@ test("immutable display projection preserves chat content without a second persi
     );
     assert.equal(
       (await repository.requireSessionReader(userId, "B", { persistenceContext })).generation,
-      initial.generation + 1,
+      generation,
     );
     await assert.rejects(readFile(summaryFile), { code: "ENOENT" });
 

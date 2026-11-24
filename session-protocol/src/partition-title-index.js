@@ -39,12 +39,47 @@ export function readFirstPartitionTitleCandidate(plan) {
   );
 }
 
-export function readPartitionTitleCandidates(plan) {
+export function readPartitionTitleCandidates(plan, { after = 0 } = {}) {
   return readDirectoryOrdinals(
     (prefix) =>
       plan.get(PARTITION_TITLE_CANDIDATES_ROOT.collection, partitionTitleCandidatePageKey(prefix)),
-    { after: 0 },
+    { after },
   );
+}
+
+export async function verifyPartitionTitleCandidateWindow(
+  plan,
+  { after, through, count, ordinals },
+) {
+  if (
+    !Number.isSafeInteger(after) ||
+    after < 0 ||
+    !Number.isSafeInteger(through) ||
+    through < after ||
+    !Number.isSafeInteger(count) ||
+    count < through ||
+    !Array.isArray(ordinals) ||
+    ordinals.some(
+      (ordinal, index) =>
+        !Number.isSafeInteger(ordinal) ||
+        ordinal <= after ||
+        ordinal > through ||
+        (index > 0 && ordinal <= ordinals[index - 1]),
+    )
+  )
+    throw new TypeError("Invalid title candidate verification window");
+  let index = 0;
+  for await (const ordinal of readPartitionTitleCandidates(plan, { after })) {
+    if (ordinal > through && through < count) break;
+    if (ordinal !== ordinals[index])
+      throw partitionJournalError(
+        "SESSION_STORAGE_CORRUPT",
+        "Title index disagrees with visible messages",
+      );
+    index += 1;
+  }
+  if (index !== ordinals.length)
+    throw partitionJournalError("SESSION_STORAGE_CORRUPT", "Title index omits visible candidates");
 }
 
 export async function verifyPartitionTitleCandidatePage(plan, key) {

@@ -4,19 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { isCanonicalText, isFunction, isPlainObject } from "@noobot/shared/value";
 import {
-  IMMUTABLE_SESSION_FORMAT_FILE,
-  IMMUTABLE_SESSION_HEAD_FILE,
-  captureImmutableMigrationSourceIdentity,
-} from "./immutable-storage.js";
+  UNSUPPORTED_SESSION_STORAGE,
+  requirePartitionPublicationSource,
+} from "./session-storage-format.js";
 import { isPartitionEpoch } from "./partition-epoch.js";
 import { PARTITION_JOURNAL_HEAD_FILE, exactObject } from "./partition-journal-fields.js";
 import { isSessionCaller } from "@noobot/shared/session-caller";
 import { assertSessionScopeIdentity, createSessionNotFoundError } from "./errors.js";
-import { requirePartitionSessionStorageBudget } from "./partition-journal.js";
-import { requirePageBounds } from "./message-read-budget.js";
 
 export function assertScopedSessionReadIdentity(
   metadata,
@@ -102,7 +98,7 @@ export const PARTITION_MIGRATION_AUTHORITY = Object.freeze({
   scratchSuffix: ".partition-migration-work",
   file: "session-authority",
   format: "noobot.partition-session-authority/1",
-  maxBytes: LENGTH_THRESHOLDS.immutableStorage.migrationAuthorityRecordBytes,
+  maxBytes: LENGTH_THRESHOLDS.partitionStorage.migrationAuthorityRecordBytes,
 });
 
 export const PARTITION_MIGRATION_BUSINESS_CHECKPOINT = Object.freeze({
@@ -111,50 +107,6 @@ export const PARTITION_MIGRATION_BUSINESS_CHECKPOINT = Object.freeze({
   maxBytes: PARTITION_MIGRATION_AUTHORITY.maxBytes,
 });
 
-export function requirePartitionMigrationBudget({ targetStorageBudget, limit, maxBytes }) {
-  const budget = requirePartitionSessionStorageBudget(targetStorageBudget);
-  requirePageBounds({ after: 0, limit, maxBytes });
-  if (limit > budget.journalLimits.pageRecords)
-    throw new TypeError("Migration page limit exceeds target journal pageRecords");
-  return budget;
-}
-
-export function resolvePartitionMigrationBudget(targetStorageBudget) {
-  const budget = requirePartitionSessionStorageBudget(targetStorageBudget);
-  const limit = Math.min(
-    budget.journalLimits.pageRecords,
-    QUANTITY_THRESHOLDS.immutableStorage.messagePageSize,
-  );
-  const maxBytes = Math.min(
-    budget.journalLimits.pageBytes,
-    LENGTH_THRESHOLDS.sessionStorage.messageReadBytes,
-  );
-  return {
-    targetStorageBudget: requirePartitionMigrationBudget({
-      targetStorageBudget: budget,
-      limit,
-      maxBytes,
-    }),
-    limit,
-    maxBytes,
-  };
-}
-
-export function requireOfflineWorkspacePartitionMigrationPlan(plan) {
-  exactObject(
-    plan,
-    ["workspaceDir", "pluginRootDir", "targetStorageBudget"],
-    "offline workspace partition migration plan",
-  );
-  const { workspaceDir, pluginRootDir } = plan;
-  if (!isCanonicalText(workspaceDir) || !isCanonicalText(pluginRootDir))
-    throw new TypeError("Offline workspace migration requires workspace and plugin directories");
-  return {
-    ...plan,
-    targetStorageBudget: requirePartitionSessionStorageBudget(plan.targetStorageBudget),
-  };
-}
-
 function partitionMigrationAuthorityError(message, cause) {
   return Object.assign(new Error(message, { cause }), { code: "SESSION_STORAGE_CORRUPT" });
 }
@@ -162,7 +114,7 @@ function partitionMigrationAuthorityError(message, cause) {
 function capturePartitionMigrationRecord(record, contract) {
   exactObject(record, ["format", "source", "target"], contract.format);
   const { format, target } = record;
-  const source = captureImmutableMigrationSourceIdentity(record.source);
+  const source = requirePartitionPublicationSource(record.source);
   exactObject(target, ["sessionId", "epoch", "generation"], "partition migration target");
   if (
     format !== contract.format ||
@@ -263,8 +215,8 @@ export async function readSessionStorageAuthorityFacts({ stat, readPrefix }) {
   const present = (file) => missingAuthorityFile(async () => Boolean(await stat(file)), false);
   const [partition, head, format, document, migration] = await Promise.all([
     present(PARTITION_JOURNAL_HEAD_FILE),
-    present(IMMUTABLE_SESSION_HEAD_FILE),
-    present(IMMUTABLE_SESSION_FORMAT_FILE),
+    present(UNSUPPORTED_SESSION_STORAGE.head),
+    present(UNSUPPORTED_SESSION_STORAGE.format),
     present(SESSION_DOCUMENT_FILE),
     missingAuthorityFile(() =>
       readPrefix(PARTITION_MIGRATION_AUTHORITY.file, PARTITION_MIGRATION_AUTHORITY.maxBytes + 1),
@@ -310,20 +262,27 @@ export function resolveSessionStorageAuthority({ partition, immutable, document,
   return null;
 }
 
+export function inspectSessionStorageAuthority(facts) {
+  try {
+    const authority = resolveSessionStorageAuthority(facts);
+    const format =
+      authority === "immutable" ? (facts.immutable ? "immutable" : "document") : authority;
+    return { authority, format, error: null };
+  } catch (error) {
+    if (error.code !== "SESSION_STORAGE_CORRUPT") throw error;
+    const conflicting =
+      facts.partition && (facts.immutable || facts.document || facts.migration !== undefined);
+    return { authority: null, format: conflicting ? "conflicting" : "partition", error };
+  }
+}
+
 export function requirePartitionSessionAuthority(facts) {
   const authority = resolveSessionStorageAuthority(facts);
   if (authority === "immutable")
-    throw Object.assign(new Error("Session storage requires an offline partition upgrade"), {
-      code: "SESSION_PARTITION_STORAGE_UPGRADE_REQUIRED",
+    throw Object.assign(new Error("Session storage format is no longer supported"), {
+      code: "SESSION_STORAGE_FORMAT_UNSUPPORTED",
     });
   return authority === "partition";
-}
-
-export function requireImmutableSessionAuthority(facts) {
-  if (resolveSessionStorageAuthority(facts) === "partition")
-    throw Object.assign(new Error("Session uses partition storage authority"), {
-      code: "SESSION_STORAGE_AUTHORITY_MISMATCH",
-    });
 }
 
 export async function planSessionOutboxMutation({ generation, methods }, plan) {

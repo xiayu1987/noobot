@@ -47,12 +47,18 @@ import {
 } from "../session/partition-storage/journal-io.js";
 import { drainJournalRetentions } from "../session/partition-storage/journal-snapshots.js";
 import { PartitionJournal } from "../session/partition-storage/partition-journal.js";
-import { discoverMigrationSessions } from "./migrate-workspace-sessions-to-partition.js";
+import { discoverSessionDirectories, ignoreSessionProgress } from "./session-directory-walk.js";
+import { quarantineSessionStorageTree } from "./session-storage-retirement.js";
+import { SESSION_STORAGE_QUARANTINE_STATUS } from "@noobot/workspace-protocol/migration-quarantine";
 import { assertWorkspaceQuarantineEmpty } from "./migration-quarantine.js";
-import { upgradePartitionFormatTitles } from "./partition-format-title-upgrade.js";
+import {
+  upgradePartitionFormatSession,
+  verifyUpgradedPartitionSession,
+} from "./partition-format-session-upgrade.js";
 
 const LEGACY_FORMAT = "noobot.partition-journal-prototype/93";
-const STAGE = `.format-v47${PARTITION_MIGRATION_AUTHORITY.scratchSuffix}`;
+const TITLE_INDEX_FORMAT = "noobot.partition-journal-prototype/95";
+const STAGE = `.format-v49${PARTITION_MIGRATION_AUTHORITY.scratchSuffix}`;
 const JOURNAL_DATA_DIRECTORIES = [
   PARTITION_JOURNAL_DIRECTORIES.partitions,
   PARTITION_JOURNAL_DIRECTORIES.catalog,
@@ -62,7 +68,7 @@ const publisher = createDurableFilePublisher((file) => `${file}.format-upgrade.t
 });
 
 function requireUpgradeHead(head) {
-  if (head.format === LEGACY_FORMAT)
+  if (head.format === LEGACY_FORMAT || head.format === TITLE_INDEX_FORMAT)
     return requirePartitionJournalHead({ ...head, format: PARTITION_JOURNAL_FORMAT });
   return requirePartitionJournalHead(head);
 }
@@ -153,6 +159,12 @@ async function prepareUpgradeStage(root, stage, source, signal) {
         "SESSION_STORAGE_UPGRADE_BLOCKED",
         "Partition format upgrade stage disagrees with journal",
       );
+    const journal = await PartitionJournal.open({ root: stage, sessionId: source.sessionId });
+    try {
+      await verifyUpgradedPartitionSession(journal, signal);
+    } finally {
+      await journal.close();
+    }
     return target;
   }
 
@@ -166,7 +178,7 @@ async function prepareUpgradeStage(root, stage, source, signal) {
   await publishJournalHead(journalPublication(stage), requireUpgradeHead(source));
   const journal = await PartitionJournal.open({ root: stage, sessionId: source.sessionId });
   try {
-    await upgradePartitionFormatTitles(journal, signal);
+    await upgradePartitionFormatSession(journal, signal, source.format === LEGACY_FORMAT);
   } finally {
     await journal.close();
   }
@@ -208,14 +220,43 @@ async function upgradeSessionFormat(sessionDir, limits, signal) {
           readUpgradeHead(root),
         );
         assertPartitionSessionJournalPolicy(head, limits);
-        if (head.format === LEGACY_FORMAT) await upgradeJournalFormat(root, stage, head, signal);
+        const needsUpgrade = head.format !== PARTITION_JOURNAL_FORMAT;
+        if (needsUpgrade) await upgradeJournalFormat(root, stage, head, signal);
         await syncStorageDirectory(root);
         await fsRm(stage, { recursive: true, force: true });
         await syncStorageDirectory(root);
-        return head.format === LEGACY_FORMAT;
+        return needsUpgrade;
       },
     );
   });
+}
+
+async function upgradeDiscoveredSession({ base, source, limits, signal }) {
+  const { sessionDir, authority, format } = source;
+  signal?.throwIfAborted();
+  try {
+    if (source.error) throw source.error;
+    if (authority !== "partition")
+      throw partitionJournalError(
+        "SESSION_STORAGE_FORMAT_UNSUPPORTED",
+        "Session storage format is no longer supported",
+      );
+    return { upgraded: await upgradeSessionFormat(sessionDir, limits, signal), quarantined: [] };
+  } catch (error) {
+    signal?.throwIfAborted();
+    const quarantined = await quarantineSessionStorageTree({
+      base,
+      sessionDir,
+      format,
+      status:
+        authority === "immutable"
+          ? SESSION_STORAGE_QUARANTINE_STATUS.UNSUPPORTED
+          : SESSION_STORAGE_QUARANTINE_STATUS.FAILED,
+      error,
+      signal,
+    });
+    return { upgraded: false, quarantined };
+  }
 }
 
 export async function upgradeWorkspacePartitionFormat({
@@ -223,21 +264,18 @@ export async function upgradeWorkspacePartitionFormat({
   scopedSessionRoots,
   targetStorageBudget,
   signal,
-  onSessionProcessed,
+  onSessionProcessed = ignoreSessionProgress,
 }) {
   await assertWorkspaceQuarantineEmpty(base);
   const { journalLimits } = requirePartitionSessionStorageBudget(targetStorageBudget);
   const roots = new Set([WORKSPACE_LAYOUT.SESSION_DIR, ...scopedSessionRoots]);
   const upgraded = [];
-  for await (const { sessionDir, authority } of discoverMigrationSessions(base, roots)) {
-    signal?.throwIfAborted();
-    if (authority !== "partition")
-      throw partitionJournalError(
-        "SESSION_STORAGE_UPGRADE_BLOCKED",
-        "Session requires partition storage before format upgrade",
-      );
-    if (await upgradeSessionFormat(sessionDir, journalLimits, signal)) upgraded.push(sessionDir);
+  const quarantined = [];
+  for await (const source of discoverSessionDirectories(base, roots)) {
+    const result = await upgradeDiscoveredSession({ base, source, limits: journalLimits, signal });
+    if (result.upgraded) upgraded.push(source.sessionDir);
+    quarantined.push(...result.quarantined);
     onSessionProcessed();
   }
-  return { upgraded: upgraded.sort() };
+  return { upgraded: upgraded.sort(), quarantined };
 }

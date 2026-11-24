@@ -5,7 +5,7 @@
  */
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import assert from "node:assert/strict";
-import { readFile, readdir, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import {
@@ -18,10 +18,12 @@ import {
   withTempWorkspace,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
+import { PartitionJournalOwner } from "../../src/session/partition-storage/partition-journal-owner.js";
+import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
+import { commitFixtureTransaction, journalTestLimits } from "../helpers/partition-journal-cases.js";
+import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { ACTIVITY_TIMELINE_ERROR_CODE } from "@noobot/event-protocol/activity-timeline";
-import { IMMUTABLE_READER_RETENTION } from "@noobot/session-protocol/immutable-storage";
 
 function canonicalTransferEnvelope(sessionId) {
   return {
@@ -99,7 +101,7 @@ test("session detail derives transfer envelopes from the canonical Session", asy
     await writeFile(summaryFile, JSON.stringify(staleSummary), "utf8");
 
     repository.findById = async () => {
-      throw new Error("display must read the immutable authority directly");
+      throw new Error("display must read the partition authority directly");
     };
     const detail = await runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId });
     assert.equal(
@@ -115,10 +117,7 @@ test("session detail derives transfer envelopes from the canonical Session", asy
       cachedDetail.sessions[0].messages[0].transferEnvelopes[0].intent.reason,
       "multimodal_parse_artifact",
     );
-    assert.deepEqual(
-      await readdir(path.join(scope.sessionDir, IMMUTABLE_READER_RETENTION.directory)),
-      [],
-    );
+    await runtime.close();
   });
 });
 
@@ -141,7 +140,11 @@ test("failed Session repair projects an unavailable list item", async () => {
       sessionId,
       repository.treePersistenceContext(userId, sessionId),
     );
-    await writeFile(path.join(scope.sessionDir, "head.json"), "{invalid-json", "utf8");
+    await writeFile(
+      path.join(scope.sessionDir, PARTITION_JOURNAL_HEAD_FILE),
+      "{invalid-json",
+      "utf8",
+    );
     await assert.rejects(
       repository.readSessionDisplaySummary(userId, sessionId, {
         persistenceContext: repository.treePersistenceContext(userId, sessionId),
@@ -154,6 +157,13 @@ test("failed Session repair projects an unavailable list item", async () => {
     const unavailable = summaries.find((item) => item.sessionId === sessionId);
     assert.equal(unavailable.availability, "unavailable");
     assert.ok(unavailable.unavailableReason.code);
+    await assert.rejects(runtime.close(), (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(error.message, "Journal owner shutdown failed");
+      assert.equal(error.errors.length, 1);
+      assert.equal(error.errors[0].code, "SESSION_STORAGE_CORRUPT");
+      return true;
+    });
   });
 });
 
@@ -185,28 +195,39 @@ test("list availability covers its local projection while detail and audit rejec
       sessionId,
       changes: { messages: [message] },
     });
-    const store = await ImmutableSessionStore.open({ sessionDir: scope.sessionDir });
-    const snapshot = await store.snapshot();
-
-    await store.transact({
-      expectedGeneration: snapshot.generation,
-      operationId: "invalid-activity",
-      input: { messageUid: message.messageUid, turnScopeId: message.turnScopeId },
-      prepare: async ({ get, input }) => {
-        const record = await get("messages", input.messageUid);
-        record.message.activityTimeline = [{ eventId: "missing-id" }];
-        const reference = await store.putCollectionValue("messages", input.messageUid, record);
-        const turn = await get("turns", input.turnScopeId);
-        turn.messagesRoot = await store.index.set(turn.messagesRoot, input.messageUid, reference);
-        return {
-          changes: [
-            { collection: "messages", key: input.messageUid, reference },
-            { collection: "turns", key: input.turnScopeId, value: turn },
-          ],
-        };
-      },
+    await using owner = new PartitionJournalOwner({
+      durableAncestor: workspaceRoot,
+      limits: journalTestLimits({ transactionBytes: 16 * 1024 }),
+      maxJournals: 1,
     });
-    const headFile = path.join(scope.sessionDir, "head.json");
+    await using lease = await owner.acquire({ ...scope, sessionId });
+    const { journal } = lease;
+    const transactions = new PartitionTransactions(journal);
+    const mutation = await journal.usingSnapshot((snapshot) =>
+      transactions.withCollectionReader(snapshot, async (read) => {
+        const stored = (
+          await read({ collection: "messages", keys: [message.messageUid], includeOwner: true })
+        ).get(message.messageUid);
+        const record = structuredClone(stored.mutation.value);
+        record.message.activityTimeline = [{ eventId: "missing-id" }];
+        return {
+          collection: "messages",
+          key: message.messageUid,
+          owner: stored.owner,
+          value: record,
+        };
+      }),
+    );
+    await commitFixtureTransaction(transactions, {
+      epoch: journal.head.epoch,
+      expectedGeneration: journal.head.sequence,
+      sequence: journal.head.sequence + 1,
+      operationId: "invalid-activity",
+      input: null,
+      mutations: [mutation],
+      result: null,
+    });
+    const headFile = path.join(scope.sessionDir, PARTITION_JOURNAL_HEAD_FILE);
     const sourceBytes = await readFile(headFile);
 
     const expectedReason = {
@@ -234,11 +255,8 @@ test("list availability covers its local projection while detail and audit rejec
         sessionId: healthyId,
       });
       assert.equal(healthy.sessions[0].availability, "available");
-      assert.deepEqual(
-        await readdir(path.join(scope.sessionDir, IMMUTABLE_READER_RETENTION.directory)),
-        [],
-      );
     }
     assert.deepEqual(await readFile(headFile), sourceBytes);
+    await runtime.close();
   });
 });

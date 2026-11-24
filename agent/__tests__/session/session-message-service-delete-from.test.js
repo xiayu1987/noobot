@@ -8,10 +8,10 @@ import assert from "node:assert/strict";
 import { rename } from "node:fs/promises";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import {
-  immutableMutationFixture,
+  sessionMutationFixture,
   mutationMessage as message,
   mutationTime,
-} from "../helpers/immutable-mutation-integration-fixture.js";
+} from "../helpers/session-mutation-fixture.js";
 
 const deletion = (fixture, scope = "drop", fields = {}) => ({
   ...fixture.request,
@@ -21,7 +21,7 @@ const deletion = (fixture, scope = "drop", fields = {}) => ({
 });
 
 test("interleaved deletion response preserves the partial turn and replays exact original message effects", async (t) => {
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     messages: [message("a1", "a"), message("b1", "b"), message("a2", "a")],
   });
   const request = deletion(f, "b");
@@ -31,7 +31,20 @@ test("interleaved deletion response preserves the partial turn and replays exact
     (await (await f.open()).exportSession()).messages.map((entry) => entry.messageUid),
     ["a1"],
   );
-  await f.commit({ messages: [message("a1", "a", { content: "later edit" }), message("a3", "a")] });
+  const retained = await (await f.open()).readMessageEntry({ messageUid: "a1" });
+  await f.commit({
+    messages: [message("a3", "a")],
+    messageContentReplacements: [
+      {
+        messageUid: "a1",
+        turnScopeId: "a",
+        dialogProcessId: "dialog-a",
+        owner: retained.owner,
+        expectedContentReference: retained.contentReference,
+        content: "later edit",
+      },
+    ],
+  });
   const beforeRetry = await f.open();
   const retry = await f.service.deleteFromMessage(request);
   assert.equal(retry.deduplicated, true);
@@ -47,7 +60,7 @@ test("interleaved deletion response preserves the partial turn and replays exact
 });
 
 test("deleteFromMessage commits only the suffix and passes the persistence context to the response", async (t) => {
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     aggregateVersion: 2,
     messages: [message("keep"), message("drop"), message("tail")],
   });
@@ -73,15 +86,15 @@ test("deleteFromMessage commits only the suffix and passes the persistence conte
     ["keep"],
   );
   assert.equal((await after.readMetadata()).updatedAt, mutationTime);
-  assert.notEqual(await before.readMessage("drop"), null);
-  assert.equal(await after.readMessage("drop"), null);
+  assert.notEqual(await before.readMessageEntry({ messageUid: "drop" }), null);
+  assert.equal(await after.readMessageEntry({ messageUid: "drop" }), null);
 });
 
 test("deleteFromMessage leaves another session's committed graph unchanged", async (t) => {
-  const parent = await immutableMutationFixture(t, {
+  const parent = await sessionMutationFixture(t, {
     messages: [message("keep"), message("drop")],
   });
-  const child = await immutableMutationFixture(t, { messages: [message("child")] });
+  const child = await sessionMutationFixture(t, { messages: [message("child")] });
   const before = await child.open();
   await parent.service.deleteFromMessage(deletion(parent));
   const after = await child.open();
@@ -90,7 +103,7 @@ test("deleteFromMessage leaves another session's committed graph unchanged", asy
 });
 
 test("deleteFromMessage replays its command after the anchor is gone and rejects changed requests", async (t) => {
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     aggregateVersion: 2,
     messages: [message("keep"), message("drop")],
   });
@@ -108,8 +121,50 @@ test("deleteFromMessage replays its command after the anchor is gone and rejects
   assert.equal((await f.open()).generation, before.generation);
 });
 
+test("deleteFromMessage rejects a missing authoritative projection after commit and retries without republishing", async (t) => {
+  const f = await sessionMutationFixture(t, { messages: [message("keep"), message("drop")] });
+  const request = deletion(f);
+  const before = await f.open();
+  const withSessionReader = f.repository.withSessionReader.bind(f.repository);
+  const fault = t.mock.method(
+    f.repository,
+    "withSessionReader",
+    (userId, sessionId, run, options) =>
+      withSessionReader(
+        userId,
+        sessionId,
+        (scope) =>
+          run({
+            ...scope,
+            readCurrent: (read) =>
+              scope.readCurrent((current) =>
+                read({
+                  generation: current.generation,
+                  readMutationProjection(commandId) {
+                    assert.equal(commandId, request.commandId);
+                    return null;
+                  },
+                }),
+              ),
+          }),
+        options,
+      ),
+  );
+  await assert.rejects(f.service.deleteFromMessage(request), {
+    code: "SESSION_STORAGE_CORRUPT",
+    message: "Committed mutation is missing its command change evidence",
+  });
+  fault.mock.restore();
+  const after = await f.open();
+  assert.equal(after.generation, before.generation + 1);
+  assert.equal(await after.readMessageEntry({ messageUid: "drop" }), null);
+  const replay = await f.service.deleteFromMessage(request);
+  assert.equal(replay.deduplicated, true);
+  assert.equal((await f.open()).generation, after.generation);
+});
+
 test("deleteFromMessage rejects missing anchors and stale versions without publishing", async (t) => {
-  const f = await immutableMutationFixture(t, { aggregateVersion: 5, messages: [message("keep")] });
+  const f = await sessionMutationFixture(t, { aggregateVersion: 5, messages: [message("keep")] });
   const before = await f.open();
   await assert.rejects(
     f.service.deleteFromMessage(deletion(f, "missing")),
@@ -123,7 +178,7 @@ test("deleteFromMessage rejects missing anchors and stale versions without publi
 });
 
 test("deleteFromMessage rejects legacy and ambiguous anchors before accessing storage", async (t) => {
-  const f = await immutableMutationFixture(t);
+  const f = await sessionMutationFixture(t);
   t.mock.method(f.repository, "requireSessionReader", () =>
     assert.fail("invalid request accessed storage"),
   );
@@ -154,8 +209,8 @@ async function accept(f, scope) {
   });
 }
 
-test("deleteFromMessage atomically removes lifecycle, summary, timing, command and pending outbox references", async (t) => {
-  const f = await immutableMutationFixture(t, { messages: [message("keep"), message("drop")] });
+test("deleteFromMessage removes visible turn facts and pending events while retaining command retry evidence", async (t) => {
+  const f = await sessionMutationFixture(t, { messages: [message("keep"), message("drop")] });
   for (const scope of ["keep", "drop"]) {
     await accept(f, scope);
     await f.commit({
@@ -207,7 +262,10 @@ test("deleteFromMessage atomically removes lifecycle, summary, timing, command a
     assert.equal((await after.readTurnState(scope)) === null, removed);
     assert.equal((await after.readCheckpoint(scope, `cp:${scope}`)) === null, removed);
     assert.equal((await after.readTurnTiming(scope)) === null, removed);
-    assert.equal((await after.readCommand(`accept:${scope}`)) === null, removed);
+    assert.deepEqual(
+      await after.readCommand(`accept:${scope}`),
+      await before.readCommand(`accept:${scope}`),
+    );
   }
   assert.equal((await after.readOutboxPage({ consumerId: "client" })).events.length, 4);
   assert.equal((await before.readOutboxPage({ consumerId: "client" })).events.length, 8);
@@ -219,20 +277,20 @@ test("deleteFromMessage atomically removes lifecycle, summary, timing, command a
 });
 
 test("deleteFromMessage recomputes the title when removing all messages", async (t) => {
-  const f = await immutableMutationFixture(t, { messages: [message("drop")] });
+  const f = await sessionMutationFixture(t, { messages: [message("drop")] });
   await f.service.deleteFromMessage(deletion(f));
   const after = await f.open();
-  assert.equal((await after.readFacts()).messageCount, 0);
+  assert.equal((await after.readListProjection()).messageCount, 0);
   assert.equal((await after.readMetadata({ includeAutoTitle: true })).autoTitle, undefined);
   assert.deepEqual((await after.exportSession()).dialogOrder, []);
 });
 
-test("deleteFromMessage exposes no partial state on head failure and retries the same command", async (t) => {
-  const f = await immutableMutationFixture(t, { messages: [message("keep"), message("drop")] });
+test("deleteFromMessage exposes no partial state on CURRENT failure and retries after reopening", async (t) => {
+  const f = await sessionMutationFixture(t, { messages: [message("keep"), message("drop")] });
   const before = await f.open();
   setFsAdapter({
     rename: async (source, target) => {
-      if (target === `${f.scope.sessionDir}/head.json`)
+      if (target === `${f.scope.sessionDir}/CURRENT`)
         throw Object.assign(new Error("injected"), { code: "EIO" });
       return rename(source, target);
     },
@@ -244,10 +302,12 @@ test("deleteFromMessage exposes no partial state on head failure and retries the
   } finally {
     resetFsAdapter();
   }
+  const generation = before.generation;
+  await f.reopen();
   const failed = await f.open();
-  assert.equal(failed.generation, before.generation);
-  assert.notEqual(await failed.readMessage("drop"), null);
+  assert.equal(failed.generation, generation);
+  assert.notEqual(await failed.readMessageEntry({ messageUid: "drop" }), null);
   assert.equal(await failed.readCommand("delete-tail"), null);
   await f.service.deleteFromMessage(deletion(f));
-  assert.equal(await (await f.open()).readMessage("drop"), null);
+  assert.equal(await (await f.open()).readMessageEntry({ messageUid: "drop" }), null);
 });

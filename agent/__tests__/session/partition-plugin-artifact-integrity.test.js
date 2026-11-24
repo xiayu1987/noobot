@@ -5,6 +5,8 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { authorityOutboxPositionKey } from "@noobot/event-protocol/outbox";
+import { PartitionJournal } from "../../src/session/partition-storage/partition-journal.js";
 import {
   createPluginArtifactEnvelope,
   pluginArtifactKey,
@@ -38,7 +40,7 @@ function artifact(sessionId, aggregateVersion, revision = 1) {
   return { eventId: envelope.identity.eventId, envelope, committedAt, deliveries: {} };
 }
 
-for (const [label, alter] of [
+for (const [label, alter, collection = "pluginArtifacts"] of [
   [
     "forged data",
     (value) => {
@@ -58,6 +60,15 @@ for (const [label, alter] of [
       value.eventId = "evt_missing";
     },
   ],
+  ["foreign event position", () => "foreign-event", "eventOrder"],
+  ["missing event position", () => null, "eventOrder"],
+  [
+    "event beyond committed tail",
+    (value) => {
+      value.ordinal += 1;
+    },
+    "events",
+  ],
 ]) {
   test(`partition artifact read and replacement reject ${label} atomically`, async (t) => {
     const context = await createMessageCase(
@@ -65,7 +76,7 @@ for (const [label, alter] of [
       { transactionBytes: 16 * 1024 },
       { autoClose: false },
     );
-    const { journal, sessionId } = context;
+    const { journal, sessionId, root } = context;
     const messages = openTestMessages(journal, sessionId);
     await messages.commit(
       await prepare(journal, messages, "seed", { messages: [message(sessionId, "m1")] }),
@@ -80,15 +91,23 @@ for (const [label, alter] of [
     await using old = await openPartitionSessionReader(options);
     const original = await old.readPluginArtifact(identity);
     const transactions = new PartitionTransactions(journal);
-    const key = pluginArtifactKey(identity);
+    const event = await old.readOutboxEvent(original.eventId);
+    const key = {
+      pluginArtifacts: pluginArtifactKey(identity),
+      events: original.eventId,
+      eventOrder: authorityOutboxPositionKey(event.ordinal),
+    }[collection];
     const mutation = await journal.usingSnapshot((snapshot) =>
       transactions.withCollectionReader(snapshot, async (read) => {
-        const stored = (
-          await read({ collection: "pluginArtifacts", keys: [key], includeOwner: true })
-        ).get(key);
+        const stored = (await read({ collection, keys: [key], includeOwner: true })).get(key);
         const value = structuredClone(stored.mutation.value);
-        alter(value);
-        return { collection: "pluginArtifacts", key, owner: stored.owner, value };
+        const altered = alter(value);
+        return {
+          collection,
+          key,
+          owner: stored.owner,
+          value: altered === undefined ? value : altered,
+        };
       }),
     );
     await commitFixtureTransaction(transactions, {
@@ -102,7 +121,7 @@ for (const [label, alter] of [
     });
     await using reader = await openPartitionSessionReader(options);
     const before = journal.head;
-    await assert.rejects(reader.readPluginArtifact(identity), { code: "SESSION_STORAGE_CORRUPT" });
+    const [readResult] = await Promise.allSettled([reader.readPluginArtifact(identity)]);
     const current = await reader.readMetadata();
     const request = await reader.prepareRequest({
       operationId: "replacement",
@@ -112,11 +131,24 @@ for (const [label, alter] of [
         artifactEvents: [artifact(sessionId, current.aggregateVersion + 1, 2)],
       },
     });
-    await assert.rejects(messages.commit(request), { code: "SESSION_STORAGE_CORRUPT" });
+    const [commitResult] = await Promise.allSettled([messages.commit(request)]);
+    assert.equal(readResult.reason?.code, "SESSION_STORAGE_CORRUPT", "read must reject corruption");
+    assert.equal(
+      commitResult.reason?.code,
+      "SESSION_STORAGE_CORRUPT",
+      "replacement must reject corruption",
+    );
     assert.equal(journal.head, before);
     assert.deepEqual(await old.readPluginArtifact(identity), original);
     await reader.close();
     await old.close();
     await assert.rejects(journal.close(), { code: "SESSION_STORAGE_CORRUPT" });
+    const cold = await PartitionJournal.open({ root, sessionId });
+    t.after(() => cold.close());
+    assert.deepEqual(cold.head, before);
+    await using reopened = await openPartitionSessionReader({ ...options, journal: cold });
+    await assert.rejects(reopened.readPluginArtifact(identity), {
+      code: "SESSION_STORAGE_CORRUPT",
+    });
   });
 }

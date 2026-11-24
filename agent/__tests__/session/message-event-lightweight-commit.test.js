@@ -8,11 +8,25 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createToolRiskAssessment } from "../../src/tools/execution/tool-risk.js";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
+import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
+import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
 import { buildHarness } from "./scoped-session-repositories.fixtures.js";
 import { testWallClock, submitTestSessionRequest } from "../helpers/session-services.js";
+import { deliveryReceiptOf } from "./turn-lifecycle-session-contract.test-helpers.js";
 
 const ts = "2026-11-01T00:00:00.000Z";
+
+function guardEventQuery(query) {
+  const guard = (input) => {
+    assert.ok(!["messageContent", "checkpoints"].includes(input.collection));
+    return query(input);
+  };
+  guard.readWindow = (input) => {
+    assert.ok(!["messageContent", "checkpoints"].includes(input.collection));
+    return query.readWindow(input);
+  };
+  return guard;
+}
 
 test("message event commit has constant snapshot IO and preserves durable starts before projection", async (t) => {
   const harness = buildHarness();
@@ -45,8 +59,8 @@ test("message event commit has constant snapshot IO and preserves durable starts
   sessionRepo.requireById = async () => {
     throw new Error("message commit must not hydrate the session");
   };
+  const committedEventIds = [];
   for (const count of [1, 8, 32]) {
-    const store = new ImmutableSessionStore({ sessionDir: scope.sessionDir, sessionId });
     let reader = await sessionRepo.requireSessionReader(userId, sessionId, { persistenceContext });
     let revision = (await reader.readCheckpointState("active"))?.checkpointRevision ?? 0;
     while (revision < count) {
@@ -61,7 +75,7 @@ test("message event commit has constant snapshot IO and preserves durable starts
                 parentSessionId: "",
                 userMessageId: "m1",
                 type: "message",
-                content: "x".repeat(65536),
+                content: "x".repeat(4096),
                 ts,
                 dialogProcessId: "dialog-active",
                 turnScopeId: "active",
@@ -97,20 +111,65 @@ test("message event commit has constant snapshot IO and preserves durable starts
         }),
         persistenceContext,
       );
+      await reader.close();
       reader = await sessionRepo.requireSessionReader(userId, sessionId, { persistenceContext });
       revision += 1;
     }
-    const beforeHead = await readFile(`${scope.sessionDir}/head.json`, "utf8");
-    const get = ImmutableSessionStore.prototype.get;
-    const bodyReads = t.mock.method(
-      ImmutableSessionStore.prototype,
-      "get",
-      function (snapshot, collection, key) {
-        assert.ok(
-          !["messages", "checkpoints"].includes(collection),
-          "event commit must not read historical bodies",
+    const beforeHead = await readFile(`${scope.sessionDir}/${PARTITION_JOURNAL_HEAD_FILE}`, "utf8");
+    if (count === 1) {
+      for (let chunk = 1; chunk < 16; chunk += 1) {
+        await using current = await sessionRepo.requireSessionReader(userId, sessionId, {
+          persistenceContext,
+        });
+        const entry = await current.readMessageEntry({ messageUid: "m1" });
+        await submitTestSessionRequest(
+          sessionRepo,
+          userId,
+          sessionId,
+          await current.prepareRequest({
+            operationId: `body-${chunk}`,
+            committedAt: ts,
+            changes: {
+              messageContentAppends: [
+                {
+                  messageUid: "m1",
+                  dialogProcessId: "dialog-active",
+                  turnScopeId: "active",
+                  owner: entry.owner,
+                  expectedContentReference: entry.contentReference,
+                  content: "x".repeat(4096),
+                },
+              ],
+            },
+          }),
+          persistenceContext,
         );
-        return get.call(this, snapshot, collection, key);
+      }
+      await reader.close();
+      reader = await sessionRepo.requireSessionReader(userId, sessionId, { persistenceContext });
+      const { contentReference } = await reader.readMessageEntry({ messageUid: "m1" });
+      const chunks = [];
+      let cursor = null;
+      do {
+        const page = await reader.readContentPage({
+          messageUid: "m1",
+          dialogProcessId: "dialog-active",
+          turnScopeId: "active",
+          contentReference,
+          cursor,
+          limit: 1,
+        });
+        chunks.push(...page.entries);
+        cursor = page.nextCursor;
+      } while (cursor !== null);
+      assert.equal(chunks.join(""), "x".repeat(65536));
+    }
+    const get = PartitionTransactions.prototype.withCollectionReader;
+    const bodyReads = t.mock.method(
+      PartitionTransactions.prototype,
+      "withCollectionReader",
+      function (snapshot, operation, options) {
+        return get.call(this, snapshot, (query) => operation(guardEventQuery(query)), options);
       },
     );
     jsonReads = [];
@@ -143,27 +202,49 @@ test("message event commit has constant snapshot IO and preserves durable starts
       });
       samples.push(performance.now() - started);
       assert.equal(result.committed, true);
+      committedEventIds.push(result.envelope.identity.eventId);
     }
     bodyReads.mock.restore();
     assert.equal(manifestReads, 0, "no legacy manifest reads");
     assert.equal(jsonReads.length, 0, "no snapshot or session hydration reads");
-    assert.notEqual(await readFile(`${scope.sessionDir}/head.json`, "utf8"), beforeHead);
-    assert.equal((await store.snapshot()).generation, reader.generation + 5);
-    assert.equal((await store.get(await store.snapshot(), "metadata", "facts")).messageCount, 1);
+    assert.notEqual(
+      await readFile(`${scope.sessionDir}/${PARTITION_JOURNAL_HEAD_FILE}`, "utf8"),
+      beforeHead,
+    );
+    await using after = await sessionRepo.requireSessionReader(userId, sessionId, {
+      persistenceContext,
+    });
+    assert.equal(after.generation, reader.generation + 5);
+    assert.equal((await after.readDisplaySourceCounts()).messageCount, 1);
+    await reader.close();
     const restartedService = new SessionMessageService({ sessionRepo, now: testWallClock });
-    const pending = await restartedService.getPendingAuthorityEvents({
+    const history = {
       userId,
       sessionId,
       persistenceContext,
-      consumerId: "test-recovery",
+      consumerId: `test-recovery-${count}`,
+    };
+    const recoveredEventIds = [];
+    let pending;
+    do {
+      pending = await restartedService.getPendingAuthorityEvents(history);
+      assert.equal(pending.found, true);
+      assert.ok(pending.events.length > 0);
+      recoveredEventIds.push(...pending.events.map(({ eventId }) => eventId));
+      assert.deepEqual(recoveredEventIds, committedEventIds.slice(0, recoveredEventIds.length));
+      const acknowledged = await restartedService.acknowledgeAuthorityEvents({
+        ...history,
+        acknowledgements: pending.events.map(({ envelope }) => deliveryReceiptOf(envelope)),
+      });
+      assert.equal(acknowledged.delivered, pending.events.length);
+      assert.equal(acknowledged.drained, !pending.hasMore);
+    } while (pending.hasMore);
+    assert.deepEqual(recoveredEventIds, committedEventIds);
+    assert.deepEqual(await restartedService.getPendingAuthorityEvents(history), {
+      found: true,
+      events: [],
+      hasMore: false,
     });
-    assert.ok(
-      pending.events.some((item) => item.envelope.payload.toolCallId === `call-${count}-0`),
-    );
-    assert.equal(
-      (await Array.fromAsync(store.entries(await store.snapshot(), "outbox"))).length,
-      count === 1 ? 5 : count === 8 ? 10 : 15,
-    );
     samples.sort((a, b) => a - b);
     t.diagnostic(
       `${count} snapshots: message commit median ${samples[2].toFixed(2)}ms, snapshot JSON reads=0`,

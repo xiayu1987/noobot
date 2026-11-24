@@ -6,17 +6,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { createServer } from "vite";
+import { createTestViteServer } from "./helpers/vite-server.js";
 import vue from "@vitejs/plugin-vue";
 import { chromium } from "@playwright/test";
 
 test(
   "shared buttons preserve variants and states across clients, themes and viewports",
   { timeout: 60000 },
-  async () => {
+  async (t) => {
     const root = fileURLToPath(new URL("../..", import.meta.url));
     const startupStyle = fileURLToPath(new URL("../../../startup/src/style.css", import.meta.url));
-    const server = await createServer({
+    const server = await createTestViteServer(t, {
       configFile: false,
       appType: "custom",
       root,
@@ -126,7 +126,6 @@ test(
       }
     } finally {
       await browser?.close();
-      await server.close();
     }
   },
 );
@@ -134,9 +133,9 @@ test(
 test(
   "thinking detail pagination keeps both icon buttons inside the drawer",
   { timeout: 60000 },
-  async () => {
+  async (t) => {
     const root = fileURLToPath(new URL("../..", import.meta.url));
-    const server = await createServer({
+    const server = await createTestViteServer(t, {
       configFile: false,
       appType: "custom",
       root,
@@ -208,7 +207,6 @@ test(
       }
     } finally {
       await browser?.close();
-      await server.close();
     }
   },
 );

@@ -5,9 +5,15 @@
  */
 import {
   assertAuthorityEventScope,
+  authorityOutboxPositionKey,
   decodeStoredAuthorityOutboxEvent,
   isAuthorityOutboxDeliveryVisible,
+  requireAuthorityOutboxEventPosition,
 } from "@noobot/event-protocol/outbox";
+import {
+  PARTITION_LIFECYCLE_HEADER,
+  requirePartitionOutboxTail,
+} from "@noobot/session-protocol/partition-transaction";
 import { partitionJournalError } from "@noobot/session-protocol/partition-journal";
 import { readPartitionEventTurnVisibility } from "@noobot/session-protocol/partition-turn-visibility";
 
@@ -25,6 +31,18 @@ export function partitionAuthorityEventRecord(value, eventId, scope) {
   }
   if (record.eventId !== eventId) corrupt("Partition outbox event ownership mismatch");
   return record;
+}
+
+export async function requireCommittedEventPosition(get, event) {
+  const { collection, key } = PARTITION_LIFECYCLE_HEADER;
+  const tail = requirePartitionOutboxTail(await get(collection, key));
+  const indexedEventId = await get("eventOrder", authorityOutboxPositionKey(event.ordinal));
+  try {
+    return requireAuthorityOutboxEventPosition({ ...event, tail, indexedEventId });
+  } catch (cause) {
+    if (!(cause instanceof TypeError)) throw cause;
+    corrupt("Invalid partition committed event position", cause);
+  }
 }
 
 export function partitionAuthorityEventVisible(event, range, tail, compaction) {

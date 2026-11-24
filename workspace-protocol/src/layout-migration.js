@@ -33,7 +33,15 @@ export const WORKSPACE_LAYOUT_UPGRADE_OWNER = Object.freeze({
   ATTACHMENT_CATALOG: "attachment-catalog",
   SESSION_PARTITION_STORAGE: "session-partition-storage",
   SESSION_PARTITION_FORMAT: "session-partition-format",
+  SESSION_STORAGE_RETIREMENT: "session-storage-retirement",
 });
+
+export const WORKSPACE_LAYOUT_ACTIVE_UPGRADE_OWNERS = Object.freeze([
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.DIRECTORY_LOCK_RETIREMENT,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.ATTACHMENT_CATALOG,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_PARTITION_FORMAT,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_STORAGE_RETIREMENT,
+]);
 
 export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
   Object.freeze({
@@ -268,6 +276,18 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     toVersion: 47,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_PARTITION_FORMAT,
   }),
+  Object.freeze({
+    id: "unsupported-session-storage-retirement-v48",
+    toVersion: 48,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_STORAGE_RETIREMENT,
+    preflight: true,
+  }),
+  Object.freeze({
+    id: "session-partition-metadata-v49",
+    toVersion: 49,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_PARTITION_FORMAT,
+    rebuildSessionTree: true,
+  }),
 ]);
 
 function layoutStateError(message) {
@@ -301,7 +321,11 @@ export function planWorkspaceLayoutUpgrades({ installedVersion } = {}) {
   if (!Number.isInteger(installedVersion)) {
     throw new TypeError("installedVersion must be an integer");
   }
-  return WORKSPACE_LAYOUT_UPGRADES.filter((upgrade) => upgrade.toVersion > installedVersion);
+  return WORKSPACE_LAYOUT_UPGRADES.filter(
+    (upgrade) =>
+      upgrade.toVersion > installedVersion &&
+      WORKSPACE_LAYOUT_ACTIVE_UPGRADE_OWNERS.includes(upgrade.owner),
+  );
 }
 
 export const WORKSPACE_LAYOUT_MIGRATIONS = Object.freeze([

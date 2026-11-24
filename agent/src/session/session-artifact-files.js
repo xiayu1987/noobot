@@ -35,23 +35,6 @@ export function buildSessionArtifactFileMap(sessionDir = "") {
   };
 }
 
-function requireSessionWritableGuard(assertSessionWritable) {
-  if (!isFunction(assertSessionWritable)) {
-    throw new TypeError("assertSessionWritable is required for session artifact mutation");
-  }
-  return assertSessionWritable;
-}
-
-export async function assertArtifactSessionWritable({
-  assertSessionWritable,
-  sessionId,
-  sessionDir,
-  operation,
-}) {
-  requireSessionWritableGuard(assertSessionWritable);
-  await assertSessionWritable({ sessionId, sessionDir, operation });
-}
-
 export function resolveSessionArtifactMutationLock(sessionDir = "") {
   const normalized = text(sessionDir);
   if (!normalized) throw new Error("session artifact mutation lock requires sessionDir");

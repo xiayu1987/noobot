@@ -12,17 +12,11 @@ import {
   isTransferEnvelopeField,
   validateTransferEnvelope,
 } from "@noobot/semantic-transfer-protocol";
-import {
-  createSessionDisplaySourceRevision,
-  SESSION_SOURCE_SCHEMA_VERSION,
-} from "../session-display-source-revision.js";
-import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 import {
   TURN_RECOVERY_ACTION,
   TURN_SNAPSHOT_TERMINAL_LIMIT,
 } from "@noobot/session-protocol/turn-lifecycle";
-
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 37;
 
 function isValidTransferEnvelopeList(value) {
   return (
@@ -45,36 +39,11 @@ function hasValidTransferEnvelopes(value, visited = new WeakSet()) {
   return Object.entries(value).every((entry) => isValidTransferEntry(entry, visited));
 }
 
-function hasExpectedSummaryVersions(payload) {
-  return (
-    payload.schemaVersion === SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION &&
-    Number(payload?.source?.sessionSchemaVersion || 0) === SESSION_SOURCE_SCHEMA_VERSION
-  );
-}
-
-function hasValidSourceRevision(payload) {
-  return /^sha256:[0-9a-f]{64}$/.test(String(payload?.source?.revision || ""));
-}
-
-function hasMatchingSessionId(payload, sessionId) {
-  const normalizedSessionId = text(sessionId);
-  return !normalizedSessionId || text(payload?.sessionId) === normalizedSessionId;
-}
-
 function assertValidTransferEnvelopes(payload) {
   if (hasValidTransferEnvelopes(payload)) return;
   const error = new Error("Session display summary contains an invalid transfer envelope");
   error.code = "SESSION_DISPLAY_SUMMARY_TRANSFER_INVALID";
   throw error;
-}
-
-export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
-  if (!isPlainObject(payload)) return false;
-  return (
-    hasExpectedSummaryVersions(payload) &&
-    hasValidSourceRevision(payload) &&
-    hasMatchingSessionId(payload, sessionId)
-  );
 }
 
 function createDisplaySummaryContext(session) {
@@ -146,15 +115,4 @@ export function buildSessionDisplayProjectionFromCounts(session, sourceCounts, o
   };
   assertValidTransferEnvelopes(summary);
   return summary;
-}
-
-export function buildSessionDisplaySummary(session) {
-  return {
-    schemaVersion: SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
-    source: {
-      sessionSchemaVersion: SESSION_SOURCE_SCHEMA_VERSION,
-      revision: createSessionDisplaySourceRevision(session),
-    },
-    ...buildSessionDisplayProjection(session),
-  };
 }

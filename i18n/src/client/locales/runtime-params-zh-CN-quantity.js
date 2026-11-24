@@ -10,17 +10,14 @@ export default {
       description: "会话分页快照可同时保留的读取器数量上限。",
     },
   },
-  partitionStorage: {
-    entityPageWriteVectorLimit: {
-      name: "实体分页写入向量上限",
-      description: "持久化分区实体分页时单次向量写入的缓冲区数量上限。",
-    },
-    recordReadConcurrency: {
-      name: "分区记录读取并发数",
-      description: "分区集合批次中同时读取记录的数量上限。",
+  sessionStorage: {
+    messagePageSize: { name: "消息分页上限", description: "单次存储分页最多读取的消息数。" },
+    messageReadPageSize: {
+      name: "消息默认分页大小",
+      description: "单次存储分页默认读取的消息数。",
     },
   },
-  immutableStorage: {
+  partitionStorage: {
     entityDirectoryMaxEntries: {
       name: "实体目录分页条目上限",
       description: "分区实体目录单页条目数量的协议上限。",
@@ -29,24 +26,14 @@ export default {
       name: "日志 JSON 嵌套上限",
       description: "分区日志 JSON 值嵌套深度的协议上限。",
     },
-    authorityOutboxPageSize: {
-      name: "权威事件发件箱分页上限",
-      description: "单次发件箱分页读取或确认事件数量的协议上限。",
+    entityPageWriteVectorLimit: {
+      name: "实体分页写入向量上限",
+      description: "持久化分区实体分页时单次向量写入的缓冲区数量上限。",
     },
-    cleanupFilterMaxEntries: {
-      name: "清理过滤批次上限",
-      description: "单次清理过滤批次最多检查的已捕获清单条目数。",
+    recordReadConcurrency: {
+      name: "分区记录读取并发数",
+      description: "分区集合批次中同时读取记录的数量上限。",
     },
-    recordIoConcurrency: {
-      name: "记录读写并发数",
-      description: "单次不可变存储批次中同时执行记录操作的最大数量。",
-    },
-    messagePageSize: { name: "消息分页上限", description: "单次存储分页最多读取的消息数。" },
-    messageReadPageSize: {
-      name: "消息默认分页大小",
-      description: "单次存储分页默认读取的消息数。",
-    },
-    receiptPageSize: { name: "回执分页大小", description: "单次存储分页最多读取的回执数。" },
   },
   artifact: {
     checkpointVerificationConcurrency: {
@@ -99,6 +86,10 @@ export default {
     },
   },
   eventProtocol: {
+    authorityOutboxPageSize: {
+      name: "权威事件发件箱分页上限",
+      description: "单次发件箱分页读取或确认事件数量的协议上限。",
+    },
     authorityOutboxPendingBatchSize: {
       name: "事件协议权威状态发件箱待处理批次大小",
       description: "事件协议权威状态发件箱待处理批次大小使用的数量阈值。",

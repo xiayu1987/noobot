@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { messageDiagnosticKey } from "@noobot/session-protocol/session-changes";
-import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
+import { emptyPartitionSession } from "../helpers/partition-session-cases.js";
 import { PartitionJournal } from "../../src/session/partition-storage/partition-journal.js";
 import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
 import { PartitionSessionTransactions } from "../../src/session/partition-storage/partition-session-transactions.js";
@@ -37,19 +37,7 @@ async function fixture(t, options) {
     transactions.prepareInitialization(snapshot, {
       operationId: "bootstrap",
       scopedMetadata: null,
-      session: {
-        sessionId,
-        parentSessionId,
-        caller: "user",
-        aggregateVersion: 0,
-        messages: [],
-        dialogOrder: [],
-        turnTimings: [],
-        sessionArtifactEvents: [],
-        turnLifecycle: createEmptyTurnLifecycle(),
-        createdAt: committedAt,
-        updatedAt: committedAt,
-      },
+      session: emptyPartitionSession({ sessionId, parentSessionId, committedAt }),
     }),
   );
   await transactions.initialize(request);

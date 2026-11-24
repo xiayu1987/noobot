@@ -27,7 +27,7 @@
 
 1. [服务装配](../service/bootstrap/create-app-dependencies.js) 仅调用 [分区会话服务](../agent/src/session/index.js)；[运行配置](../service/services/runtime-config-service.js) 要求全局 `partitionSessionStorage`，包含 `journalLimits` 和 `maxJournals`。缺失或无效即失败，不回退到 Immutable。
 2. 一个会话运行时使用一个 [Journal Owner](../agent/src/session/partition-storage/partition-journal-owner.js)，所有工作区共享驻留名额。名额满时通过退役释放空闲实例；没有空闲实例则报忙。退役失败不释放名额，后续准入可重试同一退役流程。停用工作区必须排空该工作区的租约。驻留数不是磁盘配额。
-3. [权威读取与迁移协议](../session-protocol/src/session-reader.js) 区分原生分区目录、已迁移目录和旧源。原生分区直接使用会话目录；已迁移会话的 `session-authority` 选择 `partition-session/`，并校验发布身份和目标日志头。暂存目录与阶段凭据均不能授权在线读写。未升级的 Immutable 会话在线报 `SESSION_PARTITION_STORAGE_UPGRADE_REQUIRED`。
+3. [权威读取协议](../session-protocol/src/session-reader.js) 区分原生分区目录、已经完成迁移的分区目录和不受支持的旧源。原生分区直接使用会话目录；已迁移会话的 `session-authority` 选择 `partition-session/`，并校验发布身份和目标日志头。保留既有分区发布凭据的读取，不再提供 Immutable 解码、写入、维护或迁移。旧源在升级时按会话隔离，不进入在线活动树。
 4. 单会话只有一个可写权威；旧 `head.json` 即使物理保留，也不是在线候选。消息身份和作用域由协议校验；插件通过作用域和会话接口访问，不读写分区文件。附件索引、摘要及展示只能按其契约引用已提交事实，不能凭投影补造身份。
 
 ### 2.1 物理组织与提交
@@ -113,47 +113,51 @@ Bot 当前轮持久化 / 服务会话接口
 
 **目标闭环，未据代码宣布验收：**由生产维护器选取有界低存活分区，固定发布视图和保留条件，搬迁存活记录，持久化新数据及索引，原子发布，再等引用释放后删除。保留条件覆盖当前状态、读者、分支、备份/迁移、未确认投递和有效回执。存活字节用于排序，不单独决定删除。诊断、待投递、历史回执、临时空间分别有预算；必需消费者超限要背压，可选消费者仅在协议明确支持时重同步。会话、工作区/用户、磁盘应有组合准入和独立应急余量，以保障完成、取消、恢复及整理。现有单 journal 限额和驻留数不证明工作区总容量、持续回收及释放后的写入恢复达标。
 
-**旧格式维护仅用于离线处置。** [维护门面](../agent/src/session/session-artifact-maintenance.js) 定义检查、读者恢复、定位退役、整理、清理及修复入口。定位退役不是物理删除；先核对读者、发布版本和保留证明，再准备并执行清理。不能把手工删段、清锁、跳过隔离或覆盖 `head.json` 当作恢复步骤。旧清理候选捕获仍需目录枚举，捕获阶段的跨进程有界续跑不是现有保证。
+旧 Immutable 存储的维护及迁移实现已经退役。隔离保留的旧文件用于保全源数据，不提供旧格式整理、修复、回执重放或执行恢复能力；不得手动将旧文件放回活动目录绕过格式检查。
 
-## 4. 离线升级协议与权威状态机
+## 4. 升级与不可升级会话隔离
 
-升级是对会话事实的转换，不是在线兼容。早期布局由[工作区升级链](../agent/src/workspace-lifecycle/session-storage-upgrade.js)规范化；分区导入只接受可验证的 Immutable 源。旧布局和旧请求的解释只存在于显式升级协议中，不能由仓储按文件缺失临时猜测。
+服务启动和离线升级共用[布局准备主流程](../agent/src/workspace-lifecycle/sections.js)。[旧格式退役](../agent/src/workspace-lifecycle/session-storage-retirement.js)先隔离不受支持的 Immutable、文档格式及权威冲突目录；[分区格式升级](../agent/src/workspace-lifecycle/upgrade-workspace-partition-format.js)继续转换受支持的分区格式。不可升级会话退出活动树，其他健康会话和工作区布局继续升级。
 
-| 状态                       | 权威                 | 约束                                                                                                                                                                     |
-| -------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 旧源，未开始或暂存未验证   | Immutable 源         | 在线分区服务拒绝该会话。源身份绑定原会话及其提交；读者保留、清理计划、隔离项或缺失身份阻止迁移。不能从布局推断活动归属；旧时间线可能需要现有和轮转后的系统事件作为证据。 |
-| 业务已验证，历史回执可续跑 | 仍为 Immutable 源    | `business-verified` 绑定源身份、目标 epoch 和已验证位置。凭据不授权读写，不替代最终对账。无凭据的暂存可重建；凭据不符或目标缺失显式报错。                                |
-| 目标已就位，权威尚未发布   | 仍为 Immutable 源    | 目标目录存在不等同于切换；发布前再次验证源和目标，并同步目录项。在权威未发布时不能把目标当作原生分区会话。                                                               |
-| `session-authority` 已发布 | `partition-session/` | 发布记录把原源身份和目标位置关联起来。批次按会话生效，不存在整个工作区的原子切换。既有迁移回执可核验，但不是重新完整对账的结果；原生分区会话没有迁移回执。               |
+已经完成迁移并持有有效 `session-authority` 的分区会话继续可读写，不重新读取旧对象图。只有旧源、未完成迁移的暂存或阶段凭据不能授权分区读写。
 
-[单会话迁移](../agent/src/workspace-lifecycle/migrate-immutable-session-to-partition.js)持有源权威锁，发布再使用暂存发布锁；单会话锁不证明工作区已停写。[工作区迁移](../agent/src/workspace-lifecycle/migrate-workspace-sessions-to-partition.js)依工作区布局与插件清单发现主会话和受管会话，按协议使用目标容量与分页预算。页和提交批受限不等于整个扫描或报告为常数内存。
+当前布局为 v49，在线分区格式为 96。v47 与 v49 共用分区升级主流程：格式 93 在暂存日志内按可见消息重建标题候选目录，格式 95 保留已有目录；两者均转换当前业务元数据，移除 `autoTitle` 及协议明确退役的 `sessionArtifacts`、`turnTerminalCommits`、`shortMemoryCheckpoint`，通过统一存储校验后持久化并发布新版 `CURRENT`。v49 随后按布局协议重建活动会话树；已升级会话重跑时跳过转换。
 
-**等价性契约：**[暂存对账](../agent/src/workspace-lifecycle/reconcile-immutable-session-staging.js)覆盖生命周期、轮次、消息顺序与绑定、工具配对、检查点、附件、命令和投递。历史回执保留原操作标识、请求证据和结果，而非重新执行原动作。迁移前原请求以 `epoch: null` 进入历史重放；缺来源代数的旧重复检查点回执阻止发布（`SESSION_IMMUTABLE_INDEX_UPGRADE_REQUIRED`）。回执导入中的中断可以在有效业务凭据和同一源下续跑，不允许把已经发布的前缀计算两次。
+元数据不得重复保存独立集合负责的消息、对话顺序、耗时、产物事件、轮生命周期或摘要检查点，也不得携带 `version`、`revision`、`turnStatuses`、`mutationReceipts`。读、初始化、导入及提交均由 [Session 存储元数据协议](../session-protocol/src/partition-transaction.js)校验。升级不会静默删除未经核对的重复事实；失败会话隔离并保留源目录，健康会话继续升级。
 
-**失效边界：**发布后旧副本不能替代已写入的分区事实；恢复承诺取决于可验证的分区备份及后续写入保全。旧文件的物理存留不构成在线兼容；回收另受保留期与引用安全约束。
+格式 93 重建后的标题目录与格式 95 保留的标题目录均按协议窗口和可见消息逐项对账，末窗另拒绝超出已发布消息总数的候选；空目录不代表历史确实没有候选。该遍历仅属于离线升级校验，在线标题读取仍按首候选定位。中断后复用 `READY` 暂存时，除核对源、目标日志头外，还复用首次转换的元数据及标题验证流程；有效暂存不重复提交转换，损坏暂存不会直接复制到源并发布。[恢复回归](../agent/__tests__/workspace-partition-format-resume.test.js)
 
-### 4.1 切换执行入口
+### 4.1 唯一隔离标识
 
-服务启动与离线工作区命令共用[布局准备主流程](../agent/src/workspace-lifecycle/sections.js)。服务在 HTTP 和 WebSocket 开放前，使用生效的 `partitionSessionStorage` 配置，在工作区存储独占锁内执行待升级布局步骤。v46 在主会话和受管会话对账完成、权威发布后才提交布局版本；失败不会推进 v46，已发布的单会话回执则保留供重试验证。启动会记录失败并继续准备其他工作区；失败工作区不恢复准入。
+[Workspace 隔离协议](../workspace-protocol/src/migration-quarantine.js)定义记录，报告和准入通过同一记录获取事实：
 
-v47 将已发布的分区日志从格式 93 升级到 95。在暂存日志内按可见消息重建标题候选目录，移除当前业务元数据里的 `autoTitle`，保留会话身份和已提交日志。暂存数据持久化后才发布新版 `CURRENT`。中断可以使用同一工作区升级计划重试，已切换到 95 的会话会跳过转换。迁移事务与普通事务使用同一个有限的重放窗口。见[分区格式升级](../agent/src/workspace-lifecycle/upgrade-workspace-partition-format.js)。
+| 字段                            | 含义                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------- |
+| `path`                          | 原会话相对工作区路径                                                                        |
+| `sessionStorage.format`         | `immutable`、`document`、`partition`、`conflicting` 或 `unverified`                         |
+| `sessionStorage.status`         | `unsupported-format`、`upgrade-failed`、`parent-unavailable` 或 `historical-upgrade-failed` |
+| `sessionStorage.parentPath`     | 仅父会话不可用时记录导致隔离的父路径                                                        |
+| `error.code` / `error.message`  | 格式拒绝或升级失败的具体原因                                                                |
+| `quarantineId` / `moveIdentity` | 新终态隔离的独立身份及源目录文件系统身份                                                    |
+| `quarantinedAt`                 | 隔离时间                                                                                    |
+| `quarantinePath`                | 列举接口按隔离记录位置返回的源数据保留位置                                                  |
 
-服务准入读取磁盘上的布局版本和迁移隔离状态，热重建后继续阻止有遗留隔离项的工作区。隔离移动前持久化路径和文件身份，恢复后保留记录直到负责处理器和后续转换成功。隔离扫描把有记录的受管目录作为整体处理，发现没有对应记录的文件时报告具体路径并阻止发布。v46 在枚举会话前校验预算，空工作区也遵循同一配置要求。[隔离恢复](../agent/src/workspace-lifecycle/migration-quarantine.js) · [Bot 重建回归](../service/__tests__/partition-bot-workspace-maintenance.integration.test.js)
+旧 Immutable 明确记录 `format=immutable`、`status=unsupported-format` 和 `SESSION_STORAGE_FORMAT_UNSUPPORTED`。历史失败没有格式证据时记录 `unverified / historical-upgrade-failed`，不能推断为 Immutable。父会话不可用的分区子会话单独保留源目录并标识 `parent-unavailable`，不伪装为格式不受支持。
 
-手动执行时，先在一致性备份的隔离副本演练。正式执行前停掉指向目标工作区的所有写入进程，并确认备份可恢复。离线命令只接受工作区升级计划，不允许绕过布局版本单独切换会话：
+隔离先持久化原因及源身份，再移动源目录；重启依据同一记录完成中断的移动。保留的隔离源不占用活动会话路径。终态会话隔离不会阻止就绪；非会话隔离仍由其协议处理。根目录阻塞、无效配置、隔离身份冲突和证据损坏必须明确失败，不能吞错或删除证据。
+
+### 4.2 查询与验收
+
+在项目根目录执行只读报告，可查看全部注册用户及超级管理员的不可升级会话：
 
 ```sh
-node agent/scripts/migrate-session-storage.js --upgrade-workspace "$runtime_params" "$plan"
+npm run list:migration-quarantine
+npm run list:migration-quarantine -- --json
 ```
 
-入口输出 `layoutMigrations`、`layoutUpgrades` 和 `sessionTreeRecovery`。成功执行 v46 时，`layoutUpgrades` 的对应结果包含 `receipts` 和 `nativePartition`；版本提交后重跑不重新执行 v46，也不重新生成报告。命令不负责停止服务或创建整个工作区的一致性备份。
+报告列出格式、状态、原路径、父路径、错误、隔离位置及时间；不恢复、不迁移、不删除源数据。旧格式不再承诺能够转换，保留文件不等于提供旧存储运行支持。
 
-- `runtime_params` 是有效运行参数文档的绝对路径。服务若未配置参数文件而使用默认值，离线命令仍需显式提供按同一版本默认值生成的文档。
-- 工作区计划只含 `workspaceDir`、`pluginRootDir`、`targetStorageBudget`。前两者为绝对路径，插件目录须与部署一致；`targetStorageBudget` 取目标全局配置中实际生效的 `partitionSessionStorage`。迁移分页预算由 Session 协议统一推导，不在工作区计划另设字段。
-- 旧插件路径迁移先于版本化步骤；路径冲突、未解决的隔离项或证据缺失须按报错处理，不手动跳版本或删隔离记录。保存首次成功输出，按主会话、内部会话和插件会话清单对账。中断后保持停写，用同一计划续跑；核验既有发布回执不等于重新全量对账。
-- 开放流量前检查启动工作区准备结果，并实际验证历史读取和新轮写入；`/health` 成功不代表工作区准备成功。保留旧副本直至验收及保留期结束。新存储接收写入后，不能仅切回旧存储或还原旧备份，否则会丢失切换后的写入。
-
-隔离测试已覆盖[离线 CLI](../agent/__tests__/workspace-immutable-migration-cli.test.js)失败不推进版本、同一计划续跑及成功后重跑不重复升级；[独立进程迁移回归](../agent/__tests__/workspace-isolated-immutable-migration.test.js)覆盖权威发布前后进程终止；[Bot 集成回归](../service/__tests__/partition-bot-migration.integration.test.js)验证主会话、子会话和插件受管会话对账、切换后写入的冷恢复，以及从分区备份还原后继续写入。这些是隔离回归，不替代目标部署副本的离线演练或掉电验收。
+[格式退役测试](../agent/__tests__/workspace-session-storage-retirement.test.js)覆盖历史失败、父子隔离、中断移动恢复及活动路径复用；[升级测试](../agent/__tests__/workspace-partition-format-upgrade.test.js)覆盖健康分区升级及失败隔离；[启动回归](../service/__tests__/workspace-degraded-startup.test.js)覆盖健康用户登录和健康会话跨重启读取；[报告测试](../scripts/list-migration-quarantine.test.mjs)核对明确标识、源数据保留位置及重复只读查询。
 
 ## 5. 性能与容量不变量
 

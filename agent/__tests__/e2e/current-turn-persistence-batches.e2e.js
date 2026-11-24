@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { filePath as path } from "@noobot/path-resolver";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
@@ -15,13 +15,18 @@ import { createSessionFacade } from "../../src/session/index.js";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
 import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
-import { migrateSessionImmutableStorage } from "../../src/workspace-lifecycle/session-immutable-storage-upgrade.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { bindCurrentTurnPersistence } from "../../src/bot/execution/runner/current-turn-persistence.js";
 
 const timestamp = "2026-01-01T00:00:00.000Z";
 const identity = { userId: "u1", sessionId: "s1", dialogProcessId: "d1", turnScopeId: "t1" };
-const pageSize = QUANTITY_THRESHOLDS.immutableStorage.messagePageSize;
+const pageSize = QUANTITY_THRESHOLDS.sessionStorage.messagePageSize;
+const { partitionSessionStorage: storageBudget } = JSON.parse(
+  await readFile(
+    new URL("../../../service/config/global.config.example.json", import.meta.url),
+    "utf8",
+  ),
+);
 const message = (index) => ({
   messageUid: `m${index}`,
   userMessageId: `m${index}`,
@@ -43,19 +48,14 @@ async function fixture(t) {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "bounded-persistence-e2e-"));
   t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
   await initializeUserWorkspace(workspaceRoot, identity.userId);
-  const services = createTestSessionServices({ workspaceRoot }, { now: () => timestamp });
+  const services = createTestSessionServices(
+    { workspaceRoot },
+    { now: () => timestamp, ...storageBudget },
+  );
+  t.after(() => services.close());
   await provisionTestSession(services, { ...identity, caller: SESSION_CALLER.USER });
   const repository = services.repositories.sessionRepository;
   const persistenceContext = repository.treePersistenceContext(identity.userId, identity.sessionId);
-  const scope = await repository.requireSessionScope(
-    identity.userId,
-    identity.sessionId,
-    persistenceContext,
-  );
-  await migrateSessionImmutableStorage({
-    storageService: repository.storageService,
-    sessionDir: scope.sessionDir,
-  });
   return { services, repository, persistenceContext, workspaceRoot };
 }
 
@@ -72,10 +72,11 @@ function retryInNewProcess({ workspaceRoot, request }) {
         import { createTestSessionServices } from ${JSON.stringify(servicesUrl)};
         import { readFileSync } from "node:fs";
         import { restoreSessionCommitRequest } from ${JSON.stringify(import.meta.resolve("@noobot/session-protocol/session-changes"))};
-        const { workspaceRoot, userId, sessionId, timestamp, request } = JSON.parse(readFileSync(0, "utf8"));
-        const { repositories: { sessionRepository: repository } } = createTestSessionServices(
-          { workspaceRoot }, { now: () => timestamp },
+        const { workspaceRoot, userId, sessionId, timestamp, request, storageBudget } = JSON.parse(readFileSync(0, "utf8"));
+        await using runtime = createTestSessionServices(
+          { workspaceRoot }, { now: () => timestamp, ...storageBudget },
         );
+        const repository = runtime.repositories.sessionRepository;
         const persistenceContext = repository.treePersistenceContext(userId, sessionId);
         const outcome = await repository.withSessionReader(userId, sessionId,
           ({ commitChanges }) => commitChanges(restoreSessionCommitRequest(request)),
@@ -90,6 +91,7 @@ function retryInNewProcess({ workspaceRoot, request }) {
         userId: identity.userId,
         sessionId: identity.sessionId,
         timestamp,
+        storageBudget,
         request,
       }),
       encoding: "utf8",

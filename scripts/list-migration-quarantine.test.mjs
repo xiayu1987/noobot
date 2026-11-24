@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { WORKSPACE_ROOT_LAYOUT } from "@noobot/workspace-protocol/layout";
 import { quarantineMigrationUnit } from "../agent/src/workspace-lifecycle/migration-quarantine.js";
 import { collectMigrationQuarantine } from "./list-migration-quarantine.mjs";
+import { retireUnsupportedSessionStorage } from "../agent/src/workspace-lifecycle/session-storage-retirement.js";
 
 async function snapshotTree(root) {
   const entries = await readdir(root, { recursive: true });
@@ -99,4 +100,43 @@ test("quarantine listing reports held units and backups without touching files",
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }
+});
+
+test("quarantine report retains format, terminal status and source location across reads", async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-retirement-report-"));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  const base = path.join(workspaceRoot, "admin");
+  const source = path.join(base, "runtime/session/old");
+  await mkdir(path.join(source, "child"), { recursive: true });
+  await writeFile(path.join(source, "head.json"), "old immutable bytes");
+  await writeFile(path.join(source, "child/CURRENT"), "partition bytes");
+  await retireUnsupportedSessionStorage({ base, scopedSessionRoots: [] });
+  const config = { superAdmin: { userId: "admin" } };
+  const before = await snapshotTree(workspaceRoot);
+  const report = await collectMigrationQuarantine(workspaceRoot, config);
+  assert.deepEqual(await collectMigrationQuarantine(workspaceRoot, config), report);
+  assert.deepEqual(await snapshotTree(workspaceRoot), before);
+  const [{ units }] = report;
+  assert.equal(units.length, 2);
+  const old = units.find(({ sessionStorage }) => sessionStorage.format === "immutable");
+  assert.deepEqual(old.sessionStorage, { format: "immutable", status: "unsupported-format" });
+  assert.equal(old.path, "runtime/session/old");
+  assert.equal(old.error.code, "SESSION_STORAGE_FORMAT_UNSUPPORTED");
+  assert.equal(old.moved, true);
+  assert.ok(Number.isFinite(Date.parse(old.quarantinedAt)));
+  assert.equal(
+    await readFile(path.join(base, old.quarantinePath, "head.json"), "utf8"),
+    "old immutable bytes",
+  );
+  const child = units.find(({ sessionStorage }) => sessionStorage.format === "partition");
+  assert.deepEqual(child.sessionStorage, {
+    format: "partition",
+    status: "parent-unavailable",
+    parentPath: old.path,
+  });
+  assert.equal(child.error.code, "SESSION_PARENT_UNAVAILABLE");
+  assert.equal(
+    await readFile(path.join(base, child.quarantinePath, "CURRENT"), "utf8"),
+    "partition bytes",
+  );
 });

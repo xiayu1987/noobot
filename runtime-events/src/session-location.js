@@ -4,11 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  IMMUTABLE_SESSION_HEAD_FILE,
-  decodeImmutableSessionHead,
-  immutableStorageError,
-} from "@noobot/session-protocol/immutable-storage";
-import {
   PARTITION_JOURNAL_FRAME,
   PARTITION_JOURNAL_HEAD_FILE,
   decodePartitionJournalHead,
@@ -17,7 +12,7 @@ import {
 import {
   readPartitionAuthorityPublication,
   readSessionStorageAuthorityFacts,
-  resolveSessionStorageAuthority,
+  requirePartitionSessionAuthority,
 } from "@noobot/session-protocol/session-reader";
 import { lstat } from "node:fs/promises";
 import { requireSessionLocationResolver } from "@noobot/session-protocol";
@@ -33,7 +28,6 @@ import {
   resolveSessionTreeChain,
 } from "@noobot/workspace-protocol/session-tree";
 import { text } from "@noobot/shared/value";
-import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { readFilePrefix } from "@noobot/shared/read-file-prefix";
 import { readSessionStore } from "./session-store-reader.js";
 import { resolveSessionEventWorkspace } from "./session-publication.js";
@@ -99,7 +93,7 @@ async function requirePersistedSessionDir(sessionDir, sessionId) {
     stat: (file) => lstat(path.join(sessionDir, file)),
     readPrefix: (file, max) => readFilePrefix(path.join(sessionDir, file), max),
   });
-  if (resolveSessionStorageAuthority(facts) === "partition") {
+  if (requirePartitionSessionAuthority(facts)) {
     const { head } = await readPartitionAuthorityPublication(facts.migration, async (directory) =>
       decodePartitionJournalHead(
         await readFilePrefix(
@@ -115,16 +109,5 @@ async function requirePersistedSessionDir(sessionDir, sessionId) {
       );
     return;
   }
-  let raw;
-  try {
-    raw = (
-      await readFilePrefix(
-        path.join(sessionDir, IMMUTABLE_SESSION_HEAD_FILE),
-        LENGTH_THRESHOLDS.immutableStorage.headBytes + 1,
-      )
-    ).toString("utf8");
-  } catch (cause) {
-    throw immutableStorageError("Registered session head cannot be read", cause);
-  }
-  decodeImmutableSessionHead(raw, sessionId);
+  throw partitionJournalError("SESSION_STORAGE_CORRUPT", "Registered session authority is missing");
 }

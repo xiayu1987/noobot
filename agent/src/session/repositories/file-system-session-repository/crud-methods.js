@@ -122,7 +122,6 @@ class SessionCrudMethods {
       aggregateVersion: 0,
       caller: requireSessionCaller(caller),
       modelAlias: "",
-      shortMemoryCheckpoint: 0,
       messages: [],
       sessionArtifactEvents: [],
       dialogOrder: [],

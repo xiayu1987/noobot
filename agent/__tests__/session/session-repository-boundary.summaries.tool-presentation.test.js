@@ -8,11 +8,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { compactThinkingTimeline } from "@noobot/event-protocol/tool-timeline";
-import { buildPersistedDisplayAndThinking } from "./session-artifact-store-v2.test-helpers.js";
+import { buildFixtureDisplayAndThinking } from "../helpers/session-projection-fixture.js";
 
 test("session tool details project attachment identities without object stringification", async () => {
   const attachmentRef = "attachment:v1:summary-session/model/att-summary-1";
-  const { summary, detail } = await buildPersistedDisplayAndThinking(
+  const { summary, detail } = buildFixtureDisplayAndThinking(
     {
       sessionId: "summary-session",
       aggregateVersion: 0,
@@ -59,7 +59,7 @@ test("session tool details project attachment identities without object stringif
 });
 
 test("persisted tool details use the canonical tool presentation protocol", async () => {
-  const { summary, detail } = await buildPersistedDisplayAndThinking(
+  const { summary, detail } = buildFixtureDisplayAndThinking(
     {
       sessionId: "tool-summary-session",
       aggregateVersion: 0,

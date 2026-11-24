@@ -6,7 +6,7 @@
 import { isPlainObject } from "@noobot/shared/value";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
-export const CONTEXT_CANDIDATE_PAGE_SIZE = QUANTITY_THRESHOLDS.immutableStorage.messagePageSize;
+export const CONTEXT_CANDIDATE_PAGE_SIZE = QUANTITY_THRESHOLDS.sessionStorage.messagePageSize;
 
 export function requireContextCandidatePage({ turnScopeId, before, limit, limits }) {
   if (

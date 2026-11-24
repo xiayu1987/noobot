@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { writeRuntimeEvent } from "../src/index.js";
 import { resolveWorkspaceSessionLocation } from "../src/session-location.js";
@@ -69,9 +70,9 @@ test("location port binds identity, writes the selected directory and never fall
     }),
     { missingSession: true },
   );
-  await fs.writeFile(path.join(selected, "head.json"), "invalid");
+  await fs.writeFile(path.join(selected, PARTITION_JOURNAL_HEAD_FILE), "invalid");
   await assert.rejects(resolveWorkspaceSessionLocation({ ...request, locationResolver }), {
-    code: "SESSION_IMMUTABLE_STORAGE_INVALID",
+    code: "SESSION_STORAGE_CORRUPT",
   });
 });
 
@@ -106,5 +107,5 @@ test("location port rejects malformed or foreign paths and observes deletion bef
     }),
     { deleted: true },
   );
-  assert.ok(await fs.stat(path.join(sessionDir, "head.json")));
+  assert.ok(await fs.stat(path.join(sessionDir, PARTITION_JOURNAL_HEAD_FILE)));
 });

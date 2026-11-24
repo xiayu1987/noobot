@@ -3,28 +3,25 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { partitionReaderAccess } from "../helpers/partition-reader-fixture.js";
 import assert from "node:assert/strict";
 import { borrowFixtureJournal } from "../helpers/partition-journal-lease.js";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import {
-  IMMUTABLE_SESSION_HEAD_FILE,
-  IMMUTABLE_SESSION_FORMAT_FILE,
-} from "@noobot/session-protocol/immutable-storage";
+import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
 import { FileSystemSessionRepository } from "../../src/session/repositories/file-system-session-repository.js";
 import { createPartitionSessionReaderAccess } from "../../src/session/partition-storage/partition-reader-access.js";
 import { PartitionJournal } from "../../src/session/partition-storage/partition-journal.js";
-import { immutableSessionReaderAccess } from "../../src/session/session-artifact-session/immutable-reader-access.js";
 import { journalTestLimits } from "../helpers/partition-journal-cases.js";
 import { createTestSessionServices } from "../helpers/session-services.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 const committedAt = "2026-11-20T00:00:00.000Z";
 
-for (const backend of ["partition", "immutable"]) {
-  test(`${backend} placement recovery registers committed authority after failure and cold reopen`, async (t) => {
+for (const acquisition of ["borrowed", "owned"]) {
+  test(`${acquisition} partition placement recovery registers committed authority after failure and cold reopen`, async (t) => {
     const workspaceRoot = await mkdtemp(join(tmpdir(), "session-placement-recovery-"));
     t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
     const userId = "user";
@@ -41,8 +38,8 @@ for (const backend of ["partition", "immutable"]) {
       if (journal) await journal.close();
     });
     const access =
-      backend === "immutable"
-        ? immutableSessionReaderAccess
+      acquisition === "owned"
+        ? partitionReaderAccess
         : createPartitionSessionReaderAccess({
             withJournalRemoval: () => assert.fail("Unexpected journal removal"),
             acquireJournal(scope) {
@@ -66,7 +63,7 @@ for (const backend of ["partition", "immutable"]) {
     );
     const options = { scope, persistenceContext };
     assert.equal(await repository.recoverSessionPlacement(userId, sessionId, options), null);
-    if (backend === "partition") {
+    if (acquisition === "borrowed") {
       journal = await PartitionJournal.create({
         root: scope.sessionDir,
         durableAncestor: workspaceRoot,
@@ -89,10 +86,7 @@ for (const backend of ["partition", "immutable"]) {
       ),
       (error) => error === failure,
     );
-    const headPath = join(
-      scope.sessionDir,
-      backend === "partition" ? "CURRENT" : IMMUTABLE_SESSION_HEAD_FILE,
-    );
+    const headPath = join(scope.sessionDir, PARTITION_JOURNAL_HEAD_FILE);
     const before = await readFile(headPath);
     await assert.rejects(
       repository.recoverSessionPlacement(userId, sessionId, options),
@@ -153,9 +147,7 @@ for (const backend of ["partition", "immutable"]) {
       }),
       { code: "SESSION_SCOPE_IDENTITY_CONFLICT" },
     );
-    if (backend === "partition") {
-      for (const file of [IMMUTABLE_SESSION_HEAD_FILE, IMMUTABLE_SESSION_FORMAT_FILE])
-        await assert.rejects(stat(join(scope.sessionDir, file)), { code: "ENOENT" });
-    }
+    for (const file of ["head.json", "format.json"])
+      await assert.rejects(stat(join(scope.sessionDir, file)), { code: "ENOENT" });
   });
 }

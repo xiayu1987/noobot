@@ -18,12 +18,12 @@ import {
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import {
-  buildPersistedDisplaySummary,
-  buildPersistedDisplayAndThinking,
-} from "./session-artifact-store-v2.test-helpers.js";
+  buildFixtureDisplaySummary,
+  buildFixtureDisplayAndThinking,
+} from "../helpers/session-projection-fixture.js";
 
 test("session display summary projects persisted userMessageId and messageUid without identity fallback", async () => {
-  const summary = await buildPersistedDisplaySummary({
+  const summary = buildFixtureDisplaySummary({
     sessionId: "identity-session",
     aggregateVersion: 0,
     messages: [
@@ -52,7 +52,7 @@ test("session display summary projects persisted userMessageId and messageUid wi
 });
 
 test("session display summary preserves the canonical internal control message type", async () => {
-  const summary = await buildPersistedDisplaySummary({
+  const summary = buildFixtureDisplaySummary({
     sessionId: "internal-control-session",
     aggregateVersion: 0,
     messages: [
@@ -75,7 +75,7 @@ test("session display summary preserves the canonical internal control message t
 });
 
 test("session display summary retains a workflow final assistant with stable presentation identity", async () => {
-  const summary = await buildPersistedDisplaySummary({
+  const summary = buildFixtureDisplaySummary({
     sessionId: "workflow-final-session",
     aggregateVersion: 0,
     messages: [
@@ -127,7 +127,7 @@ test("session display summary rejects an active Turn without canonical presentat
 });
 
 test("session display summary does not duplicate an active Turn with persisted assistant facts", async () => {
-  const { summary, detail } = await buildPersistedDisplayAndThinking(
+  const { summary, detail } = buildFixtureDisplayAndThinking(
     {
       sessionId: "active-turn-with-facts",
       aggregateVersion: 0,
@@ -188,7 +188,7 @@ test("session display summary does not duplicate an active Turn with persisted a
 });
 
 test("session display summary projects one explicit assistant presentation from many model messages", async () => {
-  const { summary, detail } = await buildPersistedDisplayAndThinking(
+  const { summary, detail } = buildFixtureDisplayAndThinking(
     {
       sessionId: "assistant-presentation-session",
       aggregateVersion: 0,

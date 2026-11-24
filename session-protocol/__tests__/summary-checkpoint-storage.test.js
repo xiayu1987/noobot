@@ -6,10 +6,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  assertStoredCheckpointReceipts,
   createCheckpointIdentitySource,
   hydrateCheckpointReceipts,
   projectCheckpointIdentity,
-  storeCheckpointReceipts,
 } from "../src/aggregate/summary-checkpoint-storage.js";
 
 const IDENTITY_INVALID = { code: "SESSION_SUMMARY_CHECKPOINT_IDENTITY_INVALID" };
@@ -93,20 +93,22 @@ test("identity source accepts only projected identities owned by the turn", () =
   );
 });
 
-test("receipts are stored without UID lists and hydrated from the checkpoint", () => {
-  const hydrated = session({ persistedMessageUids: ["m1", "m2"], summarizedMessageUids: ["m1"] });
-  const stored = storeCheckpointReceipts(hydrated, resolverFor(hydrated));
-  const [storedReceipt] = stored.turnSummaryCheckpoints[turn.turnScopeId].receipts;
-  assert.deepEqual(storedReceipt, { ...index, requestHash: "hash" });
-  const [receipt] = hydrateCheckpointReceipts(stored, resolverFor(stored)).turnSummaryCheckpoints[
+test("stored receipt validation rejects duplicated UID lists before hydration", () => {
+  const stored = session();
+  assert.doesNotThrow(() => assertStoredCheckpointReceipts(stored));
+  for (const key of ["persistedMessageUids", "summarizedMessageUids"]) {
+    assert.throws(() => assertStoredCheckpointReceipts(session({ [key]: [] })), IDENTITY_INVALID);
+  }
+  const resolve = resolverFor(stored);
+  const [receipt] = hydrateCheckpointReceipts(stored, resolve).turnSummaryCheckpoints[
     turn.turnScopeId
   ].receipts;
   assert.deepEqual(receipt.persistedMessageUids, ["m1", "m2"]);
   assert.deepEqual(receipt.summarizedMessageUids, ["m1"]);
   receipt.persistedMessageUids.push("m3");
   assert.deepEqual(
-    hydrateCheckpointReceipts(stored, resolverFor(stored)).turnSummaryCheckpoints[turn.turnScopeId]
-      .receipts[0].persistedMessageUids,
+    hydrateCheckpointReceipts(stored, resolve).turnSummaryCheckpoints[turn.turnScopeId].receipts[0]
+      .persistedMessageUids,
     ["m1", "m2"],
   );
 });
@@ -118,9 +120,8 @@ test("receipts that disagree with their checkpoint are rejected", () => {
     { committedAt: "2026-11-12T00:00:00.000Z" },
   ]) {
     const target = session(receipt);
-    assert.throws(() => storeCheckpointReceipts(target, resolverFor(target)), IDENTITY_INVALID);
     assert.throws(() => hydrateCheckpointReceipts(target, resolverFor(target)), IDENTITY_INVALID);
   }
   const unknown = session({ checkpointId: "checkpoint-2" });
-  assert.throws(() => storeCheckpointReceipts(unknown, resolverFor(unknown)), IDENTITY_INVALID);
+  assert.throws(() => hydrateCheckpointReceipts(unknown, resolverFor(unknown)), IDENTITY_INVALID);
 });

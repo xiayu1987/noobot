@@ -16,10 +16,7 @@ import {
   requireExecutionLogProjectionDelivery,
   executionLogProjectionFailure,
 } from "@noobot/session-protocol";
-import {
-  syncStorageDirectory,
-  writeDurableReplacement,
-} from "./session-artifact-session/immutable-storage-io.js";
+import { syncStorageDirectory, writeDurableReplacement } from "./session-artifact-io.js";
 
 async function createProjectionDirectory(directory, sessionDir) {
   try {

@@ -20,6 +20,7 @@ import {
   normalizeAuthorityEventOutbox,
   projectAuthorityOutboxJournal,
   projectAuthorityEventDeliveryResults,
+  requireAuthorityOutboxEventPosition,
 } from "../src/authority-event-outbox.js";
 
 const occurredAt = "2026-10-31T00:00:00.000Z";
@@ -45,6 +46,23 @@ function entry() {
     }),
   };
 }
+
+test("committed event positions require the published tail and matching index ownership", () => {
+  const position = { eventId: "event-1", ordinal: 2, tail: 2, indexedEventId: "event-1" };
+  assert.equal(requireAuthorityOutboxEventPosition(position), 2);
+  for (const change of [
+    { tail: 1 },
+    { tail: "2" },
+    { ordinal: 0 },
+    { ordinal: 1.5 },
+    { indexedEventId: null },
+    { indexedEventId: "foreign-event" },
+    { eventId: "" },
+  ])
+    assert.throws(() => requireAuthorityOutboxEventPosition({ ...position, ...change }), {
+      code: "AUTHORITY_OUTBOX_INTEGRITY_INVALID",
+    });
+});
 
 test("authority event admission rejects foreign scope and prefilled delivery state", () => {
   const source = entry();

@@ -201,7 +201,7 @@ export async function auditSessionSummaryArtifacts(
         const page = await reader.readThinkingDetailPage({
           lookupKey: { turnScopeId: message.turnScopeId, dialogProcessId: message.dialogProcessId },
           cursor,
-          limit: QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize,
+          limit: QUANTITY_THRESHOLDS.sessionStorage.messageReadPageSize,
         });
         if (page === null)
           failSummaryAudit(`thinking detail is missing: ${scopedSessionId}`, report);

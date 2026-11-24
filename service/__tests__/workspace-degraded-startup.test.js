@@ -18,11 +18,9 @@ import {
   WORKSPACE_ROOT_LAYOUT,
 } from "@noobot/workspace-protocol";
 import { createDefaultStartupContext } from "../services/startup-context-service.js";
-import {
-  createSessionFacade,
-  createSessionServices,
-  immutableSessionReaderAccess,
-} from "noobot-agent/session";
+import { createSessionFacade } from "noobot-agent/session";
+import { createConfiguredSessionRuntime } from "../bootstrap/create-app-dependencies.js";
+import { listQuarantinedUnits } from "../../agent/src/workspace-lifecycle/migration-quarantine.js";
 import {
   acquireWorkspaceStorageLock,
   openStartupWorkspaceStorage,
@@ -158,7 +156,7 @@ test("startup with a relative workspace root permits a healthy user's login", as
   }
 });
 
-test("startup migrates immutable history before HTTP starts and can restart on the same journal", async (t) => {
+test("startup isolates old session storage and keeps the healthy journal readable across restart", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-startup-partition-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const workspaceRoot = path.join(root, "workspace");
@@ -174,7 +172,7 @@ test("startup migrates immutable history before HTTP starts and can restart on t
   );
   const userId = "owner";
   const connectCode = "startup-migration-test";
-  const sessionId = "legacy-session";
+  const sessionId = "healthy-session";
   await fs.writeFile(
     config,
     JSON.stringify({
@@ -191,15 +189,17 @@ test("startup migrates immutable history before HTTP starts and can restart on t
     }),
   );
   const userWorkspace = await initializeUserWorkspace(workspaceRoot, userId);
-  const sessionDir = path.join(userWorkspace, WORKSPACE_LAYOUT.SESSION_DIR, sessionId);
-  const selector = path.join(sessionDir, "session-authority");
-  const predecessor = createSessionServices(
-    { workspaceRoot },
+  const legacyPath = path.join(WORKSPACE_LAYOUT.SESSION_DIR, "legacy-session");
+  const legacyDir = path.join(userWorkspace, legacyPath);
+  const oldHead = "old immutable head bytes";
+  await fs.mkdir(legacyDir, { recursive: true });
+  await fs.writeFile(path.join(legacyDir, "head.json"), oldHead);
+  const predecessor = createConfiguredSessionRuntime(
+    { workspaceRoot, partitionSessionStorage },
     {
       now: () => committedAt,
       attachmentService: { ingest() {} },
       scopedSessionRoots: [WORKSPACE_LAYOUT.AGENT_SESSION_DIR],
-      sessionReaderAccess: immutableSessionReaderAccess,
     },
   );
   try {
@@ -213,12 +213,11 @@ test("startup migrates immutable history before HTTP starts and can restart on t
   } finally {
     await predecessor.close();
   }
-  await assert.rejects(fs.stat(selector), { code: "ENOENT" });
-
   const eventFile = path.join(workspaceRoot, "system/runtime/events/startup/service/state.jsonl");
   const layoutFile = path.join(userWorkspace, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE);
   await fs.writeFile(layoutFile, JSON.stringify({ version: 45 }));
-  for (const shouldUpgrade of [true, false]) {
+  let firstQuarantine;
+  for (const restarting of [false, true]) {
     const signal = AbortSignal.timeout(20000);
     const child = spawn(process.execPath, ["app.js", "--startup-context", startup], {
       cwd,
@@ -228,22 +227,48 @@ test("startup migrates immutable history before HTTP starts and can restart on t
     const closed = new Promise((resolve) => child.once("close", resolve));
     try {
       const { events, port } = await waitForStartup({ child, eventFile, signal });
-      const prepared = events.find(
-        ({ event }) => event === `${prefix}workspacePreparation.completed`,
+      const completed = `${prefix}workspacePreparation.completed`;
+      const failed = `${prefix}workspacePreparation.failed`;
+      const preparations = events.filter(({ event }) => event === completed || event === failed);
+      assert.deepEqual(
+        preparations.map(({ event }) => event),
+        [restarting ? completed : failed],
       );
-      assert.ok(
-        prepared,
-        JSON.stringify(
-          events.find(({ event }) => event === `${prefix}workspacePreparation.failed`)?.data,
-        ),
-      );
+      const { recoveredTurnCount, failures } = preparations[0].data;
+      assert.equal(recoveredTurnCount, restarting ? 0 : 1);
       assert.equal(JSON.parse(await fs.readFile(layoutFile)).version, WORKSPACE_LAYOUT_VERSION);
-      const progress = events.filter(
-        ({ data }) => data.upgradeId === "session-partition-storage-v46",
+      const records = await listQuarantinedUnits({ base: userWorkspace });
+      assert.equal(records.length, 1);
+      const [record] = records;
+      assert.equal(record.path, legacyPath);
+      assert.equal(record.error.code, "SESSION_STORAGE_FORMAT_UNSUPPORTED");
+      assert.equal(
+        await fs.readFile(path.join(userWorkspace, record.quarantinePath, "head.json"), "utf8"),
+        oldHead,
       );
-      assert.equal(progress.length > 0, shouldUpgrade);
-      if (shouldUpgrade) assert.equal(progress.at(-1).data.processedSessions, 1);
-      assert.ok((await fs.stat(selector)).isFile());
+      await assert.rejects(fs.stat(legacyDir), { code: "ENOENT" });
+      if (restarting) {
+        assert.deepEqual(record, firstQuarantine);
+        assert.deepEqual(failures, []);
+      } else {
+        firstQuarantine = record;
+        assert.deepEqual(
+          failures.map(({ userId, path, quarantinePath, code }) => ({
+            userId,
+            path,
+            quarantinePath,
+            code,
+          })),
+          [
+            {
+              userId,
+              path: legacyPath,
+              quarantinePath: record.quarantinePath,
+              code: record.error.code,
+            },
+          ],
+        );
+      }
       const origin = `http://127.0.0.1:${port}`;
       const login = await fetch(`${origin}/internal/connect`, {
         method: "POST",

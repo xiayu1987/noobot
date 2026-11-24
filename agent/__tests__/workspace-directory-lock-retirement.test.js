@@ -16,7 +16,7 @@ import {
 import { upgradeWorkspaceLayout } from "../src/workspace-lifecycle/sections.js";
 import { ensureUserWorkspace } from "../src/workspace-lifecycle/index.js";
 import { FileMutationCoordinator } from "../src/shared/storage/file-mutation-coordinator.js";
-import { withTemp } from "./session/session-artifact-store-v2.test-helpers.js";
+import { withTemp } from "./helpers/temporary-directory.js";
 import { TEST_STORAGE_SERVICE as storageService } from "./helpers/storage-service.js";
 import { createTestPartitionStorageBudget } from "./helpers/partition-journal-cases.js";
 

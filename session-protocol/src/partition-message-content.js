@@ -7,7 +7,7 @@ import { partitionJournalError } from "./partition-journal.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 export const PARTITION_CONTENT_CHUNK_BYTES =
-  LENGTH_THRESHOLDS.immutableStorage.partitionContentChunkBytes;
+  LENGTH_THRESHOLDS.partitionStorage.partitionContentChunkBytes;
 
 const utf8 = new TextEncoder();
 

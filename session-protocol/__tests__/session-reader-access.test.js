@@ -6,7 +6,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
-import { IMMUTABLE_SESSION_FORMAT } from "../src/immutable-storage.js";
 import { partitionEpochHexLength } from "../src/partition-epoch.js";
 import {
   PARTITION_MIGRATION_AUTHORITY,
@@ -19,13 +18,12 @@ import {
   encodePartitionMigrationBusinessCheckpoint,
   planSessionOutboxMutation,
   readPartitionAuthorityPublication,
-  requireImmutableSessionAuthority,
   requirePartitionSessionAuthority,
 } from "../src/session-reader.js";
 
 const source = {
   sessionId: "session",
-  format: IMMUTABLE_SESSION_FORMAT,
+  format: "noobot.immutable-session/5",
   generation: 4,
   commit: "a".repeat(64),
 };
@@ -45,18 +43,14 @@ test("publication selects the bound partition authority without reopening the re
     target,
   });
   assert.throws(() => requirePartitionSessionAuthority(immutableFacts), {
-    code: "SESSION_PARTITION_STORAGE_UPGRADE_REQUIRED",
+    code: "SESSION_STORAGE_FORMAT_UNSUPPORTED",
   });
   assert.equal(requirePartitionSessionAuthority({ ...immutableFacts, migration }), true);
-  assert.throws(() => requireImmutableSessionAuthority({ ...immutableFacts, migration }), {
-    code: "SESSION_STORAGE_AUTHORITY_MISMATCH",
-  });
   for (const facts of [
     { ...immutableFacts, partition: true },
     { partition: true, immutable: false, document: false, migration },
   ]) {
     assert.throws(() => requirePartitionSessionAuthority(facts), corrupt);
-    assert.throws(() => requireImmutableSessionAuthority(facts), corrupt);
   }
 });
 
@@ -84,7 +78,6 @@ test("invalid publication bytes never fall back to the retained source", () => {
   ]) {
     const facts = { ...immutableFacts, migration };
     assert.throws(() => requirePartitionSessionAuthority(facts), corrupt);
-    assert.throws(() => requireImmutableSessionAuthority(facts), corrupt);
   }
 });
 

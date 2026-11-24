@@ -8,9 +8,9 @@ import os from "node:os";
 import path from "node:path";
 
 import { RUNTIME_EVENTS_CONFIG_ENVS } from "@noobot/shared/runtime-events-config";
-import { applyRuntimeEventsEnv, initializeSessionTree } from "../src/testing.js";
+import { applyRuntimeEventsEnv, initializeSessionTree } from "./testing.js";
 
-export { initializeSessionTree, markSessionDeleted, persistSession } from "../src/testing.js";
+export { initializeSessionTree, markSessionDeleted, persistSession } from "./testing.js";
 
 export const FIXTURE_USER_ID = "admin";
 

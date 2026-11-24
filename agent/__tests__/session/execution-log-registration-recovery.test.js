@@ -15,13 +15,10 @@ import {
   resolveExecutionEventsDir,
   resolveExecutionTurnDir,
 } from "../../src/session/session-artifact-execution-logs.js";
-import {
-  inspectSessionArtifacts,
-  repairSessionArtifacts,
-} from "../../src/session/session-artifact-maintenance.js";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
+import { recoverExecutionLogIndexes } from "../../src/session/execution-log-recovery.js";
 import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
-import { readTurnIndex, withTemp } from "./session-artifact-store-v2.test-helpers.js";
+import { readTurnIndex } from "../helpers/execution-log-fixture.js";
+import { withTemp } from "../helpers/temporary-directory.js";
 
 const dialogProcessId = "registration-turn";
 const record = (sequence) => ({ dialogProcessId, sequence });
@@ -95,37 +92,24 @@ test("registration sees an already published empty turn index before the first r
 });
 
 async function orphanedTurn(sessionDir) {
-  const store = new ImmutableSessionStore({
-    sessionDir,
-    sessionId: "orphan-audit",
-    allowCreate: true,
-  });
-  await store.commit({ expectedGeneration: 0, operationId: "initial", changes: [] });
   await append(sessionDir, [record(1)]);
   const registrationFile = path.join(resolveExecutionEventsDir(sessionDir), "index.json");
   await TEST_STORAGE_SERVICE.writeJsonAtomic(registrationFile, createSessionExecutionIndex([]));
   return registrationFile;
 }
 
-test("offline audit detects unregistered indexed logs and explicit repair restores discovery idempotently", async () => {
+test("recovery registers orphaned indexed logs idempotently", async () => {
   await withTemp(async (sessionDir) => {
     await orphanedTurn(sessionDir);
     const storageService = TEST_STORAGE_SERVICE;
-    const before = await inspectSessionArtifacts({ storageService, sessionDir });
-    assert.equal(before.storage.ok, true);
-    assert.equal(before.ok, false);
-    assert.equal(before.issues[0].code, "EXECUTION_TURN_UNREGISTERED");
     assert.deepEqual(await readExecutionLogs({ storageService, sessionDir }), []);
-    const options = {
-      storageService,
-      sessionDir,
-      alreadyLocked: false,
-      assertSessionWritable: async () => {},
-    };
-    const repaired = await repairSessionArtifacts(options);
-    assert.equal(repaired.after.ok, true);
+    const options = { storageService, sessionDir };
+    assert.deepEqual(await recoverExecutionLogIndexes(options), {
+      dialogProcessIds: [dialogProcessId],
+      repaired: ["index.json"],
+    });
     assert.deepEqual(await readExecutionLogs({ storageService, sessionDir }), [record(1)]);
-    assert.deepEqual((await repairSessionArtifacts(options)).repaired, []);
+    assert.deepEqual((await recoverExecutionLogIndexes(options)).repaired, []);
   });
 });
 
@@ -138,11 +122,9 @@ test("offline repair refuses to register damaged orphan logs and preserves regis
       "[]\n",
     );
     await assert.rejects(
-      repairSessionArtifacts({
+      recoverExecutionLogIndexes({
         storageService: TEST_STORAGE_SERVICE,
         sessionDir,
-        alreadyLocked: false,
-        assertSessionWritable: async () => {},
       }),
       { code: "EXECUTION_EVENT_JSONL_CORRUPTED" },
     );
@@ -150,38 +132,31 @@ test("offline repair refuses to register damaged orphan logs and preserves regis
   });
 });
 
-for (const operation of [inspectSessionArtifacts, repairSessionArtifacts]) {
-  test(`${operation.name} propagates cancellation during orphan discovery without publishing registration`, async () => {
-    await withTemp(async (sessionDir) => {
-      const registrationFile = await orphanedTurn(sessionDir);
-      const before = await readFile(registrationFile);
-      const controller = new AbortController();
-      const reason = new Error("cancel orphan discovery");
-      const turnIndex = path.join(
-        resolveExecutionTurnDir(sessionDir, dialogProcessId),
-        "index.json",
-      );
-      const storageService = Object.assign(Object.create(TEST_STORAGE_SERVICE), {
-        async readOptionalJson(file) {
-          const value = await TEST_STORAGE_SERVICE.readOptionalJson(file);
-          if (file === turnIndex) controller.abort(reason);
-          return value;
-        },
-      });
-      await assert.rejects(
-        operation({
-          storageService,
-          sessionDir,
-          signal: controller.signal,
-          alreadyLocked: false,
-          assertSessionWritable: async () => {},
-        }),
-        (error) => error === reason,
-      );
-      assert.deepEqual(await readFile(registrationFile), before);
+test("recovery propagates cancellation during orphan discovery without publishing registration", async () => {
+  await withTemp(async (sessionDir) => {
+    const registrationFile = await orphanedTurn(sessionDir);
+    const before = await readFile(registrationFile);
+    const controller = new AbortController();
+    const reason = new Error("cancel orphan discovery");
+    const turnIndex = path.join(resolveExecutionTurnDir(sessionDir, dialogProcessId), "index.json");
+    const storageService = Object.assign(Object.create(TEST_STORAGE_SERVICE), {
+      async readOptionalJson(file) {
+        const value = await TEST_STORAGE_SERVICE.readOptionalJson(file);
+        if (file === turnIndex) controller.abort(reason);
+        return value;
+      },
     });
+    await assert.rejects(
+      recoverExecutionLogIndexes({
+        storageService,
+        sessionDir,
+        signal: controller.signal,
+      }),
+      (error) => error === reason,
+    );
+    assert.deepEqual(await readFile(registrationFile), before);
   });
-}
+});
 
 for (const published of [false, true]) {
   test(`explicit registration repair resumes from disk after publication failure (published=${published})`, async () => {
@@ -202,23 +177,24 @@ for (const published of [false, true]) {
           return TEST_STORAGE_SERVICE.writeJsonAtomic(file, value);
         },
       });
-      const options = { sessionDir, alreadyLocked: false, assertSessionWritable: async () => {} };
+      const options = { sessionDir };
       await assert.rejects(
-        repairSessionArtifacts({ ...options, storageService }),
+        recoverExecutionLogIndexes({ ...options, storageService }),
         (error) => error === failure,
       );
-      const repaired = await repairSessionArtifacts({
+      const repaired = await recoverExecutionLogIndexes({
         ...options,
         storageService: TEST_STORAGE_SERVICE,
       });
-      assert.equal(repaired.after.ok, true);
+      assert.deepEqual(repaired.dialogProcessIds, [dialogProcessId]);
+      assert.deepEqual(repaired.repaired, published ? [] : ["index.json"]);
       assert.deepEqual(await readFile(segmentFile), before);
       assert.deepEqual(
         await readExecutionLogs({ storageService: TEST_STORAGE_SERVICE, sessionDir }),
         [record(1)],
       );
       assert.deepEqual(
-        (await repairSessionArtifacts({ ...options, storageService: TEST_STORAGE_SERVICE }))
+        (await recoverExecutionLogIndexes({ ...options, storageService: TEST_STORAGE_SERVICE }))
           .repaired,
         [],
       );
@@ -238,11 +214,9 @@ test("repair validates every orphan before registering any discovered turn", asy
       "[]\n",
     );
     await assert.rejects(
-      repairSessionArtifacts({
+      recoverExecutionLogIndexes({
         storageService: TEST_STORAGE_SERVICE,
         sessionDir,
-        alreadyLocked: false,
-        assertSessionWritable: async () => {},
       }),
       { code: "EXECUTION_EVENT_JSONL_CORRUPTED" },
     );
@@ -253,12 +227,6 @@ test("repair validates every orphan before registering any discovered turn", asy
 for (const existing of [false, true]) {
   test(`offline recovery discovers segments after final turn index publication failed (existing=${existing})`, async () => {
     await withTemp(async (sessionDir) => {
-      const store = new ImmutableSessionStore({
-        sessionDir,
-        sessionId: "index-failure",
-        allowCreate: true,
-      });
-      await store.commit({ expectedGeneration: 0, operationId: "initial", changes: [] });
       if (existing) await append(sessionDir, [record(0)]);
       const turnIndexFile = path.join(
         resolveExecutionTurnDir(sessionDir, dialogProcessId),
@@ -292,15 +260,7 @@ for (const existing of [false, true]) {
           return true;
         },
       );
-      const options = {
-        storageService: TEST_STORAGE_SERVICE,
-        sessionDir,
-        alreadyLocked: false,
-        assertSessionWritable: async () => {},
-      };
-      const before = await inspectSessionArtifacts(options);
-      assert.equal(before.ok, false);
-      assert.ok(before.issues.some(({ code }) => code === "EXECUTION_SEGMENT_UNINDEXED"));
+      const options = { storageService: TEST_STORAGE_SERVICE, sessionDir };
       const firstUnindexed = path.join(
         resolveExecutionTurnDir(sessionDir, dialogProcessId),
         existing ? "segment-000002.jsonl" : "segment-000001.jsonl",
@@ -317,9 +277,14 @@ for (const existing of [false, true]) {
         { code: "EXECUTION_SEGMENT_UNINDEXED" },
       );
       assert.deepEqual(await readFile(firstUnindexed), originalBytes);
-      assert.equal((await repairSessionArtifacts(options)).after.ok, true);
+      const recovered = await recoverExecutionLogIndexes(options);
+      assert.deepEqual(recovered.dialogProcessIds, [dialogProcessId]);
+      assert.ok(
+        recovered.repaired.includes(`turns/${dialogProcessId}/${path.basename(firstUnindexed)}`),
+      );
+      assert.deepEqual(await readFile(firstUnindexed), originalBytes);
       assert.deepEqual(await readExecutionLogs(options), existing ? [record(0), ...logs] : logs);
-      assert.deepEqual((await repairSessionArtifacts(options)).repaired, []);
+      assert.deepEqual((await recoverExecutionLogIndexes(options)).repaired, []);
     });
   });
 }
@@ -332,11 +297,9 @@ test("damaged unindexed segment prevents repair without rewriting its turn index
     const before = await readFile(indexFile);
     await writeFile(path.join(turnDir, "segment-000002.jsonl"), "[]\n");
     await assert.rejects(
-      repairSessionArtifacts({
+      recoverExecutionLogIndexes({
         storageService: TEST_STORAGE_SERVICE,
         sessionDir,
-        alreadyLocked: false,
-        assertSessionWritable: async () => {},
       }),
       { code: "EXECUTION_EVENT_JSONL_CORRUPTED" },
     );

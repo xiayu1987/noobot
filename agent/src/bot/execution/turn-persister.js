@@ -333,6 +333,7 @@ export class SessionTurnPersister {
       turns: turnPayloads,
       messageDiagnostics: prepareSessionTurnDiagnostics(this.now, prepared),
       messageContentAppends: changes.messageContentAppends,
+      messageContentReplacements: changes.messageContentReplacements,
       messageMetadataUpdates: changes.messageMetadataUpdates,
       submission: input.submission,
       persistenceScope: input.persistenceScope,

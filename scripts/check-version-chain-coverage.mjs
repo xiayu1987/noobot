@@ -10,6 +10,7 @@ import {
   WORKSPACE_LAYOUT_UNMARKED_VERSION,
   WORKSPACE_LAYOUT_UPGRADE_OWNER,
   WORKSPACE_LAYOUT_UPGRADES,
+  WORKSPACE_LAYOUT_ACTIVE_UPGRADE_OWNERS,
 } from "../workspace-protocol/src/layout-migration.js";
 import { WORKSPACE_LAYOUT_VERSION } from "../workspace-protocol/src/layout.js";
 import {
@@ -90,7 +91,15 @@ export function measureLayoutSequence(
 
 export function measureLayoutHandlers(
   measured,
-  { handlers, tests, owners = WORKSPACE_LAYOUT_UPGRADE_OWNER },
+  {
+    handlers,
+    tests,
+    owners = Object.fromEntries(
+      Object.entries(WORKSPACE_LAYOUT_UPGRADE_OWNER).filter(([, owner]) =>
+        WORKSPACE_LAYOUT_ACTIVE_UPGRADE_OWNERS.includes(owner),
+      ),
+    ),
+  },
 ) {
   for (const [key, owner] of Object.entries(owners)) {
     const binding = handlers.match(

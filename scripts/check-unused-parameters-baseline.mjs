@@ -55,7 +55,7 @@ export const CHECK = defineCheck({
     },
   },
   exemptions: [],
-  baseline: { unusedParameters: 29, exemptions: 0 },
+  baseline: { unusedParameters: 28, exemptions: 0 },
   measure,
 });
 

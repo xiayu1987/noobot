@@ -3,6 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  initializePartitionReaderFixture,
+  partitionReaderAccess,
+} from "../helpers/partition-reader-fixture.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -17,15 +21,13 @@ import { ExecutionLogRepository } from "../../src/observability/execution-log/ex
 import { createSessionFacade } from "../../src/session/index.js";
 import { FileSystemExecutionRepository } from "../../src/session/repositories/file-system-execution-repository.js";
 import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
-import { withTemp } from "../session/session-artifact-store-v2.test-helpers.js";
+import { withTemp } from "../helpers/temporary-directory.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { sessionReaderMethods } from "../../src/session/repositories/file-system-session-repository/reader-methods.js";
-import { immutableSessionReaderAccess } from "../../src/session/session-artifact-session/immutable-reader-access.js";
 
 async function withExecutionSession(run) {
   return withTemp(async (sessionDir) => {
-    await initializeImmutableSession({
+    await initializePartitionReaderFixture({
       sessionDir,
       operationId: "initialize-execution-listener-test",
       session: {
@@ -43,7 +45,7 @@ function executionRepositoryFor(sessionDir) {
   return new FileSystemExecutionRepository({
     storageService: TEST_STORAGE_SERVICE,
     sessionRepository: {
-      sessionReaderAccess: immutableSessionReaderAccess,
+      sessionReaderAccess: partitionReaderAccess,
       withSessionReader: sessionReaderMethods.withSessionReader,
       async withSessionMutation(_userId, _sessionId, write) {
         return write({ sessionDir, resolvedParentSessionId: "parent" });

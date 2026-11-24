@@ -19,11 +19,7 @@ import {
   readExecutionSegmentSummary,
   resolveExecutionTurnDir,
 } from "../../src/session/session-artifact-execution-logs.js";
-import {
-  inspectSessionArtifacts,
-  repairSessionArtifacts,
-} from "../../src/session/session-artifact-maintenance.js";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
+import { recoverExecutionLogIndexes } from "../../src/session/execution-log-recovery.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
 
 const file = "segment-000001.jsonl";
@@ -82,12 +78,6 @@ test("missing segment retains the protocol error; cancellation rejects before ac
 
 async function registeredFixture(context) {
   const sessionDir = await directory(context);
-  const store = new ImmutableSessionStore({ sessionDir, sessionId: "audit", allowCreate: true });
-  await store.commit({
-    expectedGeneration: 0,
-    operationId: "initial",
-    changes: [{ collection: "metadata", key: "name", value: "audit" }],
-  });
   await appendRollingJsonlArtifactLog({
     storageService,
     sessionDir,
@@ -104,71 +94,53 @@ async function registeredFixture(context) {
   return { sessionDir, turnDir, indexPath };
 }
 
-for (const operation of [inspectSessionArtifacts, repairSessionArtifacts]) {
-  test(`${operation.name} propagates cancellation after the storage audit without rewriting the log index`, async (context) => {
-    const { sessionDir, indexPath } = await registeredFixture(context);
-    const before = await readFile(indexPath);
-    const controller = new AbortController();
-    const reason = new Error("cancel execution inspection");
-    let reads = 0;
-    const cancellingStorage = Object.assign(Object.create(storageService), {
-      async readOptionalJson(filePath) {
-        const value = await storageService.readOptionalJson(filePath);
-        reads += 1;
-        controller.abort(reason);
-        return value;
-      },
-    });
-    await assert.rejects(
-      operation({
-        storageService: cancellingStorage,
-        sessionDir,
-        signal: controller.signal,
-        alreadyLocked: false,
-        assertSessionWritable: async () => {},
-      }),
-      (error) => error === reason,
-    );
-    assert.equal(reads, 1);
-    assert.deepEqual(await readFile(indexPath), before);
+test("recovery propagates cancellation during inventory without rewriting the log index", async (context) => {
+  const { sessionDir, indexPath } = await registeredFixture(context);
+  const before = await readFile(indexPath);
+  const controller = new AbortController();
+  const reason = new Error("cancel execution recovery");
+  let reads = 0;
+  const cancellingStorage = Object.assign(Object.create(storageService), {
+    async readOptionalJson(filePath) {
+      const value = await storageService.readOptionalJson(filePath);
+      reads += 1;
+      controller.abort(reason);
+      return value;
+    },
   });
-}
+  await assert.rejects(
+    recoverExecutionLogIndexes({
+      storageService: cancellingStorage,
+      sessionDir,
+      signal: controller.signal,
+    }),
+    (error) => error === reason,
+  );
+  assert.equal(reads, 1);
+  assert.deepEqual(await readFile(indexPath), before);
+});
 
-test("streaming inspection reports mismatched counts and repair rebuilds them idempotently", async (context) => {
-  const { sessionDir } = await registeredFixture(context);
-  const report = await inspectSessionArtifacts({ storageService, sessionDir });
-  assert.equal(report.storage.ok, true);
-  assert.equal(report.ok, false);
-  assert.deepEqual(report.execution, { turns: 1, segments: 1 });
-  assert.equal(report.issues[0].code, "EXECUTION_INDEX_MISMATCH");
-  const options = {
-    storageService,
-    sessionDir,
-    alreadyLocked: false,
-    assertSessionWritable: async () => {},
-  };
-  const repaired = await repairSessionArtifacts(options);
-  assert.equal(repaired.after.ok, true);
+test("recovery rebuilds mismatched segment counts idempotently", async (context) => {
+  const { sessionDir, turnDir, indexPath } = await registeredFixture(context);
+  const options = { storageService, sessionDir };
+  const raw = await readFile(path.join(turnDir, file), "utf8");
+  const decoded = decodeExecutionSegment(raw, file);
+  const repaired = await recoverExecutionLogIndexes(options);
+  assert.deepEqual(repaired.dialogProcessIds, [dialogProcessId]);
   assert.deepEqual(repaired.repaired, [`turns/${dialogProcessId}/${file}`]);
-  assert.deepEqual((await repairSessionArtifacts(options)).repaired, []);
+  const index = JSON.parse(await readFile(indexPath, "utf8"));
+  assert.equal(index.segments[0].records, decoded.records.length);
+  assert.equal(index.segments[0].bytes, decoded.bytes);
+  assert.deepEqual((await recoverExecutionLogIndexes(options)).repaired, []);
 });
 
 test("corrupt registered segment blocks index repair without changing its evidence", async (context) => {
   const { sessionDir, turnDir, indexPath } = await registeredFixture(context);
   const before = await readFile(indexPath);
   await writeFile(path.join(turnDir, file), "{}\n[]\n");
-  const report = await inspectSessionArtifacts({ storageService, sessionDir });
-  assert.equal(report.ok, false);
-  assert.equal(report.issues[0].code, EXECUTION_EVENT_SEGMENT_ERROR_CODE.JSONL_CORRUPTED);
-  await assert.rejects(
-    repairSessionArtifacts({
-      storageService,
-      sessionDir,
-      alreadyLocked: false,
-      assertSessionWritable: async () => {},
-    }),
-    { code: EXECUTION_EVENT_SEGMENT_ERROR_CODE.JSONL_CORRUPTED },
-  );
+  await assert.rejects(recoverExecutionLogIndexes({ storageService, sessionDir }), {
+    code: EXECUTION_EVENT_SEGMENT_ERROR_CODE.JSONL_CORRUPTED,
+  });
   assert.deepEqual(await readFile(indexPath), before);
 });
 

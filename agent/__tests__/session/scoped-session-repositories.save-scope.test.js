@@ -79,7 +79,7 @@ test("concurrent deltas reject stale generations and preserve unrelated turns on
     );
     assert.equal(outcomes.filter((item) => item.status === "fulfilled").length, 1);
     const loser = outcomes.findIndex((item) => item.status === "rejected");
-    assert.equal(outcomes[loser].reason.code, "SESSION_GENERATION_CONFLICT");
+    assert.equal(outcomes[loser].reason.code, "SESSION_OPERATION_CONFLICT");
     const suffix = ["a", "b"][loser];
     await commit(`retry-${suffix}`, [replacement(suffix)]);
     const restored = await sessionRepo.requireById("alice", sessionId, context);
@@ -139,7 +139,7 @@ test("session creation rejects parent identity conflicts without changing the co
       treeContext(sessionRepo, "child").persistenceContext,
     );
     assert.equal(childScope.resolvedParentSessionId, "p1");
-    const child = await sessionRepo.requireSessionReader(
+    await using child = await sessionRepo.requireSessionReader(
       "alice",
       "child",
       treeContext(sessionRepo, "child"),

@@ -14,7 +14,6 @@ import {
   TURN_PHASE,
   TURN_STATE,
 } from "@noobot/session-protocol";
-import { openSessionArtifactReader } from "../../src/session/session-artifact-session/immutable-session-reader.js";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 import { pathExists, withProvisionedSessions } from "../helpers/provisioned-sessions.js";
 
@@ -64,47 +63,62 @@ function processingEvent(sessionId, dialogProcessId) {
 
 test("a session deleted during a running turn rejects later lifecycle commits without residue", async () => {
   const sessionIds = [TARGET_SESSION_ID, SIBLING_SESSION_ID];
-  await withProvisionedSessions({ userId: USER_ID, sessionIds }, async ({ session, scopes }) => {
-    const target = await session.applyTurnLifecycleEvent(acceptedEvent(TARGET_SESSION_ID));
-    const sibling = await session.applyTurnLifecycleEvent(acceptedEvent(SIBLING_SESSION_ID));
-    assert.equal(target.applied, true);
-    assert.equal(sibling.applied, true);
+  await withProvisionedSessions(
+    { userId: USER_ID, sessionIds },
+    async ({ runtime, session, scopes }) => {
+      const target = await session.applyTurnLifecycleEvent(acceptedEvent(TARGET_SESSION_ID));
+      const sibling = await session.applyTurnLifecycleEvent(acceptedEvent(SIBLING_SESSION_ID));
+      assert.equal(target.applied, true);
+      assert.equal(sibling.applied, true);
 
-    await session.deleteSessionBranch(
-      { userId: USER_ID, sessionIds: [TARGET_SESSION_ID] },
-      executeEmptySessionCleanup,
-    );
+      await session.deleteSessionBranch(
+        { userId: USER_ID, sessionIds: [TARGET_SESSION_ID] },
+        executeEmptySessionCleanup,
+      );
 
-    const rejected = await session.applyTurnLifecycleEvent(
-      processingEvent(TARGET_SESSION_ID, target.dialogProcessId),
-    );
-    assert.deepEqual(rejected, { applied: false, reason: SESSION_DELETED_REASON });
-    assert.equal(await pathExists(scopes[TARGET_SESSION_ID].sessionDir), false);
-    await assert.rejects(
-      session.getSessionTurnMessagePage({
-        userId: USER_ID,
-        sessionId: TARGET_SESSION_ID,
-        dialogProcessId: target.dialogProcessId,
-        turnScopeId: TURN_SCOPE_ID,
-        cursor: null,
-        limit: 1,
-        persistenceScope: null,
-      }),
-      { code: "SESSION_DELETED" },
-    );
+      const rejected = await session.applyTurnLifecycleEvent(
+        processingEvent(TARGET_SESSION_ID, target.dialogProcessId),
+      );
+      assert.deepEqual(rejected, { applied: false, reason: SESSION_DELETED_REASON });
+      assert.equal(await pathExists(scopes[TARGET_SESSION_ID].sessionDir), false);
+      await assert.rejects(
+        session.getSessionTurnMessagePage({
+          userId: USER_ID,
+          sessionId: TARGET_SESSION_ID,
+          dialogProcessId: target.dialogProcessId,
+          turnScopeId: TURN_SCOPE_ID,
+          cursor: null,
+          limit: 1,
+          persistenceScope: null,
+        }),
+        { code: "SESSION_DELETED" },
+      );
 
-    const sessionDir = scopes[SIBLING_SESSION_ID].sessionDir;
-    const before = await openSessionArtifactReader({ sessionDir });
-    const siblingOutboxBefore = await before.readOutboxPage({ consumerId: "test" });
-    const processed = await session.applyTurnLifecycleEvent(
-      processingEvent(SIBLING_SESSION_ID, sibling.dialogProcessId),
-    );
-    assert.equal(processed.applied, true);
-    assert.equal(processed.turn.state, TURN_STATE.PROCESSING);
-    const after = await openSessionArtifactReader({ sessionDir });
-    const siblingOutboxAfter = await after.readOutboxPage({ consumerId: "test" });
-    assert.equal(siblingOutboxAfter.events.length, siblingOutboxBefore.events.length + 1);
-    assert.equal(siblingOutboxAfter.events.at(-1).eventId, processed.envelope.identity.eventId);
-    assert.deepEqual(await before.readOutboxPage({ consumerId: "test" }), siblingOutboxBefore);
-  });
+      const repository = runtime.repositories.sessionRepository;
+      const options = {
+        persistenceContext: repository.treePersistenceContext(USER_ID, SIBLING_SESSION_ID),
+      };
+      const query = { consumerId: "test", limit: 2 };
+      await using before = await repository.requireSessionReader(
+        USER_ID,
+        SIBLING_SESSION_ID,
+        options,
+      );
+      const siblingOutboxBefore = await before.readOutboxPage(query);
+      const processed = await session.applyTurnLifecycleEvent(
+        processingEvent(SIBLING_SESSION_ID, sibling.dialogProcessId),
+      );
+      assert.equal(processed.applied, true);
+      assert.equal(processed.turn.state, TURN_STATE.PROCESSING);
+      await using after = await repository.requireSessionReader(
+        USER_ID,
+        SIBLING_SESSION_ID,
+        options,
+      );
+      const siblingOutboxAfter = await after.readOutboxPage(query);
+      assert.equal(siblingOutboxAfter.events.length, siblingOutboxBefore.events.length + 1);
+      assert.equal(siblingOutboxAfter.events.at(-1).eventId, processed.envelope.identity.eventId);
+      assert.deepEqual(await before.readOutboxPage(query), siblingOutboxBefore);
+    },
+  );
 });

@@ -50,7 +50,7 @@ test("forward session pages cannot change pinned counts or skip positions", () =
     { ...last, records: [{ ordinal: 2 }, { ordinal: 3 }] },
   ])
     assert.throws(() => requireForwardSessionMessagePage(invalid, resume, first.messageCount), {
-      code: "SESSION_IMMUTABLE_STORAGE_INVALID",
+      code: "SESSION_STORAGE_CORRUPT",
     });
   assert.throws(
     () =>
@@ -59,11 +59,11 @@ test("forward session pages cannot change pinned counts or skip positions", () =
         start,
         null,
       ),
-    { code: "SESSION_IMMUTABLE_STORAGE_INVALID" },
+    { code: "SESSION_STORAGE_CORRUPT" },
   );
   const middle = { ...last, messageCount: 3, nextCursor: { after: 2, scope: "foreign" } };
   assert.throws(() => requireForwardSessionMessagePage(middle, resume, 3), {
-    code: "SESSION_IMMUTABLE_STORAGE_INVALID",
+    code: "SESSION_STORAGE_CORRUPT",
   });
 });
 
@@ -207,7 +207,7 @@ test("thinking detail validates one bounded selection before storage or transpor
     { limit: 0 },
     { limit: Infinity },
     { limit: 1.5 },
-    { limit: QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize + 1 },
+    { limit: QUANTITY_THRESHOLDS.sessionStorage.messageReadPageSize + 1 },
     { cursor: undefined },
     { cursor: {} },
     { cursor: { after: 0, scope: "snapshot" } },
@@ -221,7 +221,7 @@ test("thinking detail validates one bounded selection before storage or transpor
       requireScopedThinkingDetailPage(["session", "format", "revision"], {
         lookupKey: { dialogProcessId: "dialog", turnScopeId: "turn" },
         cursor: null,
-        limit: QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize + 1,
+        limit: QUANTITY_THRESHOLDS.sessionStorage.messageReadPageSize + 1,
       }),
     TypeError,
   );
@@ -414,7 +414,7 @@ test("message selection bounds total records and shares one byte budget", () => 
     [" first"],
     ["first", "first"],
     Array.from(
-      { length: QUANTITY_THRESHOLDS.immutableStorage.messagePageSize + 1 },
+      { length: QUANTITY_THRESHOLDS.sessionStorage.messagePageSize + 1 },
       (_, index) => `m-${index}`,
     ),
   ])

@@ -111,37 +111,29 @@ async function readRange(read, record, ordinal) {
 }
 
 async function locateRange(read, record, byteOffset) {
-  if (byteOffset === 1)
-    return {
-      ordinal: record.firstByteChunk,
-      range: await readRange(read, record, record.firstByteChunk),
-    };
-  const skipped = Math.floor(
-    (record.contentBytes - 2 - byteOffset) / PARTITION_CONTENT_CHUNK_BYTES,
-  );
-  const lastCandidate = Math.max(record.firstChunk, record.lastChunk - skipped);
-  const tail = await readRange(read, record, lastCandidate);
-  if (byteOffset >= tail.byteOffset && byteOffset < tail.byteOffset + tail.byteLength)
-    return { ordinal: lastCandidate, range: tail };
-  let upper = lastCandidate - 1;
-  let lower = record.firstChunk;
-  for (let distance = 1; upper >= lower; distance *= 2) {
-    const ordinal = Math.max(record.firstChunk, lastCandidate - distance);
+  let lower = record.firstByteChunk;
+  let upper = record.lastChunk;
+  let start = 1;
+  let end = record.contentBytes - 1;
+  let probes = 0;
+  while (lower <= upper && byteOffset >= start && byteOffset < end) {
+    const firstPossible = lower + Math.floor((byteOffset - start) / PARTITION_CONTENT_CHUNK_BYTES);
+    const lastPossible = upper - Math.floor((end - 1 - byteOffset) / PARTITION_CONTENT_CHUNK_BYTES);
+    if (firstPossible > lastPossible) break;
+    const boundary = byteOffset - start < end - 1 - byteOffset ? firstPossible : lastPossible;
+    const ordinal =
+      probes < 2 ? boundary : firstPossible + Math.floor((lastPossible - firstPossible) / 2);
+    probes += 1;
     const range = await readRange(read, record, ordinal);
-    if (range.byteOffset > byteOffset) {
+    const stop = range.byteOffset + range.byteLength;
+    if (range.byteOffset < start || stop > end) corrupt("Overlapping message content ranges");
+    if (byteOffset < range.byteOffset) {
       upper = ordinal - 1;
-      continue;
-    }
-    if (byteOffset < range.byteOffset + range.byteLength) return { ordinal, range };
-    lower = ordinal + 1;
-    break;
-  }
-  while (lower <= upper) {
-    const ordinal = lower + Math.floor((upper - lower) / 2);
-    const range = await readRange(read, record, ordinal);
-    if (byteOffset < range.byteOffset) upper = ordinal - 1;
-    else if (range.byteOffset + range.byteLength <= byteOffset) lower = ordinal + 1;
-    else return { ordinal, range };
+      end = range.byteOffset;
+    } else if (byteOffset >= stop) {
+      lower = ordinal + 1;
+      start = stop;
+    } else return { ordinal, range };
   }
   corrupt("Message byte offset is not covered by its chunk ranges");
 }

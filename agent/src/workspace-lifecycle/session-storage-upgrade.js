@@ -3,11 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { lstat, mkdir, readFile, readdir } from "node:fs/promises";
+import { lstat, mkdir, readFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { resolveSessionTreeChain } from "@noobot/workspace-protocol/session-tree";
-import { EXECUTION_REPORT_VERSION } from "@noobot/session-protocol/execution-report";
 import {
   SESSION_TREE_REJECTION,
   SESSION_TREE_SHAPE,
@@ -21,16 +20,9 @@ import {
   syncStorageDirectory,
 } from "../shared/storage/durable-file.js";
 import { fsRename, fsRm } from "../shared/storage/fs-adapter.js";
-import { ignoreSessionProgress, readSessionDirectory } from "./session-directory-walk.js";
-import { withImmutableAuthorityMutation } from "../session/session-storage-authority.js";
-import { SESSION_ARTIFACT_FILE_NAMES } from "../session/session-artifact-files.js";
+import { readSessionDirectory } from "./session-directory-walk.js";
 import { PartitionJournalOwner } from "../session/partition-storage/partition-journal-owner.js";
 import { createPartitionSessionReaderAccess } from "../session/partition-storage/partition-reader-access.js";
-import { immutableSessionReaderAccess } from "../session/session-artifact-session/immutable-reader-access.js";
-import {
-  EXECUTION_EVENT_INDEX_FILE,
-  LEGACY_V2_EXECUTION_EVENT_INDEX_SCHEMA_VERSION,
-} from "@noobot/session-protocol/execution-event-index";
 import { isPlainObject } from "@noobot/shared/value";
 
 const JSON_DOCUMENT_STATE = Object.freeze({
@@ -94,22 +86,25 @@ async function moveToBackup(base, backupBase, relativePath) {
 async function readSessionDocuments(sessionRoot, partitionAccess, segments = []) {
   const documents = [];
   const sessionDir = path.join(sessionRoot, ...segments);
-  const { children, authority, legacyDocument } = await readSessionDirectory(sessionDir);
+  const { children, authority } = await readSessionDirectory(sessionDir);
   if (segments.length && authority !== null) {
-    const document = legacyDocument
-      ? (await readJsonDocument(path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.session)))
-          .document
-      : await (
-          authority === "partition" ? partitionAccess : immutableSessionReaderAccess
-        ).readPlacement({ sessionDir, sessionId: segments.at(-1) });
-    if (!legacyDocument && document === null)
+    if (authority !== "partition")
+      throw Object.assign(
+        new Error(`Unsupported session storage remains in the active tree: ${sessionDir}`),
+        { code: "SESSION_STORAGE_FORMAT_UNSUPPORTED" },
+      );
+    const document = await partitionAccess.readPlacement({
+      sessionDir,
+      sessionId: segments.at(-1),
+    });
+    if (document === null)
       throw Object.assign(
         new Error(`Tree upgrade encountered an unpublished session: ${sessionDir}`),
         {
           code: "SESSION_STORAGE_UPGRADE_BLOCKED",
         },
       );
-    documents.push({ segments, document, legacyDocument });
+    documents.push({ segments, document });
   }
   for (const entry of children) {
     documents.push(
@@ -140,7 +135,7 @@ function resolveSessionTreeUpgrade({ document, shape, documents }) {
   const { placements, rejected } = listSessionTreePlacements(document);
   const byPath = new Map(documents.map((entry) => [path.join(...entry.segments), entry]));
   const entries = [];
-  for (const { sessionId, parentSessionId, segments } of placements) {
+  for (const { sessionId, segments } of placements) {
     const chain = segments.slice(1);
     const entry = byPath.get(path.join(...chain));
     if (!entry) {
@@ -148,8 +143,7 @@ function resolveSessionTreeUpgrade({ document, shape, documents }) {
     } else if (!hasSessionTreeAncestors(chain, byPath)) {
       rejected.push({ sessionId, reason: SESSION_TREE_REJECTION.PARENT_REJECTED });
     } else {
-      const placement = entry.legacyDocument ? { sessionId, parentSessionId } : entry.document;
-      entries.push({ ...placement, document: entry.document });
+      entries.push({ ...entry.document, document: entry.document });
     }
   }
   return { action: SESSION_TREE_UPGRADE_ACTION[shape], ...buildSessionTree(entries), rejected };
@@ -274,7 +268,11 @@ export function ensureSessionTree({ base, backupBase }) {
   return upgradeSessionTree({ base, backupBase, missingOnly: true });
 }
 
-async function upgradeSessionTree({ base, backupBase, missingOnly }) {
+export function rebuildStoredSessionTree({ base, backupBase }) {
+  return upgradeSessionTree({ base, backupBase, rebuild: true });
+}
+
+async function upgradeSessionTree({ base, backupBase, missingOnly, rebuild = false }) {
   base = path.resolve(base);
   const treeFile = path.join(base, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
   const planFile = path.join(base, WORKSPACE_LAYOUT.SESSION_TREE_UPGRADE_FILE);
@@ -291,7 +289,7 @@ async function upgradeSessionTree({ base, backupBase, missingOnly }) {
   const missing = current.state === JSON_DOCUMENT_STATE.MISSING;
   if (missingOnly && !missing) return null;
   const shape = classifySessionTree(current.document);
-  if (shape === SESSION_TREE_SHAPE.CURRENT) return null;
+  if (!rebuild && shape === SESSION_TREE_SHAPE.CURRENT) return null;
   const sessionRoot = path.join(base, WORKSPACE_LAYOUT.SESSION_DIR);
   await using owner = new PartitionJournalOwner({
     durableAncestor: path.resolve(base),
@@ -303,8 +301,12 @@ async function upgradeSessionTree({ base, backupBase, missingOnly }) {
     withJournalRemoval: owner.withRemoval.bind(owner),
   });
   const documents = await readSessionDocuments(sessionRoot, partitionAccess);
-  if (missing && !documents.length && !missingOnly) return null;
-  const upgrade = resolveSessionTreeUpgrade({ document: current.document, shape, documents });
+  if (missing && !documents.length && !missingOnly && !rebuild) return null;
+  const upgrade = resolveSessionTreeUpgrade({
+    document: current.document,
+    shape: rebuild ? SESSION_TREE_SHAPE.INVALID : shape,
+    documents,
+  });
   const duplicates = upgrade.rejected.filter(
     ({ reason }) => reason === SESSION_TREE_REJECTION.DUPLICATE_SESSION,
   );
@@ -313,8 +315,8 @@ async function upgradeSessionTree({ base, backupBase, missingOnly }) {
       code: "SESSION_STORAGE_CORRUPT",
       details: { rejected: duplicates },
     });
-  for (const { segments, legacyDocument } of documents) {
-    if (!legacyDocument && !isPlacedInTree(upgrade.tree, segments))
+  for (const { segments } of documents) {
+    if (!isPlacedInTree(upgrade.tree, segments))
       throw Object.assign(
         new Error(
           `Legacy tree upgrade would discard a published session: ${path.join(...segments)}`,
@@ -343,99 +345,4 @@ async function upgradeSessionTree({ base, backupBase, missingOnly }) {
   await prepareDirectory(base, path.dirname(planFile));
   await publishTreeFile(planFile, `${JSON.stringify(plan)}\n`);
   return finishTreeUpgrade(base, planFile, treeFile, plan);
-}
-
-function isRetiredJsonDocument({ state, document }, isCurrent) {
-  if (state === JSON_DOCUMENT_STATE.UNPARSABLE) return true;
-  return !isPlainObject(document) || !isCurrent(document);
-}
-
-async function isRetiredExecutionEvents(sessionDir) {
-  const index = await readJsonDocument(
-    path.join(
-      sessionDir,
-      SESSION_ARTIFACT_FILE_NAMES.executionEventsDir,
-      EXECUTION_EVENT_INDEX_FILE,
-    ),
-  );
-  if (index.state === JSON_DOCUMENT_STATE.MISSING) return false;
-  return isRetiredJsonDocument(
-    index,
-    (document) => document.schemaVersion === LEGACY_V2_EXECUTION_EVENT_INDEX_SCHEMA_VERSION,
-  );
-}
-
-async function listRetiredReports(sessionDir) {
-  const reportsDir = path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.executionReportsDir);
-  let names;
-  try {
-    names = await readdir(reportsDir);
-  } catch (error) {
-    if (error.code === "ENOENT") return [];
-    throw error;
-  }
-  const retired = [];
-  for (const name of names.filter((item) => item.endsWith(".json"))) {
-    const report = await readJsonDocument(path.join(reportsDir, name));
-    if (report.state === JSON_DOCUMENT_STATE.MISSING) continue;
-    if (
-      isRetiredJsonDocument(report, (document) => document.version === EXECUTION_REPORT_VERSION)
-    ) {
-      retired.push(path.join(SESSION_ARTIFACT_FILE_NAMES.executionReportsDir, name));
-    }
-  }
-  return retired;
-}
-
-async function retireSessionArtifacts({ base, sessionDir, retire }) {
-  const relativeDir = path.relative(base, sessionDir);
-  return withImmutableAuthorityMutation(sessionDir, async () => {
-    const targets = await listRetiredReports(sessionDir);
-    if (await isRetiredExecutionEvents(sessionDir)) {
-      targets.unshift(SESSION_ARTIFACT_FILE_NAMES.executionEventsDir);
-    }
-    const retired = [];
-    for (const target of targets) {
-      const relativePath = path.join(relativeDir, target);
-      retired.push({ path: relativePath, backupPath: await retire(relativePath) });
-    }
-    return retired;
-  });
-}
-
-async function* walkSessionDirectories(directory) {
-  const { entries, children, authority } = await readSessionDirectory(directory);
-  const names = new Set(entries.map((entry) => entry.name));
-  if (
-    authority !== "partition" &&
-    (names.has(SESSION_ARTIFACT_FILE_NAMES.executionEventsDir) ||
-      names.has(SESSION_ARTIFACT_FILE_NAMES.executionReportsDir))
-  ) {
-    yield directory;
-  }
-  for (const entry of children) {
-    yield* walkSessionDirectories(path.join(directory, entry.name));
-  }
-}
-
-export async function upgradeSessionStorage({
-  base,
-  backupBase,
-  scopedSessionRoots,
-  onSessionProcessed = ignoreSessionProgress,
-}) {
-  if (!Array.isArray(scopedSessionRoots) || !scopedSessionRoots.length) {
-    throw new TypeError("session storage upgrade requires scopedSessionRoots");
-  }
-  base = path.resolve(base);
-  const retire = (relativePath) => moveToBackup(base, backupBase, relativePath);
-  const sessionTree = await upgradeSessionTree({ base, backupBase });
-  const retired = [];
-  for (const root of [WORKSPACE_LAYOUT.SESSION_DIR, ...scopedSessionRoots]) {
-    for await (const sessionDir of walkSessionDirectories(path.join(base, root))) {
-      retired.push(...(await retireSessionArtifacts({ base, sessionDir, retire })));
-      onSessionProcessed();
-    }
-  }
-  return { sessionTree, retired };
 }

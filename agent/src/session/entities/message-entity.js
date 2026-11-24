@@ -14,6 +14,7 @@ import { projectResourceRef } from "@noobot/path-resolver";
 import { assertMutationRef } from "@noobot/file-mutation-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { SessionCommitInputError } from "@noobot/session-protocol/session-changes";
+import { requirePluginMessagePayload } from "@noobot/plugin-protocol/plugin-message-payload";
 import {
   assertSessionMessageEntity,
   assertSessionMessageMetadata,
@@ -133,6 +134,7 @@ function applyMessagePresentation(target, message) {
 function applyMessagePluginFields(target, message) {
   if (message?.pluginMessage === true) target.pluginMessage = true;
   if (isPlainObject(message?.pluginMeta)) {
+    requirePluginMessagePayload(message.pluginMeta.payload);
     target.pluginMeta = message.pluginMeta;
   }
 }

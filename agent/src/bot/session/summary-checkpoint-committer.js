@@ -64,6 +64,7 @@ async function commitCheckpointTransaction({
   identity,
   messages,
   messageContentAppends,
+  messageContentReplacements,
   messageMetadataUpdates,
   submission,
   persistedMessageUids,
@@ -71,6 +72,7 @@ async function commitCheckpointTransaction({
   retainedMessageUids,
 }) {
   const { userId, sessionId, dialogProcessId, turnScopeId, persistenceScope } = identity;
+  const replacements = messageContentReplacements.length ? { messageContentReplacements } : {};
   const checkpointResult = await session.commitTurnSummaryCheckpoint({
     userId,
     sessionId,
@@ -79,6 +81,7 @@ async function commitCheckpointTransaction({
     persistenceScope,
     messages,
     messageContentAppends,
+    ...replacements,
     messageMetadataUpdates,
     submission,
     checkpointId: createSummaryCheckpointId({
@@ -90,6 +93,7 @@ async function commitCheckpointTransaction({
       retainedMessageUids,
       messages,
       messageContentAppends,
+      ...replacements,
       messageMetadataUpdates,
     }),
     expectedCheckpointRevision,
@@ -150,7 +154,7 @@ function prepareCheckpointTransaction({ runtime, turnPersister, identity, summar
     summarizedMessageUids,
   });
   const changes = projectMessagePersistenceChanges(entries, identity);
-  const { messages, messageContentAppends, messageMetadataUpdates } = structuredClone({
+  const persistedChanges = structuredClone({
     ...changes,
     messages: turnPersister.prepareAgentMessages({ ...identity, messages: changes.messages }),
   });
@@ -162,9 +166,7 @@ function prepareCheckpointTransaction({ runtime, turnPersister, identity, summar
     summarizedRevisions,
     expectedCheckpointRevision: runtime.summaryCheckpointRevision,
     identity,
-    messages,
-    messageContentAppends,
-    messageMetadataUpdates,
+    ...persistedChanges,
     submission: createSessionChangesSubmission(),
     persistedMessageUids,
     summarizedMessageUids,

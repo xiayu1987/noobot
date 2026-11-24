@@ -3,17 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { partitionReaderAccess } from "../../../agent/__tests__/helpers/partition-reader-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 
-import {
-  createSessionFacade,
-  createSessionServices,
-  immutableSessionReaderAccess,
-} from "noobot-agent/session";
+import { createSessionFacade, createSessionServices } from "noobot-agent/session";
 import { AttachmentService } from "noobot-agent/attach";
 import { resolveScopedSessionRoots } from "@noobot/workspace-protocol";
 import { AUTHORITY_EVENT_CONSUMER } from "../../ws/chat-websocket/authority-event-dispatcher.js";
@@ -37,7 +34,7 @@ test("child interaction authority commits through the protocol persistence scope
       { workspaceRoot },
       {
         now: () => new Date().toISOString(),
-        sessionReaderAccess: immutableSessionReaderAccess,
+        sessionReaderAccess: partitionReaderAccess,
         attachmentService: new AttachmentService({ workspaceRoot }),
         scopedSessionRoots: resolveScopedSessionRoots([
           { pluginId: "workflow", scopedSessionRoots: ["session"] },
@@ -66,6 +63,28 @@ test("child interaction authority commits through the protocol persistence scope
       persistenceScope,
     });
 
+    const owner = {
+      dialogProcessId: "dialog-child-1",
+      turnScopeId: "internal-turn:child-turn",
+    };
+    await session.appendTurns({
+      userId: "user-1",
+      sessionId: "child-session",
+      persistenceScope,
+      turns: [
+        {
+          ...owner,
+          role: "user",
+          messageOrigin: "natural",
+          messageUid: "message-child-1",
+          userMessageId: "user-message-child-1",
+          content: "start child turn",
+          attachments: [],
+          transferEnvelopes: [],
+        },
+      ],
+    });
+
     const dispatched = [];
     const commitInteractionRequest = createInteractionAuthorityBridge({
       resolveBot: () => ({ session }),
@@ -82,9 +101,8 @@ test("child interaction authority commits through the protocol persistence scope
         requestId: "request-child-1",
         content: "provide the required field",
         fields: [],
-        dialogProcessId: "dialog-child-1",
+        ...owner,
         sessionId: "child-session",
-        turnScopeId: "internal-turn:child-turn",
         toolName: "user_interaction",
         lifecycle: "pending",
       },
@@ -117,7 +135,7 @@ test("interaction authority bridge leaves identity rejection to the event protoc
       { workspaceRoot },
       {
         now: () => new Date().toISOString(),
-        sessionReaderAccess: immutableSessionReaderAccess,
+        sessionReaderAccess: partitionReaderAccess,
         attachmentService: new AttachmentService({ workspaceRoot }),
         scopedSessionRoots: resolveScopedSessionRoots([]),
       },

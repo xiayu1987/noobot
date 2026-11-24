@@ -9,12 +9,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
-import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
-import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
+import { buildFixtureDisplaySummary } from "../helpers/session-projection-fixture.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 const now = () => "2026-07-10T00:00:00.000Z";
@@ -113,8 +112,7 @@ test("summary projects only the authoritative lifecycle snapshot", async () => {
     { now },
   );
 
-  const summary = await buildPersistedDisplaySummary(session);
-  assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
+  const summary = buildFixtureDisplaySummary(session);
   assert.equal(summary.turnLifecycleSnapshot.eventType, "turn.snapshot");
   assert.equal(summary.turnLifecycleSnapshot.sessionId, "s-lifecycle");
   assert.equal(summary.turnLifecycleSnapshot.sequence, 2);
@@ -143,7 +141,7 @@ test("action failure before message persistence remains terminal after summary h
     { now },
   );
 
-  const summary = await buildPersistedDisplaySummary(session);
+  const summary = buildFixtureDisplaySummary(session);
   assert.equal(summary.messages.length, 1);
   assert.equal(summary.messages[0].turnPlaceholder, true);
   assert.equal(summary.messages[0].turnScopeId, "t1");
@@ -235,7 +233,7 @@ test("synthetic placeholders cannot enter persistence or summary", async () => {
   ]) {
     assert.equal(message[key], undefined);
   }
-  const summary = await buildPersistedDisplaySummary(session);
+  const summary = buildFixtureDisplaySummary(session);
   assert.equal(summary.turnLifecycleSnapshot.sequence, 0);
   assert.equal(summary.messages[0].turnStatusPlaceholder, undefined);
 });

@@ -6,27 +6,18 @@
 import { filePath as path } from "@noobot/path-resolver";
 import {
   PARTITION_MIGRATION_AUTHORITY,
-  partitionMigrationPublicationUncertain,
   readPartitionAuthorityPublication,
   readSessionStorageAuthorityFacts,
-  requireImmutableSessionAuthority,
   requirePartitionSessionAuthority,
 } from "@noobot/session-protocol/session-reader";
-import { bindImmutableMigrationSource } from "@noobot/session-protocol/immutable-storage";
-import { assertPartitionSessionJournalPolicy } from "@noobot/session-protocol/partition-journal";
 import { readFilePrefix } from "@noobot/shared/read-file-prefix";
 import { fsLstat, fsOpen } from "../shared/storage/fs-adapter.js";
-import { syncStorageDirectory } from "../shared/storage/durable-file.js";
 import { resolveSessionArtifactMutationLock } from "./session-artifact-files.js";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 import { readJournalHead } from "./partition-storage/journal-io.js";
 
 export function partitionMigrationRoot(sessionDir) {
   return path.join(sessionDir, PARTITION_MIGRATION_AUTHORITY.directory);
-}
-
-export function partitionMigrationAuthorityPath(sessionDir) {
-  return path.join(sessionDir, PARTITION_MIGRATION_AUTHORITY.file);
 }
 
 export function readSessionStorageAuthority(sessionDir) {
@@ -50,42 +41,6 @@ export async function readPartitionStorageRoot(sessionDir) {
   return partitionMigrationRoot(sessionDir);
 }
 
-export async function readPartitionMigrationReceipt(sessionDir, expectedSource, journalLimits) {
-  const facts = await readSessionStorageAuthority(sessionDir);
-  if (facts.migration === undefined && expectedSource !== null) {
-    requireImmutableSessionAuthority(facts);
-    return null;
-  }
-  if (!requirePartitionSessionAuthority(facts))
-    throw Object.assign(new Error(`Partition authority is missing: ${sessionDir}`), {
-      code: "SESSION_NOT_FOUND",
-    });
-  const { head, receipt } = await readPublishedPartition(sessionDir, facts.migration);
-  assertPartitionSessionJournalPolicy(head, journalLimits);
-  if (receipt !== null) {
-    bindImmutableMigrationSource(receipt.source, expectedSource);
-    try {
-      await syncStorageDirectory(sessionDir);
-    } catch (cause) {
-      throw partitionMigrationPublicationUncertain(cause);
-    }
-  }
-  return receipt;
-}
-
-export async function readImmutableAuthority(sessionDir) {
-  const facts = await readSessionStorageAuthority(sessionDir);
-  requireImmutableSessionAuthority(facts);
-  return facts;
-}
-
 export function withSessionStorageAuthorityLock(sessionDir, operation) {
   return sessionMutationCoordinator.run(resolveSessionArtifactMutationLock(sessionDir), operation);
-}
-
-export function withImmutableAuthorityMutation(sessionDir, operation) {
-  return withSessionStorageAuthorityLock(sessionDir, async () => {
-    const authority = await readImmutableAuthority(sessionDir);
-    return operation(authority);
-  });
 }

@@ -85,7 +85,7 @@ export {
   requiresImmediatePartitionProjection,
 } from "./partition-journal-capacity.js";
 
-export const PARTITION_JOURNAL_FORMAT = "noobot.partition-journal-prototype/95";
+export const PARTITION_JOURNAL_FORMAT = "noobot.partition-journal-prototype/96";
 export const PARTITION_JOURNAL_PUBLICATION_LOCK = "publication.lock";
 export const PARTITION_SNAPSHOT_FORMAT = "noobot.partition-snapshot/1";
 export const PARTITION_SNAPSHOT_OWNERSHIP_DIRECTORY = "retention-owners";

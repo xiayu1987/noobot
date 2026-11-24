@@ -32,7 +32,7 @@ export function selectMessagePersistenceBatch({
   entries,
   ownership,
   maxBytes = LENGTH_THRESHOLDS.sessionStorage.messageWriteBatchBytes,
-  maxRecords = QUANTITY_THRESHOLDS.immutableStorage.messagePageSize,
+  maxRecords = QUANTITY_THRESHOLDS.sessionStorage.messagePageSize,
 }) {
   if (
     !Number.isSafeInteger(maxBytes) ||
@@ -40,7 +40,7 @@ export function selectMessagePersistenceBatch({
     maxBytes > LENGTH_THRESHOLDS.sessionStorage.messageWriteBatchBytes ||
     !Number.isSafeInteger(maxRecords) ||
     maxRecords < 1 ||
-    maxRecords > QUANTITY_THRESHOLDS.immutableStorage.messagePageSize
+    maxRecords > QUANTITY_THRESHOLDS.sessionStorage.messagePageSize
   )
     throw new TypeError("Message persistence requires bounded byte and record limits");
   const selected = [];

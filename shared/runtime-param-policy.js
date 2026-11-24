@@ -18,8 +18,8 @@ const RUNTIME_PARAM_FIXED_GROUPS = Object.freeze({
   "length.sessionLog": "crossProcess",
   "quantity.sessionLog": "crossProcess",
   "length.connectorSecrets": "cryptography",
-  "length.immutableStorage": "protocol",
-  "quantity.immutableStorage": "protocol",
+  "length.partitionStorage": "protocol",
+  "quantity.sessionStorage": "protocol",
 });
 
 const RUNTIME_PARAM_FIXED_KEYS = Object.freeze({
@@ -27,6 +27,10 @@ const RUNTIME_PARAM_FIXED_KEYS = Object.freeze({
   "time.service.startupStallTimeoutMs": "crossProcess",
   "time.service.startupUnresponsiveTimeoutMs": "crossProcess",
   "quantity.eventProtocol.authorityOutboxPendingBatchSize": "crossProcess",
+  "quantity.eventProtocol.authorityOutboxPageSize": "protocol",
+  "quantity.partitionStorage.entityDirectoryMaxEntries": "protocol",
+  "quantity.partitionStorage.journalJsonMaxDepth": "protocol",
+  "length.sessionStorage.executionProjectionOutputRecordBytes": "protocol",
   "length.semanticTransfer.toolInputOverflowChars": "crossProcess",
   "turn.model.diagnosticMaxAttempts": "protocol",
   "quantity.client.messageAnchorScrollOffsetPx": "presentation",

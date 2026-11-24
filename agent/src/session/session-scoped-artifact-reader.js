@@ -19,7 +19,7 @@ import {
   releaseRetainedDisplayArtifactPage,
   releaseRetainedSessionDisplayPage,
 } from "./session-display-page.js";
-import { readExecutionReportArtifact } from "./session-artifact-session/related-artifact-writer.js";
+import { readExecutionReportArtifact } from "./session-execution-artifacts.js";
 import { requireStorageService } from "./storage-service.js";
 import { isFunction } from "@noobot/shared/value";
 import {
@@ -29,7 +29,7 @@ import {
 import { partitionJournalError } from "@noobot/session-protocol/partition-journal";
 import { withStorageCleanup } from "../shared/storage/durable-file.js";
 import { readRequiredMessageContentPage } from "./session-message-content-page.js";
-import { assertStorageBatchSucceeded } from "./session-artifact-session/storage-batch-results.js";
+import { assertStorageBatchSucceeded } from "./storage-batch-results.js";
 
 async function openScopedReader({ access, assertAuthorityActive, sessionDir, identity }) {
   const { userId, authoritySessionId, sessionId } = identity;

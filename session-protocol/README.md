@@ -167,7 +167,7 @@ They select the earliest eligible nonempty visible user message and apply
 deletion and replacement are therefore reflected in new snapshots; retained
 snapshots remain unchanged. No candidate means the field is absent.
 `customTitle` is an independent stored setting and takes display precedence.
-Partition format 95 requires business metadata without `autoTitle` and a title
+Partition format 96 requires business metadata without `autoTitle` and a title
 candidate ordinal directory, initialized
 empty and updated atomically with message creation, content changes and suffix
 retirement. It contains only positions of eligible nonempty titles, never title
@@ -175,21 +175,39 @@ text. Title readers select its first ordinal, validate the visible message and
 read its bounded content preview; they do not scan retained history.
 Missing directories, invalid candidates and ownership conflicts fail explicitly.
 Offline message import maintains this directory without changing source metadata.
-Online readers require format 95. Workspace layout upgrade v47 converts
-format 93 journals offline, including their current metadata and title
-candidate directory. Other prototype formats require their own upgrade.
+Online readers require format 96. Workspace layout v49 uses the shared partition
+upgrade path for formats 93 and 95. Format 93 rebuilds the title candidate directory;
+format 95 retains it. Both reconcile every candidate against visible messages in
+bounded windows before publication. `verifyPartitionTitleCandidateWindow` compares
+the exact candidate ordinals in `(after, through]` against committed message facts;
+`count` is the published message count. The final window also rejects candidates
+beyond that count, including candidates in empty history. Missing, extra or invalid
+candidates fail explicitly; upgrades do not silently rebuild an existing index.
+READY receipts identify prepared source and target heads, but do not replace data
+verification. Resuming a prepared stage uses the same metadata and title validation
+as a newly converted stage, without committing the conversion again.
+Both convert current metadata and remove only the retired
+projections `sessionArtifacts`, `turnTerminalCommits` and `shortMemoryCheckpoint`.
+Online metadata rejects those fields, `version`, `revision`, `turnStatuses` and
+`mutationReceipts`. The metadata record also rejects `messages`, `dialogOrder`,
+`turnTimings`, `sessionArtifactEvents`, `turnLifecycle` and `turnSummaryCheckpoints`:
+their facts belong to independent collections, and aggregate exports assemble them
+from those collections. Reads, initialization, imports and prepared metadata writes
+share this storage contract. Upgrades quarantine metadata with duplicate collection
+facts or unverified terminal/receipt facts and preserve its source; they do not
+discard those fields. The layout upgrade rebuilds the active session tree after
+conversion. Other prototype formats require their own upgrade.
 Offline import preserves business metadata and original timestamps; importing
 messages rebuilds the same indexes as online transactions without advancing
 source timestamps. Reconciliation compares business metadata exactly before
 publishing authority and separately compares both pinned snapshots' derived titles.
-For Immutable sources, the offline migration reader resolves `autoTitle` through
-the committed title candidate index in the pinned source snapshot, using the same
-title reader as legacy display and export. The migration source exposes
-`readAutoTitle()` separately from `readMetadata()`, returning an empty string when
-the index has no candidate. Neither side stores a second copy of the title.
-Missing or invalid title indexes
-require the existing offline index upgrade or fail explicitly; readers never
-scan message history to compensate for an invalid index.
+Immutable and document storage are unsupported. Workspace upgrades retain these
+sessions in migration quarantine with `sessionStorage.format` and
+`sessionStorage.status: "unsupported-format"`; they do not import their contents.
+Supported partition sessions continue through the ordinary upgrade path.
+Session upgrade failures are retained with explicit quarantine evidence and do
+not block healthy sessions. Quarantine classification belongs to
+`@noobot/workspace-protocol/migration-quarantine`.
 
 ### Full branch detail availability
 
@@ -273,51 +291,6 @@ a missing report in that session is distinct from an orphan report. Report bytes
 are not snapshot-versioned; their session and dialog identity must match the
 validated selection. These checks do not establish cross-session artifact ownership.
 
-## Located record relocation
-
-Relocation preserves a committed record's content identity and changes only its
-physical location in the newly published snapshot. Every relocation requires
-`{ identity, sourceLocation }`, validated by `requireImmutableRelocationSource`.
-The transaction resolves the identity from its captured location root and compares
-the exact physical reference before reading bytes. A changed source rejects with
-`SESSION_RELOCATION_SOURCE_CHANGED`; staged bytes are not a committed source.
-Each explicitly relocated identity is a publication root alongside the business
-roots. Moving a child must not require rewriting or traversing its unchanged
-parents. Ordinary unreachable staged records are still discarded. A failed
-transaction publishes no new locator, and readers pinned to the old location
-root keep their original physical ranges until their retentions are released.
-
-`compactSessionArtifacts` uses `requireImmutableCompactionRequest` and
-`requireImmutableCompactionRecords`. Each batch supplies `operationId`,
-`expectedGeneration`, and explicit source records. `IMMUTABLE_COMPACTION_BUDGET`
-limits source count to 128 and aggregate source bytes to 1 MiB; copied locator,
-commit and receipt pages also consume the existing transaction budget. Duplicate
-identities, unknown request fields and missing source evidence reject. Sources in
-the captured active append segment reject with `SESSION_COMPACTION_ACTIVE_SEGMENT`.
-Sources are rechecked under the canonical session lock, together with writability,
-generation and publication. No source file is removed by relocation.
-
-Batch results use `requireImmutableCompactionResult`:
-`{ relocatedRecords, conflicts }`, where every conflict is exactly
-`{ identity, sourceLocation, currentLocation }`. A changed source is reported and
-does not prevent unchanged sources in that batch from moving. The result accounts
-for every requested identity exactly once; duplicate, foreign or unchanged
-conflict evidence rejects. Even an all-conflict batch publishes its result in the
-ordinary receipt, so retry cannot silently change its outcome. Missing locations,
-corrupt bytes, cancellation and I/O failures reject the transaction and publish
-neither relocation progress nor a receipt. Active-source rejection remains a
-batch admission check. Conflict evidence is an observation at that commit, not
-authority for a future relocation: callers must inspect the current snapshot
-before submitting a new operation for conflicting identities.
-
-The ordinary operation receipt owns retry progress: replaying the same operation
-after an uncertain head publication returns its original result and does not
-relocate twice. The generation and source checks apply to new operations, after
-receipt replay. Reusing an operation with a different input rejects. This is a
-bounded explicit relocation batch; automatic source discovery and scheduling are
-not provided by this contract. Old segments remain subject to retained-snapshot
-cleanup, including locator pages and the active tail.
-
 ## Execution log queue budgets
 
 Listener admission uses `executionLogByteBudget()` and the record limits in
@@ -386,19 +359,11 @@ Journal append boundaries, checkpoint receipts, hash-chain verification and
 recovery remain unchanged. Existing snapshots use the same record format and
 reader; no migration or alternate read path is required.
 
-Checkpoint files own persisted and summarized UID lists. Full session reads use
-`hydrateCheckpointReceipts` and return independent mutable list copies. Transaction
-turn views use `hydrateCheckpointReceiptReferences`: only identities produced by
-`projectCheckpointIdentity` may supply borrowed, deeply frozen UID lists. Receipt
-wrappers remain independent; updates replace lists rather than mutate borrowed
-values. Both projections verify receipt metadata and any supplied UID lists.
-Service results use `copyCheckpointReceiptLists` before exposing a transaction
-session: receipt wrappers and authoritative UID lists become caller-owned mutable
-copies, while the transaction retains its borrowed references. This operation
-copies an already hydrated session; it cannot hydrate an unverified manifest.
-Writing validates the receipt against the current verified identity before
-omitting the authoritative lists from the manifest. File identity, hash-chain
-checks and commit boundaries are identical for both ownership contracts.
+Checkpoint files own persisted and summarized UID lists in the offline repair
+protocol. Repair verifies the stored receipt against its checkpoint identity
+before `hydrateCheckpointReceipts` returns independent mutable list copies.
+`copyCheckpointReceiptLists` only copies an already hydrated session for callers;
+it does not resolve checkpoint identities.
 
 Runtime readers reject the previous schema. Existing artifacts must be changed
 offline before deploying all components together.
@@ -514,131 +479,77 @@ not an assertion that the current runtime has a locator or execution cursors.
 `execution_identity_conflict`，不返回部分结果。参与查询的会话不可读时，三类查询均返回
 `execution_query_incomplete`。
 
-## Immutable storage migration / 不可变存储迁移
+#### Bounded execution location / 有界执行定位（待实现）
 
-The current physical format is `noobot.immutable-session/5`: stable identities
-with compact, snapshot-bound locator pages. Version 4 JSON locator pages are
-read-only offline inputs. Workspace layout step
-`session-immutable-compact-locations-v39` owns the upgrade, including already
-installed v38 workspaces; runtime opens never select a backend by reference shape.
+The following requirements govern replacing the current discovery and lifecycle
+scan. They do not expose a new runtime API until publication, upgrade, recovery,
+and consumers implement the same contract.
 
-Commit index version 4 stores the commit record directly in each generation leaf.
-Version 3 scalar wrappers are decoded only by explicit offline migration. Source
-audit and historical replay use the source contract, and target audit uses the
-direct-index contract before the head is published. Migration preserves generation,
-operation digest and retry results, including after failed publication and retry.
-Physical-format equality does not skip a required logical-index conversion.
+- Lifecycle records remain the authority for execution identity, relations, state,
+  capabilities, and revision. A workspace locator stores only selectors and
+  references to their published session facts. It must not copy execution state,
+  infer ownership from an execution ID, or use timestamps to decide freshness.
+  References bind the declared persistence scope, session identity, journal epoch,
+  turn identity, and published record position. Reads verify that the referenced
+  record is visible and agrees with the selector in the selected view.
+- Exact identity lookup returns every live ownership claim. Parent and root lookup
+  select candidate IDs; each selected ID is then checked against **all** its
+  claims, including claims with a different parent or root. A tree selected by an
+  execution ID resolves that identity before selecting its root. Existing orphan
+  semantics and conflict scope remain unchanged. Duplicate claims cannot be
+  collapsed by picking the newest record or first session.
+- Every operation that can change membership participates in locator publication:
+  initialization with a turn, lifecycle creation, replacement, suffix deletion,
+  branch deletion, import, and offline format upgrade. A normal state update that
+  preserves identity and relations does not create a second execution fact. Before
+  a membership change can become visible, its durable publication intent must make
+  affected locator views unavailable; publishing session data and later attempting
+  an untracked index update is forbidden. Completion verifies the session's
+  published position and applies the corresponding locator change before clearing
+  that intent. Branch retirement uses the existing durable deletion operation;
+  the locator does not maintain a second deletion authority.
+- Recovery reconciles the same intent against the published session position and
+  transaction receipt. An unpublished change cannot become a claim; an uncertain
+  commit is resolved using the original operation identity. A published change
+  must finish locator publication before affected queries resume. Recovery is
+  idempotent and bounded per step. Upgrade builds and verifies the locator under
+  a declared write barrier before admitting the new read path; an empty or missing
+  locator is not evidence that a workspace contains no executions.
+- Absence is authoritative only for a ready locator view with no unresolved
+  publication affecting its selection. Missing, lagging, damaged, or unavailable
+  location evidence yields `execution_query_incomplete`, preserving its diagnostic
+  cause. It must not trigger session discovery, lifecycle scans, partial success,
+  or an execution-not-found answer. Unclassified failures still propagate.
+- A page binds the canonical query, selected root, locator generation, and retained
+  source publication views. Subsequent pages use those views; reopening each session
+  at its latest head is not a continuation. The view does not imply a workspace
+  atomic snapshot. Each page limits candidate claims, opened sessions, read bytes,
+  and output records; returning a small page after an unbounded pre-scan violates
+  the contract. A conflict check must complete before an execution is emitted.
+  Consumers apply only the completed query view and release it on failure or
+  cancellation. End, explicit release, expiry, deletion, and response interruption
+  have explicit ownership of every retained session lease. An invalidated view
+  fails explicitly rather than silently restarting at the latest state.
 
-当前物理格式为 v5，定位页采用紧凑编码并绑定快照，v4 JSON 定位页只供离线读取。
-工作区 v39 步骤负责升级已安装的 v38 工作区。提交索引 v4 直接保存提交记录，
-v3 标量包装只在离线迁移解码；源审计及历史重放遵循旧契约，目标审计遵循新契约，
-成功后才发布 head。物理格式相同不能跳过必要的逻辑索引转换。
+Acceptance must inject interruption before and after both session and locator
+publication, verify retry with the same operation, and cover every membership
+writer above. Cold-read measurements hold target and page budgets constant while
+increasing unrelated sessions and lifecycle history. They count actual scope
+discovery, session opens, candidates, bytes, and released leases. Tests must include
+conflicting claims outside the selected relationship, orphan roots, deletion and
+path reuse, concurrent updates between pages, cancellation, and expiry. A local
+per-session index alone does not satisfy workspace location or recovery.
 
-## Immutable cleanup ownership / 不可变清理计划所有权
+## Historical session storage retirement / 历史会话存储退役
 
-`IMMUTABLE_CLEANUP_PLAN` in `immutable-storage` defines one plan directory,
-manifest, candidate-page chain and durable execution cursor. The manifest is the
-sole publication point. Version 3 admits only the current located storage format;
-older sessions require explicit migration. It inventories owned names before capturing the
-retained snapshot under the mutation lock. A later located-storage head must
-prove the captured commit through its generation index; ordinary descendant
-writes cannot revive inventoried orphan segments. Earlier plans reject and must be explicitly disposed, never
-upgraded by inference. Retention follows all registered locations, locator pages,
-active tails and pinned reader roots. Locator pages are checksum-verified; content
-records are not read or audited. A corrupt content record remains retained for
-explicit audit and repair. Inventory, candidate and retained-segment index pages
-share the plan lifetime. The retention radix index lives in `retentionDirectory`;
-pending identities are limited to `chunkEntries` and its scratch segments to
-`retentionSegments`. Exceeding this capacity explicitly rejects preparation with
-`SESSION_MAINTENANCE_CAPACITY_EXCEEDED`. `retentionState` durably checkpoints the
-physical index root, committed segment tail and unique segment count using
-`retentionFormat`. Creation explicitly publishes even an empty set; reopening
-requires a valid checkpoint. Index data is synchronized before checkpoint
-publication. An uncertain publication reloads the authoritative checkpoint before
-retrying pending marks; duplicate marks perform no writes. Reopening accounts for
-orphan scratch segments against capacity. The marking cursor binds the captured
-roots and advances under `maxMarkingPages`; recovery seek reads are reported separately.
-`immutable-cleanup-filter` defines the durable input cursor, output chain and pending
-candidate batch. `maxFilterEntries` limits each filtering call. Resume the same
-`planId` until preparation returns `complete: true` before executing deletion.
-Directory inventory capture still has no persistent traversal cursor or per-call bound.
-Inventory and candidate chains jointly allocate at most `chunkPages` pages,
-`immutable-cleanup-capacity` owns the durable `capacity.json` reservation. It is
-created exclusively and cannot be reset by reopening a writer. Capacity is reserved
-before page publication and remains occupied after an uncertain publication or
-filter-checkpoint failure. Content-addressed retries validate and reuse existing
-pages; they do not infer capacity from the committed candidate prefix. Missing or
-corrupt reservation records reject preparation.
-A failed full-batch retention flush blocks new identities until that batch completes.
-Filtering shares index reads for at most `chunkEntries` files per batch.
-Capture format 2 owns the explicit `ready` state. A durable `ready: false` inventory
-can resume initialization: reuse an existing ownership record, or capture retained
-snapshots under the mutation lock if that record has not been published, initialize
-filtering and retention, then publish `ready: true`. Marking cannot begin earlier.
-A ready capture never recreates missing ownership or checkpoints. Open failures alone
-can establish record absence; read and close failures propagate.
-Before the first capture checkpoint is durably published, a first-call failure rolls
-scratch back. After that boundary, a first-call failure preserves the plan and throws
-`SESSION_MAINTENANCE_PREPARATION_INTERRUPTED` with `planId` and the original `cause`
-(including capacity errors). Resume or explicitly dispose that plan. Failed resumption
-also preserves it. Capture format 1 is rejected, requiring explicit disposal of old
-scratch. Rollback attempts removal and parent-directory sync and preserves all failures.
-All preparation, resumption, execution and disposal operations for one `planId`
-serialize, including initial preparation. Acquire the plan lock before nesting the
-session mutation lock. Inventory, marking and filtering do not hold the session
-lock; snapshot capture, publication, ownership release, deletion and disposal do.
-Lock recovery follows the shared heartbeat lease: process exit does not permit
-reclaiming a fresh lease. A wait timeout reports `SESSION_MUTATION_BUSY` and keeps
-the plan; retry the same identity after lease expiry. Published-plan release
-failure also preserves the plan. Preparation retry completes ownership release
-without republishing the manifest or resetting execution progress.
+Workspace layout step `unsupported-session-storage-retirement-v48` quarantines
+unsupported historical session storage. Historical format identifiers are used
+only to classify storage for retirement; there is no runtime reader or writer for
+the Immutable format and no automatic import into the partition journal.
+The workspace session tree is rebuilt from healthy published partitions.
 
-Execution
-deletes candidates, synchronizes their parent
-directories, then durably replaces the cursor. Cursor publication is the final
-storage mutation of that batch. Candidate pages remain owned by the plan through
-partial execution, completion and retries; execution never retires them separately.
-
-Explicit disposal removes the entire plan directory and synchronizes its parent,
-including retries after removal already succeeded. It does not trust a manifest
-or need a readable cursor, so it also disposes corrupt or unpublished scratch.
-Hosts must dispose completed and abandoned plans. Scratch size is bounded by the
-prepared plan, not by a deletion batch; retaining pages until disposal does not
-increase preparation's peak allocation. No additional retirement cursor is needed;
-the inventory and complete candidate set both contribute to scratch capacity.
-
-`immutable-storage` 的 `IMMUTABLE_CLEANUP_PLAN` 统一定义计划目录、发布清单、候选页链及
-持久化执行游标。v3 仅接受当前定位存储格式，旧会话须先显式迁移。先捕获所属文件名清单，
-再在修改锁内固定保留快照；后继 head 必须以代次索引证明原提交为祖先，普通写入不得
-收养清单中的孤立段。旧计划明确拒绝并须显式废弃，不推断升级。定位页校验内容哈希，
-正文仅按登记位置保留，不执行正文审计；正文损坏仍保留，交由显式审计和修复处理。
-保留范围包含全部登记位置、定位页、活动段和读者快照。文件清单页、候选页及保留段索引页共享计划生命周期。
-保留段基数索引放在 `retentionDirectory`，待写身份最多为 `chunkEntries`，暂存段最多为
-`retentionSegments`；超限以 `SESSION_MAINTENANCE_CAPACITY_EXCEEDED` 明确拒绝准备。
-`retentionState` 按 `retentionFormat` 持久化物理索引根、已提交活动尾及去重计数。
-创建时显式发布空集合，重新打开必须有有效检查点；先同步索引数据，再发布检查点。
-发布结果不确定时重读权威检查点后重试待写标记，重复标记不写入；孤立暂存段也计入恢复容量。
-标记游标绑定捕获的保留根，每次最多推进 `maxMarkingPages` 页，恢复定位读取单独计量。
-过滤契约持久化输入游标、输出页链和待处理候选批次，每次最多处理 `maxFilterEntries` 项。
-须以同一 `planId` 恢复，直到返回 `complete: true` 后才可执行删除；目录清单捕获仍无持久化遍历游标或单次预算。
-文件清单和候选页链共用 `chunkPages` 分配上限，发布前预留容量，结果不确定时保留额度。
-满批刷盘失败后须先完成原批次才能接纳新增身份；候选过滤以最多 `chunkEntries` 个文件共用索引读取。
-捕获格式 2 显式记录 `ready` 状态；持久化的 `ready: false` 清单可继续初始化：复用已发布的所有权记录，
-或在记录尚未发布时于修改锁内捕获保留快照，初始化过滤与保留集合后发布 `ready: true`，此前不得开始标记。
-已就绪捕获不得重建缺失的所有权或检查点；仅打开失败可判定记录不存在，读取和关闭失败须传播。
-首次捕获检查点持久化前，首次调用失败须回滚暂存；此后失败保留计划，抛出含 `planId` 和原始 `cause`
-的 `SESSION_MAINTENANCE_PREPARATION_INTERRUPTED`，容量错误也遵循该边界。宿主须恢复或显式废弃计划，
-恢复失败同样保留计划。捕获格式 1 明确拒绝，旧暂存须显式废弃。
-同计划的首次准备、续跑、执行及废弃串行化，嵌套顺序固定为先计划锁、再会话修改锁。
-清单捕获、标记和筛选在会话锁外运行；固定快照、发布、归属释放、删除及废弃持有会话锁。
-进程退出后仅在共享心跳租约过期时回收锁；等待超时返回 `SESSION_MUTATION_BUSY` 并保留计划，
-调用方租约过期后以同一身份重试。清单发布后仍须完成准备保留根释放；释放失败保留计划，
-重试只完成释放，不重发清单、不重置执行游标。回滚逐项尝试删除及父目录同步，并同时保留操作与所有回滚错误。
-删除候选并同步父目录后，持久化游标是批次最后一次存储修改。候选页
-在部分执行、完成及重试期间均归计划所有，不设置独立的页退役流程。宿主必须显式废弃
-完成或放弃的计划：删除整个计划目录并同步父目录；目录已经删除时重试仍须完成同步。
-废弃不依赖清单或游标可读，也能处理损坏和未发布的暂存。暂存容量取决于准备出的完整
-计划，包含文件清单及候选集合；不另建退役游标。
+工作区布局 v48 将不受支持的历史会话存储移入隔离区。旧格式标识仅用于识别和退役；
+运行时不再读写 Immutable 格式，也不会自动导入分区日志。会话树从健康的已发布分区重建。
 
 ## Execution-log projection output / 执行日志投影输出
 

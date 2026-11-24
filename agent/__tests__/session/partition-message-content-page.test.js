@@ -179,11 +179,29 @@ test("cold thinking detail rejects oversized selected content before reading bod
   assert.equal(page.records[1].message.content, content);
 });
 
-for (const initialContent of ["", "x".repeat(2304)]) {
-  test(`cold byte range seeks under the original budget with ${initialContent.length} initial bytes`, async (t) => {
+const fullChunk = "x".repeat(2304);
+const byteRangeCases = [
+  { label: "uniform appends", initialContent: "", appends: Array(25).fill(fullChunk) },
+  {
+    label: "uniform initial body and appends",
+    initialContent: fullChunk,
+    appends: Array(24).fill(fullChunk),
+  },
+  {
+    label: "uneven appends",
+    initialContent: "",
+    appends: [
+      ...Array.from({ length: 23 }, (_, index) => (index % 2 ? fullChunk : "z")),
+      "tail",
+      fullChunk,
+    ],
+  },
+];
+
+for (const { label, initialContent, appends } of byteRangeCases) {
+  test(`cold byte range seeks under the original budget with ${label}`, async (t) => {
     const { journal, root, sessionId } = await createMessageCase(t, { pageBytes: 4096 });
     const repository = openTestMessages(journal, sessionId);
-    const content = "x".repeat(2304);
     let receipt = (
       await repository.commit(
         await prepare(journal, repository, "create", {
@@ -191,7 +209,7 @@ for (const initialContent of ["", "x".repeat(2304)]) {
         }),
       )
     ).result.messageReceipts[0];
-    for (let index = 0; index < (initialContent.length ? 24 : 25); index += 1) {
+    for (const [index, content] of appends.entries()) {
       receipt = (
         await repository.commit(
           await prepare(journal, repository, `append-${index}`, {
@@ -216,7 +234,8 @@ for (const initialContent of ["", "x".repeat(2304)]) {
       sessionId,
       parentSessionId: "",
     });
-    const offset = 1 + content.length * 24 + 31;
+    const lastChunkOffset = 1 + initialContent.length + appends.slice(0, -1).join("").length;
+    const offset = lastChunkOffset + 31;
     const { result, work } = await observeStorageIo(root, async () => {
       try {
         return {
@@ -235,5 +254,13 @@ for (const initialContent of ["", "x".repeat(2304)]) {
     const { page } = result;
     assert.equal(Buffer.from(page.dataBase64, "base64").toString(), "x".repeat(17));
     assert.ok(work.readBytes <= 4096, JSON.stringify(Object.fromEntries(work.readBytesByPath)));
+    const crossing = await reader.readMessageContentPage(
+      selection("m1", lastChunkOffset - 2, receipt.contentReference, 4),
+    );
+    assert.equal(
+      Buffer.from(crossing.dataBase64, "base64").toString(),
+      `${appends.at(-2).slice(-2)}xx`,
+    );
+    assert.equal(crossing.nextByteOffset, lastChunkOffset + 2);
   });
 }

@@ -15,7 +15,7 @@ import {
 } from "../../src/session/session-artifact-execution-logs.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
-import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
+import { withTemp } from "../helpers/temporary-directory.js";
 
 const dialogProcessId = "directory-durability-turn";
 const record = { dialogProcessId, content: "accepted only after durable preparation" };

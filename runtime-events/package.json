@@ -10,7 +10,7 @@
     "./session-id": "./src/session-id.js",
     "./package.json": "./package.json",
     "./session-log-protocol": "./src/session-log-protocol.js",
-    "./testing": "./src/testing.js"
+    "./testing": "./__tests__/testing.js"
   },
   "dependencies": {
     "@noobot/platform-compatibility": "file:../platform-compatibility",

@@ -208,7 +208,7 @@ export async function fetchWorkflowNodeThinkingDetail({
   cursor = null,
   snapshot = null,
 }) {
-  const limit = QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize;
+  const limit = QUANTITY_THRESHOLDS.sessionStorage.messageReadPageSize;
   const scope = {
     userId: props.userId,
     sessionId: rootSessionId,

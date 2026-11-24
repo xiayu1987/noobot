@@ -12,15 +12,14 @@ import {
   assertSessionAggregateShape,
   isCanonicalMessageTimestamp,
   requireSessionAggregateVersion,
+  requireSessionSettings,
   normalizeTurnTimingRecords,
 } from "@noobot/session-protocol";
 import {
   assertDialogOrderCoversMessages,
   normalizeDialogOrderEntity,
 } from "./dialog-order-entity.js";
-import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeSessionTree } from "@noobot/workspace-protocol/session-tree";
-import { objectRecord } from "./entity-primitives.js";
 import { normalizeMessagesEntity } from "./message-entity.js";
 import { text } from "@noobot/shared/value";
 
@@ -32,27 +31,14 @@ function requireSessionTimestamp(session, field) {
   return value;
 }
 
-function resolveSessionNormalizationContext(session) {
-  const shortMemoryCheckpoint = Number(session?.shortMemoryCheckpoint);
+function createNormalizedSessionEntity(session, messages) {
   return {
-    customTitle: text(session?.customTitle),
-    autoTitle: text(session?.autoTitle),
-    shortMemoryCheckpoint: Number.isFinite(shortMemoryCheckpoint) ? shortMemoryCheckpoint : 0,
-  };
-}
-
-function createNormalizedSessionEntity(session, context, messages) {
-  const normalizedBase = { ...objectRecord(session) };
-
-  delete normalizedBase.sessionArtifacts;
-  return {
-    ...normalizedBase,
+    ...session,
     sessionId: session.sessionId,
     parentSessionId: session.parentSessionId,
     aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
     caller: session.caller,
-    modelAlias: String(session?.modelAlias || ""),
-    shortMemoryCheckpoint: context.shortMemoryCheckpoint,
+    modelAlias: session.modelAlias,
     messages,
     dialogOrder: normalizeDialogOrderEntity(session.dialogOrder),
     turnTimings: normalizeTurnTimingRecords(session.turnTimings),
@@ -61,7 +47,7 @@ function createNormalizedSessionEntity(session, context, messages) {
       session.sessionArtifactEvents,
       session.sessionId,
     ),
-    selectedConnectorIds: normalizeSelectedConnectorIds(session?.selectedConnectorIds),
+    selectedConnectorIds: [...session.selectedConnectorIds],
     createdAt: requireSessionTimestamp(session, "createdAt"),
     updatedAt: requireSessionTimestamp(session, "updatedAt"),
   };
@@ -69,31 +55,24 @@ function createNormalizedSessionEntity(session, context, messages) {
 
 export function normalizeSessionEntity(session) {
   assertSessionAggregateShape(session);
+  requireSessionSettings(session);
   return normalizeSessionAggregateEntity({
     ...session,
     messages: normalizeMessagesEntity(session.messages),
   });
 }
 
-export function normalizeSessionAggregateEntity(session) {
-  if ("version" in session || "revision" in session) {
-    throw new TypeError(
-      "legacy session version fields are not supported; run the session protocol migration",
-    );
-  }
+function normalizeSessionAggregateEntity(session) {
   assertSessionAggregateShape(session);
-  const context = resolveSessionNormalizationContext(session);
+  const autoTitle = text(session.autoTitle);
   const normalizedMessages = session.messages;
   if ("turnSummaryCheckpoints" in session) {
     assertTurnSummaryCheckpoints(session.turnSummaryCheckpoints);
   }
-  const normalizedSession = createNormalizedSessionEntity(session, context, normalizedMessages);
+  const normalizedSession = createNormalizedSessionEntity(session, normalizedMessages);
   assertDialogOrderCoversMessages(normalizedSession.dialogOrder, normalizedMessages);
-  if (context.customTitle) normalizedSession.customTitle = context.customTitle;
-  else delete normalizedSession.customTitle;
-  if (context.autoTitle) normalizedSession.autoTitle = context.autoTitle;
+  if (autoTitle) normalizedSession.autoTitle = autoTitle;
   else delete normalizedSession.autoTitle;
-  delete normalizedSession.turnTerminalCommits;
   return assertSessionAggregateInvariants(normalizedSession);
 }
 

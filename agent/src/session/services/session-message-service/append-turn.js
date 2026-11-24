@@ -16,6 +16,7 @@ export async function appendTurns({
   turns,
   messageDiagnostics = [],
   messageContentAppends = [],
+  messageContentReplacements = [],
   messageMetadataUpdates = [],
   persistenceContext,
   submission = createSessionChangesSubmission(),
@@ -23,10 +24,16 @@ export async function appendTurns({
   requireSessionChanges({
     messages: turns.map((turn) => ({ ...turn, sessionId })),
     messageContentAppends,
+    messageContentReplacements,
     messageMetadataUpdates,
     messageDiagnostics,
   });
-  if (!turns.length && !messageContentAppends.length && !messageMetadataUpdates.length) {
+  if (
+    !turns.length &&
+    !messageContentAppends.length &&
+    !messageContentReplacements.length &&
+    !messageMetadataUpdates.length
+  ) {
     throw new TypeError("appendTurns requires non-empty message changes");
   }
   return this.sessionRepo.withSessionCommit(
@@ -48,6 +55,7 @@ export async function appendTurns({
                 }),
               ),
               messageContentAppends,
+              messageContentReplacements,
               messageMetadataUpdates,
               ...(messageDiagnostics.length ? { messageDiagnostics } : {}),
             },

@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
-import { createServer } from "vite";
+import { createTestViteServer } from "./helpers/vite-server.js";
 
 const fixture = `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1">
 <div id="app"></div><script type="module">
@@ -59,9 +59,9 @@ function readTextSweep(element) {
 test(
   "the sweep targets elapsed time and status labels, with one pass on completion",
   { timeout: 60000 },
-  async () => {
+  async (t) => {
     const root = fileURLToPath(new URL("../..", import.meta.url));
-    const server = await createServer({
+    const server = await createTestViteServer(t, {
       root,
       appType: "custom",
       server: { host: "127.0.0.1", port: 0 },
@@ -136,7 +136,6 @@ test(
       });
     } finally {
       await browser?.close();
-      await server.close();
     }
   },
 );

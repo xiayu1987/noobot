@@ -4,9 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile, readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
-import { assertWorkspaceMigrationQuarantineRecord } from "@noobot/workspace-protocol/migration-quarantine";
+import {
+  assertWorkspaceMigrationQuarantineRecord,
+  classifyHistoricalMigrationQuarantine,
+} from "@noobot/workspace-protocol/migration-quarantine";
 import { fsLstat, fsRename, fsRm } from "../shared/storage/fs-adapter.js";
 import {
   durableJsonPublicationTarget,
@@ -25,14 +29,27 @@ function describeError(error) {
   };
 }
 
-export async function quarantineMigrationUnit({ base, kind, relativePath, error, move = false }) {
+export async function quarantineMigrationUnit({
+  base,
+  kind,
+  relativePath,
+  error,
+  move = false,
+  sessionStorage,
+}) {
   const quarantineRoot = quarantineOwnerRoot(base, kind);
   const normalizedPath = readQuarantinePath(relativePath);
-  const target = path.join(quarantineRoot, normalizedPath);
+  const original = path.join(base, normalizedPath);
+  const moveIdentity = move ? await readQuarantineIdentity(original) : undefined;
+  if (moveIdentity === null) throw quarantineMissing(original);
+  const quarantineId =
+    sessionStorage === undefined
+      ? undefined
+      : createHash("sha256").update(`${normalizedPath}\0${moveIdentity}`).digest("hex");
+  const target = path.join(quarantineRoot, quarantineId ?? normalizedPath);
   await ensureDurableStorageDirectory(path.dirname(target));
   const reasonPath = `${target}${REASON_SUFFIX}`;
-  const original = path.join(base, normalizedPath);
-  const moveIdentity = move ? await prepareQuarantineMove(original, target) : undefined;
+  if (move && (await readQuarantineIdentity(target)) !== null) throw quarantineConflict(target);
   const reason = assertWorkspaceMigrationQuarantineRecord({
     kind,
     path: normalizedPath,
@@ -40,6 +57,8 @@ export async function quarantineMigrationUnit({ base, kind, relativePath, error,
     quarantinedAt: new Date().toISOString(),
     error: describeError(error),
     ...(moveIdentity === undefined ? {} : { moveIdentity }),
+    ...(sessionStorage === undefined ? {} : { sessionStorage }),
+    ...(quarantineId === undefined ? {} : { quarantineId }),
   });
   await writeDurableJsonFile(reasonPath, `${JSON.stringify(reason, null, 2)}\n`);
   if (move) await moveQuarantineEntry(original, target);
@@ -47,6 +66,7 @@ export async function quarantineMigrationUnit({ base, kind, relativePath, error,
     path: normalizedPath,
     quarantinePath: path.relative(base, move ? target : reasonPath),
     error: reason.error,
+    ...(sessionStorage === undefined ? {} : { sessionStorage }),
   };
 }
 
@@ -97,7 +117,7 @@ async function readDirectoryReceipts({ root, kind, directory, entries }) {
     const held = file.slice(0, -REASON_SUFFIX.length);
     const reason = await readQuarantineReason(file);
     const relativePath = readQuarantinePath(reason.path);
-    if (reason.kind !== kind || path.join(root, relativePath) !== held)
+    if (reason.kind !== kind || path.join(root, reason.quarantineId ?? relativePath) !== held)
       throw quarantineConflict(file);
     receipts.push({ file, held, relativePath, reason });
     if (reason.moved && !reason.restored) heldPaths.add(held);
@@ -141,13 +161,6 @@ function quarantineConflict(destination) {
     code: "WORKSPACE_MIGRATION_QUARANTINE_CONFLICT",
     details: { destination },
   });
-}
-
-async function prepareQuarantineMove(original, target) {
-  if ((await readQuarantineIdentity(target)) !== null) throw quarantineConflict(target);
-  const moveIdentity = await readQuarantineIdentity(original);
-  if (moveIdentity === null) throw quarantineMissing(original);
-  return moveIdentity;
 }
 
 function quarantineMissing(file) {
@@ -204,16 +217,6 @@ export async function completeQuarantineRestores({ base, kind }) {
   }
 }
 
-export async function recordQuarantineRestoreFailure({ base, kind, released, error }) {
-  const root = path.join(base, WORKSPACE_LAYOUT.MIGRATION_QUARANTINE_DIR, kind);
-  for (const relativePath of released) {
-    const file = `${path.join(root, relativePath)}${REASON_SUFFIX}`;
-    const record = await readQuarantineReason(file);
-    if (record.restored !== true) continue;
-    await writeDurableJsonFile(file, JSON.stringify({ ...record, error: describeError(error) }));
-  }
-}
-
 export async function listQuarantinedUnits({ base }) {
   const quarantineRoot = path.join(base, WORKSPACE_LAYOUT.MIGRATION_QUARANTINE_DIR);
   const units = [];
@@ -246,15 +249,39 @@ function quarantineBlocked(base, files) {
 }
 
 export async function assertWorkspaceQuarantineEmpty(base) {
-  const units = await listQuarantinedUnits({ base });
-  if (units.length)
-    throw quarantineBlocked(
-      base,
-      units.map(({ quarantinePath }) => path.join(base, quarantinePath)),
-    );
+  for (const { quarantinePath, ...stored } of await listQuarantinedUnits({ base })) {
+    const record = classifyHistoricalMigrationQuarantine(stored);
+    if (record.sessionStorage === undefined)
+      throw quarantineBlocked(base, [path.join(base, quarantinePath)]);
+    if (record !== stored) {
+      const reasonPath =
+        path.join(base, quarantinePath) + (stored.moved && !stored.restored ? REASON_SUFFIX : "");
+      await writeDurableJsonFile(reasonPath, `${JSON.stringify(record, null, 2)}\n`);
+    }
+    if (record.moved && !record.restored)
+      await completeSessionStorageQuarantine(base, { ...record, quarantinePath });
+  }
 }
 
 export async function listWorkspaceBackups({ base }) {
+  return readWorkspaceBackups(base);
+}
+
+async function completeSessionStorageQuarantine(base, record) {
+  const original = path.join(base, record.path);
+  const held = path.join(base, record.quarantinePath);
+  const heldIdentity = await readQuarantineIdentity(held);
+  if (heldIdentity === record.moveIdentity) {
+    await syncStorageDirectory(path.dirname(held));
+  } else if (
+    heldIdentity === null &&
+    (await readQuarantineIdentity(original)) === record.moveIdentity
+  ) {
+    await moveQuarantineEntry(original, held);
+  } else throw quarantineConflict(held);
+}
+
+async function readWorkspaceBackups(base) {
   try {
     const entries = await readdir(path.join(base, WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR), {
       withFileTypes: true,

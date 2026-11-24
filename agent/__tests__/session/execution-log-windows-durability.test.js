@@ -12,7 +12,7 @@ import {
   listExecutionEventTurns,
 } from "../../src/session/session-artifact-execution-logs.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
-import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
+import { withTemp } from "../helpers/temporary-directory.js";
 
 test("index sync requests write access only on Windows", () => {
   for (const platform of ["win32", "win", "windows"])

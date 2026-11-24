@@ -19,21 +19,13 @@ import {
   isMimeTypeAllowed,
   isExtensionAllowed,
 } from "../../src/artifacts/policy/policy-validator.js";
-import {
-  readSessionArtifact,
-  writeSessionArtifact,
-  SESSION_ARTIFACT_PREDECESSOR,
-} from "../../src/session/session-artifact-store.js";
+import { openPartitionReaderFixture } from "../helpers/partition-reader-fixture.js";
+import { seedPartitionSession } from "../helpers/partition-session-seed.js";
 import {
   createTestAgentEnvironment,
   createTestAgentExecutionScope,
 } from "../helpers/agent-execution-scope.js";
-import {
-  applySessionMessageFacts,
-  createTestSessionRequiredFields,
-} from "../helpers/session-message-facts.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
-import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
 
 async function readFixtureRecords(basePath, scope) {
   const records = await listAttachmentRecords(basePath, scope);
@@ -574,35 +566,11 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
     });
 
     const basePath = path.join(workspaceRoot, userId);
-    const runtimeSessionFile = path.join(
-      basePath,
-      "runtime/session",
-      rootSessionId,
-      "session.json",
-    );
-    const runtimeSummaryFile = path.join(
-      basePath,
-      "runtime/session",
-      rootSessionId,
-      "session-summary.json",
-    );
-    const pluginSessionFile = path.join(
-      basePath,
-      "runtime/plugin/session",
-      rootSessionId,
-      pluginDialogId,
-      "session.json",
-    );
-    const pluginSummaryFile = path.join(
-      basePath,
-      "runtime/plugin/session",
-      rootSessionId,
-      pluginDialogId,
-      "session-summary.json",
-    );
-    const snapshotPayload = applySessionMessageFacts({
-      ...createTestSessionRequiredFields(),
+    const runtimeDir = path.join(basePath, "runtime/session", rootSessionId);
+    const pluginDir = path.join(basePath, "runtime/plugin/session", rootSessionId, pluginDialogId);
+    const snapshotPayload = {
       sessionId: rootSessionId,
+      parentSessionId: "",
       aggregateVersion: 0,
       messages: [
         {
@@ -621,31 +589,20 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
           ],
         },
       ],
-    });
-    await writeSessionArtifact({
-      sessionDir: path.dirname(runtimeSessionFile),
-      storageService: TEST_STORAGE_SERVICE,
-      atomic: true,
-      predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
-      sessionPayload: snapshotPayload,
-    });
-    await writeFile(
-      runtimeSummaryFile,
-      `${JSON.stringify({ schemaVersion: 5, sessionId: rootSessionId, depth: 2, messages: [] }, null, 2)}\n`,
-      "utf8",
-    );
-    await writeSessionArtifact({
-      sessionDir: path.dirname(pluginSessionFile),
-      storageService: TEST_STORAGE_SERVICE,
-      atomic: true,
-      predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
-      sessionPayload: snapshotPayload,
-    });
-    await writeFile(
-      pluginSummaryFile,
-      `${JSON.stringify({ schemaVersion: 5, sessionId: rootSessionId, depth: 3, messages: [] }, null, 2)}\n`,
-      "utf8",
-    );
+    };
+    const readState = async (sessionDir) => {
+      await using reader = await openPartitionReaderFixture({
+        sessionDir,
+        sessionId: rootSessionId,
+        parentSessionId: "",
+      });
+      return { generation: reader.generation, session: await reader.exportSession() };
+    };
+    const before = new Map();
+    for (const sessionDir of [runtimeDir, pluginDir]) {
+      await seedPartitionSession({ sessionDir, sessionPayload: snapshotPayload });
+      before.set(sessionDir, await readState(sessionDir));
+    }
 
     const linked = await service.linkParsedResultToAttachment({
       userId,
@@ -675,16 +632,11 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
       attachmentSource: parsedAttachment.attachmentSource,
     });
 
-    const runtimeSnapshot = await readSessionArtifact({
-      sessionDir: path.dirname(runtimeSessionFile),
-      storageService: TEST_STORAGE_SERVICE,
-    });
-    const pluginSnapshot = await readSessionArtifact({
-      sessionDir: path.dirname(pluginSessionFile),
-      storageService: TEST_STORAGE_SERVICE,
-    });
-    assert.equal(runtimeSnapshot.messages[0].attachments[0].parsedResult, undefined);
-    assert.equal(pluginSnapshot.messages[0].attachments[0].parsedResult, undefined);
+    for (const [sessionDir, state] of before) {
+      const after = await readState(sessionDir);
+      assert.deepEqual(after, state);
+      assert.equal(after.session.messages[0].attachments[0].parsedResult, undefined);
+    }
     const stored = await service.getAttachmentById({
       userId,
       attachmentId: sourceAttachment.attachmentId,

@@ -33,6 +33,7 @@ export const DEFAULT_QUANTITY_THRESHOLDS = deepFreeze({
     postgresPoolMax: 5,
   },
   eventProtocol: {
+    authorityOutboxPageSize: 256,
     authorityOutboxPendingBatchSize: 100,
     authorityOutboxProjectionCacheSessions: 64,
   },
@@ -150,19 +151,15 @@ export const DEFAULT_QUANTITY_THRESHOLDS = deepFreeze({
     sessionListRecentDayGroupCount: 7,
   },
 
-  partitionStorage: {
-    entityPageWriteVectorLimit: 64,
-    recordReadConcurrency: 4,
-  },
-  immutableStorage: {
-    entityDirectoryMaxEntries: 32,
-    journalJsonMaxDepth: 64,
-    authorityOutboxPageSize: 256,
-    cleanupFilterMaxEntries: 256,
-    recordIoConcurrency: 8,
+  sessionStorage: {
     messagePageSize: 256,
     messageReadPageSize: 64,
-    receiptPageSize: 64,
+  },
+  partitionStorage: {
+    entityDirectoryMaxEntries: 32,
+    journalJsonMaxDepth: 64,
+    entityPageWriteVectorLimit: 64,
+    recordReadConcurrency: 4,
   },
 
   sessionLog: {

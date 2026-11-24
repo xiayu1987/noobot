@@ -41,6 +41,7 @@ import {
   partitionAuthorityEventRecord as eventRecord,
   partitionAuthorityEventVisible as visible,
   partitionEventTurnVisibility as outboxTurnVisibility,
+  requireCommittedEventPosition,
 } from "./partition-event-visibility.js";
 import { checkPartitionMessageStorage } from "./partition-message-record.js";
 import {
@@ -193,7 +194,9 @@ async function readDeliveryTargets(view, deliveries, scope, sequence) {
         "SESSION_OUTBOX_EVENT_MISSING",
         "Authority event is missing",
       );
-    records.set(id, { entry, record: eventRecord(entry.mutation.value, id, scope) });
+    const record = eventRecord(entry.mutation.value, id, scope);
+    await requireCommittedEventPosition(view.get, record);
+    records.set(id, { entry, record });
   }
   const visible = await filterDeliverableEvents(
     view,
@@ -421,15 +424,6 @@ function outboxReadView(read, scope, snapshot) {
   return { get, getMany, readVisibility, read };
 }
 
-async function requireCommittedEventPosition(get, event) {
-  const { eventId } = event;
-  const sequence = await readOutboxTail(get);
-  if (event.ordinal > sequence) corrupt("Partition event exceeds committed outbox tail");
-  const indexedId = await get("eventOrder", authorityOutboxPositionKey(event.ordinal));
-  if (indexedId !== eventId) corrupt("Partition event ordinal mismatch");
-  return sequence;
-}
-
 async function readVisibleOutboxEvent(view, snapshot, event) {
   const sequence = await requireCommittedEventPosition(view.get, event);
   if (!(await filterDeliverableEvents(view, [event], sequence)).length) return null;
@@ -437,38 +431,11 @@ async function readVisibleOutboxEvent(view, snapshot, event) {
   return event;
 }
 
-export function readPartitionOutboxTail(read, scope, snapshot) {
-  return readOutboxTail(outboxReadView(read, scope, snapshot).get);
-}
-
-export async function readPartitionCommittedOutboxPage(read, scope, snapshot, selection) {
-  requirePartitionCollectionPageLimit(snapshot, selection.limit);
-  const { length } = authorityOutboxCommittedPageWindow(selection);
-  const { get } = outboxReadView(read, scope, snapshot);
-  const records = await read.readWindow(length, async (index) => {
-    const ordinal = selection.after + index + 1;
-    const id = requireCommittedEventId(
-      await get("eventOrder", authorityOutboxPositionKey(ordinal)),
-    );
-    return committedEvent(await get("events", id), id, scope, ordinal);
-  });
-  return { records, cursor: selection.after + records.length };
-}
-
 export async function readPartitionOutboxEvent(read, scope, snapshot, eventId) {
   const view = outboxReadView(read, scope, snapshot);
   const stored = await view.get("events", eventId);
   if (stored === null) return null;
   return readVisibleOutboxEvent(view, snapshot, eventRecord(stored, eventId, scope));
-}
-
-export async function readPartitionOutboxCursor(read, scope, snapshot, consumerId) {
-  const { get } = outboxReadView(read, scope, snapshot);
-  return consumerCursor(
-    await get("outboxConsumers", consumerId),
-    consumerId,
-    await readOutboxTail(get),
-  );
 }
 
 async function readIndexedArtifactEvent(view, { scope, snapshot, id, membership }) {
@@ -480,13 +447,6 @@ async function readIndexedArtifactEvent(view, { scope, snapshot, id, membership 
   if (await isPartitionArtifactRetired(view.read, event, tail)) return null;
   partitionCollectionResultBytes(event, snapshot.limits.pageBytes);
   return event;
-}
-
-export async function readPartitionIndexedArtifactEvent(read, scope, snapshot, id) {
-  const view = outboxReadView(read, scope, snapshot);
-  const membership = await view.get(PARTITION_SESSION_ARTIFACT_EVENTS, id);
-  if (membership === null) return null;
-  return readIndexedArtifactEvent(view, { scope, snapshot, id, membership });
 }
 
 export function readPartitionSessionArtifactEventWindow(read, scope, snapshot, { ids, offset }) {

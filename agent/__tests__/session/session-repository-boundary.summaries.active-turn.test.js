@@ -24,12 +24,12 @@ import {
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 import {
-  buildPersistedDisplaySummary,
-  buildPersistedDisplayAndThinking,
-} from "./session-artifact-store-v2.test-helpers.js";
+  buildFixtureDisplaySummary,
+  buildFixtureDisplayAndThinking,
+} from "../helpers/session-projection-fixture.js";
 
 test("session display summary materializes the active Turn presentation in the zero-event window", async () => {
-  const summary = await buildPersistedDisplaySummary({
+  const summary = buildFixtureDisplaySummary({
     sessionId: "active-turn-session",
     aggregateVersion: 0,
     messages: [
@@ -94,7 +94,7 @@ test("session display summary materializes the active Turn presentation in the z
 });
 
 test("session display summary materializes stopped Turn details on its stable presentation", async () => {
-  const { summary, detail } = await buildPersistedDisplayAndThinking(
+  const { summary, detail } = buildFixtureDisplayAndThinking(
     {
       sessionId: "stopped-turn-session",
       aggregateVersion: 0,
@@ -259,7 +259,7 @@ test("Session Detail exposes canonical active Turn messages", async () => {
 test("active Turn summary marks its separately readable thinking timelines", async () => {
   const turnScopeId = "client-turn:active-timeline";
   const presentationMessageId = "presentation-active-timeline";
-  const { summary, detail } = await buildPersistedDisplayAndThinking(
+  const { summary, detail } = buildFixtureDisplayAndThinking(
     {
       sessionId: "active-timeline-session",
       aggregateVersion: 0,

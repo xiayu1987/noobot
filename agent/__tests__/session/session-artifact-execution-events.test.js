@@ -17,12 +17,8 @@ import {
   readTurnExecutionLogs,
 } from "../../src/session/session-artifact-store.js";
 import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
-import {
-  TEST_TURN,
-  readTurnIndex,
-  turnDirOf,
-  withTemp,
-} from "./session-artifact-store-v2.test-helpers.js";
+import { TEST_TURN, readTurnIndex, turnDirOf } from "../helpers/execution-log-fixture.js";
+import { withTemp } from "../helpers/temporary-directory.js";
 
 const SEGMENT_BYTES = LENGTH_THRESHOLDS.artifact.executionEventSegmentBytes;
 const storageService = TEST_STORAGE_SERVICE;

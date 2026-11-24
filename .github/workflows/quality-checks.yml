@@ -73,9 +73,8 @@ jobs:
         run: >-
           node scripts/run-with-isolated-tmp.mjs node --test
           agent/__tests__/session/execution-log-windows-durability.test.js
-          agent/__tests__/session/immutable-windows-durability.test.js
-          agent/__tests__/session/scoped-session-repositories.test.js
-          agent/__tests__/workspace-isolated-immutable-migration.test.js
-          agent/__tests__/workspace-session-directory-walk.test.js
-          agent/__tests__/workspace-session-storage-upgrade.test.js
+          agent/__tests__/session/partition-journal-processes.test.js
+          agent/__tests__/session/partition-service-admission.test.js
+          agent/__tests__/workspace-partition-format-upgrade.test.js
+          agent/__tests__/workspace-session-storage-retirement.test.js
           session-protocol/__tests__/session-reader-access.test.js

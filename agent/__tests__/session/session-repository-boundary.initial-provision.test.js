@@ -8,8 +8,9 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import { access, mkdtemp, rm } from "node:fs/promises";
-import { corruptRecord } from "./helpers/immutable-record-reads.js";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
+import { PARTITION_MESSAGE_COLLECTIONS } from "@noobot/session-protocol/partition-session-messages";
+import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
+import { partitionReaderAccess } from "../helpers/partition-reader-fixture.js";
 
 import {
   TURN_EVENT,
@@ -28,6 +29,7 @@ import {
 } from "../helpers/session-services.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
+import { canonicalActivity } from "./session-repository-boundary.summaries.fixtures.js";
 
 async function withTempWorkspace(operation) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-initial-provision-"));
@@ -92,7 +94,7 @@ test("file repository provisions Session and initial Turn in one persisted artif
     assert.equal(result.sessionCreated, true);
 
     assert.equal(await exists(scope.sessionFile), false);
-    const reader = await runtime.repositories.sessionRepository.requireSessionReader(
+    await using reader = await runtime.repositories.sessionRepository.requireSessionReader(
       "u1",
       "session-1",
       {
@@ -106,7 +108,8 @@ test("file repository provisions Session and initial Turn in one persisted artif
     assert.equal((await reader.readLifecycleHead()).activeTurnScopeId, "turn-1");
     assert.equal((await reader.readTurnState("turn-1")).state, TURN_STATE.ACTION_REQUESTING);
     assert.equal((await reader.readLifecycleHead()).sequence, 1);
-    const pending = await reader.readOutboxPage({ consumerId: "test-consumer", limit: 10 });
+    const pending = await reader.readOutboxPage({ consumerId: "test-consumer" });
+    assert.equal(pending.hasMore, false);
     assert.equal(pending.events.length, 1);
     assert.equal(pending.events[0].eventId, result.committedEvent.eventId);
     const receipt = await reader.readCommand("command-1");
@@ -132,11 +135,21 @@ test("file repository provisions Session and initial Turn in one persisted artif
   });
 });
 
-test("connector selection does not read unrelated immutable message objects", async () => {
+function rejectMessageCollectionReads(operation) {
+  return (read) =>
+    operation(
+      Object.assign((query) => {
+        assert.notEqual(query.collection, PARTITION_MESSAGE_COLLECTIONS.messages);
+        assert.notEqual(query.collection, PARTITION_MESSAGE_COLLECTIONS.content);
+        return read(query);
+      }, read),
+    );
+}
+
+test("connector selection does not read partition message records or bodies", async (t) => {
   await withTempWorkspace(async (workspaceRoot) => {
     const runtime = createTestSessionServices({ workspaceRoot });
-    const repository = runtime.repositories.sessionRepository;
-    const accepted = await runtime.sessionMessageService.applyTurnLifecycleEvent(
+    await runtime.sessionMessageService.applyTurnLifecycleEvent(
       withTreeContext(runtime, firstSend("connector-message")),
     );
     await runtime.sessionCrudService.setRootSessionSelectedConnectorIds({
@@ -145,21 +158,14 @@ test("connector selection does not read unrelated immutable message objects", as
       selectedConnectorIds: ["connector-1"],
     });
 
-    const scope = await repository.requireSessionScope(
-      "u1",
-      "session-1",
-      repository.treePersistenceContext("u1", "session-1"),
+    const original = PartitionTransactions.prototype.withCollectionReader;
+    t.mock.method(
+      PartitionTransactions.prototype,
+      "withCollectionReader",
+      function (snapshot, operation, options) {
+        return original.call(this, snapshot, rejectMessageCollectionReads(operation), options);
+      },
     );
-    const store = new ImmutableSessionStore({
-      sessionDir: scope.sessionDir,
-      sessionId: "session-1",
-    });
-    const snapshot = await store.snapshot();
-    const reference = await store.objects.withSnapshot(snapshot, async () => {
-      const root = await store.index.get(snapshot.root, "messages");
-      return store.index.get(root, accepted.userMessage.messageUid);
-    });
-    await corruptRecord(store, reference);
 
     assert.deepEqual(
       await runtime.sessionCrudService.getRootSessionSelectedConnectorIds({
@@ -167,11 +173,6 @@ test("connector selection does not read unrelated immutable message objects", as
         sessionId: "session-1",
       }),
       ["connector-1"],
-    );
-    await assert.rejects(
-      repository.findById("u1", "session-1", {
-        persistenceContext: repository.treePersistenceContext("u1", "session-1"),
-      }),
     );
   });
 });
@@ -344,20 +345,19 @@ test("initial provision retry registers an already committed head without repeat
       ),
       /injected placement failure/,
     );
-    const store = new ImmutableSessionStore({
-      sessionDir: scope.sessionDir,
-      sessionId: "session-1",
-    });
-    const committed = await store.snapshot();
-    assert.equal(committed.generation, 1);
-    const original = await store.get(committed, "metadata", "facts");
+    let original;
+    {
+      await using committed = await partitionReaderAccess.openArtifact(scope);
+      assert.equal(committed.generation, 1);
+      [original] = (await committed.exportSession()).messages;
+    }
     const restarted = createTestSessionServices({ workspaceRoot });
     const replay = await restarted.sessionMessageService.applyTurnLifecycleEvent(
       withTreeContext(restarted, firstSend("placement-retry")),
     );
     assert.equal(replay.deduplicated, true);
-    assert.equal(replay.userMessage.messageUid, original.lastMessageUid);
-    const reader = await restarted.repositories.sessionRepository.requireSessionReader(
+    assert.equal(replay.userMessage.messageUid, original.messageUid);
+    await using reader = await restarted.repositories.sessionRepository.requireSessionReader(
       "u1",
       "session-1",
       {
@@ -368,8 +368,10 @@ test("initial provision retry registers an already committed head without repeat
       },
     );
     assert.equal(reader.generation, 1);
-    assert.equal((await reader.readFacts()).messageCount, 1);
-    assert.equal((await reader.readOutboxPage({ consumerId: "test-consumer" })).events.length, 1);
+    assert.equal((await reader.exportSession()).messages.length, 1);
+    const pending = await reader.readOutboxPage({ consumerId: "test-consumer" });
+    assert.equal(pending.events.length, 1);
+    assert.equal(pending.hasMore, false);
     const summary = await restarted.repositories.sessionRepository.readSessionsSummary("u1");
     assert.equal(summary.sessions.filter((item) => item.sessionId === "session-1").length, 1);
   });
@@ -393,7 +395,7 @@ test("explicit creation retry registers the committed empty session after placem
     );
     const restarted = createTestSessionServices({ workspaceRoot });
     await provisionTestSession(restarted, request);
-    const reader = await restarted.repositories.sessionRepository.requireSessionReader(
+    await using reader = await restarted.repositories.sessionRepository.requireSessionReader(
       "u1",
       "session-1",
       {
@@ -404,7 +406,7 @@ test("explicit creation retry registers the committed empty session after placem
       },
     );
     assert.equal(reader.generation, 1);
-    assert.equal((await reader.readFacts()).messageCount, 0);
+    assert.equal((await reader.exportSession()).messages.length, 0);
   });
 });
 
@@ -469,14 +471,14 @@ test("turn message pages use the same scoped persistence location as appendTurns
           turnScopeId: "turn-child-1",
           content: "child model response",
           activityTimeline: [
-            {
+            canonicalActivity({
               eventId: "model-content:msg-child-1",
-              activityKind: "model-content",
-              sequence: 1,
-              sequenceDomain: "message-event",
               sequenceScopeId: "msg-child-1",
-              authority: "authoritative",
-            },
+              sessionId: "child-session-1",
+              dialogProcessId: "dialog-child-1",
+              turnScopeId: "turn-child-1",
+              presentationMessageId: "pm_fx1",
+            }),
           ],
         },
       ],

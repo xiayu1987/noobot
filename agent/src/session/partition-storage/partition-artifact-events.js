@@ -30,7 +30,10 @@ import {
   requirePartitionOutboxTail,
 } from "@noobot/session-protocol/partition-transaction";
 import { partitionJournalError } from "@noobot/session-protocol/partition-journal";
-import { partitionAuthorityEventRecord } from "./partition-event-visibility.js";
+import {
+  partitionAuthorityEventRecord,
+  requireCommittedEventPosition,
+} from "./partition-event-visibility.js";
 import { requirePartitionEventSequenceFloor } from "@noobot/session-protocol/partition-session-state";
 
 function corrupt(message, cause) {
@@ -71,9 +74,10 @@ export async function readPartitionPluginArtifact(read, identity, { scope }) {
   );
   const event = partitionAuthorityEventRecord(stored?.value, current.eventId, scope);
   requireArtifactAuthority(current, event.envelope, identity);
-  const { collection, key: headerKey } = PARTITION_LIFECYCLE_HEADER;
-  const header = (await read({ collection, keys: [headerKey] })).get(headerKey)?.value;
-  const tail = requirePartitionOutboxTail(header);
+  const tail = await requireCommittedEventPosition(async (collection, key) => {
+    const entry = (await read({ collection, keys: [key] })).get(key);
+    return entry === null ? null : entry.value;
+  }, event);
   return (await isPartitionArtifactRetired(read, event, tail)) ? null : current;
 }
 

@@ -9,6 +9,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { readFile, rename } from "node:fs/promises";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
+import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
 import { createSessionFacade } from "../../src/session/index.js";
 import { createTestSessionServices } from "../helpers/session-services.js";
 import { buildHarness } from "./scoped-session-repositories.fixtures.js";
@@ -55,7 +56,7 @@ async function setup(t) {
   return {
     ...state,
     ...scope,
-    headPath: path.join(scope.sessionDir, "head.json"),
+    currentPath: path.join(scope.sessionDir, PARTITION_JOURNAL_HEAD_FILE),
     facade: createSessionFacade(state.runtime),
     restart: () => createSessionFacade(createTestSessionServices({ workspaceRoot: state.root })),
   };
@@ -95,9 +96,9 @@ for (const stage of ["acceptance", "terminal"]) {
     setFsAdapter({
       async rename(source, target) {
         await rename(source, target);
-        if (target === h.headPath) {
+        if (target === h.currentPath) {
           blocked = true;
-          throw new Error("injected response failure after head publication");
+          throw new Error("injected response failure after CURRENT publication");
         }
       },
     });
@@ -109,14 +110,18 @@ for (const stage of ["acceptance", "terminal"]) {
       resetFsAdapter();
     }
     assert.equal(blocked, true);
-    const bytes = await readFile(h.headPath, "utf8");
-    const reader = await h.sessionRepo.requireSessionReader(owner.userId, owner.sessionId, {
-      persistenceContext: h.sessionRepo.treePersistenceContext(owner.userId, owner.sessionId),
-    });
-    const receipt = await reader.readCommand(request.commandId);
-    assert.equal((await reader.readLifecycleHead()).sequence, targetSequence);
-    const expectedEnvelope = (await reader.readOutboxEvent(receipt.eventId)).envelope;
-    assert.equal(Object.hasOwn(receipt, "envelope"), false);
+    const bytes = await readFile(h.currentPath, "utf8");
+    await h.runtime.workspaceAdmission.withMaintenance(owner.userId, async () => {});
+    let expectedEnvelope;
+    {
+      await using reader = await h.sessionRepo.requireSessionReader(owner.userId, owner.sessionId, {
+        persistenceContext: h.sessionRepo.treePersistenceContext(owner.userId, owner.sessionId),
+      });
+      const receipt = await reader.readCommand(request.commandId);
+      assert.equal((await reader.readLifecycleHead()).sequence, targetSequence);
+      expectedEnvelope = (await reader.readOutboxEvent(receipt.eventId)).envelope;
+      assert.equal(Object.hasOwn(receipt, "envelope"), false);
+    }
     const restarted = h.restart();
     const pending = await restarted.getPendingAuthorityEvents({ ...owner, consumerId });
     assert.equal(pending.events.length, targetSequence);
@@ -124,24 +129,24 @@ for (const stage of ["acceptance", "terminal"]) {
     const replay = await restarted.applyTurnLifecycleEvent(request);
     assert.equal(replay.deduplicated, true);
     assert.deepEqual(replay.envelope, expectedEnvelope);
-    assert.equal(await readFile(h.headPath, "utf8"), bytes);
+    assert.equal(await readFile(h.currentPath, "utf8"), bytes);
   });
 }
 
 for (const stage of ["acceptance", "terminal"]) {
-  test(`a failed ${stage} head publication never publishes an uncommitted lifecycle event`, async (t) => {
+  test(`a failed ${stage} CURRENT publication never publishes an uncommitted lifecycle event`, async (t) => {
     const h = await setup(t);
     const dialogProcessId = stage === "terminal" ? await processTurn(h.facade) : null;
     const request = stage === "terminal" ? { ...terminal(), dialogProcessId } : action();
-    const before = await readFile(h.headPath, "utf8");
+    const before = await readFile(h.currentPath, "utf8");
     const beforeOutbox = (await h.facade.getPendingAuthorityEvents({ ...owner, consumerId }))
       .events;
     let injected = false;
     setFsAdapter({
       async rename(source, target) {
-        if (target === h.headPath) {
+        if (target === h.currentPath) {
           injected = true;
-          throw new Error("injected head failure");
+          throw new Error("injected CURRENT publication failure");
         }
         return rename(source, target);
       },
@@ -154,7 +159,8 @@ for (const stage of ["acceptance", "terminal"]) {
       resetFsAdapter();
     }
     assert.equal(injected, true);
-    assert.equal(await readFile(h.headPath, "utf8"), before);
+    assert.equal(await readFile(h.currentPath, "utf8"), before);
+    await h.runtime.workspaceAdmission.withMaintenance(owner.userId, async () => {});
     assert.deepEqual(
       (await h.restart().getPendingAuthorityEvents({ ...owner, consumerId })).events,
       beforeOutbox,
@@ -164,7 +170,7 @@ for (const stage of ["acceptance", "terminal"]) {
 
 for (const stage of ["acceptance", "terminal"]) {
   test(
-    `a process killed after ${stage} head commit recovers without rerunning the command`,
+    `a process killed after ${stage} CURRENT publication recovers without rerunning the command`,
     { timeout: 20000 },
     async (t) => {
       const h = await setup(t);
@@ -196,15 +202,15 @@ for (const stage of ["acceptance", "terminal"]) {
     await createSessionFacade(runtime).applyTurnLifecycleEvent(JSON.parse(process.argv[3]));
   `,
           h.root,
-          h.headPath,
+          h.currentPath,
           JSON.stringify(request),
-          String(targetSequence),
         ],
         { encoding: "utf8", timeout: 15000 },
       );
       assert.equal(child.error, undefined, child.stderr);
       assert.equal(child.signal, "SIGKILL", child.stderr);
-      const bytes = await readFile(h.headPath, "utf8");
+      const bytes = await readFile(h.currentPath, "utf8");
+      await h.runtime.workspaceAdmission.withMaintenance(owner.userId, async () => {});
       const restarted = h.restart();
       const pending = await restarted.getPendingAuthorityEvents({ ...owner, consumerId });
       assert.equal(pending.events.length, targetSequence);
@@ -212,7 +218,7 @@ for (const stage of ["acceptance", "terminal"]) {
       const replay = await restarted.applyTurnLifecycleEvent(request);
       assert.equal(replay.deduplicated, true);
       assert.deepEqual(replay.envelope, pending.events.at(-1).envelope);
-      assert.equal(await readFile(h.headPath, "utf8"), bytes);
+      assert.equal(await readFile(h.currentPath, "utf8"), bytes);
     },
   );
 }
@@ -267,25 +273,25 @@ test("later lifecycle commits preserve the original undelivered event and comman
     dialogProcessId: accepted.dialogProcessId,
   });
   const restarted = h.restart();
-  const before = await readFile(h.headPath, "utf8");
+  const before = await readFile(h.currentPath, "utf8");
   const replay = await restarted.applyTurnLifecycleEvent(action());
   assert.equal(replay.deduplicated, true);
   assert.deepEqual(replay.envelope, accepted.envelope);
   const pending = await restarted.getPendingAuthorityEvents({ ...owner, consumerId });
   assert.equal(pending.events.length, 2);
   assert.deepEqual(pending.events[0].envelope, accepted.envelope);
-  assert.equal(await readFile(h.headPath, "utf8"), before);
+  assert.equal(await readFile(h.currentPath, "utf8"), before);
 });
 
 test("restarted lifecycle and outbox reject conflicting identities without changing committed state", async (t) => {
   const h = await setup(t);
   const accepted = await h.facade.applyTurnLifecycleEvent(action());
   const restarted = h.restart();
-  const before = await readFile(h.headPath, "utf8");
+  const before = await readFile(h.currentPath, "utf8");
   const pending = await restarted.getPendingAuthorityEvents({ ...owner, consumerId });
   const conflict = await restarted.applyTurnLifecycleEvent({ ...action(), action: "continue" });
   assert.equal(conflict.reason, "idempotency_key_reused");
-  assert.equal(await readFile(h.headPath, "utf8"), before);
+  assert.equal(await readFile(h.currentPath, "utf8"), before);
   const receipt = deliveryReceiptOf(accepted.envelope);
   for (const change of [
     { sequence: receipt.sequence + 1 },
@@ -300,7 +306,7 @@ test("restarted lifecycle and outbox reject conflicting identities without chang
       }),
       { code: "AUTHORITY_OUTBOX_INTEGRITY_INVALID" },
     );
-    assert.equal(await readFile(h.headPath, "utf8"), before);
+    assert.equal(await readFile(h.currentPath, "utf8"), before);
     assert.deepEqual(await restarted.getPendingAuthorityEvents({ ...owner, consumerId }), pending);
   }
 });

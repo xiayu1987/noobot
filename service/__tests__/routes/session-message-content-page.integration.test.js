@@ -22,11 +22,10 @@ import {
   commitTestSessionChanges,
 } from "../../../agent/__tests__/helpers/session-services.js";
 import { initializeUserWorkspace } from "../../../agent/__tests__/helpers/user-workspace.js";
-import { migrateSessionImmutableStorage } from "../../../agent/src/workspace-lifecycle/session-immutable-storage-upgrade.js";
 import { createSessionApp, withTestServer } from "./session-routes.helpers.js";
 import { partitionRepositoryPerformanceFixture } from "../../../agent/__tests__/helpers/partition-repository-performance-fixture.js";
 import { repositoryMessage as performanceMessage } from "../../../agent/__tests__/helpers/session-repository-message.js";
-import { observeSessionStorageWork } from "../../../agent/src/session/session-storage-observation.js";
+import { observeStorageIo } from "../../../agent/__tests__/helpers/storage-io-observation.js";
 
 const ts = "2026-01-01T00:00:00.000Z";
 const identity = { userId: "u1", sessionId: "s1" };
@@ -37,22 +36,16 @@ const first = {
   expectedContentReference: null,
 };
 
-async function fixture(t, content) {
+async function fixture(t, content, { appendChunkChars = content.length || 1 } = {}) {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "session-content-http-"));
-  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
-  await initializeUserWorkspace(workspaceRoot, identity.userId);
   const runtime = createTestSessionServices({ workspaceRoot }, { now: () => ts });
-  await provisionTestSession(runtime, { ...identity, caller: SESSION_CALLER.USER });
-  const repository = runtime.repositories.sessionRepository;
-  const scope = await repository.requireSessionScope(
-    identity.userId,
-    identity.sessionId,
-    repository.treePersistenceContext(identity.userId, identity.sessionId),
-  );
-  await migrateSessionImmutableStorage({
-    storageService: repository.storageService,
-    sessionDir: scope.sessionDir,
+  t.after(async () => {
+    await runtime.close();
+    await rm(workspaceRoot, { recursive: true, force: true });
   });
+  await initializeUserWorkspace(workspaceRoot, identity.userId);
+  await provisionTestSession(runtime, { ...identity, caller: SESSION_CALLER.USER });
+  const turn = { dialogProcessId: "d1", turnScopeId: "t1" };
   const creation = await commitTestSessionChanges(runtime, {
     ...identity,
     changes: {
@@ -62,13 +55,12 @@ async function fixture(t, content) {
           userMessageId: first.messageUid,
           sessionId: identity.sessionId,
           parentSessionId: "",
-          dialogProcessId: "d1",
+          ...turn,
           parentDialogProcessId: "",
-          turnScopeId: "t1",
           role: "user",
           type: "message",
           messageOrigin: "natural",
-          content,
+          content: content.slice(0, appendChunkChars),
           attachments: [],
           transferEnvelopes: [],
           ts,
@@ -76,12 +68,30 @@ async function fixture(t, content) {
       ],
     },
   });
+  let [receipt] = creation.result.messageReceipts;
+  for (let start = appendChunkChars; start < content.length; start += appendChunkChars) {
+    const { result } = await commitTestSessionChanges(runtime, {
+      ...identity,
+      changes: {
+        messageContentAppends: [
+          {
+            ...turn,
+            messageUid: first.messageUid,
+            owner: receipt.owner,
+            expectedContentReference: receipt.contentReference,
+            content: content.slice(start, start + appendChunkChars),
+          },
+        ],
+      },
+    });
+    [receipt] = result.messageReceipts;
+  }
   const session = createSessionFacade(runtime);
   session.getSessionDisplayData = () => assert.fail("content reads must not export the session");
   return {
     runtime,
-    session,
-    receipt: creation.result.messageReceipts[0],
+    workspaceRoot,
+    receipt,
     app: createSessionApp({ json: true, bot: { session } }),
   };
 }
@@ -249,38 +259,35 @@ test("HTTP rejects malformed ranges and reports missing messages and changed con
 test("HTTP content performance E2E reads bounded tail pages as message bodies grow", async (t) => {
   for (const size of [64 * 1024, 1024 * 1024, 4 * 1024 * 1024]) {
     const content = "x".repeat(size);
-    const { app, session } = await fixture(t, content);
-    const measurements = [];
-    const readContent = session.getSessionMessageContentPage.bind(session);
-    session.getSessionMessageContentPage = async (request) => {
-      const measured = await observeSessionStorageWork(() => readContent(request));
-      measurements.push(measured.work);
-      return measured.result;
-    };
+    const { app, workspaceRoot } = await fixture(t, content, { appendChunkChars: 8192 });
     await withTestServer(app, async (baseUrl) => {
       const response = await read(baseUrl, { ...first, maxBytes: 4096 });
       assert.equal(response.status, 200);
       const { page: initial } = await response.json();
       const tailOffset = initial.totalBytes - 4096;
       const latencies = [];
-      measurements.length = 0;
+      const readBytes = [];
       for (let sample = 0; sample < 16; sample += 1) {
         const started = performance.now();
-        const response = await read(baseUrl, {
-          ...first,
-          byteOffset: tailOffset,
-          maxBytes: 4096,
-          expectedContentReference: initial.contentReference,
-        });
+        const { result: response, work } = await observeStorageIo(workspaceRoot, () =>
+          read(baseUrl, {
+            ...first,
+            byteOffset: tailOffset,
+            maxBytes: 4096,
+            expectedContentReference: initial.contentReference,
+          }),
+        );
+        readBytes.push(work.readBytes);
         assert.equal(response.status, 200);
         const { page } = await response.json();
         latencies.push(performance.now() - started);
         assert.equal(page.hasMore, false);
         assert.equal(Buffer.from(page.dataBase64, "base64").toString(), `${"x".repeat(4095)}"`);
       }
-      assert.equal(measurements.length, 16);
-      const readBytes = measurements.map((work) => work.immutableReadBytes);
-      assert.ok(readBytes.every((bytes) => bytes > 0 && bytes < 256 * 1024));
+      assert.ok(
+        readBytes.every((bytes) => bytes > 0 && bytes < 256 * 1024),
+        JSON.stringify(readBytes),
+      );
       latencies.sort((a, b) => a - b);
       t.diagnostic(
         JSON.stringify({
@@ -299,19 +306,16 @@ test("HTTP content performance E2E reads bounded tail pages as message bodies gr
 test("HTTP session list performance E2E reads bounded previews as last-message bodies grow", async (t) => {
   const maxima = [];
   for (const size of [64 * 1024, 1024 * 1024, 4 * 1024 * 1024]) {
-    const { app, session } = await fixture(t, "x".repeat(size));
-    const measurements = [];
-    const readSummaries = session.getAllSessionSummaries.bind(session);
-    session.getAllSessionSummaries = async (request) => {
-      const measured = await observeSessionStorageWork(() => readSummaries(request));
-      measurements.push(measured.work);
-      return measured.result;
-    };
+    const { app, workspaceRoot } = await fixture(t, "x".repeat(size), { appendChunkChars: 8192 });
     await withTestServer(app, async (baseUrl) => {
       const latencies = [];
+      const readBytes = [];
       for (let sample = 0; sample < 16; sample += 1) {
         const started = performance.now();
-        const response = await fetch(`${baseUrl}/internal/sessions/u1`);
+        const { result: response, work } = await observeStorageIo(workspaceRoot, () =>
+          fetch(`${baseUrl}/internal/sessions/u1`),
+        );
+        readBytes.push(work.readBytes);
         assert.equal(response.status, 200, await response.clone().text());
         const payload = await response.json();
         latencies.push(performance.now() - started);
@@ -324,9 +328,10 @@ test("HTTP session list performance E2E reads bounded previews as last-message b
         assert.equal(summary.lastMessage.content, "x".repeat(sessionMessagePreviewLimits().chars));
         assert.equal(summary.lastMessage.contentTruncated, true);
       }
-      assert.equal(measurements.length, 16);
-      const readBytes = measurements.map((work) => work.immutableReadBytes);
-      assert.ok(readBytes.every((bytes) => bytes > 0 && bytes < 128 * 1024));
+      assert.ok(
+        readBytes.every((bytes) => bytes > 0 && bytes < 128 * 1024),
+        JSON.stringify(readBytes),
+      );
       const maximum = Math.max(...readBytes);
       maxima.push(maximum);
       latencies.sort((a, b) => a - b);

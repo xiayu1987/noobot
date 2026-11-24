@@ -213,9 +213,25 @@ test("user message attachment changes require the binding command", () => {
 test("full assignments preserve replacement semantics without inferring a prefix append", () => {
   const replacement = { ...message, content: "before after" };
   assert.deepEqual(projectMessagePersistenceChange(replacement, persisted, ownership), {
-    messages: [replacement],
+    messageContentReplacements: [
+      {
+        messageUid: receipt.messageUid,
+        dialogProcessId: receipt.dialogProcessId,
+        turnScopeId: receipt.turnScopeId,
+        expectedContentReference: receipt.contentReference,
+        owner: receipt.owner,
+        content: replacement.content,
+      },
+    ],
   });
   assert.deepEqual(projectMessagePersistenceChange(message, null, ownership), {
     messages: [message],
   });
+});
+
+test("persisted identity fields cannot be changed by submitting a creation", () => {
+  assert.throws(
+    () => projectMessagePersistenceChange({ ...message, role: "tool" }, persisted, ownership),
+    /Cannot update persisted message field: role/,
+  );
 });

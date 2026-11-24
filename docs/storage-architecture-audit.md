@@ -4,6 +4,14 @@
 
 ## 本次修复
 
+### 分区升级与恢复校验
+
+- 格式 95 原先只读取首个标题候选，无法发现空索引、漏首项、漏后项或尾部多出的候选。新增 8 项回归在修复前全部失败。候选窗口对账已收敛到 [Session 协议](../session-protocol/src/partition-title-index.js)，比较已提交消息的准确候选集合，末窗拒绝超出消息总数的候选。格式 93 重建后和格式 95 保留后均执行同一验证；不以重建覆盖损坏索引。
+- 中断后复用 `READY` 暂存原先只比较源、目标日志头，暂存内的已提交记录损坏仍会被复制并发布。新增恢复用例复现了这一缺口；[升级校验](../agent/src/workspace-lifecycle/partition-format-session-upgrade.js)现由首次转换及暂存复用共用。损坏暂存隔离并保留原日志头及源记录；有效暂存直接复用，不重复提交元数据转换。[升级回归](../agent/__tests__/workspace-partition-format-upgrade.test.js) · [恢复回归](../agent/__tests__/workspace-partition-format-resume.test.js) · [协议窗口回归](../session-protocol/__tests__/partition-title-index-window.test.js)
+- [批次升级](../agent/src/workspace-lifecycle/upgrade-workspace-partition-format.js)将单会话转换及失败隔离与批次汇总分开，保留取消传播和进度回调语义。深层嵌套从实测 217 降至基线 216，未放宽基线。
+
+### 前序连接器注册表治理
+
 连接器注册表仍由 Session 持久化端口管理，Connector 协议负责记录与迁移契约。没有增加第二份注册表、在线旧格式兼容或损坏数据过滤入口。
 
 | 已证实的问题                                                       | 原因                                                         | 修复与验证                                                                                                                                                  |
@@ -51,11 +59,9 @@
 
 ## 本次验证
 
-- 存储、Session / Workspace / Connector 协议、Connector Runtime 及共享存储测试：1,718 项通过，0 失败、0 跳过。
-- 服务层分支删除、迁移、维护及独立进程中断恢复集成测试：34 项通过，0 失败、0 跳过。
-- 修改的 JavaScript 文件 ESLint 与 Prettier 检查通过。
-- Connector / Session 协议边界、Agent 插件解耦、循环依赖、死代码检查通过。
-- 复杂度、有效文件行数、工作区运行依赖检查通过。
-- 全仓兜底链检查未通过：239 处，基线为 238。本轮涉及的四个生产代码文件在该检查中均为 0 命中；未放宽基线，未据此宣称全仓质量门禁通过。
+- 最新代码的存储、Session / Workspace / Connector 协议、Session Repair、Connector Runtime、工作区升级、注册表及共享存储回归：2,517 项通过，0 失败、0 跳过。日志：`/tmp/noobot-storage-audit-final-regression.log`。
+- 最新代码的服务层分区装配、执行读取、删除与恢复、维护及降级启动集成回归：55 项通过，0 失败、0 跳过。日志：`/tmp/noobot-storage-audit-final-service.log`。
+- 最新代码的完整质量门禁：49/49，通过 ESLint、格式、协议边界、插件解耦、循环依赖、死代码及复杂度等检查。深层嵌套实测及基线均为 216。日志：`/tmp/noobot-storage-audit-final-quality.log`。
+- 此前记录的 1,718 项回归、34 项服务集成及兜底链失败属于历史代码状态，不替代以上复验。旧 10 项读取失败当前未复现，缺少当时完整代码快照，差异原因仍待验证。未将历史存储性能结果提升为本次最终代码的重新验收。
 
-测试均使用隔离临时目录并清理测试数据；未执行生产迁移、部署、正式数据修复或 Git 提交。优先后续完成执行定位契约，再完成详情分页消费与空间回收的独立验收。
+测试使用既有隔离临时目录入口；新增用例通过 fixture 的退出清理删除测试会话，外围临时根按既有保留策略处理，历史临时目录未逐一核对。未执行生产迁移、部署、正式数据修复或 Git 提交。执行定位、详情分页消费、持续物理回收与组合准入，以及删除恢复的剩余验收仍未完成，不能将本轮通过表述为全架构闭环。

@@ -7,10 +7,12 @@ import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
+import { setImmediate } from "node:timers/promises";
 import { createSessionJournalLease } from "@noobot/session-protocol/session-reader";
 import { createPartitionSessionReaderAccess } from "../../src/session/partition-storage/partition-reader-access.js";
 import { PartitionJournal } from "../../src/session/partition-storage/partition-journal.js";
 import { PartitionSessionMessages } from "../../src/session/partition-storage/partition-session-messages.js";
+import { PartitionSessionStateReader } from "../../src/session/partition-storage/partition-session-state-reader.js";
 import { createScopedSessionArtifactReader } from "../../src/session/session-scoped-artifact-reader.js";
 import { SessionPageSnapshots } from "../../src/session/session-page-snapshots.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
@@ -242,6 +244,46 @@ test("scoped partition thinking failures propagate and release the acquired jour
     throw failure;
   });
   await assert.rejects(artifacts.readScopedThinkingDetail(request), (error) => error === failure);
+  assert.equal(current.active, 0);
+});
+
+test("scoped snapshot drains concurrent reads before releasing the journal on metadata failure", async (t) => {
+  const { current, request, artifacts } = await fixture(t);
+  const entered = Promise.withResolvers();
+  const resume = Promise.withResolvers();
+  const failed = Promise.withResolvers();
+  t.after(() => resume.resolve());
+  const failure = new Error("scoped metadata unavailable");
+  const readOptionalJson = storageService.readOptionalJson.bind(storageService);
+  t.mock.method(storageService, "readOptionalJson", async (file) => {
+    entered.resolve();
+    await resume.promise;
+    assert.equal(current.active, 1);
+    return readOptionalJson(file);
+  });
+  t.mock.method(PartitionSessionStateReader.prototype, "readScopedMetadata", async () => {
+    await entered.promise;
+    failed.resolve();
+    throw failure;
+  });
+  let settled = false;
+  const checked = assert
+    .rejects(artifacts.readScopedSessionSnapshot(request), (error) => error === failure)
+    .finally(() => {
+      settled = true;
+    });
+  await Promise.race([
+    failed.promise,
+    checked.then(() => assert.fail("metadata failure was not reached")),
+  ]);
+  await setImmediate();
+  try {
+    assert.equal(settled, false);
+    assert.equal(current.active, 1);
+  } finally {
+    resume.resolve();
+  }
+  await checked;
   assert.equal(current.active, 0);
 });
 

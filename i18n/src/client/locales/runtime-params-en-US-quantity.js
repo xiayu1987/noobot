@@ -10,37 +10,7 @@ export default {
       description: "Maximum number of readers retained for session page snapshots at once.",
     },
   },
-  partitionStorage: {
-    entityPageWriteVectorLimit: {
-      name: "Entity page write vector limit",
-      description: "Maximum buffers written together when persisting partition entity pages.",
-    },
-    recordReadConcurrency: {
-      name: "Partition record read concurrency",
-      description: "Maximum simultaneous record reads in a partition collection batch.",
-    },
-  },
-  immutableStorage: {
-    entityDirectoryMaxEntries: {
-      name: "Entity directory page entry limit",
-      description: "Protocol limit on entries in one partition entity directory page.",
-    },
-    journalJsonMaxDepth: {
-      name: "Journal JSON nesting limit",
-      description: "Protocol limit on nesting depth of partition journal JSON values.",
-    },
-    authorityOutboxPageSize: {
-      name: "Authority outbox page limit",
-      description: "Protocol limit on events read or acknowledged in one outbox page.",
-    },
-    cleanupFilterMaxEntries: {
-      name: "Cleanup filtering batch limit",
-      description: "Maximum captured inventory entries inspected in one cleanup filtering batch.",
-    },
-    recordIoConcurrency: {
-      name: "Record I/O concurrency",
-      description: "Maximum simultaneous record operations in an immutable storage batch.",
-    },
+  sessionStorage: {
     messagePageSize: {
       name: "Maximum message page size",
       description: "Maximum messages read in one storage page.",
@@ -49,9 +19,23 @@ export default {
       name: "Default message page size",
       description: "Default messages read in one storage page.",
     },
-    receiptPageSize: {
-      name: "Receipt page size",
-      description: "Maximum receipts read in one storage page.",
+  },
+  partitionStorage: {
+    entityDirectoryMaxEntries: {
+      name: "Entity directory page entry limit",
+      description: "Protocol limit on entries in one partition entity directory page.",
+    },
+    journalJsonMaxDepth: {
+      name: "Journal JSON nesting limit",
+      description: "Protocol limit on nesting depth of partition journal JSON values.",
+    },
+    entityPageWriteVectorLimit: {
+      name: "Entity page write vector limit",
+      description: "Maximum buffers written together when persisting partition entity pages.",
+    },
+    recordReadConcurrency: {
+      name: "Partition record read concurrency",
+      description: "Maximum simultaneous record reads in a partition collection batch.",
     },
   },
   artifact: {
@@ -109,6 +93,10 @@ export default {
     },
   },
   eventProtocol: {
+    authorityOutboxPageSize: {
+      name: "Authority outbox page limit",
+      description: "Protocol limit on events read or acknowledged in one outbox page.",
+    },
     authorityOutboxPendingBatchSize: {
       name: "Event protocol authority outbox pending batch size",
       description: "Count threshold used by event protocol authority outbox pending batch size.",

@@ -258,9 +258,10 @@ export async function readMaterializedTurnWindow({
   budget,
   selectContent,
 }) {
-  const { records } = await readTurnWindow(read, identity, after, length);
-  const projected = [];
-  for (const record of records) {
+  return read.readWindow(length, async (index) => {
+    const {
+      records: [record],
+    } = await readTurnWindow(read, identity, after + index, 1);
     const { sessionOrdinal: ordinal, turnOrdinal } = record;
     budget.consume("bytes", messageReadJsonBytes({ ordinal, turnOrdinal }));
     const message = await materializeMessage(read, {
@@ -270,9 +271,8 @@ export async function readMaterializedTurnWindow({
       budget,
       selectContent,
     });
-    projected.push({ ordinal, turnOrdinal, message });
-  }
-  return projected;
+    return { ordinal, turnOrdinal, message };
+  });
 }
 
 export async function readTurnWindow(read, identity, after, length) {

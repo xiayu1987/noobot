@@ -3,16 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  openPartitionReaderFixture,
+  withPartitionReaderFixture,
+  createPartitionReaderFixture,
+} from "../helpers/partition-reader-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
-import { createImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
-import {
-  openImmutableSessionReader,
-  withImmutableSessionReader,
-} from "../../src/session/session-artifact-session/immutable-session-reader.js";
 
 import {
   createDetachedSubSessionRunner,
@@ -378,7 +378,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
   const sessionDir = await mkdtemp(path.join(os.tmpdir(), "noobot-detached-outbox-"));
   t.after(() => rm(sessionDir, { recursive: true, force: true }));
   const open = () =>
-    openImmutableSessionReader({
+    openPartitionReaderFixture({
       sessionDir,
       sessionId: "sub-persisted",
       parentSessionId: "parent1",
@@ -410,7 +410,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     requireSessionReader: open,
     async withSessionReader(userId, sessionId, operation) {
       return this.withSessionMutation(userId, sessionId, (scope) =>
-        withImmutableSessionReader(
+        withPartitionReaderFixture(
           { sessionDir, sessionId, parentSessionId: scope.resolvedParentSessionId },
           async (reader, commitChanges, readCurrent) => {
             const result = await operation({ reader, scope, commitChanges, readCurrent });
@@ -428,7 +428,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     },
     async createStoredSession(_userId, session, { initialTurn, scopedMetadata = null }) {
       assert.equal(persisted, null);
-      const committed = await createImmutableSession({
+      const committed = await createPartitionReaderFixture({
         scope: {
           sessionDir,
           sessionId: session.sessionId,
@@ -472,12 +472,10 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     }),
   });
 
-  const { events: outbox, hasMore } = await (
-    await open()
-  ).readOutboxPage({
+  await using reader = await open();
+  const { events: outbox, hasMore } = await reader.readOutboxPage({
     consumerId: "detached-test",
     after: 0,
-    limit: 16,
   });
   assert.equal(hasMore, false);
   assert.deepEqual(

@@ -9,12 +9,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
-import {
-  IMMUTABLE_SESSION_FORMAT_FILE,
-  IMMUTABLE_SESSION_HEAD_FILE,
-  bindImmutableMigrationSource,
-  decodeImmutableSessionHead,
-} from "@noobot/session-protocol/immutable-storage";
+import { UNSUPPORTED_SESSION_STORAGE } from "@noobot/session-protocol/session-storage-format";
 import {
   PARTITION_JOURNAL_HEAD_FILE,
   encodePartitionJournalControl,
@@ -40,9 +35,15 @@ test("runtime events follow partition publication and never fall back to a retai
     parentSessionId: "",
     caller: SESSION_CALLER.USER,
   });
-  const immutableFile = path.join(sessionDir, IMMUTABLE_SESSION_HEAD_FILE);
-  const original = await fs.readFile(immutableFile, "utf8");
-  const source = bindImmutableMigrationSource(decodeImmutableSessionHead(original), null);
+  const immutableFile = path.join(sessionDir, UNSUPPORTED_SESSION_STORAGE.head);
+  const original = "retained unsupported source";
+  await fs.writeFile(immutableFile, original);
+  const source = {
+    sessionId: location.sessionId,
+    format: "noobot.immutable-session/5",
+    generation: 1,
+    commit: "a".repeat(64),
+  };
   const { journal } = await createJournalCase(t, {}, { sessionId: location.sessionId });
   await journal.append(journalRequest(journal, 1));
   const head = journal.head;
@@ -54,7 +55,7 @@ test("runtime events follow partition publication and never fall back to a retai
   await writeHead(native, head);
   await assert.rejects(resolve(), corrupt);
   await fs.rm(immutableFile);
-  await fs.rm(path.join(sessionDir, IMMUTABLE_SESSION_FORMAT_FILE), { force: true });
+  await fs.rm(path.join(sessionDir, UNSUPPORTED_SESSION_STORAGE.format), { force: true });
   assert.deepEqual(await resolve(), { sessionDir });
   await writeHead(native, { ...head, sessionId: "foreign" });
   await assert.rejects(resolve(), corrupt);
@@ -66,7 +67,7 @@ test("runtime events follow partition publication and never fall back to a retai
   await fs.mkdir(migratedDir);
   await fs.rename(native, migrated);
   await fs.writeFile(immutableFile, original);
-  assert.deepEqual(await resolve(), { sessionDir });
+  await assert.rejects(resolve(), { code: "SESSION_STORAGE_FORMAT_UNSUPPORTED" });
   const target = { sessionId: head.sessionId, epoch: head.epoch, generation: head.sequence };
   await fs.writeFile(marker, encodePartitionMigrationAuthority({ source, target }));
   assert.deepEqual(await resolve(), { sessionDir });
@@ -79,4 +80,10 @@ test("runtime events follow partition publication and never fall back to a retai
   await assert.rejects(resolve(), corrupt);
   await fs.rm(migrated);
   await assert.rejects(resolve(), corrupt);
+  await fs.rm(marker);
+  await fs.rm(immutableFile);
+  const legacyDocument = path.join(sessionDir, "session.json");
+  await assert.rejects(fs.access(legacyDocument), { code: "ENOENT" });
+  await fs.writeFile(legacyDocument, JSON.stringify({ sessionId: location.sessionId }));
+  await assert.rejects(resolve(), { code: "SESSION_STORAGE_FORMAT_UNSUPPORTED" });
 });

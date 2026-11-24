@@ -25,12 +25,14 @@ const dialogProcessId = "completed-dialog";
 const now = () => "2026-11-15T00:00:00.000Z";
 
 async function recoverInNewProcess(workspaceRoot, query) {
+  const resultPath = path.join(workspaceRoot, "restart-result.json");
   const source = `
+    import { writeFile } from "node:fs/promises";
     import { openRestartProjectionSession } from ${JSON.stringify(new URL("./restart-execution-log-projection.test-helpers.js", import.meta.url).href)};
     import { recoverServiceRestartTurns } from ${JSON.stringify(new URL("../bootstrap/recover-service-restart-turns.js", import.meta.url).href)};
     import { withRuntimeEventsEnv } from "@noobot/runtime-events/testing";
     import { flushJsonLineBatches } from "@noobot/runtime-events";
-    const [workspaceRoot, query] = JSON.parse(process.argv[1]);
+    const [workspaceRoot, query, resultPath] = JSON.parse(process.argv[1]);
     await withRuntimeEventsEnv({ workspaceRoot }, async () => {
       const session = openRestartProjectionSession(workspaceRoot);
       const progress = [];
@@ -40,10 +42,10 @@ async function recoverInNewProcess(workspaceRoot, query) {
       });
       const logs = await session.getExecutionTurnLogs(query);
       await flushJsonLineBatches();
-      process.stdout.write(JSON.stringify({ result, logs, progress, pid: process.pid }));
+      await writeFile(resultPath, JSON.stringify({ result, logs, progress, pid: process.pid }), { flag: "wx" });
     });
   `;
-  const { stdout } = await promisify(execFile)(
+  await promisify(execFile)(
     process.execPath,
     [
       "--import",
@@ -51,11 +53,13 @@ async function recoverInNewProcess(workspaceRoot, query) {
       "--input-type=module",
       "-e",
       source,
-      JSON.stringify([workspaceRoot, query]),
+      JSON.stringify([workspaceRoot, query, resultPath]),
     ],
     { timeout: 30000 },
   );
-  return JSON.parse(stdout);
+  const result = JSON.parse(await readFile(resultPath, "utf8"));
+  await rm(resultPath);
+  return result;
 }
 
 for (const failedPublication of ["runtime-output", "projection-cursor"]) {

@@ -50,7 +50,7 @@ test("thinking page rejects invalid requests before acquiring a storage snapshot
     { cursor: { after: 1, scope: "snapshot", extra: true } },
     { limit: 0 },
     { limit: Infinity },
-    { limit: QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize + 1 },
+    { limit: QUANTITY_THRESHOLDS.sessionStorage.messageReadPageSize + 1 },
     { lookupKey: { ...lookupKey, turnScopeId: " turn" } },
   ])
     await assert.rejects(read(change), TypeError);

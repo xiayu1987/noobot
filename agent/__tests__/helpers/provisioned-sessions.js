@@ -27,7 +27,7 @@ export async function withProvisionedSessions({ userId, sessionIds }, fn) {
   try {
     await withRuntimeEventsEnv({ workspaceRoot }, async () => {
       await initializeUserWorkspace(workspaceRoot, userId);
-      const runtime = createTestSessionServices({ workspaceRoot });
+      await using runtime = createTestSessionServices({ workspaceRoot });
       const repository = runtime.repositories.sessionRepository;
       const scopes = {};
       for (const sessionId of sessionIds) {

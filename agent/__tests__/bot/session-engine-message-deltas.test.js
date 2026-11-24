@@ -13,7 +13,6 @@ import { createTestSessionExecutionEngine } from "../helpers/session-execution-e
 import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { createSessionFacade } from "../../src/session/index.js";
-import { migrateSessionImmutableStorage } from "../../src/workspace-lifecycle/session-immutable-storage-upgrade.js";
 import { bindCurrentTurnPersistence } from "../../src/bot/execution/runner/current-turn-persistence.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 
@@ -27,15 +26,6 @@ test("engine persistence carries acknowledged versions through metadata, append 
   await provisionTestSession(services, { ...identity, caller: SESSION_CALLER.USER });
   const repository = services.repositories.sessionRepository;
   const persistenceContext = repository.treePersistenceContext(identity.userId, identity.sessionId);
-  const scope = await repository.requireSessionScope(
-    identity.userId,
-    identity.sessionId,
-    persistenceContext,
-  );
-  await migrateSessionImmutableStorage({
-    storageService: repository.storageService,
-    sessionDir: scope.sessionDir,
-  });
   const session = createSessionFacade(services);
   const engine = createTestSessionExecutionEngine({ session });
   const commits = [];
@@ -105,17 +95,33 @@ test("engine persistence carries acknowledged versions through metadata, append 
       dialogProcessId: "d1",
       turnScopeId: "t1",
       expectedContentReference: metadataVersion,
-      owner: 1,
+      owner: commits[1].changes.messageMetadataUpdates[0].owner,
       content: " fragment",
     },
   ]);
   store.updateByUid("m1", { content: "explicit replacement" });
   await persist();
-  assert.equal(commits[3].changes.messages[0].content, "explicit replacement");
+  assert.equal(commits[3].changes.messages.length, 0);
+  assert.equal(commits[3].changes.messageContentReplacements[0].content, "explicit replacement");
   assert.equal(commits[3].changes.messageContentAppends.length, 0);
   assert.equal(store.demoteAssistantPresentation(identity.turnScopeId), 1);
+  store.push({
+    messageUid: "m2",
+    modelMessageId: "model-m2",
+    presentationMessageId: "presentation-t1",
+    role: "assistant",
+    sessionId: identity.sessionId,
+    dialogProcessId: identity.dialogProcessId,
+    turnScopeId: identity.turnScopeId,
+    chatPresentation: true,
+    workspaceRootDirectory: "/workspace",
+    content: "new presentation",
+  });
   await persist();
-  assert.equal(commits[4].changes.messages.length, 0);
+  assert.deepEqual(
+    commits[4].changes.messages.map(({ messageUid }) => messageUid),
+    ["m2"],
+  );
   assert.deepEqual(commits[4].changes.messageMetadataUpdates[0].metadata, {
     chatPresentation: false,
   });
@@ -125,10 +131,12 @@ test("engine persistence carries acknowledged versions through metadata, append 
   await using reader = await repository.requireSessionReader(identity.userId, identity.sessionId, {
     persistenceContext,
   });
-  const { message } = await reader.readMessage("m1");
+  const { messages } = await reader.exportSession();
+  const message = messages.find(({ messageUid }) => messageUid === "m1");
   assert.equal(message.content, "explicit replacement");
   assert.deepEqual(message.modelResponseMetadata, modelResponseMetadata);
   assert.equal(message.chatPresentation, false);
   assert.equal(Object.hasOwn(message, "workspaceRootDirectory"), false);
+  assert.equal(messages.find(({ messageUid }) => messageUid === "m2").chatPresentation, true);
   assert.equal(store.readPendingChanges().entries.length, 0);
 });

@@ -13,7 +13,6 @@ export function emptyPartitionSession({ sessionId, parentSessionId, committedAt 
     caller: "user",
     aggregateVersion: 0,
     modelAlias: "",
-    shortMemoryCheckpoint: 0,
     selectedConnectorIds: [],
     messages: [],
     dialogOrder: [],

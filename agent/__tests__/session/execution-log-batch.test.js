@@ -19,7 +19,8 @@ import {
   resolveExecutionEventsDir,
 } from "../../src/session/session-artifact-execution-logs.js";
 import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
-import { readTurnIndex, withTemp } from "./session-artifact-store-v2.test-helpers.js";
+import { readTurnIndex } from "../helpers/execution-log-fixture.js";
+import { withTemp } from "../helpers/temporary-directory.js";
 
 const record = (id, dialogProcessId = "turn-1") => ({ id, dialogProcessId, text: "中文" });
 

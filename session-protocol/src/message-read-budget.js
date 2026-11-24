@@ -14,7 +14,7 @@ import { TOOL_RESULT_MESSAGE_TYPE } from "./message-entity-contract.js";
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 import { PartitionAdmissionRejection } from "./partition-journal-capacity.js";
 import { requireTurnLookupKey } from "./identity/turn-lookup-key.js";
-import { immutableStorageError } from "./immutable-storage-error.js";
+import { sessionStorageError } from "./session-storage-format.js";
 
 export function requirePageSnapshotPolicy(limits) {
   if (
@@ -182,7 +182,7 @@ function requireForwardMessageContinuation({ messageCount, records, nextCursor }
         nextCursor.after !== end ||
         (cursor !== null && nextCursor.scope !== cursor.scope))
   )
-    throw immutableStorageError("Invalid pinned session message continuation");
+    throw sessionStorageError("Invalid pinned session message continuation");
 }
 
 export function requireForwardSessionMessagePage(
@@ -201,13 +201,13 @@ export function requireForwardSessionMessagePage(
     !Array.isArray(page.records) ||
     page.records.length > limit
   )
-    throw immutableStorageError("Invalid pinned session message page");
+    throw sessionStorageError("Invalid pinned session message page");
 
   const after = cursor === null ? 0 : cursor.after;
   requireForwardMessageContinuation(page, cursor, after + page.records.length);
   for (const [index, record] of page.records.entries()) {
     if (record?.ordinal !== after + index + 1)
-      throw immutableStorageError("Noncontiguous session message positions");
+      throw sessionStorageError("Noncontiguous session message positions");
   }
   return page;
 }
@@ -425,7 +425,7 @@ function requireThinkingDetailPageBounds({ cursor, limit }) {
   if (
     !Number.isSafeInteger(limit) ||
     limit < 1 ||
-    limit > QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize ||
+    limit > QUANTITY_THRESHOLDS.sessionStorage.messageReadPageSize ||
     (cursor !== null && !isMessagePageCursor(cursor))
   )
     throw new TypeError("Invalid thinking detail page selection");
@@ -593,7 +593,7 @@ export function createMessageReadBudget(
 export function requireMessageReadSelection({ messageUids, maxBytes }) {
   if (
     !Array.isArray(messageUids) ||
-    messageUids.length > QUANTITY_THRESHOLDS.immutableStorage.messagePageSize ||
+    messageUids.length > QUANTITY_THRESHOLDS.sessionStorage.messagePageSize ||
     messageUids.some((uid) => typeof uid !== "string" || !uid || uid.trim() !== uid) ||
     new Set(messageUids).size !== messageUids.length
   )
@@ -627,7 +627,7 @@ export function requireDialogTurnPage({ dialogProcessId, after, limit, maxBytes 
 }
 
 export function requirePageBounds({ after, limit, maxBytes }) {
-  const maximum = QUANTITY_THRESHOLDS.immutableStorage.messagePageSize;
+  const maximum = QUANTITY_THRESHOLDS.sessionStorage.messagePageSize;
   if (
     !Number.isSafeInteger(after) ||
     after < 0 ||

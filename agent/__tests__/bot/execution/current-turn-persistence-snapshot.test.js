@@ -131,26 +131,32 @@ test("nested updates cannot mutate an in-flight payload and remain pending for t
   const started = new Promise((resolve) => (entered = resolve));
   const blocked = new Promise((resolve) => (release = resolve));
   const batches = [];
-  const runtime = bind(async ({ messages }) => {
-    batches.push(messages);
+  const runtime = bind(async ({ messages, changes }) => {
+    batches.push(changes);
     if (batches.length === 1) {
       entered();
       await blocked;
     }
     return messages;
   });
-  const detail = { text: "first", nested: { count: 1 } };
-  runtime.currentTurnMessages.updateByUid("m1", { detail });
+  const modelResponseMetadata = { text: "first", nested: { count: 1 } };
+  runtime.currentTurnMessages.updateByUid("m1", { modelResponseMetadata });
   const first = runtime.persistCurrentTurnMessages();
   await started;
-  detail.text = "second";
-  detail.nested.count = 2;
-  runtime.currentTurnMessages.updateByUid("m1", { detail });
+  modelResponseMetadata.text = "second";
+  modelResponseMetadata.nested.count = 2;
+  runtime.currentTurnMessages.updateByUid("m1", { modelResponseMetadata });
   const second = runtime.persistCurrentTurnMessages();
-  assert.deepEqual(batches[0][0].detail, { text: "first", nested: { count: 1 } });
+  assert.deepEqual(batches[0].messages[0].modelResponseMetadata, {
+    text: "first",
+    nested: { count: 1 },
+  });
   release();
   await Promise.all([first, second]);
-  assert.deepEqual(batches[1][0].detail, detail);
+  assert.deepEqual(batches[1].messageMetadataUpdates[0].metadata.modelResponseMetadata, {
+    text: "second",
+    nested: { count: 2 },
+  });
   await runtime.persistCurrentTurnMessages();
   assert.equal(batches.length, 2);
 });

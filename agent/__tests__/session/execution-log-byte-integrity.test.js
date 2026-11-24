@@ -16,13 +16,9 @@ import {
   readExecutionSegmentSummary,
   resolveExecutionTurnDir,
 } from "../../src/session/session-artifact-execution-logs.js";
-import {
-  repairSessionArtifacts,
-  inspectSessionArtifacts,
-} from "../../src/session/session-artifact-maintenance.js";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
+import { recoverExecutionLogIndexes } from "../../src/session/execution-log-recovery.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
-import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
+import { withTemp } from "../helpers/temporary-directory.js";
 
 const dialogProcessId = "byte-integrity-turn";
 const file = "segment-000001.jsonl";
@@ -42,14 +38,8 @@ const corruptedBytes = Buffer.concat([
 ]);
 
 for (const mode of ["invalid UTF-8", "foreign turn"]) {
-  test(`read, audit and repair reject ${mode} without rewriting source evidence`, async () => {
+  test(`read and recovery reject ${mode} without rewriting source evidence`, async () => {
     await withTemp(async (sessionDir) => {
-      const store = new ImmutableSessionStore({
-        sessionDir,
-        sessionId: "byte-integrity",
-        allowCreate: true,
-      });
-      await store.commit({ expectedGeneration: 0, operationId: "initial", changes: [] });
       await append(sessionDir);
       const turnDir = resolveExecutionTurnDir(sessionDir, dialogProcessId);
       const segment = path.join(turnDir, file);
@@ -63,18 +53,9 @@ for (const mode of ["invalid UTF-8", "foreign turn"]) {
       await assert.rejects(readExecutionLogs({ storageService, sessionDir }), {
         code: "EXECUTION_EVENT_JSONL_CORRUPTED",
       });
-      const report = await inspectSessionArtifacts({ storageService, sessionDir });
-      assert.equal(report.ok, false);
-      assert.equal(report.issues[0].code, "EXECUTION_EVENT_JSONL_CORRUPTED");
-      await assert.rejects(
-        repairSessionArtifacts({
-          storageService,
-          sessionDir,
-          alreadyLocked: false,
-          assertSessionWritable: async () => {},
-        }),
-        { code: "EXECUTION_EVENT_JSONL_CORRUPTED" },
-      );
+      await assert.rejects(recoverExecutionLogIndexes({ storageService, sessionDir }), {
+        code: "EXECUTION_EVENT_JSONL_CORRUPTED",
+      });
       assert.deepEqual(await readFile(indexFile), indexBefore);
       assert.deepEqual(await readFile(segment), bytes);
     });

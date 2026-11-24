@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { RUNTIME_EVENTS_CONFIG_ENVS } from "@noobot/shared/runtime-events-config";
-import { resolveRuntimeEventsEnvAssignments, withRuntimeEventsEnv } from "../src/testing.js";
+import { resolveRuntimeEventsEnvAssignments, withRuntimeEventsEnv } from "./testing.js";
 
 test("testing env maps declared keys and rejects unknown groups or keys", () => {
   assert.deepEqual(

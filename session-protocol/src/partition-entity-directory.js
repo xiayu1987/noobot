@@ -6,7 +6,6 @@
 import { Buffer } from "node:buffer";
 import { storageBytesDigest } from "#storage-digest";
 import { deepFreeze, isDeepFrozen } from "@noobot/shared/deep-freeze";
-import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { PARTITION_HISTORICAL_OPERATIONS } from "./partition-collection-names.js";
 import {
   partitionEntityKey,
@@ -268,11 +267,11 @@ function encodeLeafReference({ owner, reference }) {
 export const PARTITION_HISTORICAL_PAGE_CODEC = 2;
 const digestBytes = historicalDigestLength / 2;
 const historicalSlots = 16;
-const historicalChecksumBytes = LENGTH_THRESHOLDS.immutableStorage.historicalDirectoryChecksumBytes;
+const historicalChecksumWidth = 16;
 const historicalBitmapBytes = Uint16Array.BYTES_PER_ELEMENT;
 const historicalPointerFieldCount = 3;
 const historicalMinimumPositionBytes =
-  1 + 1 + historicalBitmapBytes + historicalPointerFieldCount + historicalChecksumBytes;
+  1 + 1 + historicalBitmapBytes + historicalPointerFieldCount + historicalChecksumWidth;
 
 function validHistoricalSharedPrefix(prefix) {
   return (
@@ -389,7 +388,7 @@ function decodeHistoricalPointers(payload, slots, readByte, take) {
 function historicalPageDigest(epoch, payload) {
   return storageBytesDigest(Buffer.concat([Buffer.from(epoch, "hex"), payload])).slice(
     0,
-    historicalChecksumBytes * 2,
+    historicalChecksumWidth * 2,
   );
 }
 
@@ -455,13 +454,13 @@ function historicalOccupiedSlots(bitmap) {
 }
 
 export function decodePartitionHistoricalDirectoryPage(bytes, head) {
-  if (bytes.length < 1 + historicalChecksumBytes)
+  if (bytes.length < 1 + historicalChecksumWidth)
     throw new TypeError("Truncated historical directory page");
-  const payload = bytes.subarray(0, -historicalChecksumBytes);
+  const payload = bytes.subarray(0, -historicalChecksumWidth);
   const { epoch } = head;
   if (
     historicalPageDigest(epoch, payload) !==
-    bytes.subarray(-historicalChecksumBytes).toString("hex")
+    bytes.subarray(-historicalChecksumWidth).toString("hex")
   )
     throw new TypeError("Historical directory integrity check failed");
   let offset = 0;

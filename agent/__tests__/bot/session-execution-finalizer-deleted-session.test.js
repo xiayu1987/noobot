@@ -5,7 +5,6 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import path from "node:path";
 
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
@@ -115,7 +114,7 @@ async function assertDeletedWithoutResidue({ session, scopes, effects }) {
     }),
     { code: "SESSION_DELETED" },
   );
-  assert.equal(await exists(path.join(scopes[SIBLING_SESSION_ID].sessionDir, "head.json")), true);
+  assert.equal(await exists(scopes[SIBLING_SESSION_ID].sessionDir), true);
   assert.deepEqual(
     await session.getSessionTurnMessagePage({
       ...query,

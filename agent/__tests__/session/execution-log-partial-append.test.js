@@ -16,7 +16,7 @@ import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapte
 import { ExecutionLogRepository } from "../../src/observability/execution-log/execution-log-repository.js";
 import { FileSystemExecutionRepository } from "../../src/session/repositories/file-system-execution-repository.js";
 import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
-import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
+import { withTemp } from "../helpers/temporary-directory.js";
 
 const record = (id, dialogProcessId = "turn-1") => ({ id, dialogProcessId });
 const append = (sessionDir, logs, storageService = TEST_STORAGE_SERVICE, maxSegmentBytes = 4096) =>

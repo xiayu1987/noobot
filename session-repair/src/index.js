@@ -6,6 +6,7 @@
 
 export { readSessionForProtocolRepair, splitTurnSnapshotIndexes } from "./protocol-read.js";
 export { migrateLegacyPhaseSummaryMessages } from "./phase-summary-migration.js";
+export { removeRetiredSessionProjections } from "./retired-session-projections.js";
 export { SESSION_REPAIR_DATA_REJECTION_CODES, SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 export { assertTurnJournalBoundary } from "./repair-artifact-io.js";
 export { resegmentMigratedCheckpointBaselines } from "./checkpoint-resegment.js";

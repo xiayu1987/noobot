@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { access, mkdtemp, rm } from "node:fs/promises";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
 
 import {
   createTestSessionServices,
@@ -23,7 +24,7 @@ async function withProvisionedSession(fn) {
   try {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createTestSessionServices({ workspaceRoot });
+    await using runtime = createTestSessionServices({ workspaceRoot });
     await provisionTestSession(runtime, {
       userId,
       sessionId: "A",
@@ -32,14 +33,14 @@ async function withProvisionedSession(fn) {
     });
     const repository = runtime.repositories.sessionRepository;
     const persistenceContext = repository.treePersistenceContext(userId, "A");
-    const reader = await repository.requireSessionReader(userId, "A", { persistenceContext });
+    await using reader = await repository.requireSessionReader(userId, "A", { persistenceContext });
     return await fn({ userId, repository, persistenceContext, reader });
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }
 }
 
-test("incremental commit rejects a stale generation without changing committed metadata", async () => {
+test("incremental commit rejects reuse of a published sequence with different content", async () => {
   await withProvisionedSession(async ({ userId, repository, persistenceContext, reader }) => {
     const command = {
       operationId: "version-first",
@@ -58,38 +59,37 @@ test("incremental commit rejects a stale generation without changing committed m
         }),
       ),
       {
-        code: "SESSION_GENERATION_CONFLICT",
+        code: "SESSION_OPERATION_CONFLICT",
       },
     );
-    const current = await repository.requireSessionReader(userId, "A", { persistenceContext });
+    await using current = await repository.requireSessionReader(userId, "A", {
+      persistenceContext,
+    });
     assert.equal(current.generation, reader.generation + 1);
     assert.equal((await current.readMetadata()).customTitle, "committed title");
     assert.notEqual((await reader.readMetadata()).customTitle, "committed title");
   });
 });
 
-test("a switched session with a missing head rejects reads and commits as corruption", async () => {
+test("a live session missing CURRENT rejects reads and commits as corruption", async () => {
   await withProvisionedSession(async ({ userId, repository, persistenceContext, reader }) => {
     const scope = await repository.requireSessionScope(userId, "A", persistenceContext);
-    await rm(path.join(scope.sessionDir, "head.json"));
+    const current = path.join(scope.sessionDir, PARTITION_JOURNAL_HEAD_FILE);
+    const request = await reader.prepareRequest({
+      operationId: "missing-current",
+      committedAt: repository.now(),
+      changes: { sessionMetadata: { customTitle: "must not recreate" } },
+    });
+    await reader.close();
+    await rm(current);
     await assert.rejects(repository.requireSessionReader(userId, "A", { persistenceContext }), {
-      code: "SESSION_IMMUTABLE_STORAGE_INVALID",
+      code: "SESSION_STORAGE_CORRUPT",
     });
     await assert.rejects(
-      submitTestSessionRequest(
-        repository,
-        userId,
-        "A",
-        await reader.prepareRequest({
-          operationId: "missing-head",
-          committedAt: repository.now(),
-          changes: { sessionMetadata: { customTitle: "must not recreate" } },
-        }),
-        persistenceContext,
-      ),
-      { code: "SESSION_IMMUTABLE_STORAGE_INVALID" },
+      submitTestSessionRequest(repository, userId, "A", request, persistenceContext),
+      { code: "SESSION_STORAGE_CORRUPT" },
     );
-    await assert.rejects(access(path.join(scope.sessionDir, "head.json")), {
+    await assert.rejects(access(current), {
       code: "ENOENT",
     });
   });

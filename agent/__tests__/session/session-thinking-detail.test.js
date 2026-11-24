@@ -4,24 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
-import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
-import {
-  IMMUTABLE_SESSION_FORMAT_FILE,
-  IMMUTABLE_SESSION_HEAD_FILE,
-} from "@noobot/session-protocol/immutable-storage";
+import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
+import { PARTITION_MESSAGE_COLLECTIONS } from "@noobot/session-protocol/partition-session-messages";
 import { createTurnArtifactRevision } from "@noobot/session-protocol/turn-lookup-key";
 import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { migrateSessionImmutableStorage } from "../../src/workspace-lifecycle/session-immutable-storage-upgrade.js";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { immutableSessionReaderAccess as sessionReaderAccess } from "../../src/session/session-artifact-session/immutable-reader-access.js";
-import { readImmutableThinkingDetailPage } from "../../src/session/session-artifact-session/immutable-turn-reader.js";
-import { readImmutableScopedTurnMessagePage } from "../../src/session/session-artifact-session/immutable-message-reader.js";
-import { corruptRecord } from "./helpers/immutable-record-reads.js";
+import { mkdtemp, rm } from "node:fs/promises";
+import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
+import { partitionReaderAccess } from "../helpers/partition-reader-fixture.js";
+import { createSessionRepositoryFixture } from "../helpers/session-repository-fixture.js";
 import {
   buildThinkingDetailPayload,
   buildThinkingDetailPagePayload,
@@ -29,14 +23,24 @@ import {
 import { readSessionThinkingDetail } from "../../src/session/session-thinking-detail.js";
 import { SessionPageSnapshots } from "../../src/session/session-page-snapshots.js";
 import {
-  SESSION_ARTIFACT_PREDECESSOR,
-  writeSessionArtifact,
-} from "../../src/session/session-artifact-store.js";
-import {
   canonicalActivity,
   canonicalToolTimelineItem,
   fileToolResultText,
 } from "./session-repository-boundary.summaries.fixtures.js";
+
+function guardThinkingDetailReads(read) {
+  const { messages, content } = PARTITION_MESSAGE_COLLECTIONS;
+  return Object.assign((query) => {
+    if (query.collection === messages)
+      assert.ok(!query.keys.includes("sm-one"), "unselected message record must not be read");
+    if (query.collection === content)
+      assert.ok(
+        !query.keys.some((key) => JSON.parse(key)[0] === "sm-two"),
+        "ordinary body must not be read",
+      );
+    return read(query);
+  }, read);
+}
 
 function completedReadTool(toolCallId, { call, resultEvent }) {
   return canonicalToolTimelineItem({
@@ -54,8 +58,8 @@ import {
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
-import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
-import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
+import { buildFixtureDisplaySummary } from "../helpers/session-projection-fixture.js";
+import { seedPartitionSession } from "../helpers/partition-session-seed.js";
 
 const TEST_TURN_ID = "turn-000001";
 const TEST_COMMITTED_BYTES = 128;
@@ -420,7 +424,7 @@ test("session summary references canonical thinking detail without copying its t
     },
   ];
 
-  const summary = await buildPersistedDisplaySummary({
+  const summary = buildFixtureDisplaySummary({
     sessionId: "child-session",
     aggregateVersion: 0,
     messages,
@@ -465,7 +469,7 @@ test("session summary does not copy large tool payloads retained by thinking det
           tool: "write_file",
           args: { filePath: "large.txt", content: largePayload },
           call: { eventId: "call-large" },
-          result: fileToolResultText("large.txt", { content: largePayload }),
+          result: fileToolResultText("large.txt", { content: "saved" }),
           success: true,
           resultEvent: { eventId: "result-large" },
         }),
@@ -473,7 +477,7 @@ test("session summary does not copy large tool payloads retained by thinking det
     },
   ];
 
-  const summary = await buildPersistedDisplaySummary({
+  const summary = buildFixtureDisplaySummary({
     sessionId: "large-session",
     aggregateVersion: 0,
     messages,
@@ -494,7 +498,7 @@ test("session summary does not copy large tool payloads retained by thinking det
   assert.equal(summary.stats.thinkingMessageCount, 1);
   assert.equal(countCanonicalThinkingDetailEvents(detail.messageItem), 2);
   assert.equal(detail.messageItem.toolTimeline[0].args.content, largePayload);
-  assert.equal(JSON.parse(detail.messageItem.toolTimeline[0].result).content, largePayload);
+  assert.equal(JSON.parse(detail.messageItem.toolTimeline[0].result).content, "saved");
   assert.equal(Object.hasOwn(detail, "allMessages"), false);
 });
 
@@ -507,13 +511,10 @@ async function withSessionDir(fn) {
   }
 }
 
-test("thinking detail reads only the selected immutable turn after migration", async () =>
+test("partition thinking detail reads only the selected turn and skips ordinary bodies", async (t) =>
   withSessionDir(async (sessionDir) => {
-    await writeSessionArtifact({
-      storageService,
+    await seedPartitionSession({
       sessionDir,
-      atomic: true,
-      predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
       sessionPayload: applySessionMessageFacts({
         ...createTestSessionRequiredFields(),
         sessionId: "scoped-session",
@@ -560,25 +561,19 @@ test("thinking detail reads only the selected immutable turn after migration", a
         ],
       }),
     });
-
-    await migrateSessionImmutableStorage({ storageService, sessionDir });
-    const store = await ImmutableSessionStore.open({ sessionDir });
-    const snapshot = await store.snapshot();
-    const { unrelatedReference, ordinaryBody } = await store.objects.withSnapshot(
-      snapshot,
-      async () => {
-        const root = await store.index.get(snapshot.root, "messages");
-        const selected = await store.index.get(root, "sm-two");
-        const { parts } = await store.objects.readValueMetadata(selected);
-        return {
-          unrelatedReference: await store.index.get(root, "sm-one"),
-          ordinaryBody: parts.find(({ path }) => path[1] === "content").reference,
-        };
+    const original = PartitionTransactions.prototype.withCollectionReader;
+    t.mock.method(
+      PartitionTransactions.prototype,
+      "withCollectionReader",
+      function (snapshot, operation, options) {
+        return original.call(
+          this,
+          snapshot,
+          (read) => operation(guardThinkingDetailReads(read)),
+          options,
+        );
       },
     );
-    await corruptRecord(store, unrelatedReference);
-    await corruptRecord(store, ordinaryBody);
-    await writeFile(path.join(sessionDir, "session.json"), "not-json\n", "utf8");
 
     const lookupKey = { turnScopeId: "turn-two", dialogProcessId: "dialog-two" };
     await using snapshots = new SessionPageSnapshots();
@@ -588,7 +583,7 @@ test("thinking detail reads only the selected immutable turn after migration", a
       readSessionThinkingDetail({
         pageSnapshots,
         identity: [sessionDir],
-        open: () => sessionReaderAccess.openArtifact({ sessionDir }),
+        open: () => partitionReaderAccess.openArtifact({ sessionDir }),
         ...selection,
         lookupKey: key,
       });
@@ -604,6 +599,25 @@ test("thinking detail reads only the selected immutable turn after migration", a
     assert.equal(detail.page.nextCursor, null);
     assert.equal(detail.messageItem.presentationMessageId, "pm_fx12");
     assert.equal(detail.messageItem.toolTimeline.length, 1);
+    await using reader = await partitionReaderAccess.openArtifact({ sessionDir });
+    await assert.rejects(
+      reader.readMessageContentPage({
+        messageUid: "sm-two",
+        byteOffset: 0,
+        maxBytes: 64,
+        expectedContentReference: null,
+      }),
+      /ordinary body must not be read/,
+    );
+    await assert.rejects(
+      reader.readMessageContentPage({
+        messageUid: "sm-one",
+        byteOffset: 0,
+        maxBytes: 64,
+        expectedContentReference: null,
+      }),
+      /unselected message record must not be read/,
+    );
 
     assert.deepEqual(
       await read({
@@ -646,7 +660,7 @@ test("thinking detail preserves tool pairing, activity order and relay replaceme
         { ...activity("relayed-activity", 2), relayCorrelationId: "cross-page-relay" },
       ],
     });
-    const pageSize = QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize;
+    const pageSize = 2;
     const last = assistant("cross-page-last", {
       toolTimeline: [
         completedReadTool("paired-tool", {
@@ -661,11 +675,8 @@ test("thinking detail preserves tool pairing, activity order and relay replaceme
       relayCorrelationId: "cross-page-relay",
       content: "relayed detail",
     });
-    await writeSessionArtifact({
-      storageService,
+    await seedPartitionSession({
       sessionDir,
-      atomic: true,
-      predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
       sessionPayload: applySessionMessageFacts({
         ...createTestSessionRequiredFields(),
         sessionId,
@@ -678,16 +689,14 @@ test("thinking detail preserves tool pairing, activity order and relay replaceme
         ],
       }),
     });
-    await migrateSessionImmutableStorage({ storageService, sessionDir });
 
-    const store = await ImmutableSessionStore.open({ sessionDir });
-    const snapshot = await store.snapshot();
-    const options = { store, snapshot, lookupKey, cursor: null, limit: pageSize };
-    const firstPage = await readImmutableThinkingDetailPage(options);
+    await using reader = await partitionReaderAccess.openArtifact({ sessionDir });
+    const options = { lookupKey, cursor: null, limit: pageSize };
+    const firstPage = await reader.readThinkingDetailPage(options);
     assert.equal(firstPage.messageCount, pageSize + 2);
     assert.equal(firstPage.records.length, pageSize);
     assert.equal(firstPage.records[0].message.content, null);
-    const lastPage = await readImmutableThinkingDetailPage({
+    const lastPage = await reader.readThinkingDetailPage({
       ...options,
       cursor: firstPage.nextCursor,
     });
@@ -699,10 +708,10 @@ test("thinking detail preserves tool pairing, activity order and relay replaceme
     assert.equal(lastPage.records[0].message.toolTimeline[0].resultEvent.eventId, "paired-result");
     assert.equal(lastPage.records[1].message.content, "relayed detail");
     await assert.rejects(
-      readImmutableScopedTurnMessagePage({ ...options, cursor: firstPage.nextCursor }),
+      reader.readScopedTurnMessagePage({ ...options, cursor: firstPage.nextCursor }),
       { code: "SESSION_PAGE_CURSOR_CONFLICT" },
     );
-    await assert.rejects(readImmutableThinkingDetailPage({ ...options, maxBytes: 1 }), {
+    await assert.rejects(reader.readThinkingDetailPage({ ...options, maxBytes: 1 }), {
       code: "SESSION_MESSAGE_READ_BUDGET_EXCEEDED",
     });
 
@@ -753,26 +762,26 @@ test("thinking detail lookup requires both Turn identities", async () => {
   }
 });
 
-test("thinking detail distinguishes an absent session from an immutable session missing its head", async () =>
-  withSessionDir(async (sessionDir) => {
-    await using snapshots = new SessionPageSnapshots();
-    const pageSnapshots = snapshots.withReadAuthority(async () => {});
-    const read = () =>
-      readSessionThinkingDetail({
-        pageSnapshots,
-        identity: [sessionDir],
-        open: () => sessionReaderAccess.openArtifact({ sessionDir }),
-        sessionId: "missing-session",
-        lookupKey: { turnScopeId: "turn-two", dialogProcessId: "dialog-two" },
-        cursor: null,
-        limit: 1,
-      });
-    await assert.rejects(read(), { code: SESSION_ERROR_CODE.SESSION_NOT_FOUND });
-    await writeFile(path.join(sessionDir, IMMUTABLE_SESSION_FORMAT_FILE), "");
-    await assert.rejects(read(), (error) => {
-      assert.equal(error.code, "SESSION_IMMUTABLE_STORAGE_INVALID");
-      assert.equal(error.cause.code, "ENOENT");
-      assert.equal(error.cause.path, path.join(sessionDir, IMMUTABLE_SESSION_HEAD_FILE));
-      return true;
+test("thinking detail distinguishes an absent session from a partition session missing CURRENT", async (t) => {
+  const {
+    services: { repository, persistenceContext },
+    scope,
+  } = await createSessionRepositoryFixture(t);
+  const read = (sessionId, context) =>
+    repository.readSessionThinkingDetail("u1", sessionId, {
+      persistenceContext: context,
+      lookupKey: { turnScopeId: "turn-two", dialogProcessId: "dialog-two" },
+      cursor: null,
+      limit: 1,
     });
-  }));
+  await assert.rejects(
+    read("missing-session", repository.treePersistenceContext("u1", "missing-session")),
+    {
+      code: SESSION_ERROR_CODE.SESSION_NOT_FOUND,
+    },
+  );
+  await rm(path.join(scope.sessionDir, PARTITION_JOURNAL_HEAD_FILE));
+  await assert.rejects(read("s1", persistenceContext), {
+    code: "SESSION_STORAGE_CORRUPT",
+  });
+});

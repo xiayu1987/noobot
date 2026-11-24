@@ -31,7 +31,7 @@ import { createSessionTurnLifecycleSnapshot } from "../../session-turn-read-mode
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 import { text } from "@noobot/shared/value";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
-import { readImmutableTurnMutationSource } from "./immutable-turn-source.js";
+import { readTurnMutationSource } from "./turn-mutation-source.js";
 
 function validateAcceptedUserMessage(event) {
   const validation = assertTurnAcceptanceUserMessage(event);
@@ -118,14 +118,14 @@ function createAcceptedUserMessage({
   });
 }
 
-async function commitImmutableTurnState(
+async function commitTurnState(
   service,
   reader,
   scope,
   { userId, sessionId, expectedAggregateVersion, sessionCaller, event },
   commitChanges,
 ) {
-  const session = await readImmutableTurnMutationSource(reader, event);
+  const session = await readTurnMutationSource(reader, event);
   const { lifecycleEvent, acceptedUserMessageInput } = resolveTurnAcceptance(
     service,
     session,
@@ -262,7 +262,7 @@ export async function applyTurnLifecycleEvent({
     userId,
     sessionId,
     async ({ reader, scope, commitChanges }) => {
-      return await commitImmutableTurnState(
+      return await commitTurnState(
         this,
         reader,
         scope,
@@ -306,7 +306,7 @@ async function provisionSessionWithInitialTurn({
                 sessionCreated: false,
               };
             }
-            const result = await commitImmutableTurnState(
+            const result = await commitTurnState(
               this,
               reader,
               recoveredScope,
@@ -407,15 +407,15 @@ export async function upsertTurnTiming({
     userId,
     sessionId,
     async ({ reader, commitChanges }) => {
-      const session = await readImmutableTurnMutationSource(reader, { turnScopeId });
-      const before = JSON.stringify(session.turnTimings);
+      const session = await readTurnMutationSource(reader, { turnScopeId });
+      const before = structuredClone(session.turnTimings);
       upsertSessionTurnTiming(session, {
         turnScopeId,
         dialogProcessId,
         thinkingFinishedAt,
         modelLoopRound,
       });
-      if (JSON.stringify(session.turnTimings) === before)
+      if (isDeepStrictEqual(session.turnTimings, before))
         return { upserted: false, reason: "unchanged", session };
       const committedAt = this.now();
       await commitChanges(
@@ -473,7 +473,7 @@ export async function assertReusedUserTurnIdentity({
   await using reader = await this.sessionRepo.requireSessionReader(userId, sessionId, {
     persistenceContext,
   });
-  const session = await readImmutableTurnMutationSource(reader, {
+  const session = await readTurnMutationSource(reader, {
     turnScopeId: normalizedTurnScopeId,
   });
   const messages = session.messages;

@@ -31,6 +31,9 @@ export async function commitTurnSummaryCheckpoint(payload) {
                 }),
               ),
               messageContentAppends: request.messageContentAppends,
+              ...(Object.hasOwn(request, "messageContentReplacements")
+                ? { messageContentReplacements: request.messageContentReplacements }
+                : {}),
               messageMetadataUpdates: request.messageMetadataUpdates,
               summaryCheckpoints: [request],
             },

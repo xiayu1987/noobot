@@ -3,6 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  initializePartitionReaderFixture,
+  partitionReaderAccess,
+} from "../../../agent/__tests__/helpers/partition-reader-fixture.js";
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -13,10 +17,8 @@ import { createServicePluginHost } from "../../services/service-plugin-host.js";
 import {
   appendExecutionLogArtifact,
   createScopedSessionArtifactReader,
-  immutableSessionReaderAccess,
 } from "noobot-agent/session";
 import { SessionPageSnapshots } from "../../../agent/src/session/session-page-snapshots.js";
-import { initializeImmutableSession } from "../../../agent/src/session/session-artifact-session/immutable-session-bootstrap.js";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TEST_STORAGE_SERVICE } from "../storage-service.test-helpers.js";
@@ -25,7 +27,7 @@ const pageSnapshots = new SessionPageSnapshots();
 after(() => pageSnapshots.close());
 const SCOPED_SESSION_READER = createScopedSessionArtifactReader({
   storageService: TEST_STORAGE_SERVICE,
-  sessionReaderAccess: immutableSessionReaderAccess,
+  sessionReaderAccess: partitionReaderAccess,
   pageSnapshots,
   assertAuthorityActive: async () => {},
   withDeletionFence: (_userId, read) => read(),
@@ -45,9 +47,9 @@ const WORKFLOW_SESSION_TS = "2026-08-19T00:00:00.000Z";
 useProvisionedRuntimeEventsWorkspace(["u1"]);
 
 async function writeScopedSessionDir({ sessionDir, sessionPayload, metadata = null }) {
-  await initializeImmutableSession({
+  await initializePartitionReaderFixture({
     sessionDir,
-    session: sessionPayload,
+    session: { modelAlias: "workflow-test", selectedConnectorIds: [], ...sessionPayload },
     operationId: "initialize-workflow-route-test",
     scopedMetadata: metadata,
   });

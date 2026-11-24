@@ -8,12 +8,14 @@ import { isSessionCaller } from "@noobot/shared/session-caller";
 import { isSessionAggregateVersion } from "./command/session-command.js";
 import { isCanonicalMessageTimestamp } from "./message-entity-contract.js";
 import { assertSessionScopeIdentity, SESSION_ERROR_CODE } from "./errors.js";
+import { requireSessionSettings } from "./aggregate/session-settings.js";
+import { assertNoRetiredSessionFields } from "./aggregate/session-invariants.js";
 import { requirePartitionCollection } from "./partition-collections.js";
 import { PARTITION_HISTORICAL_OPERATIONS } from "./partition-collection-names.js";
 import {
-  assertImmutableOperationRetryMatches,
-  requireImmutableMigrationOperation,
-} from "./immutable-operation-receipt.js";
+  assertHistoricalOperationRetryMatches,
+  requirePartitionHistoricalOperation,
+} from "./partition-storage-history.js";
 import { storageDigest } from "#storage-digest";
 import { requirePartitionEntityPageKey } from "./partition-entity-page-budget.js";
 import {
@@ -55,6 +57,15 @@ export function createPartitionMutationReader(readEntries) {
 
 export const PARTITION_SESSION_METADATA = Object.freeze({ collection: "metadata", key: "session" });
 
+const SESSION_COLLECTION_FACT_FIELDS = Object.freeze([
+  "messages",
+  "dialogOrder",
+  "turnTimings",
+  "sessionArtifactEvents",
+  "turnLifecycle",
+  "turnSummaryCheckpoints",
+]);
+
 export function partitionHistoricalOperationAddress(operationId) {
   return {
     collection: PARTITION_HISTORICAL_OPERATIONS,
@@ -63,7 +74,7 @@ export function partitionHistoricalOperationAddress(operationId) {
 }
 
 export function createPartitionHistoricalOperationMutation(evidence) {
-  const value = requireImmutableMigrationOperation(evidence, evidence?.operationId);
+  const value = requirePartitionHistoricalOperation(evidence, evidence?.operationId);
   return { ...partitionHistoricalOperationAddress(value.operationId), owner: null, value };
 }
 
@@ -90,11 +101,11 @@ function requireHistoricalOperationMutation(mutation, operationId) {
     mutation.key !== partitionHistoricalOperationAddress(operationId).key
   )
     throw new TypeError("Historical operation evidence requires its own creation identity");
-  return requireImmutableMigrationOperation(mutation.value, operationId);
+  return requirePartitionHistoricalOperation(mutation.value, operationId);
 }
 
 export function assertPartitionHistoricalOperationEvidence(mutation, evidence) {
-  const expected = requireImmutableMigrationOperation(evidence, evidence?.operationId);
+  const expected = requirePartitionHistoricalOperation(evidence, evidence?.operationId);
   const actual = requireHistoricalOperationMutation(mutation, expected.operationId);
   if (JSON.stringify(stableValue(actual)) !== JSON.stringify(stableValue(expected)))
     throw partitionJournalError(
@@ -123,7 +134,7 @@ export function replayPartitionHistoricalOperation(mutation, { operationId, requ
     );
   const { receipt } = requireHistoricalOperationMutation(mutation, operationId);
   try {
-    assertImmutableOperationRetryMatches(receipt, operationId, requestDigest);
+    assertHistoricalOperationRetryMatches(receipt, operationId, requestDigest);
   } catch (error) {
     throw Object.assign(new PartitionAdmissionRejection(error.code, error.message), error);
   }
@@ -193,6 +204,20 @@ export function assertPartitionStoredSessionMetadata(snapshot, session, scope) {
     throw partitionJournalError(
       "SESSION_STORAGE_CORRUPT",
       "Published partition metadata contains invalid session facts",
+    );
+  try {
+    requireSessionSettings(session);
+    assertNoRetiredSessionFields(session);
+  } catch (cause) {
+    if (cause.code !== "SESSION_COMMIT_INPUT_INVALID" && cause.code !== "SESSION_PROTOCOL_INVALID")
+      throw cause;
+    throw Object.assign(partitionJournalError("SESSION_STORAGE_CORRUPT", cause.message), { cause });
+  }
+  const duplicated = SESSION_COLLECTION_FACT_FIELDS.find((field) => Object.hasOwn(session, field));
+  if (duplicated)
+    throw partitionJournalError(
+      "SESSION_STORAGE_CORRUPT",
+      `Published partition metadata contains collection fact:${duplicated}`,
     );
   if (Object.hasOwn(session, "autoTitle"))
     throw partitionJournalError(

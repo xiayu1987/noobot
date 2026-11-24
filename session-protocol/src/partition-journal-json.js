@@ -8,7 +8,7 @@ import { isObjectLike } from "@noobot/shared/value";
 
 const encoder = new TextEncoder();
 const nonAscii = /[^\x00-\x7f]/;
-export const JOURNAL_JSON_MAX_DEPTH = QUANTITY_THRESHOLDS.immutableStorage.journalJsonMaxDepth;
+export const JOURNAL_JSON_MAX_DEPTH = QUANTITY_THRESHOLDS.partitionStorage.journalJsonMaxDepth;
 
 export function captureJournalJson(value, { budget = Infinity, budgetError } = {}) {
   const { serialized, bytes } = writeJournalJson(value, {

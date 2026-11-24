@@ -11,6 +11,8 @@ export function createTestSessionRequiredFields() {
   return {
     parentSessionId: "",
     caller: SESSION_CALLER.USER,
+    modelAlias: "",
+    selectedConnectorIds: [],
     messages: [],
     sessionArtifactEvents: [],
     dialogOrder: [],

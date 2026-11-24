@@ -35,7 +35,6 @@ export default {
   eventProtocol: "Event protocol",
   longMemory: "Long-term memory",
   contextProtocol: "Context protocol",
-  immutableStorage: "Immutable storage",
   partitionStorage: "Partition storage",
   sessionStorage: "Session storage",
   sessionPageSnapshots: "Session page snapshots",

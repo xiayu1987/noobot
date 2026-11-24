@@ -59,6 +59,7 @@ import { migrateRetiredTaskFields } from "./retired-task-fields-migration.js";
 import { migrateSessionArtifactEvents } from "./session-artifact-events-migration.js";
 import { migrateTurnLifecycleRecords } from "./turn-lifecycle-record-migration.js";
 import { migrateDialogOrderStart } from "./dialog-order-start-migration.js";
+import { removeRetiredSessionProjections } from "./retired-session-projections.js";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 import {
   assertLegacyAuthorityEventOutbox,
@@ -740,10 +741,9 @@ function migrateReplacedTurns(context) {
   }
 }
 
-function dropLegacyTerminalCommits(context) {
-  if (!Object.hasOwn(context.next, "turnTerminalCommits")) return;
-  delete context.next.turnTerminalCommits;
-  context.changed = true;
+function migrateRetiredSessionProjections(context) {
+  if (removeRetiredSessionProjections(context.next))
+    markMigrated(context, "retired-session-projections-v1");
 }
 
 function extractLegacyAuthorityEventOutbox(context) {
@@ -801,7 +801,7 @@ const DOCUMENT_MIGRATION_STEPS = Object.freeze([
   migrateMessageIdentity,
   migrateMessageEntityContract,
   migrateReplacedTurns,
-  dropLegacyTerminalCommits,
+  migrateRetiredSessionProjections,
   migrateWriteTimeDialogFacts,
   migrateSessionCaller,
   migrateSessionArtifactEvents,

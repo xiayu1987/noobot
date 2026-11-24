@@ -17,10 +17,11 @@ export const EXECUTION_PROJECTION_PENDING_SUFFIX = ".projection-pending.json";
 export const EXECUTION_PROJECTION_OUTPUT_MAX_RECEIPTS = 100;
 
 export function executionProjectionOutputRecordBytes() {
-  return LENGTH_THRESHOLDS.immutableStorage.executionProjectionOutputRecordBytes;
+  return LENGTH_THRESHOLDS.sessionStorage.executionProjectionOutputRecordBytes;
 }
 
 const SIZING_CHECKSUM = storageDigest("");
+const utf8 = new TextEncoder();
 
 export function executionProjectionOutputEntryBytes(line, receipt) {
   const intent = requireExecutionProjectionIntent({
@@ -29,8 +30,9 @@ export function executionProjectionOutputEntryBytes(line, receipt) {
     payload: line,
     receipts: [receipt],
   });
-  const raw = `${JSON.stringify({ payload: JSON.stringify(intent), checksum: SIZING_CHECKSUM })}\n`;
-  const bytes = new TextEncoder().encode(raw).byteLength;
+  const payload = JSON.stringify(intent);
+  const raw = `${JSON.stringify({ payload, checksum: SIZING_CHECKSUM })}\n`;
+  const bytes = utf8.encode(raw).byteLength;
   if (bytes > executionProjectionOutputRecordBytes())
     throw new RangeError("Projection output entry exceeds its byte budget");
   return bytes;

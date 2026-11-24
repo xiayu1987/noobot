@@ -6,11 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { SESSION_DELETION_STAGE } from "@noobot/workspace-protocol/session-tombstone";
 import { AttachmentService } from "../../src/artifacts/index.js";
-import {
-  createPartitionSessionServices,
-  createSessionServices,
-  immutableSessionReaderAccess,
-} from "../../src/session/index.js";
+import { createPartitionSessionServices } from "../../src/session/index.js";
 import { TEST_SCOPED_SESSION_ROOTS } from "./scoped-session-roots.js";
 import { journalTestLimits } from "./partition-journal-cases.js";
 
@@ -26,13 +22,7 @@ export function createTestPartitionSessionServices(globalConfig, options = {}) {
 }
 
 export function createTestSessionServices(globalConfig, options = {}) {
-  return createSessionServices(globalConfig, {
-    now: testWallClock,
-    scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
-    sessionReaderAccess: immutableSessionReaderAccess,
-    ...options,
-    attachmentService: new AttachmentService(globalConfig),
-  });
+  return createTestPartitionSessionServices(globalConfig, options);
 }
 
 export async function executeEmptySessionCleanup({ stage }) {

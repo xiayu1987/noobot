@@ -161,6 +161,27 @@ function invalidSessionAggregate(errors) {
   return error;
 }
 
+export const RETIRED_SESSION_PROJECTION_FIELDS = Object.freeze([
+  "sessionArtifacts",
+  "turnTerminalCommits",
+  "shortMemoryCheckpoint",
+]);
+
+function collectRetiredSessionFieldErrors(session) {
+  const errors = ["version", "revision", ...RETIRED_SESSION_PROJECTION_FIELDS]
+    .filter((field) => Object.hasOwn(session, field))
+    .map((field) => `retired_session_field:${field}`);
+  if (Object.hasOwn(session, "turnStatuses")) errors.push("duplicate_terminal_fact");
+  if (Object.hasOwn(session, "mutationReceipts")) errors.push("duplicate_command_receipts");
+  return errors;
+}
+
+export function assertNoRetiredSessionFields(session) {
+  const errors = collectRetiredSessionFieldErrors(session);
+  if (errors.length) throw invalidSessionAggregate(errors);
+  return session;
+}
+
 export function assertSessionAggregateShape(session) {
   const errors = validateSessionAggregateShape(session);
   if (errors.length) throw invalidSessionAggregate(errors);
@@ -209,8 +230,7 @@ export function validateSessionAggregateInvariants(session) {
     if (commandIds.has(receipt.commandId)) errors.push("duplicate_command_receipt");
     commandIds.add(receipt.commandId);
   }
-  if (Object.hasOwn(session, "turnStatuses")) errors.push("duplicate_terminal_fact");
-  if (Object.hasOwn(session, "mutationReceipts")) errors.push("duplicate_command_receipts");
+  errors.push(...collectRetiredSessionFieldErrors(session));
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 

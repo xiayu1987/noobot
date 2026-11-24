@@ -3,13 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { partitionReaderAccess } from "../../../agent/__tests__/helpers/partition-reader-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  createSessionFacade,
-  createSessionServices,
-  immutableSessionReaderAccess,
-} from "noobot-agent/session";
+import { createSessionFacade, createSessionServices } from "noobot-agent/session";
 import { AttachmentService } from "noobot-agent/attach";
 import { resolveScopedSessionRoots } from "@noobot/workspace-protocol";
 import { AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
@@ -30,7 +27,7 @@ function openSessionFacade(workspaceRoot) {
       { workspaceRoot },
       {
         now: () => new Date().toISOString(),
-        sessionReaderAccess: immutableSessionReaderAccess,
+        sessionReaderAccess: partitionReaderAccess,
         attachmentService: new AttachmentService({ workspaceRoot }),
         scopedSessionRoots: resolveScopedSessionRoots([]),
       },

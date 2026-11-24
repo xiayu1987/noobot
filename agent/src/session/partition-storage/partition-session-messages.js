@@ -411,7 +411,7 @@ export class PartitionSessionMessages {
     snapshot,
     turnScopeId,
     after = 0,
-    limit = QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize,
+    limit = QUANTITY_THRESHOLDS.sessionStorage.messageReadPageSize,
     maxBytes,
   }) {
     const budget = requireMessagePage({ turnScopeId, after, limit, maxBytes });

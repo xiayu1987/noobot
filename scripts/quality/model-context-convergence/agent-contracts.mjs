@@ -140,36 +140,6 @@ export const AGENT_CONTRACTS = Object.freeze([
     ],
   },
   {
-    file: "agent/src/session/session-artifact-session/commit-session-changes.js",
-    required: [
-      [
-        "immutable commit delegates checkpoint preparation to its transaction plan",
-        /prepareImmutableSummaryCheckpoint\(\{\s*store,\s*plan,\s*checkpoint,\s*committedAt:\s*input\.committedAt,\s*\}\)/,
-      ],
-    ],
-  },
-  {
-    file: "agent/src/session/session-artifact-session/immutable-summary-changes.js",
-    required: [
-      [
-        "immutable checkpoint request delegates to protocol",
-        /parseTurnSummaryCheckpointRequest\(checkpoint\)/,
-      ],
-      [
-        "checkpoint transaction delegates to protocol",
-        /applyIndexedTurnSummaryCheckpoint\(\s*session,\s*request,\s*committedAt,/,
-      ],
-      [
-        "checkpoint reads tool pair membership from its transaction plan",
-        /plan\.getMany\("toolPairs", keys\)/,
-      ],
-      [
-        "checkpoint rejects missing tool pair indexes",
-        /if \(!pairs\.get\(key\)\) throw immutableStorageError\("Selected message has no tool pair index"\)/,
-      ],
-    ],
-  },
-  {
     file: "context-protocol/src/policy/summary-checkpoint-transaction.js",
     required: [
       [

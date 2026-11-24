@@ -13,10 +13,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { SESSION_ERROR_CODE, TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
-import {
-  IMMUTABLE_SESSION_FORMAT_FILE,
-  IMMUTABLE_SESSION_HEAD_FILE,
-} from "@noobot/session-protocol/immutable-storage";
+import { UNSUPPORTED_SESSION_STORAGE } from "@noobot/session-protocol/session-storage-format";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createJournalOwner, createRepository } from "./partition-repository-access.replay.js";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
@@ -118,7 +115,7 @@ test("business first send survives partition publication followed by a placement
   const { events } = await reader.readOutboxPage({ consumerId: "test-consumer" });
   assert.equal(events.length, 1);
   assert.equal(events[0].eventId, (await reader.readCommand(commandId)).eventId);
-  for (const file of [IMMUTABLE_SESSION_FORMAT_FILE, IMMUTABLE_SESSION_HEAD_FILE]) {
+  for (const file of [UNSUPPORTED_SESSION_STORAGE.format, UNSUPPORTED_SESSION_STORAGE.head]) {
     await assert.rejects(stat(join(sessionDir, file)), { code: "ENOENT" });
   }
 });
@@ -230,29 +227,6 @@ test("filesystem repository reads and commits through one partition authority", 
   );
   const headPath = join(sessionDir, "CURRENT");
   const before = await readFile(headPath);
-  const legacy = repositories.sessionRepository.sessionReaderAccess;
-  const expected = { code: "SESSION_STORAGE_AUTHORITY_MISMATCH" };
-  let mutationEntered = false;
-  await assert.rejects(legacy.readPlacement(scope), expected);
-  await assert.rejects(legacy.recover(scope), expected);
-  await assert.rejects(legacy.open(scope), expected);
-  await assert.rejects(legacy.openArtifact({ sessionDir }), expected);
-  await assert.rejects(
-    legacy.withMutation(scope, () => {
-      mutationEntered = true;
-    }),
-    expected,
-  );
-  assert.equal(mutationEntered, false);
-  await assert.rejects(
-    legacy.create(scope, {
-      session: repository.createInitialSession({ sessionId, parentSessionId, caller: "user" }),
-      operationId: "wrong-authority",
-      initialTurn: null,
-      scopedMetadata: null,
-    }),
-    expected,
-  );
   assert.deepEqual(await readFile(headPath), before);
   const display = await repository.readSessionDisplaySummary(userId, sessionId, options);
   assert.equal(display.generation, receipt.generation);
@@ -297,7 +271,7 @@ test("filesystem repository reads and commits through one partition authority", 
     ),
     ["m1"],
   );
-  for (const file of [IMMUTABLE_SESSION_FORMAT_FILE, IMMUTABLE_SESSION_HEAD_FILE]) {
+  for (const file of [UNSUPPORTED_SESSION_STORAGE.format, UNSUPPORTED_SESSION_STORAGE.head]) {
     await assert.rejects(stat(join(sessionDir, file)), { code: "ENOENT" });
   }
   await persistSessionDeletionMarkers(cold, userId, [sessionId]);

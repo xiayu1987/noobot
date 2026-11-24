@@ -12,13 +12,14 @@ import { applyRuntimeEventsEnv } from "@noobot/runtime-events/testing";
 
 export function buildHarness() {
   let root;
+  let runtime;
   let restoreRuntimeEventsEnv;
   return {
     async setup() {
       root = await mkdtemp(path.join(os.tmpdir(), "noobot-scoped-session-"));
       restoreRuntimeEventsEnv = applyRuntimeEventsEnv({ workspaceRoot: root });
       await initializeUserWorkspace(root, "alice");
-      const runtime = createTestSessionServices({ workspaceRoot: root });
+      runtime = createTestSessionServices({ workspaceRoot: root });
       const { sessionRepository, fileSystemExecutionRepository } = runtime.repositories;
       return {
         root,
@@ -30,8 +31,12 @@ export function buildHarness() {
       };
     },
     async cleanup() {
-      restoreRuntimeEventsEnv();
-      await rm(root, { recursive: true, force: true });
+      try {
+        await runtime.close();
+      } finally {
+        restoreRuntimeEventsEnv();
+        await rm(root, { recursive: true, force: true });
+      }
     },
   };
 }

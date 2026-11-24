@@ -6,13 +6,24 @@
 import { persistSessionDeletionMarkers } from "../helpers/session-services.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rm } from "node:fs/promises";
 import { withProvisionedSessions } from "../helpers/provisioned-sessions.js";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
+import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
+import { PARTITION_MESSAGE_COLLECTIONS } from "@noobot/session-protocol/partition-session-messages";
 
 const identity = { userId: "u1", sessionId: "s1", persistenceScope: null };
+
+function guardMessageBodies(read) {
+  return Object.assign((query) => {
+    assert.notEqual(
+      query.collection,
+      PARTITION_MESSAGE_COLLECTIONS.content,
+      "run context must not read message bodies",
+    );
+    return read(query);
+  }, read);
+}
 
 test("run context uses accepted authority facts without materializing message bodies", async (t) => {
   await withProvisionedSessions(
@@ -40,12 +51,19 @@ test("run context uses accepted authority facts without materializing message bo
       assert.equal(accepted.applied, true);
       const repo = runtime.repositories.sessionRepository;
       const full = await session.getSessionBundle(identity);
-      await rm(scopes.s1.sessionFile, { force: true });
-      const get = ImmutableSessionStore.prototype.get;
-      t.mock.method(ImmutableSessionStore.prototype, "get", function (snapshot, collection, key) {
-        assert.notEqual(collection, "messages", "run context must not read message bodies");
-        return get.call(this, snapshot, collection, key);
-      });
+      const withCollectionReader = PartitionTransactions.prototype.withCollectionReader;
+      t.mock.method(
+        PartitionTransactions.prototype,
+        "withCollectionReader",
+        function (snapshot, operation, options) {
+          return withCollectionReader.call(
+            this,
+            snapshot,
+            (read) => operation(guardMessageBodies(read)),
+            options,
+          );
+        },
+      );
       repo.requireTurnView = () => {
         throw new Error("initialization must not materialize a turn view");
       };

@@ -15,7 +15,7 @@ import {
   resolveExecutionTurnDir,
   readExecutionTurnIndex,
 } from "../../src/session/session-artifact-execution-logs.js";
-import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
+import { withTemp } from "../helpers/temporary-directory.js";
 
 function repositoryAt(sessionDir) {
   const state = { locked: false, entries: 0, releases: 0 };

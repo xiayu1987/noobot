@@ -21,9 +21,12 @@ import {
 } from "@noobot/session-protocol/partition-turn-visibility";
 import { checkPartitionMessageStorage } from "./partition-message-record.js";
 import {
+  partitionAuthorityEventRecord,
+  requireCommittedEventPosition,
+} from "./partition-event-visibility.js";
+import {
   assertAuthorityEventSequenceAdvance,
   assertNewAuthorityEventScope,
-  decodeStoredAuthorityOutboxEvent,
   encodeStoredAuthorityOutboxEvent,
   normalizeAuthorityEventOutbox,
   authorityOutboxPositionKey,
@@ -93,12 +96,9 @@ export async function preparePartitionTurnTransition({
     readCommand: (key) => readPartitionCommandReceipt(readMembership, key),
     isCommittedEventId: async (key) => (await read("events", key)) !== null,
     readPreparedEvent: async (key) => {
-      const record = await read("events", key);
-      if (record === null)
-        throw partitionJournalError("SESSION_STORAGE_CORRUPT", "Lifecycle receipt has no event");
-      const { ordinal: _ordinal, ...event } = decodeStoredAuthorityOutboxEvent(record);
-      if (event.eventId !== key)
-        throw partitionJournalError("SESSION_STORAGE_CORRUPT", "Lifecycle event identity mismatch");
+      const record = partitionAuthorityEventRecord(await read("events", key), key, scope);
+      await requireCommittedEventPosition(read, record);
+      const { ordinal: _ordinal, ...event } = record;
       return event;
     },
     materializeTerminal: async ({ terminalStatus, previousSummaryVersion }) => {

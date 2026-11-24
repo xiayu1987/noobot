@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
-import { isAtomicWriteTemporaryFile } from "@noobot/platform-compatibility/atomic-file-write";
+import { durableJsonPublicationTarget } from "../shared/storage/durable-file.js";
 import { fsReaddir } from "../shared/storage/fs-adapter.js";
 import {
   EXECUTION_EVENT_INDEX_ERROR_CODE,
+  EXECUTION_EVENT_INDEX_FILE,
   EXECUTION_EVENT_TURNS_DIR,
   requireExecutionSegmentSequence,
 } from "@noobot/session-protocol/execution-event-index";
@@ -23,7 +24,7 @@ async function readUnindexedTurnTemporaryFiles(turnDir, dialogProcessId, signal)
   const temporaryFiles = [];
   for (const file of await fsReaddir(turnDir, { withFileTypes: true })) {
     signal?.throwIfAborted();
-    if (!file.isFile() || !isAtomicWriteTemporaryFile(file.name)) {
+    if (!file.isFile() || durableJsonPublicationTarget(file.name) !== EXECUTION_EVENT_INDEX_FILE) {
       throw Object.assign(
         new Error(`unregistered execution turn has no index: ${dialogProcessId}`),
         { code: EXECUTION_EVENT_INDEX_ERROR_CODE.CORRUPTED },

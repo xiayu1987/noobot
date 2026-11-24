@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createImmutableRepositoryFixture as fixture } from "../helpers/immutable-repository-fixture.js";
+import { createSessionRepositoryFixture as fixture } from "../helpers/session-repository-fixture.js";
 import { repositoryMessage as message, timestamp } from "../helpers/session-repository-message.js";
 import { partitionRepositoryPerformanceFixture } from "../helpers/partition-repository-performance-fixture.js";
 

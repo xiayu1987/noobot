@@ -5,23 +5,16 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
+import { writeFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { withSessionReadCache, memoizeSessionRead } from "../../src/session/session-read-cache.js";
 import { observeSessionStorageWork } from "../../src/session/session-storage-observation.js";
 import {
   readOptionalJsonWithStorage,
   writeJsonWithStorage,
-} from "../../src/session/session-artifact-session/artifact-json-io.js";
-import {
-  beginArtifactPruning,
-  pruneSessionArtifacts,
-} from "../../src/session/session-artifact-session/artifact-pruning.js";
-import { buildSessionArtifactFileMap } from "../../src/session/session-artifact-files.js";
+} from "../../src/session/session-artifact-json-io.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
-import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
-
-const missing = (file) => assert.rejects(stat(file), { code: "ENOENT" });
+import { withTemp } from "../helpers/temporary-directory.js";
 
 test("read caches deduplicate concurrent and nested reads and isolate sessions", async () =>
   withTemp(async (root) => {
@@ -113,58 +106,4 @@ test("transaction JSON copies also isolate injected storage without source obser
       first.nested.value = 99;
       assert.ok(Object.is((await readOptionalJsonWithStorage(options)).nested.value, -0));
     });
-  }));
-
-test("pruning scans once, deletes lost references without scans, and recovers after interrupted writes", async () =>
-  withTemp(async (root) => {
-    const files = buildSessionArtifactFileMap(root);
-    await mkdir(files.turnsDir, { recursive: true });
-    await mkdir(path.join(files.turnSnapshotsDir, "turn-1"), { recursive: true });
-    await writeFile(files.session, "{}");
-    const journal = path.join(files.turnsDir, "turn-1.jsonl");
-    const orphan = path.join(files.turnsDir, "orphan.jsonl");
-    const snapshot = path.join(files.turnSnapshotsDir, "turn-1", "checkpoint-1.json");
-    const turnOrder = [
-      {
-        file: path.relative(root, journal).replaceAll("\\", "/"),
-        summarySnapshots: [{ file: path.relative(root, snapshot).replaceAll("\\", "/") }],
-      },
-    ];
-    for (const file of [journal, orphan, snapshot]) await writeFile(file, "{}");
-    assert.equal(await beginArtifactPruning(files), true);
-    await pruneSessionArtifacts({ files, turnOrder, fullScan: true });
-    await missing(orphan);
-    assert.equal(await readFile(snapshot, "utf8"), "{}");
-    assert.equal(await beginArtifactPruning(files), false);
-    const retained = await observeSessionStorageWork(() =>
-      pruneSessionArtifacts({ files, previousManifest: { turnOrder }, turnOrder, fullScan: false }),
-    );
-    assert.equal(retained.work.pruneSnapshotVisits || 0, 0);
-    assert.equal(await beginArtifactPruning(files), false);
-    const delta = await observeSessionStorageWork(() =>
-      pruneSessionArtifacts({
-        files,
-        previousManifest: { turnOrder },
-        turnOrder: [],
-        fullScan: false,
-      }),
-    );
-    assert.equal(delta.work.pruneDirectoryScans || 0, 0);
-    await missing(journal);
-    await missing(snapshot);
-    assert.equal(await beginArtifactPruning(files), false);
-    await writeFile(orphan, "uncommitted");
-    assert.equal(
-      await beginArtifactPruning(files),
-      true,
-      "an interrupted write must force reconciliation",
-    );
-    await pruneSessionArtifacts({ files, turnOrder: [], fullScan: true });
-    await missing(orphan);
-    await writeFile(files.session, '{"external":true}');
-    assert.equal(
-      await beginArtifactPruning(files),
-      true,
-      "external manifest changes invalidate reconciliation",
-    );
   }));

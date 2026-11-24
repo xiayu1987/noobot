@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { open, readdir, mkdir, writeFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
-import { isAtomicWriteTemporaryFile } from "@noobot/platform-compatibility/atomic-file-write";
+import { durableJsonPublicationTarget } from "../../src/shared/storage/durable-file.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import {
   appendRollingJsonlArtifactLogs,
@@ -16,7 +16,7 @@ import {
 } from "../../src/session/session-artifact-execution-logs.js";
 import { recoverExecutionLogIndexes } from "../../src/session/execution-log-recovery.js";
 import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
-import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
+import { withTemp } from "../helpers/temporary-directory.js";
 
 async function leaveAtomicPreparation(sessionDir) {
   const failure = new Error("index rename interrupted");
@@ -30,7 +30,7 @@ async function leaveAtomicPreparation(sessionDir) {
     async rm(file, options) {
       if (
         path.dirname(file) === path.dirname(indexPath) &&
-        isAtomicWriteTemporaryFile(path.basename(file))
+        durableJsonPublicationTarget(path.basename(file)) === path.basename(indexPath)
       )
         throw cleanupFailure;
       return rm(file, options);
@@ -56,7 +56,7 @@ async function leaveAtomicPreparation(sessionDir) {
   const turnDir = resolveExecutionTurnDir(sessionDir, "turn-1");
   const files = await readdir(turnDir);
   assert.equal(files.length, 1);
-  assert.equal(isAtomicWriteTemporaryFile(files[0]), true);
+  assert.equal(durableJsonPublicationTarget(files[0]), "index.json");
   return { turnDir, files };
 }
 
@@ -70,6 +70,19 @@ test("recovery removes only owned interrupted atomic preparation files and publi
         .repaired,
       [],
     );
+  });
+});
+
+test("recovery rejects another document's publication before removing owned preparation", async () => {
+  await withTemp(async (sessionDir) => {
+    const { turnDir, files } = await leaveAtomicPreparation(sessionDir);
+    const unrelated = files[0].replace("index.json", "metadata.json");
+    await writeFile(path.join(turnDir, unrelated), "unrelated evidence\n");
+    await assert.rejects(
+      recoverExecutionLogIndexes({ storageService: TEST_STORAGE_SERVICE, sessionDir }),
+      { code: "EXECUTION_EVENT_INDEX_CORRUPTED" },
+    );
+    assert.deepEqual((await readdir(turnDir)).sort(), [...files, unrelated].sort());
   });
 });
 

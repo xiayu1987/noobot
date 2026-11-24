@@ -7,7 +7,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import {
+  PARTITION_JOURNAL_FRAME,
+  PARTITION_JOURNAL_HEAD_FILE,
+} from "@noobot/session-protocol/partition-journal";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { resolveWorkspaceSessionLocation } from "../src/session-location.js";
 import { persistSession, tempRoot } from "./runtime-events-test-fixtures.js";
@@ -20,9 +23,9 @@ test("event location bounds head I/O and closes the descriptor before rejecting 
     parentSessionId: "",
     caller: SESSION_CALLER.USER,
   });
-  const file = path.join(sessionDir, "head.json");
+  const file = path.join(sessionDir, PARTITION_JOURNAL_HEAD_FILE);
   const original = await fs.readFile(file);
-  const limit = LENGTH_THRESHOLDS.immutableStorage.headBytes;
+  const limit = PARTITION_JOURNAL_FRAME.controlBytes;
   await fs.writeFile(file, Buffer.alloc(limit * 32, 32));
   const readFile = fs.readFile.bind(fs);
   const open = fs.open.bind(fs);
@@ -49,7 +52,7 @@ test("event location bounds head I/O and closes the descriptor before rejecting 
   });
   const location = { workspaceRoot, userId: "admin", sessionId };
   await assert.rejects(resolveWorkspaceSessionLocation(location), {
-    code: "SESSION_IMMUTABLE_STORAGE_INVALID",
+    code: "SESSION_STORAGE_CORRUPT",
   });
   assert.equal(total, limit + 1);
   assert.equal(closes, 1);

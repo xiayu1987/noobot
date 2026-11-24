@@ -8,6 +8,10 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { requirePartitionJournalHead } from "@noobot/session-protocol/partition-journal";
 import { captureSessionTransactionInput } from "@noobot/session-protocol/session-changes";
+import {
+  PARTITION_ENTITY_PAGE_CODEC,
+  decodePartitionEntityPageDelta,
+} from "@noobot/session-protocol/partition-entity-directory";
 import { journalPartitionPath } from "../../src/session/partition-storage/journal-io.js";
 import { PartitionJournal } from "../../src/session/partition-storage/partition-journal.js";
 import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
@@ -396,14 +400,24 @@ test("cold creation-owner reads do not open version directories or cache stale v
       prepare: async (snapshot, view) => {
         const query = { collection, keys: ["m", "missing"] };
         assert.notEqual(snapshot.entityDirectory.latestUpdates, null);
+        const position = snapshot.entityDirectory.identities.position;
+        const expectedReads = [directoryPageRead(root, position)];
+        const [file, offset, bytes] = expectedReads[0];
+        const page = (await readFile(file)).subarray(offset, offset + bytes);
+        if (page[0] === PARTITION_ENTITY_PAGE_CODEC.delta) {
+          const delta = decodePartitionEntityPageDelta(
+            page.subarray(1).toString("utf8"),
+            snapshot,
+            position,
+          );
+          expectedReads.push(directoryPageRead(root, delta.base));
+        }
         const { reads } = await observeDirectoryPageReads(async () => {
           const owners = await view.getCreationOwners(query);
           assert.deepEqual(owners.get("m"), created.owner);
           assert.equal(owners.get("missing"), null);
         });
-        assert.deepEqual(reads, [
-          directoryPageRead(root, snapshot.entityDirectory.identities.position),
-        ]);
+        assert.deepEqual(reads, expectedReads);
         const latest = await view.getLatestMany(query);
         assert.equal(latest.get("m").mutation.value, "updated");
         assert.equal(latest.get("missing"), null);

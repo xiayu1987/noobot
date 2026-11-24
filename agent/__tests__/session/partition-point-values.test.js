@@ -25,6 +25,76 @@ import {
   createTransactionCase,
 } from "../helpers/partition-journal-cases.js";
 import { observeStorageIo } from "../helpers/storage-io-observation.js";
+import { createPartitionCollectionReadBudget } from "@noobot/session-protocol/partition-collection-query";
+
+test("scoped frame reuse still reads selected values and expires with the scope", async (context) => {
+  const { journal, root } = await createTransactionCase(context, {}, { autoClose: false });
+  context.after(() => assert.rejects(journal.close(), { code: "SESSION_STORAGE_CORRUPT" }));
+  const committed = await commitFixtureTransaction(new PartitionTransactions(journal), {
+    epoch: journal.head.epoch,
+    sequence: 1,
+    expectedGeneration: 0,
+    operationId: "scoped-frame",
+    input: null,
+    mutations: [{ collection: "messages", key: "selected", owner: null, value: "original" }],
+    result: null,
+  });
+  const file = journalPartitionPath(root, committed.reference.partition);
+  const original = await readFile(file);
+  await observeStorageIo(root, async (readBytes) =>
+    journal.usingSnapshot(async (snapshot) => {
+      const read = (readBudget = createPartitionCollectionReadBudget(snapshot)) =>
+        journal.readRecordSlots({
+          snapshot,
+          reference: committed.reference,
+          slots: [0],
+          readBudget,
+        });
+      let firstBytes;
+      await journal.withRecordReader(snapshot, async () => {
+        const before = readBytes();
+        const first = await read();
+        firstBytes = readBytes() - before;
+        const repeatedBefore = readBytes();
+        const repeated = await read();
+        assert.deepEqual(repeated, first);
+        assert.ok(readBytes() - repeatedBefore < firstBytes);
+        await assert.rejects(
+          read({
+            consume: () => {
+              throw new Error("read budget exhausted");
+            },
+          }),
+          /read budget exhausted/,
+        );
+      });
+      const separateBefore = readBytes();
+      await journal.withRecordReader(snapshot, read);
+      assert.equal(readBytes() - separateBefore, firstBytes);
+      await journal.withRecordReader(snapshot, async () => {
+        await read();
+        const damaged = Buffer.from(original);
+        damaged[damaged.indexOf("original")] = 0x58;
+        await writeFile(file, damaged);
+        try {
+          await assert.rejects(read(), { code: "SESSION_STORAGE_CORRUPT" });
+        } finally {
+          await writeFile(file, original);
+        }
+      });
+      const damaged = Buffer.from(original);
+      damaged[damaged.length - 1] = 0x58;
+      await writeFile(file, damaged);
+      try {
+        await assert.rejects(journal.withRecordReader(snapshot, read), {
+          code: "SESSION_STORAGE_CORRUPT",
+        });
+      } finally {
+        await writeFile(file, original);
+      }
+    }),
+  );
+});
 
 test("committed mutation shape is checked before point identity and during frame replay", async (t) => {
   const { journal, root } = await createTransactionCase(t, {}, { autoClose: false });

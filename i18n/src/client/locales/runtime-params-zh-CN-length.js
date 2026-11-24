@@ -5,6 +5,10 @@
  */
 export default {
   sessionStorage: {
+    executionProjectionOutputRecordBytes: {
+      name: "执行投影输出记录上限",
+      description: "执行投影输出记录编码后的最大字节数。",
+    },
     messageReadBytes: {
       name: "消息读取预算",
       description: "单次有界会话消息请求允许读取的最大字节数。",
@@ -25,59 +29,6 @@ export default {
       name: "日志目录条目预算",
       description: "分区日志目录条目编码后的最大字节数。",
     },
-  },
-  immutableStorage: {
-    partitionContentChunkBytes: {
-      name: "分区正文块字节上限",
-      description: "单个独立校验消息正文块中规范 JSON 正文字节数的协议上限。",
-    },
-    entityPageKeyBytes: {
-      name: "实体分页键字节上限",
-      description: "实体目录键转义后 JSON 字节数的协议上限。",
-    },
-    historicalDirectoryChecksumBytes: {
-      name: "历史实体目录校验和宽度",
-      description: "历史实体目录磁盘格式规定的固定校验和字节数。",
-    },
-    valueInlineBytes: {
-      name: "值内联上限",
-      description: "使用内容图之前允许内联存储的值编码最大字节数。",
-    },
-    indexTargetBytes: {
-      name: "索引页目标大小",
-      description: "不可变索引页编码后的目标字节数。",
-    },
-    commitIndexTargetBytes: {
-      name: "提交索引页目标大小",
-      description: "提交索引页编码后的目标字节数。",
-    },
-    locationIndexTargetBytes: {
-      name: "位置索引页目标大小",
-      description: "记录位置索引页编码后的目标字节数。",
-    },
-    locationRetirementMetadataBytes: {
-      name: "位置退役元数据上限",
-      description: "位置退役元数据编码后的最大字节数。",
-    },
-    executionProjectionOutputRecordBytes: {
-      name: "执行投影输出记录上限",
-      description: "执行投影输出记录编码后的最大字节数。",
-    },
-    migrationAuthorityRecordBytes: {
-      name: "迁移权威记录上限",
-      description: "分区迁移权威记录编码后的最大字节数。",
-    },
-    readerRetentionRecordBytes: {
-      name: "读者保留记录上限",
-      description: "读者保留记录完整信封编码后的最大字节数。",
-    },
-    cleanupRecordBytes: {
-      name: "清理记录上限",
-      description: "清理计划记录完整信封编码后的最大字节数。",
-    },
-    blockBytes: { name: "存储块上限", description: "不可变存储块的最大字节数。" },
-    keyBytes: { name: "索引键上限", description: "不可变索引键的最大字节数。" },
-    headBytes: { name: "存储头上限", description: "不可变存储头的最大字节数。" },
   },
   modelMeasurement: {
     prefixCompareBlockBytes: {
@@ -296,6 +247,20 @@ export default {
     payloadBytes: {
       name: "插件消息载荷",
       description: "插件消息载荷使用的长度或容量阈值。",
+    },
+  },
+  partitionStorage: {
+    partitionContentChunkBytes: {
+      name: "分区正文块字节上限",
+      description: "单个独立校验消息正文块中规范 JSON 正文字节数的协议上限。",
+    },
+    entityPageKeyBytes: {
+      name: "实体分页键字节上限",
+      description: "实体目录键转义后 JSON 字节数的协议上限。",
+    },
+    migrationAuthorityRecordBytes: {
+      name: "迁移权威记录上限",
+      description: "分区迁移权威记录编码后的最大字节数。",
     },
   },
   sessionLog: {

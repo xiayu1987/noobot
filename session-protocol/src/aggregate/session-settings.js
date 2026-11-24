@@ -15,6 +15,21 @@ const validators = {
     Array.isArray(value) && value.every(isCanonicalText) && new Set(value).size === value.length,
 };
 
+function requireSessionSetting(key, value) {
+  if (!Object.hasOwn(validators, key) || !validators[key](value))
+    throw new SessionCommitInputError(`Invalid session setting: ${key}`);
+}
+
+export function requireSessionSettings(metadata) {
+  if (!isPlainObject(metadata))
+    throw new SessionCommitInputError("Session settings require metadata");
+  for (const key of Object.keys(validators)) {
+    if (key === "customTitle" && !Object.hasOwn(metadata, key)) continue;
+    requireSessionSetting(key, metadata[key]);
+  }
+  return metadata;
+}
+
 export function applySessionMetadataCommit(
   metadata,
   { committedAt, aggregateVersion = metadata.aggregateVersion },
@@ -36,10 +51,7 @@ export function applySessionMetadataCommit(
 export function applySessionSettings(manifest, settings, updatedAt) {
   if (!isPlainObject(settings) || Object.keys(settings).length === 0)
     throw new SessionCommitInputError("Session settings require a non-empty patch");
-  for (const [key, value] of Object.entries(settings)) {
-    if (!Object.hasOwn(validators, key) || !validators[key](value))
-      throw new SessionCommitInputError(`Invalid session setting: ${key}`);
-  }
+  for (const [key, value] of Object.entries(settings)) requireSessionSetting(key, value);
   return applySessionMetadataCommit(
     { ...manifest, ...structuredClone(settings) },
     { committedAt: updatedAt },

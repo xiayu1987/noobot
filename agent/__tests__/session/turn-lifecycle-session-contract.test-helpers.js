@@ -3,6 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  initializePartitionReaderFixture,
+  openPartitionReaderFixture,
+  withPartitionReaderFixture,
+  createPartitionReaderFixture,
+  partitionReaderAccess,
+} from "../helpers/partition-reader-fixture.js";
 import { after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -15,16 +22,6 @@ import { SessionMessageService } from "../../src/session/services/session-messag
 import { text } from "@noobot/shared/value";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import {
-  createImmutableSession,
-  initializeImmutableSession,
-} from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
-import {
-  openImmutableSessionReader,
-  withImmutableSessionReader,
-} from "../../src/session/session-artifact-session/immutable-session-reader.js";
-import { immutableSessionReaderAccess } from "../../src/session/session-artifact-session/immutable-reader-access.js";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import {
   fullSessionTurnViews,
   requiredSessionReads,
@@ -53,7 +50,7 @@ function harness(initial = {}) {
     ...createTestSessionRequiredFields(),
     ...initial,
   });
-  const initialized = initializeImmutableSession({
+  const initialized = initializePartitionReaderFixture({
     sessionDir,
     session: persisted,
     operationId: "test-seed-session",
@@ -84,16 +81,16 @@ function harness(initial = {}) {
     ...fullSessionTurnViews,
     async requireSessionReader() {
       await initialized;
-      return openImmutableSessionReader({ sessionDir, sessionId: "s1", parentSessionId: "" });
+      return openPartitionReaderFixture({ sessionDir, sessionId: "s1", parentSessionId: "" });
     },
     async withSessionOutboxMutation(_u, _s, plan) {
       await initialized;
-      return immutableSessionReaderAccess.withOutboxMutation(scope, async (reader) => {
+      return partitionReaderAccess.withOutboxMutation(scope, async (reader) => {
         const complete = await plan(reader);
         return (commit) =>
           complete((request) =>
             persist(request, commit, async () => {
-              await using current = await openImmutableSessionReader(scope);
+              await using current = await openPartitionReaderFixture(scope);
               return current.exportSession();
             }),
           );
@@ -101,7 +98,7 @@ function harness(initial = {}) {
     },
     async withSessionReader(_u, _s, operation) {
       await initialized;
-      return withImmutableSessionReader(scope, (reader, commitChanges, readCurrent) =>
+      return withPartitionReaderFixture(scope, (reader, commitChanges, readCurrent) =>
         operation({
           reader,
           scope: { resolvedParentSessionId: "", sessionDir },
@@ -133,13 +130,14 @@ function harness(initial = {}) {
       allocateDialogProcessId: () => "dp1",
     }),
     sessionDir,
+    commitChanges: (operationId, changes) =>
+      repo.withSessionReader("u1", "s1", async ({ reader, commitChanges }) =>
+        commitChanges(await reader.prepareRequest({ operationId, committedAt: now(), changes })),
+      ),
     outbox: async () => {
       await initialized;
-      const store = new ImmutableSessionStore({ sessionDir, sessionId: "s1" });
-      const snapshot = await store.snapshot();
-      const events = [];
-      for await (const [, value] of store.entries(snapshot, "outbox")) events.push(value);
-      return events.sort((a, b) => a.ordinal - b.ordinal);
+      await using reader = await repo.requireSessionReader();
+      return (await reader.readOutboxPage({ consumerId: "test-consumer" })).events;
     },
     outboxEntry: async (eventId) => (await repo.requireSessionReader()).readOutboxEvent(eventId),
     reload: () => normalizeSessionEntity(structuredClone(persisted)),
@@ -185,11 +183,11 @@ function newSessionHarness() {
     ...fullSessionTurnViews,
     async requireSessionReader() {
       if (!persisted) throw createSessionNotFoundError({ userId: "u1", sessionId: "s1" });
-      return openImmutableSessionReader({ sessionDir, sessionId: "s1", parentSessionId: "" });
+      return openPartitionReaderFixture({ sessionDir, sessionId: "s1", parentSessionId: "" });
     },
     async withSessionReader(_u, _s, operation) {
       if (!persisted) throw createSessionNotFoundError({ userId: "u1", sessionId: "s1" });
-      return withImmutableSessionReader(
+      return withPartitionReaderFixture(
         { sessionDir, sessionId: "s1", parentSessionId: "" },
         (reader, commitChanges, readCurrent) =>
           operation({
@@ -215,14 +213,14 @@ function newSessionHarness() {
     },
     async createStoredSession(_u, session, { initialTurn, scopedMetadata }) {
       assert.equal(persisted, null);
-      const result = await createImmutableSession({
+      const result = await createPartitionReaderFixture({
         scope: { sessionDir, sessionId: "s1", parentSessionId: "" },
         session,
         operationId: "test-initial-creation",
         initialTurn,
         scopedMetadata,
       });
-      await using reader = await openImmutableSessionReader({
+      await using reader = await openPartitionReaderFixture({
         sessionDir,
         sessionId: "s1",
         parentSessionId: "",

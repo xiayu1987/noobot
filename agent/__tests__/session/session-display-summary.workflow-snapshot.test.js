@@ -12,11 +12,11 @@ import {
   createWorkflowRuntimeEnvelope,
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { TURN_RECOVERY_ACTION, createTurnLifecycleSnapshot } from "@noobot/session-protocol";
-import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
-import { persistSessionManifest } from "./session-artifact-store-v2.test-helpers.js";
+import { buildSessionDisplayProjection } from "../../src/session/session-summary-builders/session-display-summary.js";
+import { projectionSession } from "../helpers/session-projection-fixture.js";
 
 test("display summary messages are admissible as workflow session snapshot messages", async () => {
-  const manifest = await persistSessionManifest({
+  const manifest = projectionSession({
     sessionId: "child-session",
     aggregateVersion: 3,
     messages: [
@@ -44,7 +44,7 @@ test("display summary messages are admissible as workflow session snapshot messa
       },
     ],
   });
-  const summary = buildSessionDisplaySummary(manifest);
+  const summary = buildSessionDisplayProjection(manifest);
 
   assert.equal(summary.messages.length, 2);
   for (const message of summary.messages) assert.equal(Object.hasOwn(message, "sessionId"), false);
@@ -85,7 +85,7 @@ test("display summary messages are admissible as workflow session snapshot messa
 });
 
 async function buildWorkflowSummary(payload) {
-  const manifest = await persistSessionManifest({
+  const manifest = projectionSession({
     sessionId: "root-session",
     aggregateVersion: 1,
     messages: [
@@ -103,7 +103,7 @@ async function buildWorkflowSummary(payload) {
       },
     ],
   });
-  return buildSessionDisplaySummary(manifest);
+  return buildSessionDisplayProjection(manifest);
 }
 
 test("display summary passes plugin payload through unchanged", async () => {

@@ -132,7 +132,9 @@ async function readReferencedRecord({ root, head, reference, work, readBudget, s
   requireCapturedPartitionJournalSnapshot(head);
   requirePartitionJournalReference(reference, head);
   const { partition, sequence } = reference;
-  const frames = slots ? getQueryFrames(readBudget?.frameScope ?? readBudget, head) : null;
+  const reader = activeRecordReader(root, head);
+  const frameScope = reader ?? readBudget?.frameScope ?? readBudget;
+  const frames = slots ? getQueryFrames(frameScope, head) : null;
   const key = `${partition}:${sequence}`;
   const cached = frames?.get(key);
   const entry =
@@ -149,7 +151,8 @@ async function readReferencedRecord({ root, head, reference, work, readBudget, s
   });
   if (!slots) return record;
   frames?.set(key, { entry, frame: record.frame, offset: record.offset });
-  if (frames && frames.size > readBudget.frameLimit) frames.delete(frames.keys().next().value);
+  const frameLimit = reader ? head.limits.pageRecords : readBudget?.frameLimit;
+  if (frames && frames.size > frameLimit) frames.delete(frames.keys().next().value);
   return record.slotRecords;
 }
 
@@ -178,12 +181,12 @@ async function readRecordInPartition({
       sequence,
       work,
       readBudget,
-      withOffsetFile: reader
-        ? (journalRoot, partitionId, operation) => {
-            reader.index ??= reserveRecordFile(openJournalOffsetFile(journalRoot, partitionId));
-            return reader.index.read(operation);
-          }
-        : undefined,
+      ...(reader && {
+        withOffsetFile: (journalRoot, partitionId, operation) => {
+          reader.index ??= reserveRecordFile(openJournalOffsetFile(journalRoot, partitionId));
+          return reader.index.read(operation);
+        },
+      }),
     }));
   return withRecordBody(journalPartitionPath(root, partition), reader, work, async (handle) => {
     const end = entry.committedBytes;

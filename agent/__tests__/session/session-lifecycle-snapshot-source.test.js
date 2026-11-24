@@ -6,7 +6,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { assertTurnRecord, TURN_STATE } from "@noobot/session-protocol";
-import { corruptRecord } from "./helpers/immutable-record-reads.js";
 import { withProvisionedSessions } from "../helpers/provisioned-sessions.js";
 import {
   persistSessionDeletionMarkers,
@@ -17,9 +16,23 @@ import {
   createSessionTurnLifecycleSnapshot,
   selectPresentedSessionLifecycleTurns,
 } from "../../src/session/session-turn-read-model.js";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { ImmutableSessionChanges } from "../../src/session/session-artifact-session/immutable-message-changes.js";
-import { prepareImmutableLifecycleIndex } from "../../src/session/session-artifact-session/immutable-lifecycle-index.js";
+import { PartitionJournalOwner } from "../../src/session/partition-storage/partition-journal-owner.js";
+import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
+import { preparePartitionLifecycleIndex } from "../../src/session/partition-storage/partition-lifecycle-index.js";
+import { PARTITION_MESSAGE_COLLECTIONS } from "@noobot/session-protocol/partition-session-messages";
+import { journalTestLimits } from "../helpers/partition-journal-cases.js";
+
+function guardLifecycleQuery(query) {
+  const guard = (input) => {
+    assert.ok(![PARTITION_MESSAGE_COLLECTIONS.content, "replacements"].includes(input.collection));
+    return query(input);
+  };
+  guard.readWindow = (input) => {
+    assert.ok(![PARTITION_MESSAGE_COLLECTIONS.content, "replacements"].includes(input.collection));
+    return query.readWindow(input);
+  };
+  return guard;
+}
 
 test("presentation uses lifecycle state when terminal details are absent", () => {
   const turns = Object.fromEntries(
@@ -81,7 +94,7 @@ test("retryable finalize failures remain visible before terminal details are com
   }
 });
 
-test("immutable lifecycle snapshots preserve visible terminal scope, limits and unchanged responses", async (t) => {
+test("partition lifecycle snapshots preserve visible terminal scope, limits and unchanged responses", async (t) => {
   await withProvisionedSessions(
     { userId: "u1", sessionIds: ["s1"] },
     async ({ runtime, scopes }) => {
@@ -121,43 +134,56 @@ test("immutable lifecycle snapshots preserve visible terminal scope, limits and 
         sessionId: "s1",
         changes: { messages },
       });
-      const store = new ImmutableSessionStore({
-        sessionDir: scopes.s1.sessionDir,
-        sessionId: "s1",
+      await using owner = new PartitionJournalOwner({
+        durableAncestor: repo.pathResolver.resolveBasePath("u1"),
+        limits: journalTestLimits({ transactionBytes: 16 * 1024 }),
+        maxJournals: 1,
       });
-      const snapshot = await store.snapshot();
-      const lifecycle = await store.get(snapshot, "metadata", "lifecycle");
-      await store.transact({
-        expectedGeneration: snapshot.generation,
-        operationId: "seed-terminal-snapshot",
-        input: {},
-        prepare: async ({ get }) => {
-          const plan = new ImmutableSessionChanges(get);
-          plan.set("metadata", "lifecycle", { ...lifecycle, sequence: states.length });
-          for (const [scope, turn] of Object.entries(turns)) plan.set("lifecycle", scope, turn);
-          await prepareImmutableLifecycleIndex(plan);
-          return { changes: plan.changes() };
+      await using lease = await owner.acquire({ ...scopes.s1, sessionId: "s1" });
+      const { journal } = lease;
+      const transactions = new PartitionTransactions(journal);
+      await transactions.commit(
+        {
+          epoch: journal.head.epoch,
+          expectedGeneration: journal.head.sequence,
+          operationId: "seed-terminal-snapshot",
+          input: {},
         },
-      });
+        {
+          validateScope() {},
+          prepare: async (_snapshot, view) => {
+            const header = (
+              await view.getLatestMany({ collection: "metadata", keys: ["lifecycle"] })
+            ).get("lifecycle");
+            const mutations = [
+              {
+                collection: "metadata",
+                key: "lifecycle",
+                owner: header.owner,
+                value: { ...header.mutation.value, sequence: states.length },
+              },
+            ];
+            for (const [key, value] of Object.entries(turns))
+              mutations.push({ collection: "lifecycle", key, owner: null, value });
+            await preparePartitionLifecycleIndex(view, mutations);
+            return { action: "commit", mutations, result: null };
+          },
+        },
+      );
       const full = await repo.requireById("u1", "s1", { persistenceContext });
-      const committed = await store.snapshot();
-      await store.objects.withSnapshot(committed, async () => {
-        const messagesRoot = await store.index.get(committed.root, "messages");
-        for (const message of messages) {
-          const reference = await store.index.get(messagesRoot, message.messageUid);
-          assert.ok(reference);
-          await corruptRecord(store, reference);
-        }
-      });
-      const entries = ImmutableSessionStore.prototype.entries;
-      t.mock.method(ImmutableSessionStore.prototype, "entries", function (pinned, collection) {
-        assert.notEqual(
-          collection,
-          "replacements",
-          "runtime snapshots must not enumerate tombstone history",
-        );
-        return entries.call(this, pinned, collection);
-      });
+      const read = PartitionTransactions.prototype.withCollectionReader;
+      t.mock.method(
+        PartitionTransactions.prototype,
+        "withCollectionReader",
+        function (snapshot, operation, options) {
+          return read.call(
+            this,
+            snapshot,
+            (query) => operation(guardLifecycleQuery(query)),
+            options,
+          );
+        },
+      );
       t.mock.method(repo, "findById", () => {
         throw new Error("lifecycle query must not materialize message bodies");
       });

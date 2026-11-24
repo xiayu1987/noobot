@@ -67,13 +67,8 @@ export class StorageService {
     }
   }
 
-  async readJson(filePath, { immutable = false, previousValue, onRead } = {}) {
-    return readPersistedJsonFile({
-      filePath,
-      readFile: observedJsonReader(onRead),
-      immutable,
-      previousValue,
-    });
+  async readJson(filePath, { onRead } = {}) {
+    return readPersistedJsonFile({ filePath, readFile: observedJsonReader(onRead) });
   }
 
   async readOptionalJson(filePath, { onRead } = {}) {

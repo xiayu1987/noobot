@@ -9,6 +9,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { writeRuntimeEvents, RUNTIME_EVENT_ERROR_CODE } from "../src/index.js";
 import { persistSession, tempRoot, readJsonl } from "./runtime-events-test-fixtures.js";
+import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
@@ -30,12 +31,13 @@ test("batch validates one session head once, groups writes and revalidates the n
     parentSessionId: "",
     caller: SESSION_CALLER.USER,
   });
+  const head = path.join(sessionDir, PARTITION_JOURNAL_HEAD_FILE);
   const originalOpen = fs.open.bind(fs);
   const originalAppend = fs.appendFile.bind(fs);
   let headReads = 0;
   let appends = 0;
   t.mock.method(fs, "open", async (file, ...options) => {
-    if (file === path.join(sessionDir, "head.json")) headReads += 1;
+    if (file === head) headReads += 1;
     return originalOpen(file, ...options);
   });
   t.mock.method(fs, "appendFile", async (...args) => {
@@ -50,10 +52,9 @@ test("batch validates one session head once, groups writes and revalidates the n
     (await readJsonl(results[0].file)).map(({ data }) => data.sequence),
     Array.from({ length: 10 }, (_, i) => i),
   );
-  const head = path.join(sessionDir, "head.json");
   await fs.writeFile(head, "corrupt");
   await assert.rejects(writeRuntimeEvents([event("batch", 10)]), {
-    code: "SESSION_IMMUTABLE_STORAGE_INVALID",
+    code: "SESSION_STORAGE_CORRUPT",
   });
   assert.equal(headReads, 2);
   assert.equal(appends, 1);

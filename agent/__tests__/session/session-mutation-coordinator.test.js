@@ -10,7 +10,7 @@ import path from "node:path";
 
 import { SessionMutationCoordinator } from "../../src/session/session-mutation-coordinator.js";
 import { holdSessionLock } from "../helpers/session-lock-process.js";
-import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
+import { withTemp } from "../helpers/temporary-directory.js";
 
 function coordinator(timeoutMs = 2000) {
   return new SessionMutationCoordinator({ readTiming: () => ({ timeoutMs, pollMs: 2 }) });

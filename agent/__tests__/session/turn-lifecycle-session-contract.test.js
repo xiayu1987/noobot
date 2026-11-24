@@ -24,7 +24,7 @@ import {
   now,
 } from "./turn-lifecycle-session-contract.test-helpers.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
+import { buildSessionDisplayProjection } from "../../src/session/session-summary-builders/session-display-summary.js";
 
 test("first send creates the session before committing action accepted", async () => {
   const h = newSessionHarness();
@@ -221,15 +221,7 @@ test("terminal materialization rejection does not mutate lifecycle or outbox", a
 });
 
 test("terminal resolution reads status from the Turn without returning messages", async () => {
-  const h = harness({
-    turnTimings: [
-      {
-        turnScopeId: "t1",
-        dialogProcessId: "dp1",
-        thinkingFinishedAt: "2026-07-18T00:00:00.000Z",
-      },
-    ],
-  });
+  const h = harness();
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.ACTION_ACCEPTED, "r1", 0, {
       action: "send",
@@ -241,6 +233,15 @@ test("terminal resolution reads status from the Turn without returning messages"
       phase: TURN_PHASE.PROCESSING,
     }),
   );
+  await h.commitChanges("terminal-thinking-timing", {
+    timings: [
+      {
+        turnScopeId: "t1",
+        dialogProcessId: "dp1",
+        thinkingFinishedAt: "2026-07-18T00:00:00.000Z",
+      },
+    ],
+  });
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.PROCESSING_COMPLETED, "r3", 2, {
       phase: TURN_PHASE.COMPLETION,
@@ -474,7 +475,7 @@ test("summary and reconnect snapshots share action-failure presentation scope", 
   assert.equal(session.turnLifecycle.turns.t1.state, "action_failed");
   assert.equal(session.turnLifecycle.turns.t1.executionState, "error");
   assert.equal(session.turnLifecycle.turns.t1.terminalStatus.status, "error");
-  const summarySnapshot = (await buildPersistedDisplaySummary(session)).turnLifecycleSnapshot;
+  const summarySnapshot = buildSessionDisplayProjection(session).turnLifecycleSnapshot;
   const reconnectSnapshot = (
     await h.service.getTurnLifecycleSnapshot({
       userId: "u1",

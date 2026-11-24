@@ -167,12 +167,22 @@ export class PartitionTransactions {
           );
         },
         getLatestMany: (query) => getLatestMany(collectionQueryReads(snapshot, reads), query),
-        getCreationOwners: ({ collection, keys }) =>
-          this.#readCreationOwners(
-            requireSessionCollectionQuery({ snapshot, collection, keys }),
-            staged,
-            collectionQueryReads(snapshot, reads),
-          ),
+        getCreationOwners: async ({ collection, keys }) => {
+          const owners = new Map();
+          for (let offset = 0; offset < keys.length; offset += snapshot.limits.pageRecords) {
+            const page = await this.#readCreationOwners(
+              requireSessionCollectionQuery({
+                snapshot,
+                collection,
+                keys: keys.slice(offset, offset + snapshot.limits.pageRecords),
+              }),
+              staged,
+              collectionQueryReads(snapshot, reads),
+            );
+            for (const [key, owner] of page) owners.set(key, owner);
+          }
+          return owners;
+        },
         getLatestByOwner: ({ collection, entities }) =>
           this.#readLatest(
             requireSessionCollectionOwnerQuery({ snapshot, collection, entities }),

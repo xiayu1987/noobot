@@ -7,14 +7,14 @@ import { getEventFamily } from "@noobot/event-protocol";
 import { assertAuthorityOutboxRequest } from "@noobot/event-protocol/outbox";
 import { isCanonicalText, isObjectLike } from "@noobot/shared/value";
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
-import { planAuthorityEventCommit } from "./immutable-authority-event.js";
+import { planAuthorityEventCommit } from "./authority-event-plan.js";
 import {
-  withImmutableOutbox,
+  withOutboxReader,
   planPendingOutbox,
   planOutboxDelivery,
   planOutboxAcknowledgement,
-  commitImmutableOutbox,
-} from "./immutable-authority-outbox.js";
+  commitOutboxChanges,
+} from "./authority-outbox.js";
 
 export async function commitAuthorityEvent({
   userId,
@@ -99,8 +99,8 @@ export async function compactAuthorityEvents(request) {
   const { userId, sessionId, persistenceContext, retainDeliveredAfter } =
     assertAuthorityOutboxRequest(request, "compact");
   return resolveDeletedSessionAs(
-    withImmutableOutbox(this, { userId, sessionId, persistenceContext }, async (reader, commit) => {
-      const committed = await commitImmutableOutbox(
+    withOutboxReader(this, { userId, sessionId, persistenceContext }, async (reader, commit) => {
+      const committed = await commitOutboxChanges(
         this,
         reader,
         {

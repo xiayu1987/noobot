@@ -27,7 +27,23 @@ async function identityHarness(session, now = "2026-07-25T00:01:00.000Z") {
   return fixture.service;
 }
 
-test("appendTurns upserts an ordered message batch with one immutable commit", async () => {
+function messageUpdateIdentity({
+  messageUid,
+  dialogProcessId,
+  turnScopeId,
+  owner,
+  contentReference,
+}) {
+  return {
+    messageUid,
+    dialogProcessId,
+    turnScopeId,
+    owner,
+    expectedContentReference: contentReference,
+  };
+}
+
+test("appendTurns creates an ordered message batch in one partition commit", async () => {
   const session = createTestSessionRequiredFields();
   const service = await identityHarness(session);
   const generation = (await service.sessionRepo.requireSessionReader()).generation;
@@ -98,7 +114,7 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
     workspaceRootDirectory: "/workspace/user-1",
   });
 
-  await appendTurns.call(service, {
+  const first = await appendTurns.call(service, {
     userId: "u1",
     sessionId: "s1",
     turns: [canonical("assistant-1", "first")],
@@ -117,10 +133,17 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
     /session_message_presentationMessageId_missing/,
   );
   assert.equal(session.messages[0].chatPresentation, true);
-  await appendTurns.call(service, {
+  const second = await appendTurns.call(service, {
     userId: "u1",
     sessionId: "s1",
     turns: [canonical("assistant-2", "second")],
+    messageMetadataUpdates: [
+      {
+        ...messageUpdateIdentity(first.messageReceipts[0]),
+        metadata: { chatPresentation: false },
+        metadataRemovals: ["workspaceRootDirectory"],
+      },
+    ],
   });
 
   assert.deepEqual(
@@ -133,23 +156,32 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
   assert.equal(Object.hasOwn(session.messages[0], "workspaceRootDirectory"), false);
   assert.equal(session.messages[1].workspaceRootDirectory, "/workspace/user-1");
 
-  const refresh = canonical("assistant-2", "refreshed presentation");
-  delete refresh.workspaceRootDirectory;
-  await appendTurns.call(service, {
+  const assistant = second.messageReceipts.find(({ messageUid }) => messageUid === "assistant-2");
+  const refresh = await appendTurns.call(service, {
     userId: "u1",
     sessionId: "s1",
-    turns: [refresh],
+    turns: [],
+    messageContentReplacements: [
+      {
+        ...messageUpdateIdentity(assistant),
+        content: "refreshed presentation",
+      },
+    ],
   });
   assert.equal(session.messages[1].chatPresentation, true);
   assert.equal(session.messages[1].workspaceRootDirectory, "/workspace/user-1");
 
-  const updated = canonical("assistant-2", "updated without presentation");
-  updated.chatPresentation = false;
-  delete updated.workspaceRootDirectory;
   await appendTurns.call(service, {
     userId: "u1",
     sessionId: "s1",
-    turns: [updated],
+    turns: [],
+    messageMetadataUpdates: [
+      {
+        ...messageUpdateIdentity(refresh.messageReceipts[0]),
+        metadata: { chatPresentation: false },
+        metadataRemovals: ["workspaceRootDirectory"],
+      },
+    ],
   });
   assert.equal(session.messages.length, 2);
   assert.equal(session.messages[1].chatPresentation, false);
@@ -265,30 +297,10 @@ test("appendTurns leaves natural user presentation unspecified and visible", asy
   assert.equal("chatPresentation" in session.messages[0], false);
 });
 
-test("appendTurns updates an existing message with the same messageUid", async () => {
-  const session = {
-    ...createTestSessionRequiredFields(),
-    messages: [
-      {
-        attachments: [],
-        transferEnvelopes: [],
-        messageUid: "sm_existing",
-        sessionId: "s1",
-        role: "assistant",
-        presentationMessageId: "pm_fx5",
-        content: "partial",
-        type: "message",
-        modelMessageId: "message-1",
-        dialogProcessId: "dialog-1",
-        turnScopeId: "turn-1",
-        ts: "2026-07-25T00:00:00.000Z",
-      },
-    ],
-  };
-  const service = await identityHarness(session);
-  const generation = (await service.sessionRepo.requireSessionReader()).generation;
-
-  const result = await appendTurns.call(service, {
+test("appendTurns replaces content without changing message identity or creation time", async () => {
+  const session = createTestSessionRequiredFields();
+  const service = await identityHarness(session, "2026-07-25T00:00:00.000Z");
+  const created = await appendTurns.call(service, {
     userId: "u1",
     sessionId: "s1",
     turns: [
@@ -298,11 +310,25 @@ test("appendTurns updates an existing message with the same messageUid", async (
         messageUid: "sm_existing",
         role: "assistant",
         presentationMessageId: "pm_fx5",
-        content: "completed",
+        content: "partial",
         type: "message",
         modelMessageId: "message-1",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
+      },
+    ],
+  });
+  service.now = () => "2026-07-25T00:01:00.000Z";
+  const generation = (await service.sessionRepo.requireSessionReader()).generation;
+
+  const result = await appendTurns.call(service, {
+    userId: "u1",
+    sessionId: "s1",
+    turns: [],
+    messageContentReplacements: [
+      {
+        ...messageUpdateIdentity(created.messageReceipts[0]),
+        content: "completed",
       },
     ],
   });
@@ -394,27 +420,9 @@ test("appendTurns rejects a turn without messageUid", async () => {
 });
 
 test("appendTurns uses messageUid as the persistence identity and validates its dialog scope", async () => {
-  const session = {
-    ...createTestSessionRequiredFields(),
-    messages: [
-      {
-        attachments: [],
-        transferEnvelopes: [],
-        messageUid: "sm_fixed",
-        sessionId: "s1",
-        role: "assistant",
-        presentationMessageId: "pm_fx7",
-        content: "partial",
-        modelMessageId: "am_1",
-        dialogProcessId: "dialog-1",
-        turnScopeId: "turn-1",
-        ts: "2026-07-25T00:00:00.000Z",
-      },
-    ],
-  };
+  const session = createTestSessionRequiredFields();
   const service = await identityHarness(session);
-
-  const updated = await appendTurns.call(service, {
+  const created = await appendTurns.call(service, {
     userId: "u1",
     sessionId: "s1",
     turns: [
@@ -424,10 +432,22 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
         messageUid: "sm_fixed",
         role: "assistant",
         presentationMessageId: "pm_fx7",
-        content: "done",
-        modelMessageId: "a-different-runtime-id",
+        content: "partial",
+        modelMessageId: "am_1",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
+      },
+    ],
+  });
+
+  const updated = await appendTurns.call(service, {
+    userId: "u1",
+    sessionId: "s1",
+    turns: [],
+    messageContentReplacements: [
+      {
+        ...messageUpdateIdentity(created.messageReceipts[0]),
+        content: "done",
       },
     ],
   });
@@ -440,15 +460,11 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
     appendTurns.call(service, {
       userId: "u1",
       sessionId: "s1",
-      turns: [
+      turns: [],
+      messageContentReplacements: [
         {
-          attachments: [],
-          transferEnvelopes: [],
-          messageUid: "sm_fixed",
-          role: "assistant",
-          presentationMessageId: "pm_fx9",
+          ...messageUpdateIdentity(updated.messageReceipts[0]),
           content: "wrong dialog",
-          modelMessageId: "am_1",
           dialogProcessId: "dialog-2",
           turnScopeId: "turn-2",
         },
@@ -456,6 +472,8 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
     }),
     (error) => error.code === "SESSION_MESSAGE_IDENTITY_CONFLICT",
   );
+  assert.equal(session.messages[0].content, "done");
+  assert.equal(session.messages[0].modelMessageId, "am_1");
 });
 
 test("appendTurns preserves assistant presentation identity in the authoritative snapshot", async () => {

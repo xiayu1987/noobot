@@ -7,7 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 
 import {
   executeEmptySessionCleanup,
@@ -19,7 +19,7 @@ import {
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
 import { SESSIONS_SUMMARY_SCHEMA_VERSION } from "@noobot/session-protocol/sessions-summary";
-import { contentDigest } from "../../src/session/session-artifact-session/immutable-object-store.js";
+import { UNSUPPORTED_SESSION_STORAGE } from "@noobot/session-protocol/session-storage-format";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   canonicalMessages,
@@ -70,12 +70,16 @@ test("session list projects committed heads without persisting another list docu
       sessionId: "B",
       changes: { messages },
     });
-    const reader = await runtime.repositories.sessionRepository.requireSessionReader(userId, "B", {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        "B",
-      ),
-    });
+    await using reader = await runtime.repositories.sessionRepository.requireSessionReader(
+      userId,
+      "B",
+      {
+        persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
+          userId,
+          "B",
+        ),
+      },
+    );
     const { aggregateVersion } = await reader.readMetadata();
 
     const summary = await runtime.repositories.sessionRepository.readSessionsSummary(userId);
@@ -193,7 +197,7 @@ test("session list projects session-tree nodes without Session artifacts as unav
     assert.deepEqual(summaries.map((item) => item.sessionId).sort(), ["materialized", "orphan"]);
     const orphan = summaries.find((item) => item.sessionId === "orphan");
     assert.equal(orphan.availability, "unavailable");
-    assert.equal(orphan.unavailableReason.code, "SESSION_IMMUTABLE_STORAGE_INVALID");
+    assert.equal(orphan.unavailableReason.code, "SESSION_STORAGE_CORRUPT");
     assert.equal(orphan.caller, SESSION_CALLER.BOT);
   });
 });
@@ -225,7 +229,7 @@ test("session detail projects a tree child without artifact as unavailable", asy
     );
     const child = detail.sessions.find((item) => item.sessionId === "child");
     assert.equal(child.availability, "unavailable");
-    assert.equal(child.unavailableReason.code, "SESSION_IMMUTABLE_STORAGE_INVALID");
+    assert.equal(child.unavailableReason.code, "SESSION_STORAGE_CORRUPT");
     assert.equal(child.parentSessionId, "root");
     assert.equal(child.caller, SESSION_CALLER.BOT);
   });
@@ -242,7 +246,13 @@ test("ensureSession recovers registration of a committed session without repeati
       parentSessionId: "",
       caller: SESSION_CALLER.USER,
     });
-    const headFile = path.join(workspaceRoot, userId, "runtime", "session", "S", "head.json");
+    const headFile = path.join(
+      workspaceRoot,
+      userId,
+      WORKSPACE_LAYOUT.SESSION_DIR,
+      "S",
+      PARTITION_JOURNAL_HEAD_FILE,
+    );
     const committedHead = await readFile(headFile, "utf8");
     const treeFile = path.join(workspaceRoot, userId, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
     await writeFile(treeFile, JSON.stringify({ nodes: {} }));
@@ -317,7 +327,7 @@ test("session summary rebuild isolates an unreadable session as an unavailable p
 
     const repository = runtime.repositories.sessionRepository;
     const legacyDir = path.join(workspaceRoot, userId, "runtime", "session", "legacy");
-    await writeFile(path.join(legacyDir, "head.json"), "{invalid-json", "utf8");
+    await writeFile(path.join(legacyDir, PARTITION_JOURNAL_HEAD_FILE), "{invalid-json", "utf8");
     let readError = null;
     await assert.rejects(
       repository.findById(userId, "legacy", {
@@ -367,7 +377,7 @@ test("unreadable Session is rejected with its read error and projected unavailab
       caller: SESSION_CALLER.USER,
     });
     const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
-    await writeFile(path.join(sessionDir, "head.json"), "{invalid-json", "utf8");
+    await writeFile(path.join(sessionDir, PARTITION_JOURNAL_HEAD_FILE), "{invalid-json", "utf8");
 
     const repository = runtime.repositories.sessionRepository;
     const read = () =>
@@ -399,19 +409,15 @@ test("Session reads reject an unsupported immutable format without rewriting it"
       caller: SESSION_CALLER.USER,
     });
     const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
-    const manifestFile = path.join(sessionDir, "head.json");
+    const manifestFile = path.join(sessionDir, UNSUPPORTED_SESSION_STORAGE.head);
     const repository = runtime.repositories.sessionRepository;
     const persistenceContext = repository.treePersistenceContext(userId, sessionId);
-    const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
-    const payload = JSON.stringify({
-      ...JSON.parse(manifest.payload),
-      format: "noobot.immutable-session/0",
-    });
-    const legacyManifest = JSON.stringify({ payload, checksum: contentDigest(payload) });
+    await rm(path.join(sessionDir, PARTITION_JOURNAL_HEAD_FILE));
+    const legacyManifest = "retired immutable publication";
     await writeFile(manifestFile, legacyManifest, "utf8");
 
     await assert.rejects(repository.findById(userId, sessionId, { persistenceContext }), {
-      code: "SESSION_IMMUTABLE_STORAGE_INVALID",
+      code: "SESSION_STORAGE_FORMAT_UNSUPPORTED",
     });
     await assert.rejects(
       repository.withSessionReader(
@@ -427,12 +433,12 @@ test("Session reads reject an unsupported immutable format without rewriting it"
           ),
         { persistenceContext },
       ),
-      { code: "SESSION_IMMUTABLE_STORAGE_INVALID" },
+      { code: "SESSION_STORAGE_FORMAT_UNSUPPORTED" },
     );
     assert.equal(await readFile(manifestFile, "utf8"), legacyManifest);
     await assert.rejects(
       repository.readSessionDisplaySummary(userId, sessionId, { persistenceContext }),
-      { code: "SESSION_IMMUTABLE_STORAGE_INVALID" },
+      { code: "SESSION_STORAGE_FORMAT_UNSUPPORTED" },
     );
     assert.equal(await readFile(manifestFile, "utf8"), legacyManifest);
   });
@@ -558,7 +564,7 @@ test("summary session detail projects an unreadable tree child as unavailable wi
       caller: SESSION_CALLER.BOT,
     });
     const childDir = path.join(workspaceRoot, userId, "runtime", "session", "root", "child");
-    await writeFile(path.join(childDir, "head.json"), "{invalid-json", "utf8");
+    await writeFile(path.join(childDir, PARTITION_JOURNAL_HEAD_FILE), "{invalid-json", "utf8");
 
     const detail = await runtime.sessionCrudService.getSessionDisplayData({
       userId,

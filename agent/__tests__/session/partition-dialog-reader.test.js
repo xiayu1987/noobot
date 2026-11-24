@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { openPartitionSessionReader } from "../../src/session/partition-storage/partition-session-reader.js";
 import { PartitionJournal } from "../../src/session/partition-storage/partition-journal.js";
 import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
-import { readImmutableTurnMutationSource } from "../../src/session/services/session-message-service/immutable-turn-source.js";
+import { readTurnMutationSource } from "../../src/session/services/session-message-service/turn-mutation-source.js";
 import { commitFixtureTransaction } from "../helpers/partition-journal-cases.js";
 import {
   createMessageCase,
@@ -62,7 +62,7 @@ test("dialog facts preserve first occurrence and anchor across snapshot, append,
     assert.deepEqual(await repository.commit(request), { ...committed, replayed: true });
     await using after = await open(journal, sessionId);
     assert.deepEqual(await after.readDialog(scope.dialogProcessId), expected);
-    const source = await readImmutableTurnMutationSource(after, { turnScopeId: "continued-turn" });
+    const source = await readTurnMutationSource(after, { turnScopeId: "continued-turn" });
     assert.equal(source.messages[0].messageUid, "later-user");
     assert.deepEqual(await before.readDialog(scope.dialogProcessId), expected);
   }

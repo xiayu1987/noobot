@@ -5,11 +5,22 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { ImmutableRecordStore } from "../../src/session/session-artifact-session/immutable-record-store.js";
+import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
+import { PARTITION_MESSAGE_COLLECTIONS } from "@noobot/session-protocol/partition-session-messages";
 import { withProvisionedSessions } from "../helpers/provisioned-sessions.js";
+import { commitTestSessionChanges } from "../helpers/session-services.js";
 
 const identity = { userId: "u1", sessionId: "s1", persistenceScope: null };
+
+function guardContentQueries(query) {
+  return Object.assign(
+    async (input) => {
+      assert.notEqual(input.collection, PARTITION_MESSAGE_COLLECTIONS.content);
+      return query(input);
+    },
+    { readWindow: query.readWindow },
+  );
+}
 
 test("user meta reuses source content without reading or encoding any message body", async (t) =>
   withProvisionedSessions({ userId: "u1", sessionIds: ["s1"] }, async ({ session, runtime }) => {
@@ -25,33 +36,55 @@ test("user meta reuses source content without reading or encoding any message bo
             turnScopeId,
             attachments: [],
             transferEnvelopes: [],
-            content: turnScopeId === "source" ? "source 中文".repeat(20000) : turnScopeId,
+            content: turnScopeId === "source" ? "source 中文".repeat(1000) : turnScopeId,
           },
         ],
       });
     const repository = runtime.repositories.sessionRepository;
     const options = { persistenceContext: repository.treePersistenceContext("u1", "s1") };
+    for (let index = 1; index < 20; index += 1) {
+      await using current = await repository.requireSessionReader("u1", "s1", options);
+      const entry = await current.readMessageEntry({ messageUid: "sm_source" });
+      await commitTestSessionChanges(runtime, {
+        ...identity,
+        changes: {
+          messageContentAppends: [
+            {
+              messageUid: "sm_source",
+              dialogProcessId: "source",
+              turnScopeId: "source",
+              owner: entry.owner,
+              expectedContentReference: entry.contentReference,
+              content: "source 中文".repeat(1000),
+            },
+          ],
+        },
+      });
+    }
     await using beforeReader = await repository.requireSessionReader("u1", "s1", options);
     const before = await beforeReader.readMetadata();
-    const get = ImmutableSessionStore.prototype.get;
+    const read = PartitionTransactions.prototype.withCollectionReader;
     const bodyReads = t.mock.method(
-      ImmutableSessionStore.prototype,
-      "get",
-      function (snapshot, collection, key) {
-        if (collection === "messages") assert.fail("user meta must not read any message body");
-        return get.call(this, snapshot, collection, key);
+      PartitionTransactions.prototype,
+      "withCollectionReader",
+      function (snapshot, operation, options) {
+        return read.call(this, snapshot, (query) => operation(guardContentQueries(query)), options);
       },
     );
-    const putValue = ImmutableRecordStore.prototype.putValue;
+    const commit = PartitionTransactions.prototype.commit;
     const bodyWrites = t.mock.method(
-      ImmutableRecordStore.prototype,
-      "putValue",
-      function (value, options) {
-        if (value?.message) {
-          assert.equal(value.message.content, null);
-          assert.equal(options.parts.length, 1);
-        }
-        return putValue.call(this, value, options);
+      PartitionTransactions.prototype,
+      "commit",
+      function (request, callbacks) {
+        return commit.call(this, request, {
+          ...callbacks,
+          async prepare(...args) {
+            const plan = await callbacks.prepare(...args);
+            for (const mutation of plan.mutations ?? [])
+              assert.notEqual(mutation.collection, PARTITION_MESSAGE_COLLECTIONS.content);
+            return plan;
+          },
+        });
       },
     );
     const original = repository.findById;
@@ -83,16 +116,35 @@ test("user meta reuses source content without reading or encoding any message bo
     assert.equal(afterReader.generation, beforeReader.generation + 1);
     assert.equal(after.aggregateVersion, before.aggregateVersion);
     assert.ok(Date.parse(after.updatedAt) >= Date.parse(before.updatedAt));
-    assert.deepEqual((await afterReader.readMessage("sm_source")).message.userMetaParsedResults, [
-      result,
-    ]);
-    assert.equal((await afterReader.readMessage("sm_unrelated")).message.content, "unrelated");
-    assert.equal(
-      (await afterReader.readMessage("sm_source")).message.content,
-      "source 中文".repeat(20000),
+    assert.deepEqual(
+      (await afterReader.readMessageEntry({ messageUid: "sm_source" })).message
+        .userMetaParsedResults,
+      [result],
     );
     assert.equal(
-      (await beforeReader.readMessage("sm_source")).message.userMetaParsedResults,
+      (await afterReader.readMessages({ messageUids: ["sm_unrelated"] }))[0].message.content,
+      "unrelated",
+    );
+    const { contentReference } = await beforeReader.readMessageEntry({ messageUid: "sm_source" });
+    const chunks = [];
+    let cursor = null;
+    let page;
+    do {
+      page = await afterReader.readContentPage({
+        messageUid: "sm_source",
+        dialogProcessId: "source",
+        turnScopeId: "source",
+        contentReference,
+        cursor,
+        limit: 1,
+      });
+      chunks.push(...page.entries);
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+    assert.equal(chunks.join(""), "source 中文".repeat(20000));
+    assert.equal(
+      (await beforeReader.readMessageEntry({ messageUid: "sm_source" })).message
+        .userMetaParsedResults,
       undefined,
     );
   }));

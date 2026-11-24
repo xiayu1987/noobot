@@ -36,6 +36,26 @@ test("entry reservations bound the complete envelope including escaping and all 
 });
 
 const sourceId = '["d1",1,0]';
+test("entry reservations exactly measure both escaping layers for every UTF-16 code unit", () => {
+  const receipt = { file: '/turn/中文"\\/receipt', sourceId };
+  const cases = ['"\\\b\t\n\f\r\u0000', "😀\ud800x\udfff", "中文"];
+  for (let start = 0; start < 65536; start += 256)
+    cases.push(String.fromCharCode(...Array.from({ length: 256 }, (_, i) => start + i)));
+  for (const data of cases) {
+    const line = `${data}\n`;
+    const record = {
+      version: 1,
+      offset: Number.MAX_SAFE_INTEGER,
+      payload: line,
+      receipts: [receipt],
+    };
+    assert.equal(
+      executionProjectionOutputEntryBytes(line, receipt),
+      Buffer.byteLength(encodeExecutionProjectionOutputRecord(record)),
+    );
+  }
+});
+
 const intent = () => ({
   version: 1,
   offset: 10,

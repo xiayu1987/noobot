@@ -28,8 +28,7 @@ function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "runtime-params-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const file = path.join(root, "runtime-params.json");
-  const active = createDefaultRuntimeParamsDocument();
-  return { file, store: createRuntimeParamsStore(file, { active: () => active }) };
+  return { file, store: createRuntimeParamsStore(file) };
 }
 
 test("catalog has unique keys, valid defaults, and translated names and descriptions", () => {

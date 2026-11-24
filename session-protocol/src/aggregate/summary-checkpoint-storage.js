@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
-import { deepFreeze, isDeepFrozen } from "@noobot/shared/deep-freeze";
 import { SESSION_ERROR_CODE } from "../errors.js";
 import { requireCheckpointMessageUids } from "./checkpoint-message-uids.js";
 
@@ -19,7 +18,6 @@ export function checkpointIdentityError(reason) {
 const CHECKPOINT_UID_LIST_FIELDS = Object.freeze(["persistedMessageUids", "summarizedMessageUids"]);
 
 const projectedCheckpointIdentities = new WeakSet();
-const storedReceiptProjections = new WeakMap();
 
 function assertCheckpointIdentity(identity, owner, index) {
   if (!projectedCheckpointIdentities.has(identity))
@@ -53,14 +51,13 @@ export function projectCheckpointIdentity(payload) {
     requireCheckpointMessageUids(values, key, () =>
       checkpointIdentityError(`${key} must be a unique UID list`),
     );
-    identity[key] = deepFreeze([...values]);
+    identity[key] = Object.freeze([...values]);
   }
   projectedCheckpointIdentities.add(identity);
   return Object.freeze(identity);
 }
 
 function sameUidList(left, right) {
-  if (left === right && isDeepFrozen(left)) return true;
   return (
     Array.isArray(left) &&
     left.length === right.length &&
@@ -77,7 +74,7 @@ function assertReceiptMatchesCheckpoint(receipt, payload) {
   }
 }
 
-export function projectCheckpointReceipt(receipt, payload) {
+function projectCheckpointReceipt(receipt, payload) {
   assertReceiptMatchesCheckpoint(receipt, payload);
   const projected = { ...receipt };
   for (const key of CHECKPOINT_UID_LIST_FIELDS) projected[key] = [...payload[key]];
@@ -150,53 +147,11 @@ function mapCheckpointReceipts(session, project) {
   return checkpoints === source ? session : { ...session, turnSummaryCheckpoints: checkpoints };
 }
 
-function storedReceiptMatches(receipt, stored) {
-  if (receipt === stored) return true;
-  const keys = Object.keys(receipt).filter((key) => !CHECKPOINT_UID_LIST_FIELDS.includes(key));
-  return (
-    keys.length === Object.keys(stored).length &&
-    keys.every((key) =>
-      key === "retainedMessageUids"
-        ? sameUidList(receipt[key], stored[key])
-        : Object.hasOwn(stored, key) && Object.is(receipt[key], stored[key]),
-    )
-  );
-}
-
-function canCacheStoredReceipt(stored) {
-  return Object.entries(stored).every(([key, value]) =>
-    key === "retainedMessageUids"
-      ? Array.isArray(value) && value.every((uid) => typeof uid === "string")
-      : value === null || ["string", "number", "boolean", "undefined"].includes(typeof value),
-  );
-}
-
-function storeCheckpointReceipt(receipt, identity) {
-  assertReceiptMatchesCheckpoint(receipt, identity);
-  const cached = storedReceiptProjections.get(identity);
-  if (cached && storedReceiptMatches(receipt, cached)) return cached;
-  const stored = { ...receipt };
-  for (const key of CHECKPOINT_UID_LIST_FIELDS) delete stored[key];
-  if (!projectedCheckpointIdentities.has(identity) || !canCacheStoredReceipt(stored)) return stored;
-  if (Object.hasOwn(stored, "retainedMessageUids"))
-    stored.retainedMessageUids = [...stored.retainedMessageUids];
-  deepFreeze(stored);
-  storedReceiptProjections.set(identity, stored);
-  return stored;
-}
-
 function copyRetainedMessageUids(receipt) {
   const owned = { ...receipt };
   if (Array.isArray(receipt.retainedMessageUids))
     owned.retainedMessageUids = [...receipt.retainedMessageUids];
   return owned;
-}
-
-export function storeCheckpointReceipts(session, resolvePayload, { immutable = false } = {}) {
-  return mapCheckpointReceipts(session, (receipt, scope) => {
-    const stored = storeCheckpointReceipt(receipt, resolvePayload(scope, receipt));
-    return immutable ? stored : copyRetainedMessageUids(stored);
-  });
 }
 
 export function hydrateCheckpointReceipts(session, resolvePayload) {
@@ -210,17 +165,6 @@ export function copyCheckpointReceiptLists(session) {
     const owned = copyRetainedMessageUids(receipt);
     for (const key of CHECKPOINT_UID_LIST_FIELDS) owned[key] = [...receipt[key]];
     return owned;
-  });
-}
-
-export function hydrateCheckpointReceiptReferences(session, resolvePayload) {
-  return mapCheckpointReceipts(session, (receipt, scope) => {
-    const identity = resolvePayload(scope, receipt);
-    if (!projectedCheckpointIdentities.has(identity))
-      throw checkpointIdentityError("identity must come from projectCheckpointIdentity");
-    const projected = { ...storeCheckpointReceipt(receipt, identity) };
-    for (const key of CHECKPOINT_UID_LIST_FIELDS) projected[key] = identity[key];
-    return projected;
   });
 }
 

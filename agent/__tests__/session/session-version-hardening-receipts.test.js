@@ -8,10 +8,7 @@ import assert from "node:assert/strict";
 
 import { pruneTurnSummaryCheckpoints } from "@noobot/context-protocol/policy/summary";
 import { acceptTurn, harness } from "./session-version-hardening.test-helpers.js";
-import {
-  immutableMutationFixture,
-  mutationMessage,
-} from "../helpers/immutable-mutation-integration-fixture.js";
+import { sessionMutationFixture, mutationMessage } from "../helpers/session-mutation-fixture.js";
 
 test("turn summary checkpoint receipts reject stale revisions and are pruned with removed turns", async () => {
   const h = await harness({
@@ -24,6 +21,8 @@ test("turn summary checkpoint receipts reject stale revisions and are pruned wit
         modelMessageId: "model-1",
         presentationMessageId: "message-t",
         role: "assistant",
+        type: "thinking",
+        chatPresentation: false,
         content: "one",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -119,7 +118,7 @@ test("attachment binding rejects placeholders and cross-session injection after 
 });
 
 test("deleteFromMessage replays a committed receipt without deleting again", async (t) => {
-  const h = await immutableMutationFixture(t, {
+  const h = await sessionMutationFixture(t, {
     aggregateVersion: 2,
     messages: [mutationMessage("keep"), mutationMessage("delete")],
   });
@@ -145,11 +144,11 @@ test("deleteFromMessage replays a committed receipt without deleting again", asy
   const afterReplay = await h.open();
   assert.equal(afterReplay.generation, beforeReplay.generation);
   assert.equal((await afterReplay.readMetadata()).aggregateVersion, 4);
-  assert.equal((await afterReplay.readFacts()).messageCount, 2);
+  assert.equal((await afterReplay.readListProjection()).messageCount, 2);
 });
 
 test("replaceTurn replays a committed receipt after the original anchor is gone", async (t) => {
-  const h = await immutableMutationFixture(t, {
+  const h = await sessionMutationFixture(t, {
     aggregateVersion: 4,
     messages: [mutationMessage("old")],
   });
@@ -180,7 +179,7 @@ test("replaceTurn replays a committed receipt after the original anchor is gone"
 });
 
 test("replaceTurn idempotency keys reject reuse with a different request", async (t) => {
-  const replace = await immutableMutationFixture(t, {
+  const replace = await sessionMutationFixture(t, {
     messages: [mutationMessage("old")],
   });
   await replace.service.replaceTurn({

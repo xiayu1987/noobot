@@ -5,6 +5,10 @@
  */
 export default {
   sessionStorage: {
+    executionProjectionOutputRecordBytes: {
+      name: "Execution projection output record limit",
+      description: "Maximum encoded bytes in an execution projection output record.",
+    },
     messageReadBytes: {
       name: "Message read budget",
       description: "Maximum bytes read in a bounded session message request.",
@@ -24,66 +28,6 @@ export default {
     journalDirectoryBytes: {
       name: "Journal directory entry budget",
       description: "Maximum encoded bytes in a partition journal directory entry.",
-    },
-  },
-  immutableStorage: {
-    partitionContentChunkBytes: {
-      name: "Partition content chunk byte limit",
-      description:
-        "Protocol limit on canonical JSON body bytes in one independently verified message chunk.",
-    },
-    entityPageKeyBytes: {
-      name: "Entity page key byte limit",
-      description: "Protocol limit on escaped JSON bytes of an entity directory key.",
-    },
-    historicalDirectoryChecksumBytes: {
-      name: "Historical directory checksum width",
-      description: "Fixed checksum width in the historical entity directory disk format.",
-    },
-    valueInlineBytes: {
-      name: "Inline value limit",
-      description: "Maximum encoded value bytes stored inline before using a content graph.",
-    },
-    indexTargetBytes: {
-      name: "Index page target size",
-      description: "Target encoded bytes per immutable index page.",
-    },
-    commitIndexTargetBytes: {
-      name: "Commit index page target size",
-      description: "Target encoded bytes per commit index page.",
-    },
-    locationIndexTargetBytes: {
-      name: "Location index page target size",
-      description: "Target encoded bytes per record location index page.",
-    },
-    locationRetirementMetadataBytes: {
-      name: "Location retirement metadata limit",
-      description: "Maximum encoded bytes in location retirement metadata.",
-    },
-    executionProjectionOutputRecordBytes: {
-      name: "Execution projection output record limit",
-      description: "Maximum encoded bytes in an execution projection output record.",
-    },
-    migrationAuthorityRecordBytes: {
-      name: "Migration authority record limit",
-      description: "Maximum encoded bytes in a partition migration authority record.",
-    },
-    readerRetentionRecordBytes: {
-      name: "Reader retention record limit",
-      description: "Maximum encoded bytes in a reader retention record envelope.",
-    },
-    cleanupRecordBytes: {
-      name: "Cleanup record limit",
-      description: "Maximum encoded bytes in a cleanup plan record envelope.",
-    },
-    blockBytes: {
-      name: "Storage block limit",
-      description: "Maximum bytes in an immutable storage block.",
-    },
-    keyBytes: { name: "Index key limit", description: "Maximum bytes in an immutable index key." },
-    headBytes: {
-      name: "Storage head limit",
-      description: "Maximum bytes in an immutable storage head.",
     },
   },
   modelMeasurement: {
@@ -308,6 +252,21 @@ export default {
     payloadBytes: {
       name: "Plugin message payload",
       description: "Length or capacity threshold used by plugin message payload.",
+    },
+  },
+  partitionStorage: {
+    partitionContentChunkBytes: {
+      name: "Partition content chunk byte limit",
+      description:
+        "Protocol limit on canonical JSON body bytes in one independently verified message chunk.",
+    },
+    entityPageKeyBytes: {
+      name: "Entity page key byte limit",
+      description: "Protocol limit on escaped JSON bytes of an entity directory key.",
+    },
+    migrationAuthorityRecordBytes: {
+      name: "Migration authority record limit",
+      description: "Maximum encoded bytes in a partition migration authority record.",
     },
   },
   sessionLog: {

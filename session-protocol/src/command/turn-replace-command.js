@@ -5,6 +5,7 @@
  */
 import { text as clean, isCanonicalText, isPlainObject } from "@noobot/shared/value";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
+import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
 import { canonicalAttachmentIdentities, createCommandRequestHash } from "./command-fingerprint.js";
 import { parseMessageDeleteRequest } from "./message-delete-command.js";
 import { isNaturalDialogUserMessage } from "../message-entity-contract.js";
@@ -45,6 +46,7 @@ export function parseTurnReplaceRequest(request) {
     request.attachments.some((attachment) => !isPlainObject(attachment))
   )
     throw new TypeError("Turn replacement requires canonical content, turn scope and attachments");
+  for (const attachment of request.attachments) projectAttachmentIdentity(attachment);
   const command = parseMessageDeleteRequest({
     commandId: request.commandId,
     anchor: request.anchor,

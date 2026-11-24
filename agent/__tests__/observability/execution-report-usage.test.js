@@ -19,7 +19,7 @@ import { createModelRequestMetrics } from "../../src/observability/execution-log
 import {
   writeExecutionReportArtifact,
   readExecutionReportArtifact,
-} from "../../src/session/session-artifact-session/related-artifact-writer.js";
+} from "../../src/session/session-execution-artifacts.js";
 import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
 
 const invocation = {

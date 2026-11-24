@@ -9,11 +9,11 @@ import { mkdtemp, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
 import { createTestSessionExecutionEngine } from "../helpers/session-execution-engine.js";
 import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { createSessionFacade } from "../../src/session/index.js";
-import { migrateSessionImmutableStorage } from "../../src/workspace-lifecycle/session-immutable-storage-upgrade.js";
 import { bindCurrentTurnPersistence } from "../../src/bot/execution/runner/current-turn-persistence.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
@@ -38,10 +38,6 @@ for (const failure of ["before publication", "after publication", "lost response
       identity.sessionId,
       persistenceContext,
     );
-    await migrateSessionImmutableStorage({
-      storageService: repository.storageService,
-      sessionDir: scope.sessionDir,
-    });
     const engine = createTestSessionExecutionEngine({ session: createSessionFacade(services) });
     const store = createCurrentTurnMessagesStore([
       {
@@ -88,7 +84,7 @@ for (const failure of ["before publication", "after publication", "lost response
     if (failure !== "lost response") {
       setFsAdapter({
         rename: async (source, target) => {
-          if (String(target) !== path.join(scope.sessionDir, "head.json") || !armed)
+          if (String(target) !== path.join(scope.sessionDir, PARTITION_JOURNAL_HEAD_FILE) || !armed)
             return rename(source, target);
           armed = false;
           if (failure === "after publication") await rename(source, target);
@@ -103,6 +99,9 @@ for (const failure of ["before publication", "after publication", "lost response
     );
     resetFsAdapter();
     assert.equal(armed, false, "the intended publication boundary must be reached");
+    if (failure !== "lost response") {
+      await services.workspaceAdmission.withMaintenance(identity.userId, async () => {});
+    }
     const published = failure !== "before publication";
     {
       await using reader = await repository.requireSessionReader(
@@ -112,7 +111,8 @@ for (const failure of ["before publication", "after publication", "lost response
       );
       assert.equal(reader.generation, commits[0].expectedGeneration + Number(published));
       assert.equal(
-        (await reader.readMessage("m1")).message.content,
+        (await reader.exportSession()).messages.find(({ messageUid }) => messageUid === "m1")
+          .content,
         published ? "initial first" : "initial",
       );
     }
@@ -140,7 +140,10 @@ for (const failure of ["before publication", "after publication", "lost response
       { persistenceContext },
     );
     assert.equal(reader.generation, commits[0].expectedGeneration + 2);
-    assert.equal((await reader.readMessage("m1")).message.content, "initial first concurrent");
+    assert.equal(
+      (await reader.exportSession()).messages.find(({ messageUid }) => messageUid === "m1").content,
+      "initial first concurrent",
+    );
     assert.equal(store.readPendingChanges().entries.length, 0);
     await runtime.persistCurrentTurnMessages();
     assert.equal(commits.length, 3, "another flush must not resubmit acknowledged revisions");

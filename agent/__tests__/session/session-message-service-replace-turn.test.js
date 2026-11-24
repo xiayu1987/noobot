@@ -10,13 +10,17 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { parseTurnReplaceRequest } from "@noobot/session-protocol";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
-import { forbidMutationBodyReads } from "./helpers/immutable-record-reads.js";
+import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
 import {
-  immutableMutationFixture,
+  PARTITION_MESSAGE_COLLECTIONS,
+  partitionMessageEntryKey,
+} from "@noobot/session-protocol/partition-session-messages";
+import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
+import {
+  sessionMutationFixture,
   mutationMessage as message,
   mutationTime,
-} from "../helpers/immutable-mutation-integration-fixture.js";
+} from "../helpers/session-mutation-fixture.js";
 
 const replacement = (f, fields = {}) => ({
   ...f.request,
@@ -41,7 +45,7 @@ function assistantMessage(uid, scope, fields = {}) {
 }
 
 test("replacement rejects invalid internal identities without publishing a head", async (t) => {
-  const f = await immutableMutationFixture(t, { messages: [message("drop")] });
+  const f = await sessionMutationFixture(t, { messages: [message("drop")] });
   const before = await f.open();
   const command = parseTurnReplaceRequest({
     commandId: "invalid-identity",
@@ -71,7 +75,7 @@ test("replacement rejects invalid internal identities without publishing a head"
 });
 
 test("replacement command replays in a fresh process without publishing another head", async (t) => {
-  const f = await immutableMutationFixture(t, { messages: [message("drop")] });
+  const f = await sessionMutationFixture(t, { messages: [message("drop")] });
   const first = await f.service.replaceTurn(replacement(f));
   const before = await f.open();
   const command = parseTurnReplaceRequest({
@@ -81,9 +85,29 @@ test("replacement command replays in a fresh process without publishing another 
     turnScopeId: "replacement",
     attachments: [],
   });
-  const moduleUrl = new URL("../helpers/commit-immutable-session-fixture.js", import.meta.url).href;
-  const code = `import { commitSessionChanges } from ${JSON.stringify(moduleUrl)};
-    const result = await commitSessionChanges(JSON.parse(process.argv[1]));
+  const ownerUrl = new URL(
+    "../../src/session/partition-storage/partition-journal-owner.js",
+    import.meta.url,
+  ).href;
+  const accessUrl = new URL(
+    "../../src/session/partition-storage/partition-reader-access.js",
+    import.meta.url,
+  ).href;
+  const code = `import { PartitionJournalOwner } from ${JSON.stringify(ownerUrl)};
+    import { createPartitionSessionReaderAccess } from ${JSON.stringify(accessUrl)};
+    import { tmpdir } from "node:os";
+    const owner = new PartitionJournalOwner({ durableAncestor: tmpdir(), maxJournals: 1, allowNewJournals: false });
+    const partitionReaderAccess = createPartitionSessionReaderAccess({
+      acquireJournal: owner.acquire.bind(owner), withJournalRemoval: owner.withRemoval.bind(owner)
+    });
+    const { sessionDir, sessionId, expectedGeneration, ...request } = JSON.parse(process.argv[1]);
+    const result = await partitionReaderAccess.withMutation(
+      { sessionDir, sessionId, parentSessionId: "" },
+      async (reader, commit) => {
+        if (reader.generation !== expectedGeneration) throw new Error("Unexpected generation");
+        return commit(await reader.prepareRequest(request));
+      });
+    await owner.close();
     process.stdout.write(JSON.stringify(result.result.turnReplacement));`;
   const { stdout } = await promisify(execFile)(process.execPath, [
     "--import",
@@ -116,7 +140,7 @@ test("replacement command replays in a fresh process without publishing another 
 });
 
 test("replacement command changes retain the exact suffix and original user across later edits and retries", async (t) => {
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     messages: [
       message("keep", "keep", { dialogProcessId: "d" }),
       message("drop", "drop", { dialogProcessId: "d" }),
@@ -138,7 +162,7 @@ test("replacement command changes retain the exact suffix and original user acro
   };
   const result = await f.commit(change);
   const before = await f.open();
-  const delta = await before.readCommandChanges(command.commandId);
+  const receipt = await before.readCommand(command.commandId);
   const projection = await before.readMutationProjection(command.commandId);
   assert.equal(projection.baseAggregateVersion, 0);
   assert.deepEqual(projection.messageSuffix, { firstOrdinal: 2, previousMessageCount: 3 });
@@ -146,40 +170,43 @@ test("replacement command changes retain the exact suffix and original user acro
   assert.equal(projection.messages[0].message.content, "edited");
   assert.equal(projection.messages[0].message.messageUid, "sm_new");
   assert.equal(projection.messages[0].ordinal, 2);
-  assert.equal(delta.generation, result.generation);
-  assert.equal(delta.kind, "commit");
-  assert.deepEqual(delta.receipt, result.result.turnReplacement.receipt);
-  assert.deepEqual(
-    delta.changes
-      .filter((entry) => entry.collection === "messages" && entry.remove)
-      .map((entry) => entry.key),
-    ["keep-tail", "drop"],
-  );
-  assert.equal(
-    delta.changes.some(
-      (entry) => entry.collection === "turns" && entry.key === "keep" && entry.remove,
-    ),
-    false,
-  );
-  const original = delta.changes.find(
-    (entry) => entry.collection === "messages" && entry.key === "sm_new",
-  ).value.message;
+  assert.deepEqual(receipt, result.result.turnReplacement.receipt);
+  assert.equal(await before.readMessageEntry({ messageUid: "drop" }), null);
+  assert.equal(await before.readMessageEntry({ messageUid: "keep-tail" }), null);
+  assert.notEqual(await before.readTurnDescriptor("keep"), null);
+  const original = projection.messages[0].message;
   assert.equal(original.content, "edited");
-  await f.commit({ messages: [{ ...original, content: "later edit" }, message("later")] });
+  const entry = await before.readMessageEntry({ messageUid: original.messageUid });
+  await f.commit({
+    messages: [message("later")],
+    messageContentReplacements: [
+      {
+        messageUid: original.messageUid,
+        dialogProcessId: original.dialogProcessId,
+        turnScopeId: original.turnScopeId,
+        owner: entry.owner,
+        expectedContentReference: entry.contentReference,
+        content: "later edit",
+      },
+    ],
+  });
   const retried = await f.commit(change);
   assert.equal(retried.result.turnReplacement.deduplicated, true);
   const after = await f.open();
-  assert.deepEqual(await after.readCommandChanges(command.commandId), delta);
+  assert.deepEqual(await after.readCommand(command.commandId), receipt);
   assert.deepEqual(await after.readMutationProjection(command.commandId), projection);
   assert.deepEqual(await before.readMutationProjection(command.commandId), projection);
-  assert.deepEqual(await before.readCommandChanges(command.commandId), delta);
-  assert.equal((await after.readMessage("sm_new")).message.content, "later edit");
-  assert.notEqual(await after.readMessage("later"), null);
-  assert.notEqual(await after.readMessage("keep"), null);
+  assert.deepEqual(await before.readCommand(command.commandId), receipt);
+  assert.equal(
+    (await after.readMessages({ messageUids: ["sm_new"] }))[0].message.content,
+    "later edit",
+  );
+  assert.notEqual(await after.readMessageEntry({ messageUid: "later" }), null);
+  assert.notEqual(await after.readMessageEntry({ messageUid: "keep" }), null);
 });
 
 test("replaceTurn publishes fresh identities, suffix indexes and tombstones in one generation", async (t) => {
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     aggregateVersion: 2,
     messages: [message("keep"), message("drop", "drop", { error: "old failure" }), message("tail")],
   });
@@ -226,8 +253,8 @@ test("replaceTurn publishes fresh identities, suffix indexes and tombstones in o
   assert.deepEqual(response.turnReplacement.replacedTurnScopeIds, ["drop", "tail"]);
   assert.equal(session.turnLifecycle.sequence, 1);
   assert.deepEqual(Object.keys(session.turnLifecycle.replacedTurns).sort(), ["drop", "tail"]);
-  assert.equal(await after.readMessage("drop"), null);
-  assert.notEqual(await before.readMessage("drop"), null);
+  assert.equal(await after.readMessageEntry({ messageUid: "drop" }), null);
+  assert.notEqual(await before.readMessageEntry({ messageUid: "drop" }), null);
 });
 
 test("replaceTurn resolves a continued assistant turn to its committed dialog user anchor", async (t) => {
@@ -239,7 +266,7 @@ test("replaceTurn resolves a continued assistant turn to its committed dialog us
   });
   delete answer.userMessageId;
   delete answer.messageOrigin;
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     messages: [message("keep"), message("user", "source"), answer, message("tail")],
   });
   const result = await f.service.replaceTurn(
@@ -253,7 +280,7 @@ test("replaceTurn resolves a continued assistant turn to its committed dialog us
 });
 
 test("replaceTurn replays after anchor removal without advancing generation", async (t) => {
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     aggregateVersion: 2,
     messages: [message("keep"), message("drop")],
   });
@@ -276,7 +303,7 @@ test("replaceTurn replays after anchor removal without advancing generation", as
 });
 
 test("replaceTurn rejects stale versions, missing anchors and reused identities without publication", async (t) => {
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     aggregateVersion: 5,
     messages: [message("keep"), message("drop")],
   });
@@ -294,7 +321,7 @@ test("replaceTurn rejects stale versions, missing anchors and reused identities 
 });
 
 test("replaceTurn validates required payload and rejects compatibility or ambiguous anchors", async (t) => {
-  const f = await immutableMutationFixture(t);
+  const f = await sessionMutationFixture(t);
   t.mock.method(f.repository, "requireSessionReader", () =>
     assert.fail("invalid request accessed storage"),
   );
@@ -338,7 +365,7 @@ test("replaceTurn persists incoming canonical attachments and rejects missing st
     mimeType: "text/plain",
     size: 123,
   };
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     messages: [
       message("drop", "drop", { attachments: [{ ...attachment, path: "/old/report.txt" }] }),
     ],
@@ -351,15 +378,18 @@ test("replaceTurn persists incoming canonical attachments and rejects missing st
   assert.equal((await f.open()).generation, before.generation);
   const result = await f.service.replaceTurn(replacement(f, { attachments: [attachment] }));
   assert.deepEqual(
-    (await (await f.open()).readMessage(result.turnReplacement.replacementUserMessageUid)).message
-      .attachments,
+    (
+      await (
+        await f.open()
+      ).readMessageEntry({ messageUid: result.turnReplacement.replacementUserMessageUid })
+    ).message.attachments,
     [attachment],
   );
 });
 
 test("replaceTurn leaves another session graph unchanged", async (t) => {
-  const f = await immutableMutationFixture(t, { messages: [message("drop")] });
-  const other = await immutableMutationFixture(t, { messages: [message("other")] });
+  const f = await sessionMutationFixture(t, { messages: [message("drop")] });
+  const other = await sessionMutationFixture(t, { messages: [message("other")] });
   const before = await other.open();
   await f.service.replaceTurn(replacement(f));
   assert.deepEqual(await (await other.open()).exportSession(), await before.exportSession());
@@ -401,8 +431,8 @@ async function complete(f, scope) {
     });
 }
 
-test("replaceTurn atomically removes related lifecycle, summaries, timings, commands and outbox", async (t) => {
-  const f = await immutableMutationFixture(t, { messages: [message("keep"), message("drop")] });
+test("replaceTurn retires lifecycle, summaries, timings and outbox while retaining command receipts", async (t) => {
+  const f = await sessionMutationFixture(t, { messages: [message("keep"), message("drop")] });
   for (const scope of ["keep", "drop"]) {
     await complete(f, scope);
     await f.commit({
@@ -431,7 +461,10 @@ test("replaceTurn atomically removes related lifecycle, summaries, timings, comm
   assert.notEqual(await after.readTurnState("keep"), null);
   assert.equal(await after.readTurnState("drop"), null);
   assert.equal(await after.readTurnTiming("drop"), null);
-  assert.equal(await after.readCommand("turn.action_accepted:drop"), null);
+  assert.deepEqual(
+    await after.readCommand("turn.action_accepted:drop"),
+    await before.readCommand("turn.action_accepted:drop"),
+  );
   assert.equal(await after.readCheckpoint("drop", "cp:drop"), null);
   assert.equal(await after.readCheckpointState("drop"), null);
   assert.notEqual(await after.readCheckpoint("keep", "cp:keep"), null);
@@ -447,12 +480,13 @@ test("replaceTurn atomically removes related lifecycle, summaries, timings, comm
 });
 
 test("replaceTurn head publication failure retains the old graph and retries the command", async (t) => {
-  const f = await immutableMutationFixture(t, { messages: [message("keep"), message("drop")] });
+  const f = await sessionMutationFixture(t, { messages: [message("keep"), message("drop")] });
   await complete(f, "drop");
   const before = await f.open();
+  const original = await before.exportSession();
   setFsAdapter({
     rename: async (source, target) => {
-      if (target === `${f.scope.sessionDir}/head.json`)
+      if (target === `${f.scope.sessionDir}/${PARTITION_JOURNAL_HEAD_FILE}`)
         throw Object.assign(new Error("injected"), { code: "EIO" });
       return rename(source, target);
     },
@@ -464,18 +498,19 @@ test("replaceTurn head publication failure retains the old graph and retries the
   } finally {
     resetFsAdapter();
   }
+  await f.reopen();
   const failed = await f.open();
   assert.equal(failed.generation, before.generation);
-  assert.deepEqual(await failed.exportSession(), await before.exportSession());
+  assert.deepEqual(await failed.exportSession(), original);
   assert.equal(await failed.readCommand("replace-tail"), null);
   assert.equal((await failed.readOutboxPage({ consumerId: "client" })).events.length, 4);
   await f.service.replaceTurn(replacement(f));
-  assert.equal(await (await f.open()).readMessage("drop"), null);
+  assert.equal(await (await f.open()).readMessageEntry({ messageUid: "drop" }), null);
 });
 
 test("replacement of a later user in one dialog preserves the earlier user and response", async (t) => {
   const dialogProcessId = "shared-dialog";
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     messages: [
       message("first", "first", { dialogProcessId }),
       assistantMessage("answer", "first", { dialogProcessId }),
@@ -492,7 +527,7 @@ test("replacement of a later user in one dialog preserves the earlier user and r
 
 test("replacement of a continuation uses its nearest user interjection", async (t) => {
   const dialogProcessId = "shared-dialog";
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     messages: [
       message("first", "first", { dialogProcessId }),
       assistantMessage("answer", "first", { dialogProcessId }),
@@ -508,17 +543,20 @@ test("replacement of a continuation uses its nearest user interjection", async (
 });
 
 test("committed message role changes reject before publishing a head", async (t) => {
-  const f = await immutableMutationFixture(t, { messages: [message("drop")] });
+  const f = await sessionMutationFixture(t, { messages: [message("drop")] });
   const before = await f.open();
   await assert.rejects(f.commit({ messages: [assistantMessage("drop", "drop")] }), {
-    code: "SESSION_MESSAGE_IDENTITY_CONFLICT",
+    code: "SESSION_ENTITY_EXISTS",
   });
   assert.equal((await f.open()).generation, before.generation);
-  assert.equal((await (await f.open()).readMessage("drop")).message.role, "user");
+  assert.equal(
+    (await (await f.open()).readMessageEntry({ messageUid: "drop" })).message.role,
+    "user",
+  );
 });
 
 test("replacement of the first turn updates the title and permits a subsequent append", async (t) => {
-  const f = await immutableMutationFixture(t, { messages: [message("drop")] });
+  const f = await sessionMutationFixture(t, { messages: [message("drop")] });
   await f.service.replaceTurn(replacement(f));
   assert.equal(
     (await (await f.open()).readMetadata({ includeAutoTitle: true })).autoTitle,
@@ -533,22 +571,45 @@ test("replacement of the first turn updates the title and permits a subsequent a
 
 test("replacing the tail reads only the retained title prefix and no removed body", async (t) => {
   const title = "12345678901234567890";
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     messages: [
       message("keep", "keep", { content: title + "body".repeat(50000) }),
       message("drop", "drop", { content: "removed ".repeat(25000) }),
     ],
   });
-  const store = await ImmutableSessionStore.open({ sessionDir: f.scope.sessionDir });
-  setFsAdapter(await forbidMutationBodyReads(store, "keep", "drop"));
-  try {
-    await f.service.replaceTurn(replacement(f));
-    const reader = await f.open();
-    assert.equal((await reader.readMetadata({ includeAutoTitle: true })).autoTitle, title);
-    assert.equal(await reader.readMessage("drop"), null);
-  } finally {
-    resetFsAdapter();
-  }
+  const original = PartitionTransactions.prototype.withCollectionReader;
+  let contentReads = 0;
+  t.mock.method(
+    PartitionTransactions.prototype,
+    "withCollectionReader",
+    function (snapshot, run, options) {
+      return original.call(
+        this,
+        snapshot,
+        (read) => {
+          const guarded = Object.assign(
+            async (query) => {
+              if (query.collection === PARTITION_MESSAGE_COLLECTIONS.content) {
+                contentReads += query.keys.length;
+                assert.deepEqual(query.keys, [
+                  partitionMessageEntryKey(query.collection, "keep", 1),
+                ]);
+              }
+              return read(query);
+            },
+            { readWindow: read.readWindow },
+          );
+          return run(guarded);
+        },
+        options,
+      );
+    },
+  );
+  await f.service.replaceTurn(replacement(f));
+  const reader = await f.open();
+  assert.equal((await reader.readMetadata({ includeAutoTitle: true })).autoTitle, title);
+  assert.equal(await reader.readMessageEntry({ messageUid: "drop" }), null);
+  assert.ok(contentReads > 0);
 });
 
 test("reused user identity accepts integrity fields and ignores derived presentation without writing", async (t) => {
@@ -561,7 +622,7 @@ test("reused user identity accepts integrity fields and ignores derived presenta
     name: "original.txt",
     mimeType: "text/plain",
   };
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     messages: [message("user", "edited", { attachments: [attachment] })],
   });
   const before = await f.open();
@@ -591,7 +652,7 @@ test("reused user identity rejects immutable attachment and dialog divergence", 
     name: "original.txt",
     mimeType: "text/plain",
   };
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     messages: [message("user", "edited", { attachments: [attachment] })],
   });
   const request = {

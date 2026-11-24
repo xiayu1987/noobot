@@ -7,13 +7,10 @@ import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  immutableMutationFixture,
-  mutationMessage,
-} from "../helpers/immutable-mutation-integration-fixture.js";
+import { sessionMutationFixture, mutationMessage } from "../helpers/session-mutation-fixture.js";
 
 test("SessionMessageService.appendTurns persists transferEnvelopes", async (t) => {
-  const f = await immutableMutationFixture(t);
+  const f = await sessionMutationFixture(t);
   const envelope = {
     protocol: "noobot.semantic-transfer",
     version: TRANSFER_VERSION,
@@ -62,7 +59,7 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async (t) =
     ],
   });
 
-  const lastMessage = (await (await f.open()).readMessage("sm_done")).message;
+  const lastMessage = (await (await f.open()).readMessageEntry({ messageUid: "sm_done" })).message;
   assert.equal("attachmentMetas" in lastMessage, false);
   assert.equal("transferEnvelopes" in lastMessage, true);
   assert.deepEqual(lastMessage?.transferEnvelopes, [envelope]);
@@ -73,7 +70,7 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async (t) =
 });
 
 test("SessionMessageService.appendTurns leaves turnTimings to the timing fact writer", async (t) => {
-  const f = await immutableMutationFixture(t);
+  const f = await sessionMutationFixture(t);
 
   await f.service.appendTurns({
     ...f.request,
@@ -93,14 +90,14 @@ test("SessionMessageService.appendTurns leaves turnTimings to the timing fact wr
   });
 
   const reader = await f.open();
-  const { message } = await reader.readMessage("sm_done");
+  const { message } = await reader.readMessageEntry({ messageUid: "sm_done" });
   assert.equal(Object.hasOwn(message, "thinkingStartedAt"), false);
   assert.equal(Object.hasOwn(message, "thinkingFinishedAt"), false);
   assert.equal(await reader.readTurnTiming("turn-1"), null);
 });
 
 test("SessionMessageService.upsertTurnTiming is first-write-wins and rejects conflicting facts", async (t) => {
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     messages: [mutationMessage("user-1", "turn-1", { dialogProcessId: "dp-1" })],
   });
 
@@ -130,7 +127,7 @@ test("SessionMessageService.upsertTurnTiming is first-write-wins and rejects con
 });
 
 test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async (t) => {
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     aggregateVersion: 1,
     messages: [mutationMessage("keep"), mutationMessage("delete")],
   });
@@ -160,7 +157,7 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
 });
 
 test("SessionMessageService.replaceTurn prunes replaced turnTimings", async (t) => {
-  const f = await immutableMutationFixture(t, {
+  const f = await sessionMutationFixture(t, {
     aggregateVersion: 1,
     messages: [mutationMessage("keep"), mutationMessage("old")],
   });

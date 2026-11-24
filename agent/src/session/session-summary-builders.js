@@ -4,10 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export {
-  SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
-  buildSessionDisplaySummary,
-  isSessionDisplaySummaryPayload,
-} from "./session-summary-builders/session-display-summary.js";
-
 export { buildSessionSummary } from "./session-summary-builders/session-list-summary.js";

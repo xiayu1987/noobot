@@ -17,14 +17,18 @@ import {
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { normalizeMessageEntity } from "../../src/session/entities/message-entity.js";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
+import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
+import {
+  PARTITION_MESSAGE_COLLECTIONS,
+  partitionMessageEntryKey,
+} from "@noobot/session-protocol/partition-session-messages";
 import { createSessionTurnLifecycleSnapshot } from "../../src/session/session-turn-read-model.js";
 
 test("session metadata and current turn identity never materialize historical message bodies", async (t) => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-settings-"));
+  const runtime = createTestSessionServices({ workspaceRoot });
   try {
     await initializeUserWorkspace(workspaceRoot, "u1");
-    const runtime = createTestSessionServices({ workspaceRoot });
     await provisionTestSession(runtime, {
       userId: "u1",
       sessionId: "A",
@@ -33,7 +37,7 @@ test("session metadata and current turn identity never materialize historical me
     const repo = runtime.repositories.sessionRepository;
     const context = withTreeContext(runtime, { userId: "u1", sessionId: "A" });
     const session = await repo.requireById("u1", "A", context);
-    session.messages = ["old", "last"].map((id) => ({
+    session.messages = ["title", "old", "last"].map((id) => ({
       messageUid: `message-${id}`,
       userMessageId: `user-${id}`,
       ts: "2026-11-12T00:00:00.000Z",
@@ -46,7 +50,7 @@ test("session metadata and current turn identity never materialize historical me
       attachments: [],
       transferEnvelopes: [],
     }));
-    const initial = await repo.requireSessionReader("u1", "A", context);
+    await using initial = await repo.requireSessionReader("u1", "A", context);
     await submitTestSessionRequest(
       repo,
       "u1",
@@ -58,10 +62,13 @@ test("session metadata and current turn identity never materialize historical me
       }),
       context.persistenceContext,
     );
-    const scope = await repo.requireSessionScope("u1", "A", context.persistenceContext);
-    const beforeReader = await repo.requireSessionReader("u1", "A", context);
+    await using beforeReader = await repo.requireSessionReader("u1", "A", context);
     const before = await beforeReader.readMetadata();
-    const beforeFacts = await beforeReader.readFacts();
+    const messageEntries = (reader) =>
+      Promise.all(
+        session.messages.map(({ messageUid }) => reader.readMessageEntry({ messageUid })),
+      );
+    const beforeMessages = await messageEntries(beforeReader);
     const snapshotOptions = {
       commandId: "query-lifecycle",
       knownSequence: 0,
@@ -74,14 +81,38 @@ test("session metadata and current turn identity never materialize historical me
       session,
       messageTurnScopeIds: session.messages.map((message) => message.turnScopeId),
     });
-    await rm(scope.sessionFile, { force: true });
-    const get = ImmutableSessionStore.prototype.get;
-    t.mock.method(ImmutableSessionStore.prototype, "get", function (snapshot, collection, key) {
-      if (collection === "messages" && key === "message-old") {
-        throw new Error("unrelated historical message body read is forbidden");
-      }
-      return get.call(this, snapshot, collection, key);
-    });
+    const content = PARTITION_MESSAGE_COLLECTIONS.content;
+    const oldContentKey = partitionMessageEntryKey(content, "message-old", 1);
+    const withCollectionReader = PartitionTransactions.prototype.withCollectionReader;
+    t.mock.method(
+      PartitionTransactions.prototype,
+      "withCollectionReader",
+      function (snapshot, operation, options) {
+        return withCollectionReader.call(
+          this,
+          snapshot,
+          (read) =>
+            operation(
+              Object.assign((query) => {
+                if (query.collection === content && query.keys.includes(oldContentKey)) {
+                  throw new Error("unrelated historical message body read is forbidden");
+                }
+                return read(query);
+              }, read),
+            ),
+          options,
+        );
+      },
+    );
+    await assert.rejects(
+      beforeReader.readMessageContentPage({
+        messageUid: "message-old",
+        byteOffset: 0,
+        maxBytes: 64,
+        expectedContentReference: null,
+      }),
+      /unrelated historical message body read is forbidden/,
+    );
     t.mock.method(repo, "requireById", () => {
       throw new Error("full session read is forbidden");
     });
@@ -139,9 +170,9 @@ test("session metadata and current turn identity never materialize historical me
       ...context,
       selectedConnectorIds: ["connector-one"],
     });
-    const afterReader = await repo.requireSessionReader("u1", "A", context);
+    await using afterReader = await repo.requireSessionReader("u1", "A", context);
     const after = await afterReader.readMetadata();
-    assert.deepEqual(await afterReader.readFacts(), beforeFacts);
+    assert.deepEqual(await messageEntries(afterReader), beforeMessages);
     assert.equal(after.aggregateVersion, before.aggregateVersion);
     assert.equal(after.modelAlias, "test-model");
     assert.equal(after.customTitle, "新名称");
@@ -159,10 +190,11 @@ test("session metadata and current turn identity never materialize historical me
     const entry = rebuilt.sessions.find((item) => item.sessionId === "A");
     assert.equal(entry.availability, "available");
     assert.equal(entry.title, "新名称");
-    assert.equal(entry.messageCount, 2);
+    assert.equal(entry.messageCount, 3);
     assert.equal(entry.lastMessage.messageUid, "message-last");
   } finally {
     t.mock.restoreAll();
+    await runtime.close();
     await rm(workspaceRoot, { recursive: true, force: true });
   }
 });

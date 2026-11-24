@@ -7,42 +7,18 @@ import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-pro
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import os from "node:os";
-import path from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
-
-import {
-  readSessionArtifact,
-  writeSessionArtifact,
-  SESSION_ARTIFACT_PREDECESSOR,
-} from "../../src/session/session-artifact-store.js";
-import {
-  buildSessionDisplaySummary,
-  SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
-} from "../../src/session/session-summary-builders.js";
-import {
-  applySessionMessageFacts,
-  createTestSessionRequiredFields,
-} from "../helpers/session-message-facts.js";
+import { partitionReaderAccess } from "../helpers/partition-reader-fixture.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
-import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
-import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
+import { buildFixtureDisplaySummary } from "../helpers/session-projection-fixture.js";
+import { withTemp } from "../helpers/temporary-directory.js";
+import { seedPartitionSession } from "../helpers/partition-session-seed.js";
 import { canonicalToolTimelineItem } from "./session-repository-boundary.summaries.fixtures.js";
 
 const EXECUTE_SCRIPT_RESULT = JSON.stringify({ ok: true, status: "completed", stdout: "done" });
 
-async function withTempWorkspace(fn) {
-  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
-  try {
-    return await fn(workspaceRoot);
-  } finally {
-    await rm(workspaceRoot, { recursive: true, force: true });
-  }
-}
-
 test("session display summary should keep canonical attachment fields", async () => {
-  const summary = await buildPersistedDisplaySummary({
+  const summary = buildFixtureDisplaySummary({
     sessionId: "s-attachments",
     aggregateVersion: 0,
     messages: [
@@ -66,14 +42,13 @@ test("session display summary should keep canonical attachment fields", async ()
     ],
   });
 
-  assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
   assert.equal(summary.messages[0].attachments[0].attachmentId, "att-canonical");
   assert.equal(summary.messages[0].attachments[0].name, "canonical.txt");
   assert.equal(summary.stats.attachmentCount, 1);
 });
 
 test("session display summary keeps rich attachment fields for preview and parsed result", async () => {
-  const summary = await buildPersistedDisplaySummary({
+  const summary = buildFixtureDisplaySummary({
     sessionId: "s-rich-attachments",
     aggregateVersion: 0,
     messages: [
@@ -152,7 +127,7 @@ test("session display summary keeps rich attachment fields for preview and parse
 });
 
 test("session display summary derives attachments from transfer envelopes", async () => {
-  const summary = await buildPersistedDisplaySummary({
+  const summary = buildFixtureDisplaySummary({
     sessionId: "s-transfer-attachments",
     aggregateVersion: 0,
     messages: [
@@ -214,7 +189,7 @@ test("session display summary derives attachments from transfer envelopes", asyn
 });
 
 test("session display summary binds completed tool artifacts to one explicit assistant turn", async () => {
-  const summary = await buildPersistedDisplaySummary({
+  const summary = buildFixtureDisplaySummary({
     sessionId: "s-tool-artifacts",
     aggregateVersion: 0,
     messages: [
@@ -370,7 +345,7 @@ function transferDupSession(secondEnvelope) {
     transferEnvelopes: [envelope],
   });
   const first = toolArtifactEnvelope("stdout.txt");
-  return buildPersistedDisplaySummary({
+  return buildFixtureDisplaySummary({
     sessionId: "s-transfer-dup",
     aggregateVersion: 0,
     messages: [
@@ -413,7 +388,7 @@ test("history projection isolates a transferId conflict to its presentation mess
 });
 
 test("session display summary does not guess ownership for an unmatched tool artifact turn", async () => {
-  const summary = await buildPersistedDisplaySummary({
+  const summary = buildFixtureDisplaySummary({
     sessionId: "s-unmatched-artifact",
     aggregateVersion: 0,
     messages: [
@@ -483,15 +458,10 @@ test("session display summary does not guess ownership for an unmatched tool art
 });
 
 test("session artifact persistence should normalize attachment fields before writing", async () => {
-  await withTempWorkspace(async (workspaceRoot) => {
-    const sessionDir = path.join(workspaceRoot, "u1", "runtime", "session", "s-attachments");
-    await writeSessionArtifact({
+  await withTemp(async (sessionDir) => {
+    await seedPartitionSession({
       sessionDir,
-      storageService: TEST_STORAGE_SERVICE,
-      atomic: true,
-      predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
-      sessionPayload: applySessionMessageFacts({
-        ...createTestSessionRequiredFields(),
+      sessionPayload: {
         sessionId: "s-attachments",
         aggregateVersion: 0,
         caller: SESSION_CALLER.USER,
@@ -532,14 +502,12 @@ test("session artifact persistence should normalize attachment fields before wri
             attachment_metas: [{ attachmentId: "att-legacy-only-snake" }],
           },
         ],
-      }),
+      },
     });
 
-    const persistedSession = await readSessionArtifact({
-      sessionDir,
-      storageService: TEST_STORAGE_SERVICE,
-    });
-    const persistedSummary = buildSessionDisplaySummary(persistedSession);
+    await using reader = await partitionReaderAccess.openArtifact({ sessionDir });
+    const persistedSession = await reader.exportSession();
+    const persistedSummary = await reader.readDisplayProjection();
     const sessionJson = JSON.stringify(persistedSession);
     const summaryJson = JSON.stringify(persistedSummary);
 

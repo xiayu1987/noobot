@@ -6,20 +6,18 @@
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { test } from "node:test";
-import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
+import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_VERSION } from "@noobot/workspace-protocol";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../src/session/session-artifact-files.js";
 import {
   readSessionDirectory,
-  walkSessionManifestDirectories,
+  discoverSessionDirectories,
 } from "../src/workspace-lifecycle/session-directory-walk.js";
-import {
-  ensureSessionTree,
-  upgradeSessionStorage,
-} from "../src/workspace-lifecycle/session-storage-upgrade.js";
+import { ensureSessionTree } from "../src/workspace-lifecycle/session-storage-upgrade.js";
 import { upgradeWorkspaceLayout } from "../src/workspace-lifecycle/sections.js";
-import { TEST_STORAGE_SERVICE } from "./helpers/storage-service.js";
+import { listQuarantinedUnits } from "../src/workspace-lifecycle/migration-quarantine.js";
+import { createTestPartitionStorageBudget } from "./helpers/partition-journal-cases.js";
 
 async function fixture(t) {
   const base = await mkdtemp(join(tmpdir(), "storage-structure-"));
@@ -31,7 +29,8 @@ async function fixture(t) {
 
 async function collect(directory) {
   const sessions = [];
-  for await (const session of walkSessionManifestDirectories(directory)) sessions.push(session);
+  for await (const session of discoverSessionDirectories(dirname(directory), [basename(directory)]))
+    sessions.push(session);
   return sessions;
 }
 
@@ -61,32 +60,11 @@ test("tree recovery does not publish an empty tree over an obstructed session ro
   assert.equal(await readFile(options.root, "utf8"), "session evidence");
 });
 
-for (const artifact of ["executionReportsDir", "executionEventsDir"]) {
-  test(`artifact retirement rejects an obstructed ${artifact} without retiring evidence`, async (t) => {
-    const options = await fixture(t);
-    const session = join(options.root, "session");
-    await mkdir(session);
-    const treeFile = join(options.base, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
-    const tree = JSON.stringify({ nodes: {} });
-    await writeFile(treeFile, tree);
-    await writeFile(join(session, SESSION_ARTIFACT_FILE_NAMES[artifact]), "artifact evidence");
-    await assert.rejects(
-      upgradeSessionStorage({ ...options, scopedSessionRoots: ["runtime/scoped-sessions"] }),
-      { code: "ENOTDIR" },
-    );
-    assert.equal(await readFile(treeFile, "utf8"), tree);
-    assert.equal(
-      await readFile(join(session, SESSION_ARTIFACT_FILE_NAMES[artifact]), "utf8"),
-      "artifact evidence",
-    );
-  });
-}
-
 for (const { version, artifact } of [
   { version: 5, artifact: "executionEventsDir" },
   { version: 6, artifact: "modelMessageSnapshotsDir" },
 ]) {
-  test(`layout v${version} does not advance past an obstructed ${artifact}`, async (t) => {
+  test(`layout v${version} retains unsupported session ${artifact} evidence without blocking upgrade`, async (t) => {
     const options = await fixture(t);
     const session = join(options.root, "session");
     await mkdir(session);
@@ -101,12 +79,22 @@ for (const { version, artifact } of [
     const results = await upgradeWorkspaceLayout({
       ...options,
       scopedSessionRoots: ["runtime/scoped-sessions"],
-      storageService: TEST_STORAGE_SERVICE,
+      targetStorageBudget: createTestPartitionStorageBudget(),
     });
-    assert.equal(results.length, 1);
-    assert.equal(results[0].failed.code, "ENOTDIR");
-    assert.equal(await readFile(state, "utf8"), installed);
-    assert.equal(await readFile(manifest, "utf8"), "{}");
-    assert.equal(await readFile(obstruction, "utf8"), "migration evidence");
+    assert.equal(
+      results.some((result) => result.failed),
+      false,
+      JSON.stringify(results),
+    );
+    assert.equal(JSON.parse(await readFile(state, "utf8")).version, WORKSPACE_LAYOUT_VERSION);
+    const [unit] = await listQuarantinedUnits({ base: options.base });
+    assert.deepEqual(unit.sessionStorage, { format: "document", status: "unsupported-format" });
+    const held = join(options.base, unit.quarantinePath);
+    assert.equal(await readFile(join(held, SESSION_ARTIFACT_FILE_NAMES.session), "utf8"), "{}");
+    assert.equal(
+      await readFile(join(held, SESSION_ARTIFACT_FILE_NAMES[artifact]), "utf8"),
+      "migration evidence",
+    );
+    await assert.rejects(readFile(manifest), { code: "ENOENT" });
   });
 }

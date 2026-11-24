@@ -16,6 +16,7 @@ import {
 } from "@noobot/session-protocol/execution-report";
 import { createSessionPersistenceScope } from "@noobot/session-protocol";
 import { resolveSessionArtifactMutationLock } from "../../src/session/session-artifact-files.js";
+import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
 import { summarizeExecutionLogs } from "../../src/observability/execution-log/execution-log-summary.js";
 import { createSessionFacade } from "../../src/session/index.js";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
@@ -109,9 +110,9 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
       plugin: "workflow-test",
       sessionId: "child-a",
     });
-    const reader = await sessionRepo.requireSessionReader("alice", "child-a", options);
+    await using reader = await sessionRepo.requireSessionReader("alice", "child-a", options);
     assert.equal((await reader.readMetadata()).parentSessionId, "parent-a");
-    const headFile = path.join(scope.sessionDir, "head.json");
+    const headFile = path.join(scope.sessionDir, PARTITION_JOURNAL_HEAD_FILE);
     const headBefore = await readFile(headFile);
     const summary = await sessionRepo.readSessionDisplaySummary("alice", "child-a", options);
     assert.deepEqual(
@@ -311,7 +312,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
       }),
     );
 
-    const reader = await sessionRepo.requireSessionReader("alice", "child-agent", {
+    await using reader = await sessionRepo.requireSessionReader("alice", "child-agent", {
       persistenceContext: access.persistenceContext,
     });
     const scopedSession = await reader.exportSession();
@@ -349,7 +350,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
   }
 });
 
-test("scoped repositories isolate concurrent contexts and mutation locks", async () => {
+test("scoped repositories isolate concurrent contexts without locking pinned readers", async () => {
   const harness = buildHarness();
   const { runtime, sessionRepo, executionRepo } = await harness.setup();
   try {
@@ -432,9 +433,17 @@ test("scoped repositories isolate concurrent contexts and mutation locks", async
     await sessionRepo.withSessionReader(
       "alice",
       nodes[0].sessionId,
-      async () => {
+      async ({ reader }) => {
+        const before = await reader.readMetadata();
         await probe(secondLock, "acquired");
-        await probe(firstLock, "SESSION_MUTATION_BUSY");
+        await probe(firstLock, "acquired");
+        await sessionRepo.writeSessionMetadata(
+          "alice",
+          nodes[0].sessionId,
+          { node: "changed" },
+          { persistenceContext: nodes[0].access.persistenceContext },
+        );
+        assert.deepEqual(await reader.readMetadata(), before);
       },
       { persistenceContext: nodes[0].access.persistenceContext },
     );
@@ -459,7 +468,7 @@ test("scoped metadata writes reject non-object metadata without publishing a rev
       persistenceContext: access.persistenceContext,
     });
     const scope = await access.locate();
-    const headFile = path.join(scope.sessionDir, "head.json");
+    const headFile = path.join(scope.sessionDir, PARTITION_JOURNAL_HEAD_FILE);
     const headBefore = await readFile(headFile);
     for (const metadata of [null, [], "boom"]) {
       await assert.rejects(

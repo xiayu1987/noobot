@@ -4,11 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isFunction, isObjectLike } from "@noobot/shared/value";
-import { deepFreeze } from "@noobot/shared/deep-freeze";
-import { createHash } from "node:crypto";
+import { isFunction } from "@noobot/shared/value";
 
-const immutableJsonSources = new WeakMap();
 export const PERSISTED_JSON_READ_ERROR_CODE = Object.freeze({
   MISSING: "PERSISTED_JSON_MISSING",
   CORRUPTED: "PERSISTED_JSON_CORRUPTED",
@@ -45,7 +42,7 @@ function createPersistedJsonMissingError(filePath, cause) {
   return error;
 }
 
-async function readParsedJson({ filePath, readFile, immutable = false, previousValue }) {
+export async function readPersistedJsonFile({ filePath, readFile }) {
   if (!isFunction(readFile)) {
     throw new TypeError("readPersistedJsonFile requires readFile");
   }
@@ -53,14 +50,7 @@ async function readParsedJson({ filePath, readFile, immutable = false, previousV
     throw new TypeError("readPersistedJsonFile requires filePath");
   }
   try {
-    const source = await readFile(filePath, "utf8");
-    if (!immutable) return JSON.parse(source);
-    const sourceHash = createHash("sha256").update(source).digest("hex");
-    if (previousValue && immutableJsonSources.get(previousValue) === sourceHash)
-      return previousValue;
-    const value = deepFreeze(JSON.parse(source));
-    if (isObjectLike(value)) immutableJsonSources.set(value, sourceHash);
-    return value;
+    return JSON.parse(await readFile(filePath, "utf8"));
   } catch (error) {
     if (isMissingPersistencePathError(error))
       throw createPersistedJsonMissingError(filePath, error);
@@ -68,13 +58,9 @@ async function readParsedJson({ filePath, readFile, immutable = false, previousV
   }
 }
 
-export async function readPersistedJsonFile(options) {
-  return readParsedJson(options);
-}
-
 export async function readOptionalPersistedJsonFile({ filePath, readFile }) {
   try {
-    return await readParsedJson({ filePath, readFile });
+    return await readPersistedJsonFile({ filePath, readFile });
   } catch (error) {
     if (error.code === PERSISTED_JSON_READ_ERROR_CODE.MISSING) return null;
     throw error;

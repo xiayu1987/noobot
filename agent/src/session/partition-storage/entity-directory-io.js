@@ -5,7 +5,7 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { deflateRawSync, inflateRawSync } from "node:zlib";
+import { constants as zlibConstants, deflateRawSync, inflateRawSync } from "node:zlib";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import {
@@ -233,7 +233,7 @@ function encodePage(node, limits) {
   }
   const serialized = Buffer.from(encodePartitionEntityDirectoryPage(node));
   if (serialized.length + 1 > partitionEntityPageBytes(limits)) return null;
-  const compressed = deflateRawSync(serialized);
+  const compressed = deflateRawSync(serialized, { level: zlibConstants.Z_BEST_SPEED });
   return compressed.length < serialized.length
     ? Buffer.concat([Buffer.from([PARTITION_ENTITY_PAGE_CODEC.deflateRaw]), compressed])
     : Buffer.concat([Buffer.from([PARTITION_ENTITY_PAGE_CODEC.literal]), serialized]);

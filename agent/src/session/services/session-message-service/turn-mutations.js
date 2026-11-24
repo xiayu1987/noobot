@@ -6,6 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { createMessageUid, createUserMessageId } from "@noobot/session-protocol/message-identity";
+import { partitionJournalError } from "@noobot/session-protocol/partition-journal";
 import { createMessageAnchorMatcher } from "./anchor-utils.js";
 import {
   createMessageDeleteResponse,
@@ -41,11 +42,9 @@ async function commitMutation({
         generation: current.generation,
       }));
       if (!source || !isDeepStrictEqual(source.receipt, receipt)) {
-        throw Object.assign(
-          new Error("Committed mutation is missing its command change evidence"),
-          {
-            code: "SESSION_IMMUTABLE_STORAGE_INVALID",
-          },
+        throw partitionJournalError(
+          "SESSION_STORAGE_CORRUPT",
+          "Committed mutation is missing its command change evidence",
         );
       }
       const displayMessages =

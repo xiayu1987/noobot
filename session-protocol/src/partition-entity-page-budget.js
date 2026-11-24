@@ -10,7 +10,7 @@ import { partitionEpochHexLength } from "./partition-epoch.js";
 
 export const PARTITION_ENTITY_DIRECTORY_FORMAT = "noobot.partition-entity-directory/10";
 export const PARTITION_ENTITY_DIRECTORY = Object.freeze({
-  maxEntries: QUANTITY_THRESHOLDS.immutableStorage.entityDirectoryMaxEntries,
+  maxEntries: QUANTITY_THRESHOLDS.partitionStorage.entityDirectoryMaxEntries,
   maxLevel: 52,
 });
 export const PARTITION_ENTITY_PAGE_CODEC = Object.freeze({
@@ -24,7 +24,7 @@ const max = Number.MAX_SAFE_INTEGER;
 const epoch = "0".repeat(partitionEpochHexLength);
 const updatedLeaf = [max, max, max, max, max, max];
 const child = [max, max, max, max];
-const maxKeyBytes = LENGTH_THRESHOLDS.immutableStorage.entityPageKeyBytes;
+const maxKeyBytes = LENGTH_THRESHOLDS.partitionStorage.entityPageKeyBytes;
 
 const escapedBytes = (value) => encoder.encode(JSON.stringify(JSON.stringify(value))).length - 2;
 const embeddedStringDelimiterBytes = escapedBytes("");

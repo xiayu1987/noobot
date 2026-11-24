@@ -6,17 +6,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { createServer } from "vite";
+import { createTestViteServer } from "./helpers/vite-server.js";
 import vue from "@vitejs/plugin-vue";
 import { chromium } from "@playwright/test";
 
 test(
   "HTML preview renders resources in an opaque sandbox and keeps source readable",
   { timeout: 60000 },
-  async () => {
+  async (t) => {
     const root = fileURLToPath(new URL("../..", import.meta.url));
     const runtime = fileURLToPath(new URL("../../../../shared/runtime-params.js", import.meta.url));
-    const server = await createServer({
+    const server = await createTestViteServer(t, {
       configFile: false,
       appType: "custom",
       root,
@@ -421,7 +421,6 @@ test(
       await page.evaluate(() => window.previewApp.unmount());
     } finally {
       await browser?.close();
-      await server.close();
     }
   },
 );

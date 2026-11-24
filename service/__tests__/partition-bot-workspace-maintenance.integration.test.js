@@ -352,7 +352,7 @@ test(
   },
 );
 
-async function workspaceWithMissingQuarantine(t) {
+async function workspaceWithQuarantine(t, owner, relativePath) {
   const { service, workspaceRoot } = await createPartitionBotFixture(t, {
     assemble: (config, dependencies) =>
       createConfiguredSessionRuntime(config, { ...dependencies, assertWorkspaceStorageReady }),
@@ -363,8 +363,6 @@ async function workspaceWithMissingQuarantine(t) {
   await bot.repairUserWorkspace(other.userId);
   await bot.repairUserWorkspace(identity.userId);
   const base = bot.getWorkspacePath(identity.userId);
-  const owner = WORKSPACE_LAYOUT_UPGRADE_OWNER.MODEL_CONTEXT_SNAPSHOT;
-  const relativePath = "runtime/session/missing/model-message-snapshots/staged.json";
   const held = join(base, WORKSPACE_LAYOUT.MIGRATION_QUARANTINE_DIR, owner, relativePath);
   const original = join(base, relativePath);
   await mkdir(join(original, ".."), { recursive: true });
@@ -379,17 +377,19 @@ async function workspaceWithMissingQuarantine(t) {
   return { service, bot, other, base, owner, held, relativePath };
 }
 
-test("a pending layout retry keeps the workspace closed until its source is restored", async (t) => {
-  const { bot, other, base, owner, held } = await workspaceWithMissingQuarantine(t);
+test("a historical session quarantine blocks only while its retained source is missing", async (t) => {
+  const { bot, other, base, held } = await workspaceWithQuarantine(
+    t,
+    WORKSPACE_LAYOUT_UPGRADE_OWNER.MODEL_CONTEXT_SNAPSHOT,
+    "runtime/session/missing/model-message-snapshots/staged.json",
+  );
   const displaced = join(base, "missing-quarantine-fixture");
   await rename(held, displaced);
   await writeFile(join(base, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE), JSON.stringify({ version: 45 }));
 
-  await assert.rejects(bot.repairUserWorkspace(identity.userId), (error) => {
-    assert.equal(error.code, "WORKSPACE_LAYOUT_UPGRADE_FAILED");
-    assert.equal(error.details.failures[0].stage, `quarantine-retry:${owner}`);
-    assert.equal(error.details.failures[0].code, "ENOENT");
-    return true;
+  await assert.rejects(bot.repairUserWorkspace(identity.userId), {
+    code: "WORKSPACE_MIGRATION_QUARANTINE_CONFLICT",
+    details: { destination: held },
   });
   await assert.rejects(bot.session.listSessionIds(identity), { code: "WORKSPACE_MAINTENANCE" });
   assert.deepEqual(await bot.session.listSessionIds(other), []);
@@ -399,9 +399,12 @@ test("a pending layout retry keeps the workspace closed until its source is rest
   assert.deepEqual(await bot.session.listSessionIds(identity), []);
 });
 
-test("a current layout stays closed until its quarantine is resolved offline", async (t) => {
-  const { service, bot, other, base, owner, held, relativePath } =
-    await workspaceWithMissingQuarantine(t);
+test("a current layout stays closed until its non-session quarantine is resolved offline", async (t) => {
+  const { service, bot, other, base, owner, held, relativePath } = await workspaceWithQuarantine(
+    t,
+    WORKSPACE_LAYOUT_UPGRADE_OWNER.ATTACHMENT_CATALOG,
+    "runtime/attach/catalog.json",
+  );
   const blocked = {
     code: "SESSION_STORAGE_UPGRADE_BLOCKED",
     details: { quarantinePaths: [relative(base, held)] },

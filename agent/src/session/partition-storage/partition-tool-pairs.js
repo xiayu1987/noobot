@@ -9,7 +9,6 @@ import {
   partitionJournalError,
 } from "@noobot/session-protocol/partition-journal";
 import {
-  createPartitionToolPairReader,
   PARTITION_TOOL_PAIRS,
   partitionToolPairKey,
   partitionToolPairResultKey,
@@ -18,7 +17,6 @@ import {
 import { readPartitionSessionMessageCount } from "@noobot/session-protocol/partition-session-messages";
 import { createPartitionMutationReader } from "@noobot/session-protocol/partition-transaction";
 import { checkPartitionMessageStorage } from "./partition-message-record.js";
-import { PartitionSessionTransactions } from "./partition-session-transactions.js";
 
 const collection = PARTITION_TOOL_PAIRS.pairs;
 
@@ -29,33 +27,6 @@ function createMemberChecker(checkMessage) {
       throw partitionJournalError("SESSION_STORAGE_CORRUPT", "Tool pair membership disagrees");
     return checked;
   };
-}
-
-export async function readPartitionToolPairAt({ journal, scope, snapshot, key, identity }) {
-  const transactions = new PartitionSessionTransactions(journal, scope);
-  const read = (query) => transactions.read(snapshot, (readCollection) => readCollection(query));
-  const stored = (await read({ collection, keys: [key] })).get(key);
-  if (stored === null) return null;
-  const value = stored.value;
-  if (typeof value?.identity !== "string" || partitionToolPairKey(value.identity) !== key)
-    throw partitionJournalError("SESSION_STORAGE_CORRUPT", "Invalid partition tool pair key");
-  const checkMember = createMemberChecker((record, messageUid) =>
-    checkPartitionMessageStorage(record, {
-      snapshot,
-      scope,
-      messageUid,
-      generation: snapshot.sequence,
-    }),
-  );
-  const reader = createPartitionToolPairReader({
-    read,
-    checkMember,
-    identity: identity ?? value.identity,
-    value,
-    count: await readPartitionSessionMessageCount(read),
-    sessionId: scope.sessionId,
-  });
-  return { header: await reader.readHeader(), visitResults: reader.visitResults };
 }
 
 export async function readPartitionToolPairs(view, identities) {

@@ -229,25 +229,6 @@ export function requireSessionChanges(changes) {
   return changes;
 }
 
-export function requireImmutableSessionChanges(changes) {
-  requireSessionChanges(changes);
-  if (
-    Object.hasOwn(changes, "messageContentReplacements") ||
-    changes.summaryCheckpoints?.some((checkpoint) =>
-      Object.hasOwn(checkpoint, "messageContentReplacements"),
-    )
-  ) {
-    throw Object.assign(
-      new Error("Immutable storage does not support message content replacements"),
-      {
-        code: "SESSION_CHANGE_UNSUPPORTED",
-        statusCode: 409,
-      },
-    );
-  }
-  return changes;
-}
-
 export function requireUserMetaParsedResultAttachmentRef(result) {
   if (!isPlainObject(result))
     throw new SessionCommitInputError("user_meta parsed result must be an object");
@@ -457,13 +438,11 @@ export function projectMessagePersistenceChange(
     (field) =>
       !(field === "attachments" && previous.role === "user") && previous[field] !== message[field],
   );
-  if (
-    changedFields.some(
-      (field) => field !== "content" && !MESSAGE_METADATA_UPDATE_FIELDS.includes(field),
-    ) ||
-    (message.content !== previous.content && contentAppend === null)
-  )
-    return { messages: [message] };
+  const unsupported = changedFields.find(
+    (field) => field !== "content" && !MESSAGE_METADATA_UPDATE_FIELDS.includes(field),
+  );
+  if (unsupported)
+    throw new SessionCommitInputError(`Cannot update persisted message field: ${unsupported}`);
   const metadata = Object.fromEntries(
     changedFields
       .filter((field) => field !== "content" && message[field] !== undefined)
@@ -477,7 +456,11 @@ export function projectMessagePersistenceChange(
     changes.messageContentAppends = [
       requireMessageContentAppend({ ...identity, content: contentAppend }),
     ];
-  if (Object.keys(metadata).length || metadataRemovals.length || contentAppend === null)
+  else if (message.content !== previous.content)
+    changes.messageContentReplacements = [
+      requireMessageContentReplacement({ ...identity, content: message.content }),
+    ];
+  if (Object.keys(metadata).length || metadataRemovals.length || !changedFields.length)
     changes.messageMetadataUpdates = [
       requireMessageMetadataUpdate({ ...identity, metadata, metadataRemovals }),
     ];
@@ -495,7 +478,12 @@ export function* projectMessagePersistenceEntries(entries, ownership) {
 }
 
 export function mergeMessagePersistenceDeltas(deltas) {
-  const changes = { messages: [], messageContentAppends: [], messageMetadataUpdates: [] };
+  const changes = {
+    messages: [],
+    messageContentAppends: [],
+    messageContentReplacements: [],
+    messageMetadataUpdates: [],
+  };
   for (const delta of deltas)
     for (const [field, values] of Object.entries(delta)) changes[field].push(...values);
   return changes;

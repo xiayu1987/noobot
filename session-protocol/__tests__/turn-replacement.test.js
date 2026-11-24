@@ -95,7 +95,8 @@ test("replacement change accepts only its explicit canonical identity fields", (
 });
 
 test("replacement request captures immutable attachment values before asynchronous submission", () => {
-  const attachment = { attachmentId: "att-1", metadata: { tags: ["original"] } };
+  const identity = { attachmentId: "att-1", sessionId: "session-1", attachmentSource: "user" };
+  const attachment = { ...identity, metadata: { tags: ["original"] } };
   const source = {
     commandId: "replace-1",
     anchor: { turnScopeId: "old" },
@@ -107,11 +108,9 @@ test("replacement request captures immutable attachment values before asynchrono
   const fingerprint = createTurnReplaceFingerprint(captured);
   attachment.attachmentId = "changed";
   attachment.metadata.tags.push("changed");
-  source.attachments.push({ attachmentId: "att-2" });
+  source.attachments.push({ ...identity, attachmentId: "att-2" });
   source.anchor.turnScopeId = "changed";
-  assert.deepEqual(captured.attachments, [
-    { attachmentId: "att-1", metadata: { tags: ["original"] } },
-  ]);
+  assert.deepEqual(captured.attachments, [{ ...identity, metadata: { tags: ["original"] } }]);
   assert.equal(captured.anchor.turnScopeId, "old");
   assert.equal(createTurnReplaceFingerprint(captured), fingerprint);
   assert.throws(() => captured.attachments[0].metadata.tags.push("changed"), TypeError);

@@ -35,7 +35,6 @@ export default {
   eventProtocol: "事件协议",
   longMemory: "长期记忆",
   contextProtocol: "上下文协议",
-  immutableStorage: "不可变存储",
   partitionStorage: "分区存储",
   sessionStorage: "会话存储",
   sessionPageSnapshots: "会话分页快照",

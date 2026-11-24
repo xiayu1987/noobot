@@ -126,7 +126,7 @@ describe("thinkingDetailService.getPage", () => {
     getSessionThinkingDetailApi.mockResolvedValue(jsonResponse(page(messages)));
     await expect(thinkingDetailService.getPage(TARGET)).resolves.toEqual(detail(messages));
     expect(getSessionThinkingDetailApi).toHaveBeenCalledWith(
-      { ...TARGET, cursor: null, limit: QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize },
+      { ...TARGET, cursor: null, limit: QUANTITY_THRESHOLDS.sessionStorage.messageReadPageSize },
       { fetcher },
     );
   });

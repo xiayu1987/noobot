@@ -3,16 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { turnRecord } from "../helpers/turn-record.js";
+import { processingTurnChanges } from "../helpers/turn-command-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  SESSION_ERROR_CODE,
-  TURN_EVENT,
-  TURN_PHASE,
-  createEmptyTurnLifecycle,
-} from "@noobot/session-protocol";
+import { SESSION_ERROR_CODE, TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { acceptTurn, canonical, harness } from "./session-version-hardening.test-helpers.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
@@ -335,20 +330,12 @@ test("internal append and summary checkpoint use mutation lock without changing 
         dialogProcessId: "dp-old",
       },
     ],
-    turnLifecycle: {
-      ...createEmptyTurnLifecycle(),
-      sequence: 1,
-      activeTurnScopeId: "t",
-      turns: {
-        t: turnRecord({
-          revision: 1,
-          sequence: 1,
-          turnScopeId: "t",
-          dialogProcessId: "dp",
-          state: "processing",
-        }),
-      },
-    },
+    fixtureChanges: processingTurnChanges({
+      sessionId: "s1",
+      dialogProcessId: "dp",
+      turnScopeId: "t",
+      presentationMessageId: "message-t",
+    }),
   });
   await h.service.appendTurns({
     userId: "u1",
@@ -428,6 +415,7 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
     messages: [
       {
         messageUid: "sm_target",
+        chatPresentation: false,
         sessionId: "s1",
         attachments: [],
         ts: TEST_MESSAGE_TS,
@@ -463,20 +451,12 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
         turnScopeId: "old-t",
       },
     ],
-    turnLifecycle: {
-      ...createEmptyTurnLifecycle(),
-      sequence: 1,
-      activeTurnScopeId: "t",
-      turns: {
-        t: turnRecord({
-          revision: 1,
-          sequence: 1,
-          turnScopeId: "t",
-          dialogProcessId: "dp",
-          state: "processing",
-        }),
-      },
-    },
+    fixtureChanges: processingTurnChanges({
+      sessionId: "s1",
+      dialogProcessId: "dp",
+      turnScopeId: "t",
+      presentationMessageId: "message-t",
+    }),
   });
   const input = {
     userId: "u1",
@@ -510,6 +490,7 @@ test("turn summary checkpoint restores explicitly retained messages to active co
     messages: [
       {
         messageUid: "sm_summary",
+        chatPresentation: false,
         ts: TEST_MESSAGE_TS,
         sessionId: "s1",
         role: "assistant",
@@ -534,20 +515,12 @@ test("turn summary checkpoint restores explicitly retained messages to active co
         summarized: true,
       },
     ],
-    turnLifecycle: {
-      ...createEmptyTurnLifecycle(),
-      sequence: 1,
-      activeTurnScopeId: "t",
-      turns: {
-        t: turnRecord({
-          revision: 1,
-          sequence: 1,
-          turnScopeId: "t",
-          dialogProcessId: "dp",
-          state: "processing",
-        }),
-      },
-    },
+    fixtureChanges: processingTurnChanges({
+      sessionId: "s1",
+      dialogProcessId: "dp",
+      turnScopeId: "t",
+      presentationMessageId: "message-t",
+    }),
   });
 
   await h.service.commitTurnSummaryCheckpoint({
@@ -605,20 +578,12 @@ test("turn summary checkpoints reject a split assistant tool-call and result pai
         tool_call_id: "call_1",
       },
     ],
-    turnLifecycle: {
-      ...createEmptyTurnLifecycle(),
-      sequence: 1,
-      activeTurnScopeId: "t",
-      turns: {
-        t: turnRecord({
-          revision: 1,
-          sequence: 1,
-          turnScopeId: "t",
-          dialogProcessId: "dp",
-          state: "processing",
-        }),
-      },
-    },
+    fixtureChanges: processingTurnChanges({
+      sessionId: "s1",
+      dialogProcessId: "dp",
+      turnScopeId: "t",
+      presentationMessageId: "message-t",
+    }),
   });
 
   await assert.rejects(
@@ -671,20 +636,12 @@ test("turn summary checkpoints allow exact historical summary targets but keep p
         turnScopeId: "old-t",
       },
     ],
-    turnLifecycle: {
-      ...createEmptyTurnLifecycle(),
-      sequence: 1,
-      activeTurnScopeId: "t",
-      turns: {
-        t: turnRecord({
-          revision: 1,
-          sequence: 1,
-          turnScopeId: "t",
-          dialogProcessId: "dp",
-          state: "processing",
-        }),
-      },
-    },
+    fixtureChanges: processingTurnChanges({
+      sessionId: "s1",
+      dialogProcessId: "dp",
+      turnScopeId: "t",
+      presentationMessageId: "message-t",
+    }),
   });
   const historical = await crossTurn.service.commitTurnSummaryCheckpoint({
     userId: "u1",

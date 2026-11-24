@@ -355,11 +355,36 @@ test("partition delivery and cursor publish atomically, retain old snapshots and
   assert.deepEqual(await cold.commit(request), { ...committed, replayed: true });
   assert.equal(reopened.head.sequence, before);
   assert.equal((await page(reopened, cold)).after, 1);
+  const other = await page(reopened, cold, { consumerId: "other" });
+  assert.equal(other.after, 0);
+  assert.deepEqual(
+    other.events.map(({ eventId }) => eventId),
+    [event.eventId],
+  );
+  assert.deepEqual(other.events[0].deliveries.other, undefined);
   const conflict = await prepare(reopened, cold, "cursor-conflict", {
     outboxCursors: [{ consumerId, expectedCursor: 0, cursor: 1 }],
   });
   await assert.rejects(cold.commit(conflict), { code: "SESSION_OUTBOX_CURSOR_CONFLICT" });
   assert.equal(reopened.head.sequence, before);
+  for (const [operationId, cursor] of [
+    ["cursor-regression", 0],
+    ["cursor-past-tail", pending.cursor + 1],
+  ]) {
+    await assert.rejects(
+      async () => {
+        const invalid = await prepare(reopened, cold, operationId, {
+          outboxCursors: [{ consumerId, expectedCursor: 1, cursor }],
+        });
+        await cold.commit(invalid);
+      },
+      { code: "SESSION_COMMIT_INPUT_INVALID" },
+    );
+    assert.equal(reopened.head.sequence, before);
+    const current = await page(reopened, cold);
+    assert.equal(current.after, 1);
+    assert.deepEqual(current.events, []);
+  }
 });
 
 test("a cursor cannot skip pending events or publish a partial acknowledgement", async (t) => {

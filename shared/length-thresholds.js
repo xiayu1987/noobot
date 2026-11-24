@@ -168,25 +168,8 @@ export const DEFAULT_LENGTH_THRESHOLDS = deepFreeze({
     payloadBytes: LENGTH_TIERS.bytes.pluginMessagePayload,
   },
 
-  immutableStorage: {
-    partitionContentChunkBytes: 2 * KiB,
-    entityPageKeyBytes: 512,
-    historicalDirectoryChecksumBytes: 16,
-    blockBytes: 32 * KiB,
-    keyBytes: KiB,
-    headBytes: 4 * KiB,
-    migrationAuthorityRecordBytes: 4 * KiB,
-    readerRetentionRecordBytes: 4 * KiB,
-    cleanupRecordBytes: 32 * KiB,
-    valueInlineBytes: 4 * KiB,
-    indexTargetBytes: 16 * KiB,
-    commitIndexTargetBytes: 4 * KiB,
-    locationIndexTargetBytes: 4 * KiB,
-    locationRetirementMetadataBytes: MiB,
-    executionProjectionOutputRecordBytes: 32 * MiB,
-  },
-
   sessionStorage: {
+    executionProjectionOutputRecordBytes: 32 * MiB,
     messageReadBytes: 16 * MiB,
     messageWriteBatchBytes: 16 * MiB,
     listMessagePreviewChars: 256,
@@ -194,6 +177,11 @@ export const DEFAULT_LENGTH_THRESHOLDS = deepFreeze({
     journalDirectoryBytes: 512,
   },
 
+  partitionStorage: {
+    partitionContentChunkBytes: 2 * KiB,
+    entityPageKeyBytes: 512,
+    migrationAuthorityRecordBytes: 4 * KiB,
+  },
   sessionLog: {
     maxDebugQueueBytes: 1024 * 1024,
     messageChars: 4000,

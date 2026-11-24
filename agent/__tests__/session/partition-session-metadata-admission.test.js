@@ -17,9 +17,40 @@ import { emptyPartitionSession } from "../helpers/partition-session-cases.js";
 import { createMessageCase } from "./partition-session-messages.test-helpers.js";
 
 const invalidWrites = [
+  ...[
+    "messages",
+    "dialogOrder",
+    "turnTimings",
+    "sessionArtifactEvents",
+    "turnLifecycle",
+    "turnSummaryCheckpoints",
+  ].map((field) => [`collection fact ${field}`, (value) => ({ value: { ...value, [field]: [] } })]),
+  ...[
+    "version",
+    "revision",
+    "sessionArtifacts",
+    "turnTerminalCommits",
+    "shortMemoryCheckpoint",
+    "turnStatuses",
+    "mutationReceipts",
+  ].map((field) => [`retired ${field}`, (value) => ({ value: { ...value, [field]: null } })]),
   ["derived title", (value) => ({ value: { ...value, autoTitle: "stale" } })],
   ["empty derived title", (value) => ({ value: { ...value, autoTitle: "" } })],
   ["null derived title", (value) => ({ value: { ...value, autoTitle: null } })],
+  ["numeric model alias", (value) => ({ value: { ...value, modelAlias: 42 } })],
+  ["missing model alias", ({ modelAlias: _alias, ...value }) => ({ value })],
+  ["blank custom title", (value) => ({ value: { ...value, customTitle: " " } })],
+  ["null custom title", (value) => ({ value: { ...value, customTitle: null } })],
+  ["non-array connector selection", (value) => ({ value: { ...value, selectedConnectorIds: {} } })],
+  [
+    "duplicate connector selection",
+    (value) => ({ value: { ...value, selectedConnectorIds: ["one", "one"] } }),
+  ],
+  [
+    "noncanonical connector selection",
+    (value) => ({ value: { ...value, selectedConnectorIds: [" one "] } }),
+  ],
+  ["missing connector selection", ({ selectedConnectorIds: _ids, ...value }) => ({ value })],
   ["deleted metadata", () => ({ remove: true })],
   ["foreign session", (value) => ({ value: { ...value, sessionId: "foreign" } })],
   ["foreign parent", (value) => ({ value: { ...value, parentSessionId: "foreign" } })],

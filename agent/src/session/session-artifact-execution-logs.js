@@ -6,7 +6,6 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { createReadStream } from "node:fs";
 import { appendFile, mkdir, open } from "node:fs/promises";
-import { fileSyncOpenFlags } from "@noobot/platform-compatibility/file-system";
 import {
   EXECUTION_EVENT_INDEX_ERROR_CODE,
   EXECUTION_LOG_APPEND_OUTCOME,
@@ -31,10 +30,7 @@ import {
 } from "./session-artifact-files.js";
 import { requireStorageService } from "./storage-service.js";
 import { PERSISTED_JSON_READ_ERROR_CODE } from "../shared/storage/json-file-reader.js";
-import {
-  syncStorageDirectory,
-  withStorageCleanup,
-} from "./session-artifact-session/immutable-storage-io.js";
+import { syncStorageDirectory, withStorageCleanup } from "./session-artifact-io.js";
 import { isCanonicalText, requireBoolean, requirePositiveInteger } from "@noobot/shared/value";
 
 function requireSessionDir(sessionDir, owner) {
@@ -95,17 +91,8 @@ export async function writeExecutionTurnIndex({ storageService, turnDir, index }
   await storageService.writeJsonAtomic(
     path.join(turnDir, EXECUTION_EVENT_INDEX_FILE),
     requireTurnExecutionIndex(index),
+    { durable: true },
   );
-  await syncExecutionIndex(turnDir);
-}
-
-async function syncExecutionIndex(directory) {
-  const handle = await open(path.join(directory, EXECUTION_EVENT_INDEX_FILE), fileSyncOpenFlags());
-  await withStorageCleanup(
-    () => handle.sync(),
-    () => handle.close(),
-  );
-  await syncStorageDirectory(directory);
 }
 
 function* splitSegmentChunk(chunk, fragments, signal) {
@@ -215,8 +202,8 @@ export async function writeSessionExecutionIndex({ storageService, sessionDir, i
   await storageService.writeJsonAtomic(
     path.join(resolveExecutionEventsDir(sessionDir), EXECUTION_EVENT_INDEX_FILE),
     requireSessionExecutionIndex(index),
+    { durable: true },
   );
-  await syncExecutionIndex(resolveExecutionEventsDir(sessionDir));
 }
 
 async function registerExecutionTurn(storageService, sessionDir, turns, dialogProcessId) {

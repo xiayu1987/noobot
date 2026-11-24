@@ -8,7 +8,7 @@ import { requireOutbox, requireOutboxText } from "./outbox-delivery.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 export const AUTHORITY_OUTBOX_PAGE_LIMIT =
-  QUANTITY_THRESHOLDS.immutableStorage.authorityOutboxPageSize;
+  QUANTITY_THRESHOLDS.eventProtocol.authorityOutboxPageSize;
 
 export function requireAuthorityOutboxConsumer(consumerId) {
   requireOutboxText(consumerId, "consumerId");
@@ -97,4 +97,15 @@ export function decodeStoredAuthorityOutboxCursor(state, consumerId, tail) {
 export function authorityOutboxPositionKey(ordinal) {
   requireOutbox(Number.isSafeInteger(ordinal) && ordinal >= 1, "invalid event position");
   return String(ordinal);
+}
+
+export function requireAuthorityOutboxEventPosition({ eventId, ordinal, tail, indexedEventId }) {
+  requireOutboxText(eventId, "eventId");
+  authorityOutboxPositionKey(ordinal);
+  requireOutbox(
+    Number.isSafeInteger(tail) && tail >= ordinal,
+    "event exceeds committed outbox tail",
+  );
+  requireOutbox(indexedEventId === eventId, "event position ownership mismatch");
+  return tail;
 }

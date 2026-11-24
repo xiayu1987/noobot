@@ -16,8 +16,12 @@ export function pickLightAttachments(message) {
 
 export function pickLightPluginMeta(message = {}) {
   if (!isPlainObject(message.pluginMeta)) return null;
-  const { source, kind, phase, payload } = message.pluginMeta;
-  return { source, kind, phase, payload: requirePluginMessagePayload(payload) };
+  const { pluginMeta } = message;
+  const metadata = { payload: requirePluginMessagePayload(pluginMeta.payload) };
+  for (const field of ["source", "kind", "phase"]) {
+    if (Object.hasOwn(pluginMeta, field)) metadata[field] = pluginMeta[field];
+  }
+  return metadata;
 }
 
 export function pickLightTransferEnvelopes(message) {

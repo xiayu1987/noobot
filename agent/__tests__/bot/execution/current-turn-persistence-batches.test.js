@@ -11,7 +11,7 @@ import { bindCurrentTurnPersistence } from "../../../src/bot/execution/runner/cu
 import { createTestMessagePersistenceReceipts } from "../../helpers/message-persistence-receipts.js";
 
 const identity = { sessionId: "s1", dialogProcessId: "d1", turnScopeId: "t1" };
-const pageSize = QUANTITY_THRESHOLDS.immutableStorage.messagePageSize;
+const pageSize = QUANTITY_THRESHOLDS.sessionStorage.messagePageSize;
 const message = (index) => ({
   ...identity,
   messageUid: `m${index}`,

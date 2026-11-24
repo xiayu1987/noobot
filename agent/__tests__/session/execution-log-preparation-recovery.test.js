@@ -15,7 +15,8 @@ import {
 } from "../../src/session/session-artifact-execution-logs.js";
 import { recoverExecutionLogIndexes } from "../../src/session/execution-log-recovery.js";
 import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
-import { turnDirOf, withTemp } from "./session-artifact-store-v2.test-helpers.js";
+import { turnDirOf } from "../helpers/execution-log-fixture.js";
+import { withTemp } from "../helpers/temporary-directory.js";
 
 const logs = [{ dialogProcessId: "turn-1", event: "preparation", ts: "2026-11-15T00:00:00.000Z" }];
 

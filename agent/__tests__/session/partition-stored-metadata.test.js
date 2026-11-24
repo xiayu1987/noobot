@@ -14,8 +14,71 @@ import { createPartitionSessionReaderAccess } from "../../src/session/partition-
 import { commitFixtureTransaction } from "../helpers/partition-journal-cases.js";
 import { createMessageCase } from "./partition-session-messages.test-helpers.js";
 
-for (const autoTitle of ["stale title", "", null]) {
-  test(`stored autoTitle=${JSON.stringify(autoTitle)} rejects reads, commits and initialization replay`, async (t) => {
+const corruptMetadata = [
+  ...[
+    "messages",
+    "dialogOrder",
+    "turnTimings",
+    "sessionArtifactEvents",
+    "turnLifecycle",
+    "turnSummaryCheckpoints",
+  ].map((field) => [
+    `collection fact ${field}`,
+    (metadata) => ({ ...metadata, [field]: null }),
+    new RegExp(`collection fact:${field}`),
+  ]),
+  ...[
+    "version",
+    "revision",
+    "sessionArtifacts",
+    "turnTerminalCommits",
+    "shortMemoryCheckpoint",
+  ].map((field) => [
+    `retired ${field}`,
+    (metadata) => ({ ...metadata, [field]: null }),
+    new RegExp(`retired_session_field:${field}`),
+  ]),
+  ...[
+    ["turnStatuses", /duplicate_terminal_fact/],
+    ["mutationReceipts", /duplicate_command_receipts/],
+  ].map(([field, message]) => [
+    `duplicate ${field}`,
+    (metadata) => ({ ...metadata, [field]: [] }),
+    message,
+  ]),
+  ...["stale title", "", null].map((autoTitle) => [
+    `autoTitle=${JSON.stringify(autoTitle)}`,
+    (metadata) => ({ ...metadata, autoTitle }),
+    /derived autoTitle/,
+  ]),
+  ["numeric model alias", (metadata) => ({ ...metadata, modelAlias: 42 }), /modelAlias/],
+  ["missing model alias", ({ modelAlias: _alias, ...metadata }) => metadata, /modelAlias/],
+  ["blank custom title", (metadata) => ({ ...metadata, customTitle: " " }), /customTitle/],
+  ["null custom title", (metadata) => ({ ...metadata, customTitle: null }), /customTitle/],
+  [
+    "non-array connectors",
+    (metadata) => ({ ...metadata, selectedConnectorIds: {} }),
+    /selectedConnectorIds/,
+  ],
+  [
+    "duplicate connectors",
+    (metadata) => ({ ...metadata, selectedConnectorIds: ["one", "one"] }),
+    /selectedConnectorIds/,
+  ],
+  [
+    "noncanonical connectors",
+    (metadata) => ({ ...metadata, selectedConnectorIds: [" one "] }),
+    /selectedConnectorIds/,
+  ],
+  [
+    "missing connectors",
+    ({ selectedConnectorIds: _ids, ...metadata }) => metadata,
+    /selectedConnectorIds/,
+  ],
+];
+
+for (const [label, invalidate, message] of corruptMetadata) {
+  test(`stored ${label} rejects reads, commits and initialization replay`, async (t) => {
     const { journal, root, sessionId } = await createMessageCase(t);
     const scope = { sessionId, parentSessionId: "" };
     const transactions = new PartitionTransactions(journal);
@@ -35,9 +98,7 @@ for (const autoTitle of ["stale title", "", null]) {
       expectedGeneration: generation,
       operationId: "inject-invalid-metadata",
       input: null,
-      mutations: [
-        { collection, key, owner: entries.get(key).owner, value: { ...metadata, autoTitle } },
-      ],
+      mutations: [{ collection, key, owner: entries.get(key).owner, value: invalidate(metadata) }],
       result: null,
     });
     assert.deepEqual(await sessions.readMetadata(retained), metadata);
@@ -46,7 +107,7 @@ for (const autoTitle of ["stale title", "", null]) {
     const cold = await PartitionJournal.open({ root, sessionId });
     const reader = new PartitionSessionTransactions(cold, scope);
     const head = structuredClone(cold.head);
-    const corrupt = { code: "SESSION_STORAGE_CORRUPT", message: /derived autoTitle/ };
+    const corrupt = { code: "SESSION_STORAGE_CORRUPT", message };
     let released = 0;
     const access = createPartitionSessionReaderAccess({
       withJournalRemoval: () => assert.fail("Unexpected journal removal"),

@@ -46,16 +46,6 @@ loading historical checkpoints through a turn view.
 Deleted sessions, missing turns and mismatched dialog identities are rejected.
 `locateSessionScope` remains the host workspace route's location contract.
 
-## Checkpoint reads
-
-Storage `readJson(path, { immutable: true, previousValue })` always reads the source.
-It may reuse an owned, deeply frozen value only when the source SHA-256 matches;
-ordinary reads still return independent mutable values. The reader holds source hashes
-weakly and does not retain another copy of checkpoint bodies.
-Snapshot validation retains file identity checks before and after reading, the recent-file
-guard, canonical content hashes and chain/index checks. Reuse avoids parsing and hashing
-the same immutable object again; missing, changed and corrupt files still fail explicitly.
-
 ## Minimal Usage
 
 ```js

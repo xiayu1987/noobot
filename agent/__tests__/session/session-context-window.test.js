@@ -5,17 +5,20 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { corruptRecord } from "./helpers/immutable-record-reads.js";
 import { withProvisionedSessions } from "../helpers/provisioned-sessions.js";
 import { commitTestSessionChanges } from "../helpers/session-services.js";
-import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
+import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
+import {
+  PARTITION_MESSAGE_COLLECTIONS,
+  partitionMessageEntryKey,
+} from "@noobot/session-protocol/partition-session-messages";
 import { createContextScope, projectContextSource } from "@noobot/context-protocol";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
-test("context window reads selected immutable objects without full-history dependencies", async (t) => {
+test("context window reads selected partition messages without full-history dependencies", async (t) => {
   await withProvisionedSessions(
     { userId: "u1", sessionIds: ["s1"] },
-    async ({ runtime, session, scopes }) => {
+    async ({ runtime, session }) => {
       const repo = runtime.repositories.sessionRepository;
       const persistenceContext = repo.treePersistenceContext("u1", "s1");
       const historyLimit = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
@@ -41,17 +44,23 @@ test("context window reads selected immutable objects without full-history depen
       const full = await repo.requireById("u1", "s1", { persistenceContext });
       const scope = createContextScope(full.messages.at(-1));
       const expected = projectContextSource({ source: full, scope, historyLimit });
-      const store = new ImmutableSessionStore({
-        sessionDir: scopes.s1.sessionDir,
-        sessionId: "s1",
-      });
-      const snapshot = await store.snapshot();
-      const reference = await store.objects.withSnapshot(snapshot, async () => {
-        const messagesRoot = await store.index.get(snapshot.root, "messages");
-        return store.index.get(messagesRoot, messages[0].messageUid);
-      });
-      assert.ok(reference);
-      await corruptRecord(store, reference);
+      const original = PartitionTransactions.prototype.withCollectionReader;
+      const guard = (read) =>
+        Object.assign((query) => {
+          if (query.collection === PARTITION_MESSAGE_COLLECTIONS.content)
+            assert.ok(
+              !query.keys.some((key) => JSON.parse(key)[0] === "message-0"),
+              "unselected historical body must not be read",
+            );
+          return read(query);
+        }, read);
+      t.mock.method(
+        PartitionTransactions.prototype,
+        "withCollectionReader",
+        function (snapshot, operation, options) {
+          return original.call(this, snapshot, (read) => operation(guard(read)), options);
+        },
+      );
       t.mock.method(repo, "findById", () => {
         throw new Error("full history read is forbidden");
       });
@@ -64,6 +73,29 @@ test("context window reads selected immutable objects without full-history depen
       });
       assert.deepEqual(actual, expected);
       assert.equal(actual.messages.length, historyLimit);
+      await assert.rejects(
+        repo.withSessionReader(
+          "u1",
+          "s1",
+          ({ reader }) =>
+            reader.readMessageContentPage({
+              messageUid: "message-0",
+              byteOffset: 0,
+              maxBytes: 64,
+              expectedContentReference: null,
+            }),
+          { persistenceContext },
+        ),
+        /unselected historical body/,
+      );
+      assert.throws(
+        () =>
+          guard(() => {})({
+            collection: PARTITION_MESSAGE_COLLECTIONS.content,
+            keys: [partitionMessageEntryKey(PARTITION_MESSAGE_COLLECTIONS.content, "message-0", 1)],
+          }),
+        /unselected historical body/,
+      );
     },
   );
 });

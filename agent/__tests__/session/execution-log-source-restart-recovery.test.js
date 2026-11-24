@@ -12,7 +12,8 @@ import { ExecutionLogRepository } from "../../src/observability/execution-log/ex
 import { FileSystemExecutionRepository } from "../../src/session/repositories/file-system-execution-repository.js";
 import { resolveExecutionEventsDir } from "../../src/session/session-artifact-execution-logs.js";
 import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
-import { turnDirOf, withTemp } from "./session-artifact-store-v2.test-helpers.js";
+import { turnDirOf } from "../helpers/execution-log-fixture.js";
+import { withTemp } from "../helpers/temporary-directory.js";
 
 const record = (sequence) => ({
   dialogProcessId: "turn-1",

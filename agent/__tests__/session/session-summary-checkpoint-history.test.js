@@ -5,8 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
-import { turnRecord } from "../helpers/turn-record.js";
+import { processingTurnChanges, completedTurnChanges } from "../helpers/turn-command-fixture.js";
 import { harness } from "./session-version-hardening.test-helpers.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
@@ -41,20 +40,12 @@ test("turn summary checkpoints validate historical tool pairs inside their origi
         tool_call_id: "call_1",
       },
     ],
-    turnLifecycle: {
-      ...createEmptyTurnLifecycle(),
-      sequence: 1,
-      activeTurnScopeId: "t",
-      turns: {
-        t: turnRecord({
-          revision: 1,
-          sequence: 1,
-          turnScopeId: "t",
-          dialogProcessId: "dp",
-          state: "processing",
-        }),
-      },
-    },
+    fixtureChanges: processingTurnChanges({
+      sessionId: "s1",
+      dialogProcessId: "dp",
+      turnScopeId: "t",
+      presentationMessageId: "message-t",
+    }),
   });
 
   await assert.rejects(
@@ -90,20 +81,12 @@ test("terminal turn checkpoints only mark already persisted canonical messages",
         turnScopeId: "t",
       },
     ],
-    turnLifecycle: {
-      ...createEmptyTurnLifecycle(),
-      sequence: 1,
-      activeTurnScopeId: "",
-      turns: {
-        t: turnRecord({
-          revision: 1,
-          sequence: 1,
-          turnScopeId: "t",
-          dialogProcessId: "dp",
-          state: "completed",
-        }),
-      },
-    },
+    fixtureChanges: completedTurnChanges({
+      sessionId: "s1",
+      dialogProcessId: "dp",
+      turnScopeId: "t",
+      presentationMessageId: "message-t",
+    }),
   });
   const committed = await terminal.service.commitTurnSummaryCheckpoint({
     userId: "u1",

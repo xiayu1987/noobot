@@ -111,7 +111,7 @@ describe("sessionDetailRequests thinking detail", () => {
       dialogProcessId: "dp-eventual-detail",
       turnScopeId: "client-turn:eventual-detail",
       cursor: null,
-      limit: QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize,
+      limit: QUANTITY_THRESHOLDS.sessionStorage.messageReadPageSize,
     });
     expect(detail).toEqual({
       ...buildThinkingDetailPayload({

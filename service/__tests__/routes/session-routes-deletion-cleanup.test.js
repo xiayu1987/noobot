@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { partitionReaderAccess } from "../../../agent/__tests__/helpers/partition-reader-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -11,10 +12,7 @@ import path from "node:path";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
 import { createServicePluginHost } from "../../services/service-plugin-host.js";
 import { createPluginServicePorts } from "../../services/plugin-service-ports.js";
-import {
-  createScopedSessionArtifactReader,
-  immutableSessionReaderAccess,
-} from "noobot-agent/session";
+import { createScopedSessionArtifactReader } from "noobot-agent/session";
 import { SessionPageSnapshots } from "../../../agent/src/session/session-page-snapshots.js";
 import { TEST_STORAGE_SERVICE } from "../storage-service.test-helpers.js";
 import { AttachmentService } from "../../../agent/src/artifacts/index.js";
@@ -82,7 +80,7 @@ test("session-routes: 删除 session 时清理 harness 运行记录", async (t) 
     session: {
       ...createScopedSessionArtifactReader({
         storageService: TEST_STORAGE_SERVICE,
-        sessionReaderAccess: immutableSessionReaderAccess,
+        sessionReaderAccess: partitionReaderAccess,
         pageSnapshots,
         assertAuthorityActive: async () => {},
         withDeletionFence: (_userId, read) => read(),

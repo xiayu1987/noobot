@@ -6,6 +6,7 @@
 import { AttachmentProtocolError } from "@noobot/attachment-protocol";
 import { MutationRefInputError } from "@noobot/file-mutation-protocol";
 import { ResourceRefInputError } from "@noobot/path-resolver";
+import { PLUGIN_MESSAGE_PAYLOAD_ERROR_CODE } from "@noobot/plugin-protocol/plugin-message-payload";
 import {
   isTransferIdentityConflict,
   TransferEnvelopeInputError,
@@ -23,6 +24,7 @@ export function messageValidationCode(cause) {
   if (
     cause?.code === SESSION_MESSAGE_ENTITY_INVALID ||
     cause?.code === SESSION_MESSAGE_IDENTITY_INVALID ||
+    Object.values(PLUGIN_MESSAGE_PAYLOAD_ERROR_CODE).includes(cause?.code) ||
     cause instanceof SessionCommitInputError ||
     isTransferIdentityConflict(cause)
   )

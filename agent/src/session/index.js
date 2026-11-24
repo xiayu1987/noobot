@@ -33,7 +33,6 @@ import {
 import { isFunction } from "@noobot/shared/value";
 import { readServerClock } from "@noobot/session-protocol/server-clock";
 import { createSessionReaderAccess } from "@noobot/session-protocol/session-reader";
-import { immutableSessionReaderAccess } from "./session-artifact-session/immutable-reader-access.js";
 import { PartitionJournalOwner } from "./partition-storage/partition-journal-owner.js";
 import { createPartitionSessionReaderAccess } from "./partition-storage/partition-reader-access.js";
 import { createWorkspaceAdmission } from "../workspace-lifecycle/workspace-admission.js";
@@ -645,37 +644,15 @@ export {
   SessionMutationCoordinator,
   sessionMutationCoordinator,
 } from "./session-mutation-coordinator.js";
-export {
-  SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
-  buildSessionDisplaySummary,
-  buildSessionSummary,
-  isSessionDisplaySummaryPayload,
-} from "./session-summary-builders.js";
+export { buildSessionSummary } from "./session-summary-builders.js";
 export {
   SESSION_ARTIFACT_FILE_NAMES,
-  SESSION_ARTIFACT_PREDECESSOR,
   appendExecutionLogArtifact,
   buildSessionArtifactFileMap,
-  inspectSessionArtifacts,
-  inspectSessionArtifactReader,
-  recoverSessionArtifactReader,
-  repairSessionArtifacts,
-  prepareSessionArtifactCleanup,
-  cleanupSessionArtifacts,
-  compactSessionArtifacts,
-  retireSessionArtifactLocations,
-  discardSessionArtifactLocationRetirement,
-  discardSessionArtifactCleanup,
   readExecutionLogs,
   readTurnExecutionLogs,
-  readRecentSessionTurns,
-  readSessionArtifact,
-  readSessionTurn,
-  readSessionArtifactSnapshot,
-  rebuildSessionDisplaySummaryArtifact,
   writeExecutionReportArtifact,
   readExecutionReportArtifact,
-  writeSessionArtifact,
 } from "./session-artifact-store.js";
 export {
   normalizeMessageEntity,
@@ -685,6 +662,4 @@ export {
 
 export { readSessionThinkingDetail } from "./session-thinking-detail.js";
 export { createScopedSessionArtifactReader } from "./session-scoped-artifact-reader.js";
-export { openSessionArtifactReader } from "./session-artifact-session/immutable-session-reader.js";
-export { immutableSessionReaderAccess };
 export { withSessionArtifactReadFence } from "./session-artifact-files.js";

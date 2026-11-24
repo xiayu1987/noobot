@@ -16,10 +16,7 @@ import {
   readExecutionTurnIndex,
   resolveExecutionTurnDir,
 } from "./session-artifact-execution-logs.js";
-import {
-  writeDurableReplacement,
-  withStorageCleanup,
-} from "./session-artifact-session/immutable-storage-io.js";
+import { writeDurableReplacement, withStorageCleanup } from "./session-artifact-io.js";
 
 export async function projectTurnExecutionLogs({
   storageService,

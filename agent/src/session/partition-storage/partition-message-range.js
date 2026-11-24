@@ -24,7 +24,7 @@ import { hasToolResultArtifacts } from "../session-summary-builders/turn-artifac
 import {
   materializeMessage,
   readPartitionSuffixAnchor,
-  readSessionOrderRecords,
+  readSessionOrderRecord,
 } from "./partition-message-reader.js";
 
 export class PartitionMessageRange {
@@ -50,7 +50,7 @@ export class PartitionMessageRange {
     snapshot,
     {
       cursor = null,
-      limit = QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize,
+      limit = QUANTITY_THRESHOLDS.sessionStorage.messageReadPageSize,
       maxBytes,
       direction = "forward",
     } = {},
@@ -79,6 +79,7 @@ export class PartitionMessageRange {
         count: messageCount,
         budget,
         selectContent,
+        direction,
       });
       return {
         generation: snapshot.sequence,
@@ -98,7 +99,7 @@ export class PartitionMessageRange {
     {
       turnScopeId,
       cursor = null,
-      limit = QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize,
+      limit = QUANTITY_THRESHOLDS.sessionStorage.messageReadPageSize,
       maxBytes,
     },
   ) {
@@ -151,23 +152,19 @@ async function readWindow({
   budget,
   firstOrdinal = 1,
   selectContent,
+  direction = "forward",
 }) {
   const length = Math.min(
     snapshot.limits.pageRecords,
     sessionMessagePageLength(position.after, count, limit),
   );
-  const records = await readSessionOrderRecords({
-    read,
-    scope,
-    snapshot,
-    page: position,
-    limit: length,
-    count,
-    firstOrdinal,
-  });
-  const { lifecycle } = await requirePartitionVisibleMessageTurnOwnership(read, records);
-  const projected = [];
-  for (const record of records) {
+  const projected = await read.readWindow(length, async (index) => {
+    const offset = direction === "backward" ? length - index - 1 : index;
+    const record = await readSessionOrderRecord(
+      { read, scope, snapshot },
+      firstOrdinal + position.after + offset,
+    );
+    const { lifecycle } = await requirePartitionVisibleMessageTurnOwnership(read, [record]);
     const ordinal = record.sessionOrdinal;
     const { turnOrdinal } = record;
     budget.consume("bytes", Buffer.byteLength(JSON.stringify({ ordinal, turnOrdinal })));
@@ -178,7 +175,7 @@ async function readWindow({
       budget,
       selectContent,
     });
-    projected.push(createSessionMessagePageRecord({ ordinal, turnOrdinal, message }));
-  }
-  return projected;
+    return createSessionMessagePageRecord({ ordinal, turnOrdinal, message });
+  });
+  return direction === "backward" ? projected.reverse() : projected;
 }

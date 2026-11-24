@@ -45,7 +45,7 @@ export const thinkingDetailService = Object.freeze({
     cursor = null,
     snapshot = null,
   }) {
-    const limit = QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize;
+    const limit = QUANTITY_THRESHOLDS.sessionStorage.messageReadPageSize;
     const selection = { sessionId, dialogProcessId, turnScopeId, cursor, limit };
     const validate = prepareThinkingDetailPageTransition(selection, snapshot);
     const fetcher = requireAuthenticatedFetcher();

@@ -4,9 +4,76 @@
  * SPDX-License-Identifier: MIT
  */
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
+import { WORKSPACE_LAYOUT_UPGRADE_OWNER as OWNER } from "./layout-migration.js";
+
+const historicalSessionOwners = new Set([
+  OWNER.SESSION_STORAGE,
+  OWNER.SESSION_LIFECYCLE,
+  OWNER.SESSION_TRANSFER_ENVELOPE,
+  OWNER.MODEL_CONTEXT_SNAPSHOT,
+  OWNER.SESSION_MESSAGE_IDENTITY,
+  OWNER.EXECUTION_EVENT_INDEX,
+  OWNER.SESSION_TASK_ARTIFACT,
+  OWNER.SESSION_MUTATION_REFS,
+  OWNER.SESSION_ACTIVITY_TIMELINE,
+  OWNER.SESSION_TOOL_RESULT,
+  OWNER.SESSION_SCRIPT_EXIT_CODE,
+  OWNER.SESSION_LEGACY_MCP_RESULT,
+  OWNER.SESSION_RESULT_OVERFLOW,
+  OWNER.SESSION_CHECKPOINT_IDENTITY,
+  OWNER.SESSION_PHASE_SUMMARY,
+  OWNER.SESSION_IMMUTABLE_STORAGE,
+  OWNER.SESSION_PARTITION_STORAGE,
+]);
 
 const requiredFields = ["kind", "path", "moved", "quarantinedAt", "error"];
-const receiptFields = new Set([...requiredFields, "moveIdentity", "restored"]);
+const receiptFields = new Set([
+  ...requiredFields,
+  "moveIdentity",
+  "restored",
+  "sessionStorage",
+  "quarantineId",
+]);
+
+export const SESSION_STORAGE_QUARANTINE_STATUS = Object.freeze({
+  UNSUPPORTED: "unsupported-format",
+  FAILED: "upgrade-failed",
+  PARENT_UNAVAILABLE: "parent-unavailable",
+  HISTORICAL_FAILURE: "historical-upgrade-failed",
+});
+
+export function requireSessionStorageQuarantine(value) {
+  if (
+    !isPlainObject(value) ||
+    Object.keys(value).some((key) => !["format", "status", "parentPath"].includes(key)) ||
+    !Object.values(SESSION_STORAGE_QUARANTINE_STATUS).includes(value.status) ||
+    !["immutable", "document", "partition", "conflicting", "unverified"].includes(value.format) ||
+    (value.status === SESSION_STORAGE_QUARANTINE_STATUS.HISTORICAL_FAILURE) !==
+      (value.format === "unverified") ||
+    (value.status === SESSION_STORAGE_QUARANTINE_STATUS.UNSUPPORTED &&
+      !["immutable", "document"].includes(value.format)) ||
+    (value.status === SESSION_STORAGE_QUARANTINE_STATUS.FAILED &&
+      !["partition", "conflicting"].includes(value.format)) ||
+    (value.status === SESSION_STORAGE_QUARANTINE_STATUS.PARENT_UNAVAILABLE
+      ? value.format !== "partition" || !isCanonicalText(value.parentPath)
+      : Object.hasOwn(value, "parentPath"))
+  )
+    throw new TypeError("Invalid session storage quarantine classification");
+  return value;
+}
+
+export function classifyHistoricalMigrationQuarantine(record) {
+  assertWorkspaceMigrationQuarantineRecord(record);
+  if (record.sessionStorage !== undefined || !historicalSessionOwners.has(record.kind))
+    return record;
+  return assertWorkspaceMigrationQuarantineRecord({
+    ...record,
+    sessionStorage: {
+      format: "unverified",
+      status: SESSION_STORAGE_QUARANTINE_STATUS.HISTORICAL_FAILURE,
+    },
+  });
+}
 
 export function assertWorkspaceMigrationQuarantineRecord(record) {
   if (
@@ -30,5 +97,18 @@ export function assertWorkspaceMigrationQuarantineRecord(record) {
       : Object.hasOwn(record, "moveIdentity")
   )
     throw new TypeError("Moved quarantine records require the original filesystem identity");
+  if (record.sessionStorage !== undefined) {
+    requireSessionStorageQuarantine(record.sessionStorage);
+    if (record.sessionStorage.status === SESSION_STORAGE_QUARANTINE_STATUS.HISTORICAL_FAILURE) {
+      if (Object.hasOwn(record, "quarantineId"))
+        throw new TypeError("Historical quarantine retains its original receipt identity");
+      return record;
+    }
+    if (typeof record.quarantineId !== "string" || !/^[a-f0-9]{64}$/u.test(record.quarantineId))
+      throw new TypeError("Session storage quarantine requires an independent unit identity");
+    if (!record.moved || record.restored === true)
+      throw new TypeError("Terminal session storage quarantine requires a retained, moved source");
+  } else if (Object.hasOwn(record, "quarantineId"))
+    throw new TypeError("Unexpected quarantine identity");
   return record;
 }

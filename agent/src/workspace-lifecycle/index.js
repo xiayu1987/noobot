@@ -26,7 +26,6 @@ import {
 import { text } from "@noobot/shared/value";
 import { requireStorageService } from "../session/storage-service.js";
 import { retireDirectoryLockIfPresent } from "./directory-lock-retirement.js";
-import { repairSessionContextIndexes } from "./session-immutable-storage-upgrade.js";
 import { recoverWorkspaceAttachmentCatalogs } from "./attachment-catalog-upgrade.js";
 
 const workspaceMutationCoordinator = new FileMutationCoordinator({
@@ -141,11 +140,6 @@ async function runWorkspaceOperation({
   const report = { operation, ...layout };
   if (operation === WORKSPACE_OPERATION.REPAIR) {
     await recoverWorkspaceAttachmentCatalogs(base);
-    report.sessionContextIndexes = await repairSessionContextIndexes({
-      base,
-      scopedSessionRoots,
-      storageService,
-    });
   }
   if (operation !== WORKSPACE_OPERATION.RESET || selected.has(WORKSPACE_SECTION.CONFIG)) {
     const { modelLibraryUpgrade, ...config } = await repairConfigSection({

@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { createServer } from "vite";
+import { createTestViteServer } from "./helpers/vite-server.js";
 import { chromium } from "@playwright/test";
 
 test(
@@ -15,7 +15,7 @@ test(
   {
     timeout: 60000,
   },
-  async () => {
+  async (t) => {
     const root = fileURLToPath(new URL("../../../startup", import.meta.url));
     const main = await readFile(`${root}/src/main.js`, "utf8");
     const imports = main.slice(0, main.indexOf("import App from"));
@@ -25,7 +25,7 @@ test(
         'import "@noobot/client-shared/theme";',
         'import "element-plus/dist/index.css";\nimport "@noobot/client-shared/theme";',
       );
-    const server = await createServer({
+    const server = await createTestViteServer(t, {
       configFile: false,
       root,
       appType: "custom",
@@ -141,7 +141,6 @@ test(
       assert.deepEqual(errors, []);
     } finally {
       await browser?.close();
-      await server.close();
     }
   },
 );

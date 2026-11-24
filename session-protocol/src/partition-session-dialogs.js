@@ -228,7 +228,7 @@ export async function readPartitionDialogTurnPage(
   {
     dialogProcessId,
     after = 0,
-    limit = QUANTITY_THRESHOLDS.immutableStorage.messageReadPageSize,
+    limit = QUANTITY_THRESHOLDS.sessionStorage.messageReadPageSize,
     maxBytes,
   },
 ) {

@@ -26,6 +26,7 @@ export {
   authorityOutboxPositionKey,
   decodeStoredAuthorityOutboxCursor,
   requireAuthorityOutboxConsumer,
+  requireAuthorityOutboxEventPosition,
   requireAuthorityOutboxCursorAdvances,
   requireAuthorityOutboxMigrationPage,
   requireAuthorityOutboxPagePosition,
