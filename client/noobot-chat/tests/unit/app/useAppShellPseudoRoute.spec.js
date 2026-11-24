@@ -5,7 +5,10 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "vue";
-import { useAppShellPseudoRoute } from "../../../src/app/composables/useAppShellPseudoRoute.js";
+import {
+  PSEUDO_PANEL,
+  useAppShellPseudoRoute,
+} from "../../../src/app/composables/useAppShellPseudoRoute.js";
 
 function createRouteHarness() {
   const activeSessionId = ref("local-session");
@@ -15,6 +18,7 @@ function createRouteHarness() {
     activeSession.value = { sessionId, loaded: true };
   });
   const connectorVisible = ref(false);
+  const quarantinedSessionsVisible = ref(false);
   const chatNavigatorVisible = ref(true);
   const routedTurnScopeId = ref("");
   const applyRoutedTurn = vi.fn(({ turnScopeId }) => {
@@ -34,6 +38,7 @@ function createRouteHarness() {
     connectorVisible,
     userSettingsVisible: ref(false),
     configParamsVisible: ref(false),
+    quarantinedSessionsVisible,
     mobileSidebarOpen: ref(false),
     isMobile: ref(false),
     composerMorePanelVisible: ref(false),
@@ -41,7 +46,9 @@ function createRouteHarness() {
     mobileChatNavigatorVisible: ref(false),
     chatNavigatorVisible,
     isSuperAdmin: ref(false),
-    closeAllPanels: vi.fn(),
+    closeAllPanels: () => {
+      quarantinedSessionsVisible.value = false;
+    },
     closeMobileSidebar: vi.fn(),
     closeComposerMorePanel: vi.fn(),
     closeThinkingDetailsPanel: vi.fn(),
@@ -49,6 +56,9 @@ function createRouteHarness() {
     openWorkspaceRaw: vi.fn(),
     openUserSettingsRaw: vi.fn(),
     openConfigParamsRaw: vi.fn(),
+    openQuarantinedSessionsRaw: () => {
+      quarantinedSessionsVisible.value = true;
+    },
     openMobileSidebar: vi.fn(),
     openThinkingDetailsPanel: vi.fn(),
     closeMobileSidebarOnSelect: vi.fn(),
@@ -60,6 +70,7 @@ function createRouteHarness() {
     activeSessionId,
     activeSession,
     connectorVisible,
+    quarantinedSessionsVisible,
     chatNavigatorVisible,
     openConnectorsRaw,
     applyRoutedTurn,
@@ -166,5 +177,25 @@ describe("useAppShellPseudoRoute initial Session activation", () => {
 
     expect(selectSession).not.toHaveBeenCalled();
     expect(requestSessionNavigation).toHaveBeenCalledWith("local-session");
+  });
+
+  it("restores the quarantine drawer from its URL and keeps the routed session and turn", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?session=persisted-session&panel=quarantined-sessions&turn=routed-turn",
+    );
+    const { route, quarantinedSessionsVisible } = createRouteHarness();
+
+    await route.applyInitialPseudoRoute();
+    expect(quarantinedSessionsVisible.value).toBe(true);
+    expect(route.resolveActivePseudoPanel()).toBe(PSEUDO_PANEL.QUARANTINED_SESSIONS);
+
+    quarantinedSessionsVisible.value = false;
+    route.pushClosePseudoPanelRoute();
+    const query = new URL(window.location.href).searchParams;
+    expect(query.has("panel")).toBe(false);
+    expect(query.get("session")).toBe("persisted-session");
+    expect(query.get("turn")).toBe("routed-turn");
   });
 });

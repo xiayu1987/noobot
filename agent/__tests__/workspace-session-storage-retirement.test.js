@@ -22,6 +22,10 @@ import {
 } from "../src/workspace-lifecycle/sections.js";
 import { getFsAdapter, setFsAdapter } from "../src/shared/storage/fs-adapter.js";
 import { createTestPartitionStorageBudget } from "./helpers/partition-journal-cases.js";
+import {
+  deleteQuarantinedSession,
+  listQuarantinedSessions,
+} from "../src/workspace-lifecycle/quarantined-sessions.js";
 
 async function fixture(t) {
   const base = await mkdtemp(join(tmpdir(), "storage-retirement-"));
@@ -201,4 +205,39 @@ test("non-session quarantine evidence remains unclassified and keeps its own rea
   });
   assert.deepEqual(await listQuarantinedUnits({ base }), before);
   assert.equal(Object.hasOwn(before[0], "sessionStorage"), false);
+});
+
+test("interrupted quarantine deletion can be retried without touching a reused session path", async (t) => {
+  const base = await fixture(t);
+  const source = await oldSession(base, "reused");
+  await writeFile(
+    join(source, "session.json"),
+    JSON.stringify({ sessionId: "reused", autoTitle: "Old title" }),
+  );
+  await retireUnsupportedSessionStorage({ base, scopedSessionRoots: [] });
+  await oldSession(base, "reused");
+  const [quarantined] = await listQuarantinedSessions(base);
+  assert.equal(quarantined.title, "Old title");
+  const held = join(base, quarantined.quarantinePath);
+  const adapter = getFsAdapter();
+  setFsAdapter({
+    ...adapter,
+    async rm(target, ...options) {
+      await adapter.rm(target, ...options);
+      if (target === held)
+        throw Object.assign(new Error("injected deletion interruption"), { code: "EIO" });
+    },
+  });
+  try {
+    await assert.rejects(deleteQuarantinedSession(base, quarantined.id), { code: "EIO" });
+  } finally {
+    setFsAdapter(adapter);
+  }
+  await assertWorkspaceQuarantineEmpty(base);
+  const [interrupted] = await listQuarantinedSessions(base);
+  assert.equal(interrupted.id, quarantined.id);
+  assert.equal(interrupted.deleting, true);
+  assert.equal(await deleteQuarantinedSession(base, quarantined.id), true);
+  assert.deepEqual(await listQuarantinedSessions(base), []);
+  assert.equal(await readFile(join(source, "head.json"), "utf8"), "retained old bytes");
 });

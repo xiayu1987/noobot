@@ -93,6 +93,21 @@ export const zhCNMessages = {
     navRole: "角色",
     navContent: "内容",
   },
+  quarantinedSessions: {
+    title: "隔离会话",
+    loading: "正在加载隔离会话…",
+    empty: "暂无隔离会话",
+    loadFailed: "无法加载隔离会话",
+    deleteFailed: "无法删除隔离会话",
+    deleteInterrupted: "删除已中断，可以重试。",
+    confirmDelete: "确定永久删除「{title}」的隔离数据吗？",
+    status: {
+      "unsupported-format": "存储格式不受支持",
+      "upgrade-failed": "升级失败",
+      "parent-unavailable": "父会话不可用",
+      "historical-upgrade-failed": "历史升级失败",
+    },
+  },
   settings: {
     userParams: "用户参数",
     systemParams: "系统参数",

@@ -281,6 +281,31 @@ test("startup isolates old session storage and keeps the healthy journal readabl
         "content-type": "application/json",
         "x-api-key": (await login.json()).apiKey,
       };
+      const quarantineUrl = `${origin}/internal/sessions/${userId}/quarantine`;
+      const listQuarantine = async () => {
+        const response = await fetch(quarantineUrl, { headers, signal });
+        const body = await response.json();
+        assert.equal(response.status, 200, body.error);
+        return body.sessions;
+      };
+      const [quarantined] = await listQuarantine();
+      assert.equal(quarantined.sessionId, "legacy-session");
+      assert.equal(quarantined.quarantinePath, record.quarantinePath);
+      assert.equal(quarantined.status, "unsupported-format");
+      if (restarting) {
+        const deleteUrl = `${quarantineUrl}/${quarantined.id}`;
+        const unauthorized = await fetch(deleteUrl, { method: "DELETE", signal });
+        assert.equal(unauthorized.status, 401);
+        for (const attempt of [0, 1]) {
+          const deleted = await fetch(deleteUrl, { method: "DELETE", headers, signal });
+          assert.equal(deleted.status, 200, `delete attempt ${attempt}`);
+        }
+        assert.deepEqual(await listQuarantine(), []);
+        await assert.rejects(fs.stat(path.join(userWorkspace, record.quarantinePath)), {
+          code: "ENOENT",
+        });
+        assert.deepEqual(await listQuarantinedUnits({ base: userWorkspace }), []);
+      }
       const response = await fetch(
         `${origin}/internal/session/${userId}/${sessionId}/detail-start`,
         {

@@ -61,11 +61,14 @@ function isBelowBase(relative) {
 }
 
 async function prepareDirectory(base, directory) {
-  if (!isBelowBase(path.relative(base, directory)))
-    throw new TypeError(`Expected directory below ${base}: ${directory}`);
+  const relative = path.relative(base, directory);
+  if (!isBelowBase(relative)) throw new TypeError(`Expected directory below ${base}: ${directory}`);
   await mkdir(directory, { recursive: true });
-  for (let current = directory; current !== base; current = path.dirname(current)) {
-    await syncStorageDirectory(path.dirname(current));
+  const depth = relative.split(path.sep).length;
+  let parent = path.dirname(directory);
+  for (let index = 0; index < depth; index += 1) {
+    await syncStorageDirectory(parent);
+    parent = path.dirname(parent);
   }
 }
 

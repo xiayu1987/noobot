@@ -27,6 +27,7 @@ export function usePanelState() {
   const connectorVisible = ref(false);
   const userSettingsVisible = ref(false);
   const configParamsVisible = ref(false);
+  const quarantinedSessionsVisible = ref(false);
 
   function updateViewportState() {
     isMobile.value = window.innerWidth <= MOBILE_BREAKPOINT;
@@ -55,6 +56,7 @@ export function usePanelState() {
     workspaceVisible.value = false;
     userSettingsVisible.value = false;
     configParamsVisible.value = false;
+    quarantinedSessionsVisible.value = false;
     if (isMobile.value) connectorVisible.value = false;
   }
 
@@ -83,6 +85,12 @@ export function usePanelState() {
     configParamsVisible.value = true;
   }
 
+  function openQuarantinedSessions() {
+    closeAllPanels();
+    closeMobileSidebar();
+    quarantinedSessionsVisible.value = true;
+  }
+
   const drawerSize = computed(() => resolveDrawerSize(isMobile.value));
 
   const throttledResize = useThrottledResize(updateViewportState);
@@ -104,6 +112,7 @@ export function usePanelState() {
     connectorVisible,
     userSettingsVisible,
     configParamsVisible,
+    quarantinedSessionsVisible,
     drawerSize,
     toggleSidebar,
     closeMobileSidebar,
@@ -114,5 +123,6 @@ export function usePanelState() {
     openConnectors,
     openUserSettings,
     openConfigParams,
+    openQuarantinedSessions,
   };
 }

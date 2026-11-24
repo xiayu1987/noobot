@@ -24,6 +24,7 @@ export function useAppShellPanelActions({
   openConnectorsRaw,
   openUserSettingsRaw,
   openConfigParamsRaw,
+  openQuarantinedSessionsRaw,
   pushPanelPseudoRoute,
   pushPanelVisibilityPseudoRoute,
   pushClosePseudoPanelRoute,
@@ -39,6 +40,7 @@ export function useAppShellPanelActions({
     openConnectorsRaw,
     openUserSettingsRaw,
     openConfigParamsRaw,
+    openQuarantinedSessionsRaw,
     pushPanelPseudoRoute,
     pushPanelVisibilityPseudoRoute,
     pushClosePseudoPanelRoute,
@@ -88,6 +90,13 @@ export function useAppShellPanelActions({
     pushPanelPseudoRoute(PSEUDO_PANEL.CONFIG_PARAMS);
   }
 
+  function openQuarantinedSessions() {
+    if (!ensureConnected()) return;
+    closeComposerMorePanel();
+    openQuarantinedSessionsRaw();
+    pushPanelPseudoRoute(PSEUDO_PANEL.QUARANTINED_SESSIONS);
+  }
+
   function handleToggleSidebar() {
     toggleSidebar();
     if (isMobile.value) {
@@ -127,6 +136,7 @@ export function useAppShellPanelActions({
     openConnectors,
     openUserSettings,
     openConfigParams,
+    openQuarantinedSessions,
     handleToggleSidebar,
     handleCloseMobileSidebar,
     handleComposerMorePanelVisibleUpdate,

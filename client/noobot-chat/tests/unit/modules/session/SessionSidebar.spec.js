@@ -113,4 +113,15 @@ describe("SessionSidebar connection settings", () => {
     await wrapper.setProps({ connected: false });
     expect(wrapper.find(".connection-panel").exists()).toBe(true);
   });
+
+  it("requests the quarantine drawer only for a connected user", async () => {
+    const wrapper = mountSidebar();
+    const button = wrapper.get(".sidebar-quarantine-btn");
+    expect(button.attributes("disabled")).toBeDefined();
+    await button.trigger("click");
+    expect(wrapper.emitted("open-quarantined-sessions")).toBeUndefined();
+    await wrapper.setProps({ connected: true });
+    await button.trigger("click");
+    expect(wrapper.emitted("open-quarantined-sessions")).toEqual([[]]);
+  });
 });

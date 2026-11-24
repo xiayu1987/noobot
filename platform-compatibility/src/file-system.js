@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import path from "node:path";
 import { isFunction } from "@noobot/shared/value";
 import { normalizePlatform, PLATFORM } from "./platform.js";
 
@@ -10,6 +11,16 @@ const WINDOWS_TRANSIENT_ATOMIC_RENAME_CODES = new Set(["EPERM", "EACCES", "EBUSY
 
 export function fileSyncOpenFlags(platform = process.platform) {
   return normalizePlatform(platform) === PLATFORM.WINDOWS ? "r+" : "r";
+}
+
+export function createdDirectoryDepth(directory, firstCreated) {
+  const target = path.toNamespacedPath(path.resolve(directory));
+  const ancestor = path.dirname(path.toNamespacedPath(path.resolve(firstCreated)));
+  const relative = path.relative(ancestor, target);
+  const segments = relative.split(path.sep);
+  if (!relative || segments[0] === ".." || path.isAbsolute(relative))
+    throw new TypeError("Created directory must be inside its existing ancestor");
+  return segments.length;
 }
 
 export async function syncDirectory({ directory, open, platform = process.platform }) {

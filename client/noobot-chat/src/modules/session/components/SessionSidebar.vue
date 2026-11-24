@@ -9,6 +9,7 @@ import {
   CircleCheckFilled,
   CircleCloseFilled,
   Close,
+  Files,
   Expand,
   Fold,
   Key,
@@ -44,6 +45,7 @@ const emit = defineEmits([
   "update:connect-code",
   "connect",
   "new-session",
+  "open-quarantined-sessions",
   "delete-session",
   "rename-session",
   "refresh-sessions",
@@ -122,6 +124,17 @@ const { translate } = useLocale();
     />
 
     <div class="sidebar-footer" @keydown.esc.stop.prevent="closeConnectionPanel">
+      <button
+        type="button"
+        class="sidebar-quarantine-btn noobot-action-btn noobot-flat-soft-btn"
+        :disabled="!connected"
+        :title="translate('quarantinedSessions.title')"
+        :aria-label="translate('quarantinedSessions.title')"
+        @click="emit('open-quarantined-sessions')"
+      >
+        <el-icon><Files /></el-icon>
+        <span class="sidebar-settings-label">{{ translate("quarantinedSessions.title") }}</span>
+      </button>
       <section
         v-if="connectionPanelOpen"
         id="sidebar-connection-panel"
@@ -348,7 +361,8 @@ const { translate } = useLocale();
   border-top: 1px solid var(--noobot-border-weak);
 }
 
-.sidebar-settings-btn {
+.sidebar-settings-btn,
+.sidebar-quarantine-btn {
   display: flex;
   align-items: center;
   justify-content: center;

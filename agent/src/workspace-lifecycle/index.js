@@ -27,6 +27,7 @@ import { text } from "@noobot/shared/value";
 import { requireStorageService } from "../session/storage-service.js";
 import { retireDirectoryLockIfPresent } from "./directory-lock-retirement.js";
 import { recoverWorkspaceAttachmentCatalogs } from "./attachment-catalog-upgrade.js";
+import { deleteQuarantinedSession, listQuarantinedSessions } from "./quarantined-sessions.js";
 
 const workspaceMutationCoordinator = new FileMutationCoordinator({
   timeoutMessage: "workspace mutation lock timeout",
@@ -207,4 +208,12 @@ export async function syncUserWorkspace(options) {
 export async function resetUserWorkspace({ sections = [], ...options }) {
   return (await withWorkspace(options, WORKSPACE_OPERATION.RESET, normalizeSections(sections)))
     .base;
+}
+
+export async function manageQuarantinedSessions(options, id) {
+  const { base, mutationLockPath } = await resolveWorkspacePaths(options);
+  return workspaceMutationCoordinator.run(mutationLockPath, async () => {
+    if (!(await requireWorkspaceDirectory(base))) return id === undefined ? [] : false;
+    return id === undefined ? listQuarantinedSessions(base) : deleteQuarantinedSession(base, id);
+  });
 }

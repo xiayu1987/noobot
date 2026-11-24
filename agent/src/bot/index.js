@@ -121,6 +121,10 @@ export class BotManager {
     return this.workspaceService.syncUserWorkspace(userId);
   }
 
+  manageQuarantinedSessions(userId, id) {
+    return this.workspaceService.manageQuarantinedSessions(userId, id);
+  }
+
   async replaceSessionTurn(payload = {}) {
     const userId = text(payload?.userId);
     const sessionId = text(payload?.sessionId);

@@ -10,7 +10,12 @@ import AppShellDrawers from "./AppShellDrawers.vue";
 import AppShellLayout from "./AppShellLayout.vue";
 import { buildAppShellDrawerPanels } from "../state/drawerPanelsState.js";
 import ThinkingPanel from "../../modules/chat/components/thinking/ThinkingPanel.vue";
-import { ConfigParamsPanel, UserSettingsPanel, WorkspacePanel } from "../entrypoints.js";
+import {
+  ConfigParamsPanel,
+  QuarantinedSessionsPanel,
+  UserSettingsPanel,
+  WorkspacePanel,
+} from "../entrypoints.js";
 import { useApiConnection } from "../../modules/chat/composables/connectivity/useApiConnection.js";
 import { useChatSession } from "../../modules/chat/composables/useChatSession.js";
 import { useUiFeedback } from "../../shared/composables/useUiFeedback.js";
@@ -57,6 +62,7 @@ const {
   connectorVisible,
   userSettingsVisible,
   configParamsVisible,
+  quarantinedSessionsVisible,
   drawerSize,
   toggleSidebar,
   closeMobileSidebar,
@@ -67,6 +73,7 @@ const {
   openConnectors: openConnectorsRaw,
   openUserSettings: openUserSettingsRaw,
   openConfigParams: openConfigParamsRaw,
+  openQuarantinedSessions: openQuarantinedSessionsRaw,
 } = usePanelState();
 
 const layoutRef = ref(null);
@@ -336,6 +343,7 @@ const {
   connectorVisible,
   userSettingsVisible,
   configParamsVisible,
+  quarantinedSessionsVisible,
   mobileSidebarOpen,
   isMobile,
   composerMorePanelVisible,
@@ -350,6 +358,7 @@ const {
   openConnectorsRaw,
   openUserSettingsRaw,
   openConfigParamsRaw,
+  openQuarantinedSessionsRaw,
   closeComposerMorePanel,
   closeThinkingDetailsPanel,
   openThinkingDetailsPanel,
@@ -374,6 +383,7 @@ const appShellPanelActions = useAppShellPanelActions({
   openConnectorsRaw,
   openUserSettingsRaw,
   openConfigParamsRaw,
+  openQuarantinedSessionsRaw,
   pushPanelPseudoRoute,
   pushPanelVisibilityPseudoRoute,
   pushClosePseudoPanelRoute,
@@ -384,6 +394,7 @@ const {
   openConnectors: openConnectorsPanel,
   openUserSettings,
   openConfigParams,
+  openQuarantinedSessions,
   handleToggleSidebar,
   handleCloseMobileSidebar,
   handleComposerMorePanelVisibleUpdate,
@@ -496,10 +507,12 @@ const drawerPanels = computed(() =>
     userSettingsVisible,
     thinkingDetailsVisible,
     configParamsVisible,
+    quarantinedSessionsVisible,
     WorkspacePanel,
     UserSettingsPanel,
     ThinkingPanel,
     ConfigParamsPanel,
+    QuarantinedSessionsPanel,
     userId: userId.value,
     fetcher: authFetch,
     connected: connected.value,
@@ -593,6 +606,7 @@ const drawerPanels = computed(() =>
       @toggle-connectors-visible="toggleConnectorOverview"
       @open-user-settings="openUserSettings"
       @open-config-params="openConfigParams"
+      @open-quarantined-sessions="openQuarantinedSessions"
       @open-thinking-details="openThinkingDetailsPanel"
       @toggle-chat-navigator-visible="toggleChatNavigatorOverview"
       @select-chat-message-nav-item="handleSelectChatMessageNavItem"

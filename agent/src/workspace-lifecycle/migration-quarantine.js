@@ -12,6 +12,7 @@ import {
   classifyHistoricalMigrationQuarantine,
 } from "@noobot/workspace-protocol/migration-quarantine";
 import { fsLstat, fsRename, fsRm } from "../shared/storage/fs-adapter.js";
+import { sessionMutationCoordinator } from "../session/session-mutation-coordinator.js";
 import {
   durableJsonPublicationTarget,
   ensureDurableStorageDirectory,
@@ -20,6 +21,11 @@ import {
 } from "../shared/storage/durable-file.js";
 
 const REASON_SUFFIX = ".reason.json";
+
+export function withQuarantineMutation(base, operation) {
+  const root = path.join(base, WORKSPACE_LAYOUT.MIGRATION_QUARANTINE_DIR);
+  return sessionMutationCoordinator.run(`${root}.lock`, operation);
+}
 
 function describeError(error) {
   return {
@@ -146,7 +152,7 @@ function readQuarantinePath(relativePath) {
   return path.join(...parts);
 }
 
-async function readQuarantineIdentity(file) {
+export async function readQuarantineIdentity(file) {
   try {
     const { dev, ino } = await fsLstat(file, { bigint: true });
     return `${dev}:${ino}`;
@@ -195,6 +201,7 @@ async function restoreQuarantinedEntry(reasonPath, reason, original) {
 
 export async function restoreQuarantinedUnits({ base, kind, released }) {
   for (const { file, relativePath, reason } of await readQuarantineRecords({ base, kind })) {
+    if (reason.deleting) throw quarantineConflict(file);
     if (reason.moved && reason.restored !== true) {
       await restoreQuarantinedEntry(file, reason, path.join(base, relativePath));
     }
@@ -217,23 +224,24 @@ export async function completeQuarantineRestores({ base, kind }) {
   }
 }
 
-export async function listQuarantinedUnits({ base }) {
+export async function* readQuarantineInventory(base) {
   const quarantineRoot = path.join(base, WORKSPACE_LAYOUT.MIGRATION_QUARANTINE_DIR);
-  const units = [];
   const owners = (await readEntries(quarantineRoot)).sort((a, b) => a.name.localeCompare(b.name));
   for (const owner of owners) {
     if (!owner.isDirectory())
       throw quarantineBlocked(base, [path.join(quarantineRoot, owner.name)]);
-    for (const { file, held, relativePath, reason } of await readQuarantineRecords({
-      base,
-      kind: owner.name,
-    })) {
-      units.push({
-        ...reason,
-        path: relativePath,
-        quarantinePath: path.relative(base, reason.moved && !reason.restored ? held : file),
-      });
-    }
+    yield* await readQuarantineRecords({ base, kind: owner.name });
+  }
+}
+
+export async function listQuarantinedUnits({ base }) {
+  const units = [];
+  for await (const { file, held, relativePath, reason } of readQuarantineInventory(base)) {
+    units.push({
+      ...reason,
+      path: relativePath,
+      quarantinePath: path.relative(base, reason.moved && !reason.restored ? held : file),
+    });
   }
   return units;
 }
@@ -248,7 +256,11 @@ function quarantineBlocked(base, files) {
   );
 }
 
-export async function assertWorkspaceQuarantineEmpty(base) {
+export function assertWorkspaceQuarantineEmpty(base) {
+  return withQuarantineMutation(base, () => assertRetainedQuarantines(base));
+}
+
+async function assertRetainedQuarantines(base) {
   for (const { quarantinePath, ...stored } of await listQuarantinedUnits({ base })) {
     const record = classifyHistoricalMigrationQuarantine(stored);
     if (record.sessionStorage === undefined)
@@ -258,7 +270,7 @@ export async function assertWorkspaceQuarantineEmpty(base) {
         path.join(base, quarantinePath) + (stored.moved && !stored.restored ? REASON_SUFFIX : "");
       await writeDurableJsonFile(reasonPath, `${JSON.stringify(record, null, 2)}\n`);
     }
-    if (record.moved && !record.restored)
+    if (record.moved && !record.restored && !record.deleting)
       await completeSessionStorageQuarantine(base, { ...record, quarantinePath });
   }
 }

@@ -86,6 +86,22 @@ export async function getSessionsApi({ userId }, { fetcher }) {
   return runFetch(`/api/internal/sessions/${encodeURIComponent(userId)}`);
 }
 
+export function getQuarantinedSessionsApi({ userId }, { fetcher, signal }) {
+  return requireFetcher(fetcher)(
+    `/api/internal/sessions/${encodeURIComponent(userId)}/quarantine`,
+    {
+      signal,
+    },
+  );
+}
+
+export function deleteQuarantinedSessionApi({ userId, id }, { fetcher }) {
+  return requireFetcher(fetcher)(
+    `/api/internal/sessions/${encodeURIComponent(userId)}/quarantine/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function getSessionConnectorsApi({ userId = "", sessionId = "" }, { fetcher }) {
   const runFetch = requireFetcher(fetcher);
   return runFetch(

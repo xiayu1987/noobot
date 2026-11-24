@@ -31,6 +31,7 @@ const receiptFields = new Set([
   ...requiredFields,
   "moveIdentity",
   "restored",
+  "deleting",
   "sessionStorage",
   "quarantineId",
 ]);
@@ -86,6 +87,8 @@ export function assertWorkspaceMigrationQuarantineRecord(record) {
     !isCanonicalText(record.quarantinedAt) ||
     !Number.isFinite(Date.parse(record.quarantinedAt)) ||
     (Object.hasOwn(record, "restored") && record.restored !== true) ||
+    (Object.hasOwn(record, "deleting") &&
+      (record.deleting !== true || !record.moved || record.restored || !record.sessionStorage)) ||
     !isPlainObject(record.error) ||
     typeof record.error.code !== "string" ||
     typeof record.error.message !== "string"

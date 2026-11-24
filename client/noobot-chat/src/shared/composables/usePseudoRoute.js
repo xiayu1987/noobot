@@ -15,6 +15,7 @@ export const PSEUDO_PANEL = Object.freeze({
   CONNECTORS: "connectors",
   USER_SETTINGS: "user-settings",
   CONFIG_PARAMS: "config-params",
+  QUARANTINED_SESSIONS: "quarantined-sessions",
   SIDEBAR: "sidebar",
   COMPOSER: "composer",
   THINKING_DETAILS: "thinking-details",

@@ -81,6 +81,7 @@ export function createServiceBotAccess({ getBot }) {
     ensureUserWorkspace: (...args) => resolveBot().ensureUserWorkspace(...args),
     resetUserWorkspace: (...args) => resolveBot().resetUserWorkspace(...args),
     syncUserWorkspace: (...args) => resolveBot().syncUserWorkspace(...args),
+    manageQuarantinedSessions: (...args) => resolveBot().manageQuarantinedSessions(...args),
     loadUserConfig: (...args) => resolveBot().loadUserConfig(...args),
     replaceSessionTurn: (...args) => resolveBot().replaceSessionTurn(...args),
     openAttachmentStream: (...args) => resolveBot().openAttachmentStream(...args),

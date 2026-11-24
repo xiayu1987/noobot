@@ -60,6 +60,10 @@ export const SessionSidebar = asyncVueComponent(
   () => import("../modules/session/components/SessionSidebar.vue"),
 );
 
+export const QuarantinedSessionsPanel = asyncVueComponent(
+  () => import("../modules/session/components/QuarantinedSessionsPanel.vue"),
+);
+
 export const WorkspacePanel = asyncVueComponent(
   () => import("../modules/settings/panels/WorkspacePanel.vue"),
 );

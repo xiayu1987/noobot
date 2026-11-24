@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { filePath as path } from "@noobot/path-resolver";
 import { renameFileAtomic } from "@noobot/platform-compatibility/atomic-file-write";
-import { syncDirectory } from "@noobot/platform-compatibility/file-system";
+import { createdDirectoryDepth, syncDirectory } from "@noobot/platform-compatibility/file-system";
 import { fsLink, fsMkdir, fsOpen, fsReaddir, fsRename, fsRm } from "./fs-adapter.js";
 
 export async function withStorageCleanup(operation, cleanup) {
@@ -37,12 +37,14 @@ export function syncStorageDirectory(directory) {
 }
 
 export async function ensureDurableStorageDirectory(directory) {
-  const firstCreated = await fsMkdir(directory, { recursive: true });
+  const target = path.resolve(directory);
+  const firstCreated = await fsMkdir(target, { recursive: true });
   if (firstCreated === undefined) return;
-  const existing = path.dirname(firstCreated);
-  for (let parent = path.dirname(directory); ; parent = path.dirname(parent)) {
+  const depth = createdDirectoryDepth(target, firstCreated);
+  let parent = path.dirname(target);
+  for (let index = 0; index < depth; index += 1) {
     await syncStorageDirectory(parent);
-    if (parent === existing) break;
+    parent = path.dirname(parent);
   }
 }
 

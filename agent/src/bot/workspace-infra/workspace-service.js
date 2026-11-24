@@ -6,6 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import {
   ensureUserWorkspace,
+  manageQuarantinedSessions,
   repairUserWorkspace,
   resetUserWorkspace,
   syncUserWorkspace,
@@ -86,5 +87,9 @@ export class WorkspaceService {
     return this.workspaceAdmission.withMaintenance(userId, () =>
       syncUserWorkspace(this.lifecycleOptions(userId)),
     );
+  }
+
+  manageQuarantinedSessions(userId, id) {
+    return manageQuarantinedSessions(this.lifecycleOptions(userId), id);
   }
 }

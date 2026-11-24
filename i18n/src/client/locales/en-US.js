@@ -95,6 +95,21 @@ export const enUSMessages = {
     navRole: "Role",
     navContent: "Content",
   },
+  quarantinedSessions: {
+    title: "Quarantined sessions",
+    loading: "Loading quarantined sessions…",
+    empty: "No quarantined sessions",
+    loadFailed: "Could not load quarantined sessions",
+    deleteFailed: "Could not delete the quarantined session",
+    deleteInterrupted: "Deletion interrupted. Retry to finish.",
+    confirmDelete: "Permanently delete the quarantined data for “{title}”?",
+    status: {
+      "unsupported-format": "Unsupported storage format",
+      "upgrade-failed": "Upgrade failed",
+      "parent-unavailable": "Parent session unavailable",
+      "historical-upgrade-failed": "Previous upgrade failed",
+    },
+  },
   settings: {
     userParams: "User Params",
     systemParams: "System Params",

@@ -58,4 +58,15 @@ describe("usePanelState", () => {
 
     expect(state.connectorVisible.value).toBe(false);
   });
+
+  it("replaces the mobile sidebar with the quarantine drawer", () => {
+    const state = mountPanelState(390);
+    state.openMobileSidebar();
+    state.openQuarantinedSessions();
+
+    expect(state.mobileSidebarOpen.value).toBe(false);
+    expect(state.quarantinedSessionsVisible.value).toBe(true);
+    state.openWorkspace();
+    expect(state.quarantinedSessionsVisible.value).toBe(false);
+  });
 });

@@ -45,6 +45,7 @@ function handleMobileNavigatorClose() {
     @update:model-value="emit('drawer-model-update', drawer, $event)"
     :title="drawer.title"
     :size="drawerSize"
+    direction="rtl"
     destroy-on-close
     class="workspace-drawer noobot-side-drawer"
   >

@@ -12,6 +12,7 @@ describe("drawerPanelsState", () => {
     const userSettingsVisible = { value: false };
     const thinkingDetailsVisible = { value: true };
     const configParamsVisible = { value: false };
+    const quarantinedSessionsVisible = { value: true };
     const handleWorkspaceReset = vi.fn();
     const fetcher = vi.fn();
     const components = {
@@ -19,6 +20,7 @@ describe("drawerPanelsState", () => {
       UserSettingsPanel: { name: "UserSettingsPanel" },
       ThinkingPanel: { name: "ThinkingPanel" },
       ConfigParamsPanel: { name: "ConfigParamsPanel" },
+      QuarantinedSessionsPanel: { name: "QuarantinedSessionsPanel" },
     };
 
     const panels = buildAppShellDrawerPanels({
@@ -27,6 +29,7 @@ describe("drawerPanelsState", () => {
       userSettingsVisible,
       thinkingDetailsVisible,
       configParamsVisible,
+      quarantinedSessionsVisible,
       ...components,
       userId: "u1",
       fetcher,
@@ -44,6 +47,7 @@ describe("drawerPanelsState", () => {
       "user-settings",
       "thinking-details",
       "config-params",
+      "quarantined-sessions",
     ]);
     expect(panels[0]).toMatchObject({
       model: workspaceVisible,
@@ -58,7 +62,7 @@ describe("drawerPanelsState", () => {
       },
     });
     expect(panels[0].listeners["workspace-reset"]).toBe(handleWorkspaceReset);
-    expect(panels.slice(1).map((panel) => panel.listeners)).toEqual([{}, {}, {}]);
+    expect(panels.slice(1).map((panel) => panel.listeners)).toEqual([{}, {}, {}, {}]);
     expect(panels[1]).toMatchObject({
       model: userSettingsVisible,
       title: "t:common.userSettings",
@@ -87,6 +91,12 @@ describe("drawerPanelsState", () => {
         connected: true,
         active: false,
       },
+    });
+    expect(panels[4]).toMatchObject({
+      model: quarantinedSessionsVisible,
+      title: "t:quarantinedSessions.title",
+      component: components.QuarantinedSessionsPanel,
+      props: { userId: "u1", fetcher, connected: true, active: true },
     });
   });
 });

@@ -78,6 +78,7 @@ const emit = defineEmits([
   "mobile-chat-navigator-trigger-click",
   "new-session",
   "open-config-params",
+  "open-quarantined-sessions",
   "open-connectors",
   "open-openvscode",
   "open-thinking-details",
@@ -216,6 +217,7 @@ defineExpose({
       @update:connect-code="emit('update:connect-code', $event)"
       @connect="emit('connect')"
       @new-session="emit('new-session')"
+      @open-quarantined-sessions="emit('open-quarantined-sessions')"
       @delete-session="emit('delete-session', $event)"
       @rename-session="emit('rename-session', $event)"
       @refresh-sessions="emit('refresh-sessions')"

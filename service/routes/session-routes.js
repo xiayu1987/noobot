@@ -44,6 +44,20 @@ import {
 } from "@noobot/session-protocol/message-read-budget";
 
 const HTTP_SESSION_PERSISTENCE_SCOPE = null;
+const SESSION_QUARANTINE_ROUTE = "/internal/sessions/:userId/quarantine";
+
+function quarantineUserId(req) {
+  const { userId } = req.params;
+  if (
+    !userId ||
+    userId.trim() !== userId ||
+    userId.endsWith(".") ||
+    /[\\/:]/u.test(userId) ||
+    userId.includes("\0")
+  )
+    throw createBadRequestError("Invalid quarantine user ID");
+  return userId;
+}
 
 function decodeSessionCommand(body, { type, userId, sessionId }) {
   const command = decodeRequestInput(
@@ -112,6 +126,25 @@ export function registerSessionRoutes(
   const wrapJsonRoute = createJsonRouteWrapper({ translateText });
   const jsonRoute = (handler, options) =>
     wrapJsonRoute((req, res) => runBotOperation(() => handler(req, res)), options);
+
+  app.get(
+    SESSION_QUARANTINE_ROUTE,
+    jsonRoute(async (req, res) => {
+      const sessions = await bot.manageQuarantinedSessions(quarantineUserId(req));
+      res.json({ ok: true, sessions });
+    }),
+  );
+
+  app.delete(
+    `${SESSION_QUARANTINE_ROUTE}/:quarantineId`,
+    jsonRoute(async (req, res) => {
+      const { quarantineId } = req.params;
+      if (!/^[0-9a-f]{64}$/u.test(quarantineId))
+        throw createBadRequestError("Invalid quarantine record ID");
+      await bot.manageQuarantinedSessions(quarantineUserId(req), quarantineId);
+      res.json({ ok: true });
+    }),
+  );
 
   app.get(
     "/internal/plugins",

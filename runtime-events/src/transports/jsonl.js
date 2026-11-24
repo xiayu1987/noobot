@@ -7,6 +7,7 @@ import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createdDirectoryDepth } from "@noobot/platform-compatibility/file-system";
 import { FileMutationCoordinator } from "@noobot/shared/file-mutation-coordinator";
 import {
   executionProjectionOutputRecordBytes,
@@ -117,7 +118,7 @@ async function ensureDirectory(directory) {
           code: "RUNTIME_EVENT_DIRECTORY_BACKPRESSURE_REQUIRED",
         },
       );
-    state = { pending: null, syncParent: null, ready: false };
+    state = { pending: null, syncDepth: null, ready: false };
     directoryStates.set(directory, state);
   }
   if (!state.pending) {
@@ -143,14 +144,15 @@ function trimDirectoryStates(limit = MAX_CACHED_FILES) {
 }
 
 async function createDurableDirectory(directory, state) {
-  if (state.syncParent === null) {
+  if (state.syncDepth === null) {
     const firstCreated = await fs.mkdir(directory, { recursive: true });
     if (firstCreated === undefined) return;
-    state.syncParent = path.dirname(firstCreated);
+    state.syncDepth = createdDirectoryDepth(directory, firstCreated);
   }
-  for (let current = directory; ; current = path.dirname(current)) {
+  let current = path.resolve(directory);
+  for (let index = 0; index <= state.syncDepth; index += 1) {
     await syncDirectory(current);
-    if (current === state.syncParent) break;
+    current = path.dirname(current);
   }
 }
 
