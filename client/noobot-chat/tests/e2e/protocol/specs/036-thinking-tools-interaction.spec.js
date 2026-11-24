@@ -222,7 +222,7 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
     ).toString();
     await secondPage.goto(sessionUrl);
     await connectThroughUi(secondPage, readE2eCredentials());
-    await expect(secondPage.locator(".session-item.active")).toHaveAttribute(
+    await expect(secondPage.locator('.session-item[aria-current="true"]')).toHaveAttribute(
       "data-session-id",
       noobot.sessionId,
     );

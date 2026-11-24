@@ -155,6 +155,14 @@ export function projectStoredSessionMetadata(metadata) {
   return stored;
 }
 
+export function resolveSessionNamedTitle(session) {
+  return text(session.customTitle) || text(session.autoTitle);
+}
+
+export function resolveSessionTitle(session) {
+  return resolveSessionNamedTitle(session) || session.sessionId.slice(0, 8);
+}
+
 export function isSessionAutoTitleCandidate(record = {}) {
   return text(record?.role).toLowerCase() === "user" && !isInjectedSessionMessageRecord(record);
 }

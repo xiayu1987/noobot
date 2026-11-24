@@ -151,7 +151,9 @@ for (const stage of ["directory", "read", "data"]) {
 
 for (const stage of ["stat", "readFile", "close"]) {
   test(`optional projection read propagates ENOENT from ${stage} after opening`, async (t) => {
-    const file = path.join(os.tmpdir(), "projection-optional-boundary.jsonl");
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "projection-optional-boundary-"));
+    t.after(() => fs.rm(root, { recursive: true, force: true }));
+    const file = path.join(root, "interaction.jsonl");
     const failure = Object.assign(new Error(`${stage} failed after opening`), { code: "ENOENT" });
     let closed = 0;
     const bytes = encodeExecutionProjectionOutputRecord({});

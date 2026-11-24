@@ -12,6 +12,7 @@ import {
 } from "@noobot/model-protocol";
 import {
   CONFIG_DOCUMENT_SCOPE,
+  CONFIG_ERROR_CODE,
   upgradeConfigModelLibrary,
   repairConfigDocument,
 } from "../src/index.js";
@@ -83,6 +84,44 @@ test("matching versions do not sync membership or modify flags", () => {
   const upgraded = upgradeConfigModelLibrary(target);
   assert.equal(upgraded.report.changed, false);
   assert.deepEqual(upgraded.document, target);
+});
+
+test("catalog upgrade removes retired builtins and reports their old references", () => {
+  const custom = {
+    model: "private-flash",
+    is_custom: true,
+    multimodal_parsing: { enabled: true, input_modalities: ["audio"] },
+  };
+  const target = {
+    model_library_version: MODEL_LIBRARY_VERSION - 1,
+    default_provider: "gpt_5_6_sol",
+    multimodal: {
+      parsing: { default_models: { document: "gpt_5_6_sol", audio: "gemini_3_6_flash" } },
+    },
+    plugins: { harness: { stepModels: { planning: "gpt_5_6_sol" } } },
+    providers: {
+      gpt_5_6_sol: { model: "gpt-5.6-sol", is_custom: false },
+      gemini_3_6_flash: custom,
+    },
+  };
+  const original = structuredClone(target);
+  const { document, report } = upgradeConfigModelLibrary(target);
+  assert.deepEqual(report.removed, ["gpt_5_6_sol"]);
+  assert.equal(document.providers.gpt_5_6_sol, undefined);
+  assert.deepEqual(document.providers.gemini_3_6_flash, custom);
+  assert.equal(document.default_provider, target.default_provider);
+  assert.deepEqual(document.multimodal, target.multimodal);
+  assert.deepEqual(document.plugins, target.plugins);
+  assert.deepEqual(
+    report.issues.map(({ path, code }) => [path, code]),
+    [
+      ["default_provider", CONFIG_ERROR_CODE.MODEL_REFERENCE_NOT_FOUND],
+      ["multimodal.parsing.default_models.document", CONFIG_ERROR_CODE.MODEL_REFERENCE_NOT_FOUND],
+      ["plugins.harness.stepModels.planning", CONFIG_ERROR_CODE.MODEL_REFERENCE_NOT_FOUND],
+    ],
+  );
+  assert.deepEqual(target, original);
+  assert.deepEqual(upgradeConfigModelLibrary(document).document, document);
 });
 
 test("version one configurations receive generation templates without overwriting credentials", () => {

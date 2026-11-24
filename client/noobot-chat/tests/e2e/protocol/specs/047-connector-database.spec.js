@@ -93,7 +93,7 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
     turnScopeId: provisionCommand.identity.turnScopeId,
   });
   await reloadAndWaitForReconnect(noobot.page, protocolCapture);
-  await expect(noobot.page.locator(".session-item.active")).toHaveAttribute(
+  await expect(noobot.page.locator('.session-item[aria-current="true"]')).toHaveAttribute(
     "data-session-id",
     noobot.sessionId,
   );

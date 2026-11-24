@@ -225,10 +225,10 @@ Session 日志 WebSocket：
 
 - `plugins.harness.enabled = true`
 - `plugins.harness.mode = "off"`
-- `plugins.harness.stepModels = { planning, guidance, acceptance, default }`（当前示例中均为 `"gpt_5_6_sol"`）
+- `plugins.harness.stepModels = { planning, guidance, acceptance, default }`（当前示例中均为 `"gpt_6_2_sol"`）
 - `plugins.workflow.enabled = true`
 - `plugins.workflow.mode = "off"`
-- `plugins.workflow.semanticModel = "gpt_5_6_sol"`
+- `plugins.workflow.semanticModel = "gpt_6_2_sol"`
 - 全局示例中 `plugins.workflow.parallelNodeExecution = true`
 
 ### 3.6 模型提供方（`providers.<alias>`）
@@ -356,7 +356,7 @@ Session 日志 WebSocket：
 - 缺少的默认节点按协议结构、全局配置 `baseValues` 和模型库生成；用户配置从空文档经同一修复生成。
 - 合法用户值保持不变；非法值在存在协议默认值时重置为默认值，非法可选值直接移除。
 - 不支持的节点以及用户文档中的系统所有节点会被移除。
-- 已有 provider 别名不会被删除；其子字段按 provider 协议校验，不支持的字段会被移除。
+- 配置修复保留已有 provider 别名，按 provider 协议校验字段。模型库升级会移除已淘汰的内置别名，并保留自定义 provider。指向已移除别名的配置保留原值，由配置诊断报告引用缺失。
 - JSON 无效时，原文件先移动为 `.invalid-<timestamp>.json` 备份，再写入修复后的文档。
 - 协议迁移和修复共用同一条流水线；运行时消费者不维护另一套配置结构。
 

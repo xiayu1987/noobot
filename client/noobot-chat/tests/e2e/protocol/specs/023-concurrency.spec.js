@@ -90,7 +90,7 @@ test("@full PBE-024 停止命令幂等性", async ({ noobot, protocolCapture }, 
   const receivedAtStart = protocolCapture.websocketReceived.length;
   await secondPage.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
   await waitForReconnect(protocolCapture, receivedAtStart);
-  await expect(secondPage.locator(".session-item.active")).toHaveAttribute(
+  await expect(secondPage.locator('.session-item[aria-current="true"]')).toHaveAttribute(
     "data-session-id",
     noobot.sessionId,
   );

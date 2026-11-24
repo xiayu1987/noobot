@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pad } from "./common.js";
 import { sanitizeHeaders, sanitizeUrl } from "@noobot/sanitize";
+import { formatModelRequestBodyCompleteness } from "@noobot/model-protocol/protocol";
 import { text } from "@noobot/shared/value";
 
 function formatCacheDiagnostics(cacheDiagnostics) {
@@ -209,6 +210,7 @@ function createLogger({
 
   function logRequest({
     req,
+    requestId,
     bodyText = "",
     modelName = unknownModelName,
     flowName = unknownFlowName,
@@ -220,6 +222,7 @@ function createLogger({
     const logEntry = `
 === ${new Date().toLocaleString()} ===
 [Request]
+RequestId: ${requestId}
 Model: ${modelName}
 Flow: ${flowName}
 SessionId: ${sessionId}
@@ -228,7 +231,7 @@ URL: ${sanitizeUrl(req.url)}
 Method: ${req.method}
 Headers: ${JSON.stringify(sanitizeHeaders(req.headers), null, 2)}
 CacheDiagnostics: ${formatCacheDiagnostics(cacheDiagnostics)}
-BodyComplete: ${bodyComplete === true}
+${formatModelRequestBodyCompleteness(bodyComplete)}
 Body:
 ${bodyText}
 ========================
@@ -237,6 +240,7 @@ ${bodyText}
   }
 
   function logTerminal({
+    requestId,
     outcome = "error",
     status,
     headers = {},
@@ -251,6 +255,7 @@ ${bodyText}
     const logEntry = `
 --- ${new Date().toLocaleString()} ---
 [Terminal]
+RequestId: ${requestId}
 Outcome: ${text(outcome) || "error"}
 Model: ${modelName}
 Flow: ${flowName}

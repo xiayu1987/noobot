@@ -44,6 +44,11 @@ test("request log lifecycle writes exactly one terminal record", () => {
   assert.equal(logger.terminals.length, 1);
   assert.equal(logger.terminals[0].outcome, "client_aborted");
   assert.equal(logger.terminals[0].sessionId, "session-1");
+  assert.match(logger.requests[0].requestId, /^[0-9a-f-]{36}$/);
+  assert.equal(logger.requests[0].requestId, logger.terminals[0].requestId);
+  const other = createRequestLogLifecycle({ logger });
+  other.recordRequest({ bodyText: "{}" });
+  assert.notEqual(logger.requests[0].requestId, logger.requests[1].requestId);
 });
 
 test("terminal observed before request completion is written after Request", () => {
@@ -56,6 +61,7 @@ test("terminal observed before request completion is written after Request", () 
   assert.equal(logger.requests.length, 1);
   assert.equal(logger.terminals.length, 1);
   assert.equal(logger.terminals[0].outcome, "proxy_error");
+  assert.equal(logger.requests[0].requestId, logger.terminals[0].requestId);
   assert.equal(lifecycle.terminalLogged, true);
 });
 

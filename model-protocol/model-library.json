@@ -1,9 +1,33 @@
 {
-  "version": 3,
+  "version": 4,
   "releases": {
-    "gpt-5.6-sol": {
-      "date": "2026-07-09",
+    "gpt-6.2-sol": {
+      "date": "2026-11-17",
       "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "gpt-6.2-astra": {
+      "date": "2026-11-17",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "claude-fable-5-2": {
+      "date": "2026-11-09",
+      "source": "https://platform.claude.com/docs/en/release-notes/overview"
+    },
+    "gemini-4-neon": {
+      "date": "2026-11-18",
+      "source": "https://ai.google.dev/gemini-api/docs/changelog"
+    },
+    "gemini-4-hydrogen": {
+      "date": "2026-11-12",
+      "source": "https://ai.google.dev/gemini-api/docs/changelog"
+    },
+    "gemini-4-carbon": {
+      "date": "2026-11-10",
+      "source": "https://ai.google.dev/gemini-api/docs/changelog"
+    },
+    "qwen4-max": {
+      "date": "2026-11-16",
+      "source": "https://help.aliyun.com/en/model-studio/newly-released-models"
     },
     "gpt-6-sol": {
       "date": "2026-09-22",
@@ -77,10 +101,6 @@
       "date": "2026-08-13",
       "source": "https://ai.google.dev/gemini-api/docs/deprecations"
     },
-    "gemini-3.6-flash": {
-      "date": "2026-07-21",
-      "source": "https://ai.google.dev/gemini-api/docs/deprecations"
-    },
     "gemini-3.1-pro-preview": {
       "date": "2026-02-19",
       "source": "https://ai.google.dev/gemini-api/docs/deprecations"
@@ -97,9 +117,18 @@
       "date": "2026-04-24",
       "source": "https://api-docs.deepseek.com/news/news260424/"
     },
-    "grok-4.7": { "date": "2026-09-21", "source": "https://x.ai/news/grok-4-7" },
-    "grok-4.6": { "date": "2026-08-12", "source": "https://x.ai/news/grok-4-6" },
-    "qwen3.8-max": { "date": "2026-08-03", "source": "https://qwen.ai/blog?id=qwen3.8" },
+    "grok-4.7": {
+      "date": "2026-09-21",
+      "source": "https://x.ai/news/grok-4-7"
+    },
+    "grok-4.6": {
+      "date": "2026-08-12",
+      "source": "https://x.ai/news/grok-4-6"
+    },
+    "qwen3.8-max": {
+      "date": "2026-08-03",
+      "source": "https://qwen.ai/blog?id=qwen3.8"
+    },
     "qwen3.8-flash": {
       "date": "2026-08-26",
       "source": "https://docs.qwencloud.com/changelog/models"
@@ -124,12 +153,18 @@
       "date": "2026-04-16",
       "source": "https://help.aliyun.com/en/model-studio/newly-released-models"
     },
-    "glm-5.2": { "date": "2026-06-16", "source": "https://docs.z.ai/release-notes/new-released" },
+    "glm-5.2": {
+      "date": "2026-06-16",
+      "source": "https://docs.z.ai/release-notes/new-released"
+    },
     "glm-5.3-flash": {
       "date": "2026-08-26",
       "source": "https://docs.z.ai/release-notes/new-released"
     },
-    "glm-5.3": { "date": "2026-08-18", "source": "https://docs.z.ai/release-notes/new-released" },
+    "glm-5.3": {
+      "date": "2026-08-18",
+      "source": "https://docs.z.ai/release-notes/new-released"
+    },
     "gpt-image-2.5-sunburst": {
       "date": "2026-09-08",
       "source": "https://developers.openai.com/api/docs/changelog"
@@ -138,7 +173,10 @@
       "date": "2026-09-08",
       "source": "https://developers.openai.com/api/docs/changelog"
     },
-    "kimi-k3": { "date": "2026-07-16", "source": "https://www.kimi.ai/help/agent/agent-overview" },
+    "kimi-k3": {
+      "date": "2026-07-16",
+      "source": "https://www.kimi.ai/help/agent/agent-overview"
+    },
     "MiniMax-M3.1-Flash": {
       "date": "2026-10-19",
       "source": "https://www.minimax.io/blog/minimax-m31f"
@@ -240,20 +278,50 @@
     }
   },
   "providers": {
-    "gpt_5_6_sol": {
+    "gpt_6_2_sol": {
       "supplier": "OpenAI",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${OPENAI_API_KEY}",
       "base_url": "${OPENAI_API_ADDRESS}",
-      "model": "gpt-5.6-sol",
+      "model": "gpt-6.2-sol",
       "prompt_cache_fields": ["prompt_cache_key", "prompt_cache_options"],
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
-      "reasoning_effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
+      "reasoning_effort_options": ["low", "medium", "high", "xhigh", "max"],
       "reasoning_effort_parameter": "reasoning_effort",
-      "description": "OpenAI flagship model for complex reasoning, coding, and agent workflows",
+      "use_responses_api": true,
+      "description": "OpenAI GPT-6.2 Sol for everyday coding and agent workflows",
+      "capabilities": {
+        "web_search": true
+      },
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "gpt_6_2_astra": {
+      "supplier": "OpenAI",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "gpt-6.2-astra",
+      "prompt_cache_fields": ["prompt_cache_key", "prompt_cache_options"],
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["low", "medium", "high", "xhigh", "max"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "use_responses_api": true,
+      "description": "OpenAI GPT-6.2 Astra for demanding reasoning and coding tasks",
       "capabilities": {
         "web_search": true
       },
@@ -497,6 +565,34 @@
         }
       }
     },
+    "claude_fable_5_2": {
+      "supplier": "Anthropic",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${ANTHROPIC_API_KEY}",
+      "base_url": "${ANTHROPIC_API_ADDRESS}",
+      "model": "claude-fable-5-2",
+      "prompt_cache_fields": ["cache_control"],
+      "reasoning_effort": "high",
+      "tool_reasoning_effort": "high",
+      "reasoning_effort_options": ["low", "medium", "high", "xhigh", "max"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Anthropic Fable 5.2 for demanding reasoning and long-horizon agentic work",
+      "capabilities": {
+        "web_search": true
+      },
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
     "claude_fable_5_1": {
       "supplier": "Anthropic",
       "is_custom": false,
@@ -693,6 +789,81 @@
         }
       }
     },
+    "gemini_4_neon": {
+      "supplier": "Google",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${GEMINI_API_KEY}",
+      "base_url": "${GEMINI_API_ADDRESS}",
+      "model": "gemini-4-neon",
+      "prompt_cache_fields": [],
+      "reasoning_effort": "high",
+      "tool_reasoning_effort": "high",
+      "reasoning_effort_options": ["low", "medium", "high", "xhigh"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Google Gemini 4 Neon for complex software engineering and knowledge work",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document", "audio", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "gemini_4_hydrogen": {
+      "supplier": "Google",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${GEMINI_API_KEY}",
+      "base_url": "${GEMINI_API_ADDRESS}",
+      "model": "gemini-4-hydrogen",
+      "prompt_cache_fields": [],
+      "reasoning_effort": "high",
+      "tool_reasoning_effort": "high",
+      "reasoning_effort_options": ["low", "medium", "high", "xhigh"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Google Gemini 4 Hydrogen for fast coding and multimodal workflows",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document", "audio", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "gemini_4_carbon": {
+      "supplier": "Google",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${GEMINI_API_KEY}",
+      "base_url": "${GEMINI_API_ADDRESS}",
+      "model": "gemini-4-carbon",
+      "prompt_cache_fields": [],
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["low", "medium", "high"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Google Gemini 4 Carbon for deep reasoning and long-horizon work",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document", "audio", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
     "gemini_4_argon": {
       "supplier": "Google",
       "is_custom": false,
@@ -757,31 +928,6 @@
       "reasoning_effort_options": ["low", "medium", "high"],
       "reasoning_effort_parameter": "reasoning_effort",
       "description": "Google's stable Flash model for coding, agentic workflows, and multimodal analysis",
-      "multimodal_parsing": {
-        "enabled": true,
-        "input_modalities": ["image", "document", "audio", "video"]
-      },
-      "multimodal_generation": {
-        "support_generation": {
-          "enabled": false,
-          "support_scope": []
-        }
-      }
-    },
-    "gemini_3_6_flash": {
-      "supplier": "Google",
-      "is_custom": false,
-      "enabled": true,
-      "used_for_conversation": true,
-      "api_key": "${GEMINI_API_KEY}",
-      "base_url": "${GEMINI_API_ADDRESS}",
-      "model": "gemini-3.6-flash",
-      "prompt_cache_fields": [],
-      "reasoning_effort": "medium",
-      "tool_reasoning_effort": "medium",
-      "reasoning_effort_options": ["minimal", "low", "medium", "high"],
-      "reasoning_effort_parameter": "reasoning_effort",
-      "description": "Google Gemini 3.6 Flash for general agentic and multimodal tasks",
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document", "audio", "video"]
@@ -963,6 +1109,34 @@
       "reasoning_effort_options": ["none", "low", "medium", "high", "xhigh"],
       "reasoning_effort_parameter": "reasoning_effort",
       "description": "xAI general-purpose reasoning, coding, and vision model",
+      "capabilities": {
+        "web_search": true
+      },
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "qwen4_max": {
+      "supplier": "Alibaba",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "${DASHSCOPE_API_ADDRESS}",
+      "model": "qwen4-max",
+      "prompt_cache_fields": ["cache_control"],
+      "reasoning_effort": "high",
+      "tool_reasoning_effort": "high",
+      "reasoning_effort_options": ["low", "high", "xhigh"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Alibaba Qwen4 Max for deep reasoning, tools, and image and video understanding",
       "capabilities": {
         "web_search": true
       },

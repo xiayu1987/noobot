@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onWatcherCleanup, ref, watch } from "vue";
 import { Delete, Refresh } from "@element-plus/icons-vue";
 import { readApiResponseEnvelope } from "@noobot/shared/request-error";
 import {
@@ -42,9 +42,9 @@ onBeforeUnmount(() => {
 
 watch(
   [ready, () => props.userId, revision],
-  async ([open, userId], _previous, onCleanup) => {
+  async ([open, userId]) => {
     const request = new AbortController();
-    onCleanup(() => request.abort());
+    onWatcherCleanup(() => request.abort());
     sessions.value = [];
     failed.value = false;
     loading.value = open;
@@ -66,12 +66,16 @@ watch(
   { immediate: true },
 );
 
+function sessionLabel(session) {
+  return session.title || translate(`quarantinedSessions.status.${session.status}`);
+}
+
 async function deleteSession(session) {
   const userId = props.userId;
   deletingId.value = session.id;
   try {
     await overlayMessageBox.confirm(
-      translate("quarantinedSessions.confirmDelete", { title: session.title || session.sessionId }),
+      translate("quarantinedSessions.confirmDelete", { title: sessionLabel(session) }),
       translate("common.deleteSession"),
       {
         confirmButtonText: translate("common.deleteSession"),
@@ -130,7 +134,7 @@ async function deleteSession(session) {
       <ul v-else class="quarantine-list">
         <li v-for="session in sessions" :key="session.id" class="quarantine-row noobot-subtle-row">
           <div class="quarantine-entry">
-            <strong>{{ session.title || session.sessionId }}</strong>
+            <strong>{{ sessionLabel(session) }}</strong>
             <div class="quarantine-meta">
               <span :title="session.errorCode">{{
                 translate(`quarantinedSessions.status.${session.status}`)
@@ -139,7 +143,7 @@ async function deleteSession(session) {
                 dateFormatter.format(new Date(session.quarantinedAt))
               }}</time>
             </div>
-            <span v-if="session.title">{{ session.sessionId }}</span>
+            <span>{{ session.sessionId }}</span>
             <code>{{ session.quarantinePath }}</code>
             <span v-if="session.deleting" class="quarantine-interrupted">{{
               translate("quarantinedSessions.deleteInterrupted")

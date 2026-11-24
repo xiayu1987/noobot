@@ -68,7 +68,7 @@ describe("BaseModelPicker", () => {
     await open({
       options: [
         { alias: "unknown", model: "custom-999", supplier: "Private" },
-        { alias: "older", model: "gpt-5.6-sol", supplier: "OpenAI" },
+        { alias: "older", model: "gpt-5.6-terra", supplier: "OpenAI" },
         { alias: "newer", model: "gpt-6.1-terra", supplier: "OpenAI" },
       ],
       modelValue: "older",

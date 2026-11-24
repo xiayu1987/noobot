@@ -45,7 +45,7 @@ test("release facts identify exact models and retain their evidence", () => {
 test("newest first is stable for equal dates and missing dates without mutating input", () => {
   const input = Object.freeze([
     Object.freeze({ model: "unknown-999" }),
-    Object.freeze({ model: "gpt-5.6-sol" }),
+    Object.freeze({ model: "gpt-5.6-terra" }),
     Object.freeze({ model: "gpt-6.1-terra" }),
     Object.freeze({ model: "gpt-5.6-luna" }),
     Object.freeze({ model: "another-unknown" }),

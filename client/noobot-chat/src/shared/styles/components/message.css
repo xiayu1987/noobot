@@ -323,11 +323,17 @@
         var(--noobot-ease-linear) infinite;
     }
 
+    .noobot-thinking-sweep {
+      animation-duration: var(--noobot-duration-thinking-sweep-cycle);
+      animation-timing-function: var(--noobot-ease-thinking-sweep-cycle);
+    }
+
     .noobot-thinking-sweep-once {
       animation-iteration-count: 1;
     }
 
     .noobot-thinking-sweep .noobot-thinking-sweep-text,
+    .noobot-thinking-sweep.noobot-thinking-sweep-text,
     .noobot-thinking-sweep-once {
       background-image:
         linear-gradient(

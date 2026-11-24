@@ -60,7 +60,7 @@ test("model input processing keeps directly readable text out of multimodal pars
 test("model library exposes copy-safe provider templates", () => {
   const options = listModelLibraryOptions();
   assert.ok(options.length > 0);
-  assert.equal(options[0].key, "gpt_5_6_sol");
+  assert.equal(options[0].key, "gpt_6_2_sol");
   assert.equal(
     options.some((item) => item.key === "gpt_5_4"),
     false,
@@ -79,7 +79,8 @@ test("model library exposes copy-safe provider templates", () => {
       .filter(({ key }) => resolveModelLibraryProvider(key)?.capabilities?.web_search === true)
       .map(({ key }) => key),
     [
-      "gpt_5_6_sol",
+      "gpt_6_2_sol",
+      "gpt_6_2_astra",
       "gpt_6_sol",
       "gpt_6_1_sol",
       "gpt_6_1_terra",
@@ -88,6 +89,7 @@ test("model library exposes copy-safe provider templates", () => {
       "gpt_5_6_terra",
       "gpt_5_6_luna",
       "claude_fable_5",
+      "claude_fable_5_2",
       "claude_fable_5_1",
       "claude_opus_5_5",
       "claude_opus_5",
@@ -98,6 +100,7 @@ test("model library exposes copy-safe provider templates", () => {
       "deepseek_v4_pro",
       "grok_4_7",
       "grok_4_6",
+      "qwen4_max",
       "qwen3_8_max",
       "qwen3_8_flash",
       "qwen3_8_omni_flash",
@@ -150,7 +153,7 @@ test("model library exposes copy-safe provider templates", () => {
   assert.equal(astra.capabilities.web_search, true);
   assert.deepEqual(astra.multimodal_parsing.input_modalities, ["image"]);
   assert.equal(astra.multimodal_generation.support_generation.enabled, false);
-  const sol = resolveModelLibraryProvider("gpt_5_6_sol");
+  const sol = resolveModelLibraryProvider("gpt_6_2_sol");
   assert.equal(sol.multimodal_generation.support_generation.enabled, false);
   assert.deepEqual(sol.multimodal_generation.support_generation.support_scope, []);
   const flare = resolveModelLibraryProvider("gpt_image_2_5_flare");

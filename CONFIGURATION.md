@@ -225,10 +225,10 @@ Current plugin defaults in repo:
 
 - `plugins.harness.enabled = true`
 - `plugins.harness.mode = "off"`
-- `plugins.harness.stepModels = { planning, guidance, acceptance, default }` (all default to `"gpt_5_6_sol"` in the current example)
+- `plugins.harness.stepModels = { planning, guidance, acceptance, default }` (all default to `"gpt_6_2_sol"` in the current example)
 - `plugins.workflow.enabled = true`
 - `plugins.workflow.mode = "off"`
-- `plugins.workflow.semanticModel = "gpt_5_6_sol"`
+- `plugins.workflow.semanticModel = "gpt_6_2_sol"`
 - `plugins.workflow.parallelNodeExecution = true` in the global example
 
 ### 3.6 Providers (`providers.<alias>`)
@@ -354,7 +354,7 @@ Example:
 - Missing defaulted nodes are generated from the protocol structure, global `baseValues`, and the model catalog. User configs are created from an empty document through the same repair.
 - Valid user values are preserved. Invalid values reset to the protocol default when one exists; invalid optional values are removed.
 - Unsupported nodes and system-owned nodes in user documents are removed.
-- Existing provider aliases are preserved. Their child fields are validated against the provider contract, and unsupported provider fields are removed.
+- Configuration repair preserves existing provider aliases and validates their fields against the provider contract. Model library upgrades remove retired built-in aliases and preserve custom providers. References to removed aliases keep their configured values and are reported as missing.
 - Invalid JSON is moved to an `.invalid-<timestamp>.json` backup before a repaired document is written.
 - Protocol migration and repair happen through the same pipeline; runtime consumers do not maintain alternate config shapes.
 

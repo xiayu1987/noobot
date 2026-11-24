@@ -118,6 +118,33 @@ test("multimodal_generate: failed image generation returns diagnostics and stabl
         return true;
       },
     );
+    for (const [requestUrl, expected] of [
+      [`invalid/${"/".repeat(100_000)}x`, `invalid/${"/".repeat(100_000)}x`],
+      [`invalid/path${"/".repeat(100_000)}`, "invalid/path"],
+      [`invalid/path#${"#".repeat(100_000)}\nprivate`, "invalid/path"],
+      ["invalid/path/?token=secret#fragment", "invalid/path"],
+      ["https://user:secret@example.test/path///?token=secret", "https://example.test/path"],
+    ]) {
+      runtime.modelHost = createTestModelHost({
+        modelPort: {
+          async invoke() {
+            throw Object.assign(new Error("Injected generation failure"), { requestUrl });
+          },
+        },
+        modelSpec: null,
+      });
+      await assert.rejects(
+        getMultimodalGenerateTool(runtime).invoke({
+          generation_content: "draw a small red square",
+          model_name: "gpt_image_2",
+        }),
+        (error) => {
+          assert.equal(error.code, "RECOVERABLE_MULTIMODAL_GENERATE_FAILED");
+          assert.equal(error.details.requestUrl, expected);
+          return true;
+        },
+      );
+    }
   } finally {
     if (originalHttpsProxy === undefined) delete process.env.HTTPS_PROXY;
     else process.env.HTTPS_PROXY = originalHttpsProxy;

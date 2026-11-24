@@ -196,13 +196,13 @@ test("provider runtime authority rejects user-owned system declarations", () => 
 });
 
 test("user-only providers use an exact model-library authority before generic fallback", () => {
-  const libraryProvider = resolveModelLibraryProvider("gpt_5_6_sol");
+  const libraryProvider = resolveModelLibraryProvider("gpt_6_2_sol");
   assert.ok(libraryProvider);
   const merged = mergeConfig(
     { providers: {} },
     {
       providers: {
-        gpt_5_6_sol: {
+        gpt_6_2_sol: {
           model: "user-model",
           reasoning_effort_options: ["forged"],
           reasoning_effort_parameter: "enable_thinking",
@@ -211,7 +211,7 @@ test("user-only providers use an exact model-library authority before generic fa
     },
   );
 
-  assert.deepEqual(merged.providers.gpt_5_6_sol, {
+  assert.deepEqual(merged.providers.gpt_6_2_sol, {
     ...libraryProvider,
     model: "user-model",
   });

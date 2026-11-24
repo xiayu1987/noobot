@@ -15,12 +15,10 @@ if (!logPaths.length) {
 
 const failures = [];
 const passes = [];
-for (const logPath of logPaths) {
-  validateRequestLogOrder(logPath, {
-    fail: (title, detail) => failures.push(detail ? `${title}\n${detail}` : title),
-    pass: (title) => passes.push(title),
-  });
-}
+validateRequestLogOrder(logPaths, {
+  fail: (title, detail) => failures.push(detail ? `${title}\n${detail}` : title),
+  pass: (title) => passes.push(title),
+});
 
 for (const line of passes) process.stdout.write(`[model-request-log] ${line}\n`);
 if (failures.length) {

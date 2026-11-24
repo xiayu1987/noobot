@@ -5,7 +5,11 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { MODEL_OPERATION_KIND } from "@noobot/model-protocol/protocol";
+import {
+  MODEL_OPERATION_KIND,
+  readModelRequestBodyCompleteness,
+  validateModelIncompleteRequestTerminal,
+} from "@noobot/model-protocol/protocol";
 import { text } from "@noobot/shared/value";
 
 function sliceJsonObject(inputText = "", start = 0) {
@@ -25,15 +29,16 @@ function sliceJsonObject(inputText = "", start = 0) {
   return inputText.slice(start);
 }
 
-function extractRequestBodies(inputText = "") {
+function extractRequestBodies(entries) {
   const bodies = [];
-  for (const entry of inputText.split(/^(?=\[(?:Request|Terminal)\]\s*$)/m)) {
+  for (const entry of entries) {
     if (!entry.startsWith("[Request]")) continue;
     const bodyIndex = entry.search(/^Body:/m);
     if (bodyIndex < 0) continue;
     const start = entry.indexOf("{", bodyIndex);
     bodies.push({
       text: start < 0 ? "" : sliceJsonObject(entry, start),
+      headerText: entry.slice(0, bodyIndex),
       operationKind: requestOperationKind(entry.slice(0, bodyIndex)),
     });
   }
@@ -123,20 +128,41 @@ function findLateSystemMessages(messages) {
   return late;
 }
 
-export function validateRequestLogOrder(logPath = "", { fail, pass }) {
+export function validateRequestLogOrder(logPaths, { fail, pass }) {
+  const audit = { terminals: [], incompleteRequests: [] };
+  let checked = 0;
+  for (const logPath of logPaths) checked += auditRequestLog(logPath, { fail, pass }, audit);
+  for (const { logPath, headerText } of audit.incompleteRequests) {
+    try {
+      validateModelIncompleteRequestTerminal(headerText, audit.terminals);
+    } catch (error) {
+      fail(`request log incomplete request terminal invalid: ${logPath}`, error.message);
+    }
+  }
+  if (!checked) fail(`request log has no auditable request messages: ${logPaths.join(", ")}`);
+}
+
+function auditRequestLog(logPath, { fail, pass }, audit) {
   const fullPath = path.isAbsolute(logPath) ? logPath : path.join(process.cwd(), logPath);
   if (!existsSync(fullPath)) {
     fail(`missing request log: ${logPath}`);
-    return;
+    return 0;
   }
-  const bodies = extractRequestBodies(readFileSync(fullPath, "utf8"));
+  const entries = readFileSync(fullPath, "utf8").split(/^(?=\[(?:Request|Terminal)\]\s*$)/m);
+  audit.terminals.push(
+    ...entries
+      .filter((entry) => entry.startsWith("[Terminal]"))
+      .map((entry) => entry.slice(0, entry.search(/^Body:/m))),
+  );
+  const bodies = extractRequestBodies(entries);
   let checked = 0;
-  for (const [bodyIndex, { text: bodyText, operationKind }] of bodies.entries()) {
-    let body;
+  let incomplete = 0;
+  for (const [bodyIndex, { text: bodyText, headerText, operationKind }] of bodies.entries()) {
+    let bodyComplete;
     try {
-      body = JSON.parse(bodyText);
+      bodyComplete = readModelRequestBodyCompleteness(headerText);
     } catch (error) {
-      fail(`request log Body JSON parse failed: ${logPath}`, error?.message || String(error));
+      fail(`request log body completeness invalid: ${logPath}`, error.message);
       continue;
     }
     const rule = REQUEST_AUDIT_RULES[operationKind];
@@ -145,6 +171,18 @@ export function validateRequestLogOrder(logPath = "", { fail, pass }) {
         `request log has unknown x-model-operation: ${logPath} Body#${bodyIndex + 1}`,
         `x-model-operation must be one of ${Object.values(MODEL_OPERATION_KIND).join(", ")}, got "${operationKind}"`,
       );
+      continue;
+    }
+    if (!bodyComplete) {
+      audit.incompleteRequests.push({ logPath, headerText });
+      incomplete += 1;
+      continue;
+    }
+    let body;
+    try {
+      body = JSON.parse(bodyText);
+    } catch (error) {
+      fail(`request log Body JSON parse failed: ${logPath}`, error?.message || String(error));
       continue;
     }
     const messages = rule.messages(body);
@@ -170,6 +208,9 @@ export function validateRequestLogOrder(logPath = "", { fail, pass }) {
       );
     }
   }
-  if (checked) pass(`request log order checked: ${logPath} (${checked} requests)`);
-  else fail(`request log has no auditable request messages: ${logPath}`);
+  if (checked)
+    pass(
+      `request log order checked: ${logPath} (${checked} requests) (incomplete transport bodies=${incomplete})`,
+    );
+  return checked;
 }

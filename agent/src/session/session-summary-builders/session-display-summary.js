@@ -7,7 +7,7 @@ import { createSessionTurnLifecycleSnapshot } from "../session-turn-read-model.j
 import { buildSessionDisplayEntries } from "./display-message-list.js";
 import { buildSessionDisplayStats, countSessionDisplaySources } from "./display-summary-stats.js";
 import { attachSessionToolArtifacts } from "./display-tool-artifacts.js";
-import { resolveSessionTitle } from "../entities/session-message-facts.js";
+import { resolveSessionTitle } from "@noobot/session-protocol";
 import {
   isTransferEnvelopeField,
   validateTransferEnvelope,

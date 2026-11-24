@@ -75,9 +75,9 @@ export async function createFixture() {
           tool_reasoning_effort: "high",
         },
       },
-      default_provider: "gpt_5_6_sol",
+      default_provider: "gpt_6_2_sol",
       multimodal: {
-        parsing: { default_models: { audio: "gemini_3_7_flash", image: "gpt_5_6_sol" } },
+        parsing: { default_models: { audio: "gemini_3_7_flash", image: "gpt_6_2_sol" } },
         generation: { default_models: { image: "gpt_image_2_5_flare" } },
       },
       plugins: {
@@ -242,7 +242,7 @@ test("packaged desktop startup incrementally adds any bundled global config fiel
     assert.equal(config.attachments, undefined);
     assert.deepEqual(config.multimodal.parsing.default_models, {
       audio: "gemini_3_7_flash",
-      image: "gpt_5_6_sol",
+      image: "gpt_6_2_sol",
     });
     const userConfig = JSON.parse(await readFile(path.join(legacyUserDir, "config.json"), "utf8"));
     assert.deepEqual(userConfig.plugins.character, { enabled: true, mode: "on" });

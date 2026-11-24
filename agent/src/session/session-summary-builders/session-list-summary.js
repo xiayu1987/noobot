@@ -3,8 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveSessionTitle } from "../entities/session-message-facts.js";
-import { requireSessionAggregateVersion } from "@noobot/session-protocol";
+import { requireSessionAggregateVersion, resolveSessionTitle } from "@noobot/session-protocol";
 import {
   SESSION_SUMMARY_AVAILABILITY,
   requireSessionSummaryEntry,

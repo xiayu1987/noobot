@@ -5,6 +5,7 @@
  */
 import http from "node:http";
 import https from "node:https";
+import { randomUUID } from "node:crypto";
 import { createProxyServer as createHttpProxyServer } from "http-proxy-3";
 import { getHeaderValue } from "./common.js";
 import { decodeBodyByEncoding, resolveFinalResponseBodyText } from "./response-body.js";
@@ -21,6 +22,7 @@ function normalizeTerminalError(error = null) {
 }
 
 function createRequestLogLifecycle({ logger, context = {} } = {}) {
+  const requestContext = { ...context, requestId: randomUUID() };
   let requestLogged = false;
   let terminalLogged = false;
   let pendingTerminal = null;
@@ -28,14 +30,14 @@ function createRequestLogLifecycle({ logger, context = {} } = {}) {
   function writeTerminal(terminal = {}) {
     if (terminalLogged) return false;
     terminalLogged = true;
-    logger.logTerminal({ ...context, ...terminal });
+    logger.logTerminal({ ...requestContext, ...terminal });
     return true;
   }
 
   function recordRequest(request = {}) {
     if (requestLogged) return false;
     requestLogged = true;
-    logger.logRequest({ ...context, ...request });
+    logger.logRequest({ ...requestContext, ...request });
     if (pendingTerminal) {
       const terminal = pendingTerminal;
       pendingTerminal = null;

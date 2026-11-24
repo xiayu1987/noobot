@@ -72,7 +72,7 @@ test("@core PBE-022 停止后关闭浏览器再打开并继续", async ({
   const receivedAtStart = protocolCapture.websocketReceived.length;
   await page.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
   await waitForReconnect(protocolCapture, receivedAtStart);
-  await expect(page.locator(".session-item.active")).toHaveAttribute(
+  await expect(page.locator('.session-item[aria-current="true"]')).toHaveAttribute(
     "data-session-id",
     noobot.sessionId,
   );

@@ -20,3 +20,4 @@ export * from "./anthropic-stream.js";
 export * from "./tool-binding.js";
 export * from "./tool-definition-projection.js";
 export * from "./tool-name-prompt.js";
+export * from "./request-log.js";

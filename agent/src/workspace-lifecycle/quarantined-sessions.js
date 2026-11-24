@@ -7,10 +7,10 @@ import { hash } from "node:crypto";
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { classifyHistoricalMigrationQuarantine } from "@noobot/workspace-protocol/migration-quarantine";
+import { resolveSessionNamedTitle } from "@noobot/session-protocol";
 import { SESSION_DOCUMENT_FILE } from "@noobot/session-protocol/session-reader";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { readFilePrefix } from "@noobot/shared/read-file-prefix";
-import { text } from "@noobot/shared/value";
 import { fsLstat, fsOpen, fsRealpath, fsRm } from "../shared/storage/fs-adapter.js";
 import { syncStorageDirectory, writeDurableJsonFile } from "../shared/storage/durable-file.js";
 import {
@@ -41,7 +41,7 @@ async function readSessionTitle(held, sessionId) {
     const limit = LENGTH_THRESHOLDS.sessionStorage.journalControlBytes;
     const document = JSON.parse(await readFilePrefix(file, limit, fsOpen));
     if (document?.sessionId !== sessionId) return "";
-    return (text(document.title) || text(document.autoTitle)).slice(
+    return resolveSessionNamedTitle(document).slice(
       0,
       LENGTH_THRESHOLDS.sessionStorage.listMessagePreviewChars,
     );

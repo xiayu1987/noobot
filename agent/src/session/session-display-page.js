@@ -19,7 +19,7 @@ import {
   requireSessionDetailStartResponse,
 } from "@noobot/session-protocol/session-detail";
 import { TURN_RECOVERY_ACTION } from "@noobot/session-protocol/turn-lifecycle";
-import { resolveSessionTitle } from "./entities/session-message-facts.js";
+import { resolveSessionTitle } from "@noobot/session-protocol";
 import { createSessionTurnLifecycleSnapshot } from "./session-turn-read-model.js";
 
 function snapshotIdentity(identity, sessionId) {

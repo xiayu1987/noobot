@@ -287,6 +287,27 @@ test("non-session quarantine evidence remains unclassified and keeps its own rea
   assert.equal(Object.hasOwn(before[0], "sessionStorage"), false);
 });
 
+test("quarantined titles follow the session protocol without accepting a display projection as metadata", async (t) => {
+  const base = await fixture(t);
+  for (const [sessionId, fields] of [
+    ["custom", { customTitle: "Renamed conversation", autoTitle: "First question" }],
+    ["automatic", { autoTitle: "First question" }],
+    ["projection", { title: "Unverified display title" }],
+    ["wrong-identity", { sessionId: "another-session", customTitle: "Another conversation" }],
+  ]) {
+    const source = await oldSession(base, sessionId);
+    await writeFile(join(source, "session.json"), JSON.stringify({ sessionId, ...fields }));
+  }
+  await retireUnsupportedSessionStorage({ base, scopedSessionRoots: [] });
+  const sessions = await listQuarantinedSessions(base);
+  assert.deepEqual(Object.fromEntries(sessions.map(({ sessionId, title }) => [sessionId, title])), {
+    custom: "Renamed conversation",
+    automatic: "First question",
+    projection: "",
+    "wrong-identity": "",
+  });
+});
+
 test("interrupted quarantine deletion can be retried without touching a reused session path", async (t) => {
   const base = await fixture(t);
   const source = await oldSession(base, "reused");
@@ -297,6 +318,7 @@ test("interrupted quarantine deletion can be retried without touching a reused s
   await retireUnsupportedSessionStorage({ base, scopedSessionRoots: [] });
   await oldSession(base, "reused");
   const [quarantined] = await listQuarantinedSessions(base);
+  assert.equal(quarantined.sessionId, "reused");
   assert.equal(quarantined.title, "Old title");
   const held = join(base, quarantined.quarantinePath);
   const adapter = getFsAdapter();

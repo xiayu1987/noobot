@@ -1,5 +1,13 @@
 :root {
-  --noobot-duration-thinking-sweep: 0.95s;
+  --noobot-thinking-sweep-seconds: 0.95;
+  --noobot-thinking-sweep-cycle-seconds: calc(var(--noobot-thinking-sweep-seconds) + 2);
+  --noobot-duration-thinking-sweep: calc(var(--noobot-thinking-sweep-seconds) * 1s);
+  --noobot-duration-thinking-sweep-cycle: calc(var(--noobot-thinking-sweep-cycle-seconds) * 1s);
+  --noobot-ease-thinking-sweep-cycle: linear(
+    0,
+    1 calc(100% * var(--noobot-thinking-sweep-seconds) / var(--noobot-thinking-sweep-cycle-seconds)),
+    1
+  );
   --noobot-thinking-text-sweep-width: 12rem;
   --noobot-thinking-panel-tint: color-mix(in srgb, var(--noobot-accent) 5%, transparent);
   --noobot-thinking-text-sweep-steel: var(--noobot-base-slate-500);

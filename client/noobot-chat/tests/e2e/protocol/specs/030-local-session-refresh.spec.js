@@ -15,7 +15,7 @@ test("@core PBE-030 未 provision 的本地 Session 刷新不污染权威路由"
       .filter(Boolean),
   );
   expect(new URL(noobot.page.url()).searchParams.has("session")).toBe(false);
-  await expect(noobot.page.locator(".session-item.active")).toHaveAttribute(
+  await expect(noobot.page.locator('.session-item[aria-current="true"]')).toHaveAttribute(
     "data-session-id",
     localSessionId,
   );

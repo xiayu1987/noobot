@@ -257,6 +257,11 @@ function sessionRuntimeStatus(sessionItem = {}) {
   return "idle";
 }
 
+function sessionTitleClasses(sessionItem) {
+  const status = sessionItem.isUnavailable ? "error" : sessionRuntimeStatus(sessionItem);
+  return [status, { "noobot-thinking-sweep": status === "running" }];
+}
+
 function formatSessionTime(value = "") {
   const timeMs = Date.parse(value || "");
   if (!Number.isFinite(timeMs)) return "";
@@ -359,12 +364,12 @@ watch(
                   :data-session-id="sessionItem.sessionId"
                   :data-session-local="sessionItem.isLocal === true ? 'true' : 'false'"
                   :class="{
-                    active: sessionItem.sessionId === activeSessionId,
                     unavailable: sessionItem.isUnavailable === true,
                     'actions-expanded': expandedActionSessionId === sessionItem.sessionId,
                   }"
                   tabindex="0"
                   :aria-label="sessionDisplayTitle(sessionItem)"
+                  :aria-current="sessionItem.sessionId === activeSessionId ? 'true' : undefined"
                   :aria-disabled="sessionItem.isUnavailable === true ? 'true' : undefined"
                   @click="selectSession(sessionItem)"
                   @pointerdown="startLongPress($event, sessionItem)"
@@ -381,10 +386,8 @@ watch(
                   </div>
                   <div class="session-info">
                     <div
-                      class="title"
-                      :class="
-                        sessionItem.isUnavailable ? 'error' : sessionRuntimeStatus(sessionItem)
-                      "
+                      class="title noobot-thinking-sweep-text"
+                      :class="sessionTitleClasses(sessionItem)"
                       :aria-label="
                         sessionItem.isUnavailable
                           ? `${sessionDisplayTitle(sessionItem)}: ${translate('common.sessionUnavailableLegacyProtocol')}`
@@ -527,6 +530,16 @@ watch(
   cursor: pointer;
 }
 
+.session-item[aria-current="true"]::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block: var(--noobot-space-sm);
+  width: var(--noobot-space-2xs);
+  border-radius: var(--noobot-radius-pill);
+  background: var(--noobot-accent);
+}
+
 .session-item.unavailable {
   cursor: not-allowed;
   opacity: 0.72;
@@ -549,11 +562,6 @@ watch(
     color var(--noobot-duration-normal) var(--noobot-ease-standard),
     background-color var(--noobot-duration-normal) var(--noobot-ease-standard);
   color: var(--noobot-text-main);
-}
-
-.session-item.active .session-icon-wrapper {
-  background: var(--noobot-accent-soft);
-  color: var(--noobot-text-strong);
 }
 
 .session-icon {
@@ -647,10 +655,6 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
   transition: color var(--noobot-duration-normal) var(--noobot-ease-standard);
-}
-
-.session-item.active .title {
-  font-weight: var(--noobot-font-weight-semibold);
 }
 
 .title.running {

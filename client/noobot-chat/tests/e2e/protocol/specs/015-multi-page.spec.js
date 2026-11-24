@@ -46,7 +46,7 @@ test("@full PBE-015 双标签页生命周期一致性", async ({
   try {
     await secondPage.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
     await connectThroughUi(secondPage, readE2eCredentials());
-    await expect(secondPage.locator(".session-item.active")).toHaveAttribute(
+    await expect(secondPage.locator('.session-item[aria-current="true"]')).toHaveAttribute(
       "data-session-id",
       noobot.sessionId,
     );
@@ -121,7 +121,7 @@ test("@full PBE-046 双标签页 Workflow 消息与卡片一致性", async ({
   try {
     await secondPage.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
     await connectThroughUi(secondPage, readE2eCredentials());
-    await expect(secondPage.locator(".session-item.active")).toHaveAttribute(
+    await expect(secondPage.locator('.session-item[aria-current="true"]')).toHaveAttribute(
       "data-session-id",
       noobot.sessionId,
     );

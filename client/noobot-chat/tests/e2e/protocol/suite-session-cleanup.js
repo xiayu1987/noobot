@@ -188,12 +188,14 @@ export default class SuiteSessionCleanupReporter {
     }
     const failures = [];
     const checked = [];
+    const logPaths = [];
     for await (const relative of fs.glob("**/*.log", { cwd: this.requestLogsRoot })) {
-      validateRequestLogOrder(path.join(this.requestLogsRoot, relative), {
-        fail: (title, detail) => failures.push(detail ? `${title}\n${detail}` : title),
-        pass: (title) => checked.push(title),
-      });
+      logPaths.push(path.join(this.requestLogsRoot, relative));
     }
+    validateRequestLogOrder(logPaths, {
+      fail: (title, detail) => failures.push(detail ? `${title}\n${detail}` : title),
+      pass: (title) => checked.push(title),
+    });
     if (!checked.length) failures.push("Full suite requires auditable model request logs");
     if (failures.length) {
       await this.preserveFailureEvidence(credentials.userId);

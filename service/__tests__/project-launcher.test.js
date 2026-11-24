@@ -81,12 +81,12 @@ const minimalGlobalExample = {
     },
   },
   providers: {
-    gpt_5_6_sol: {
+    gpt_6_2_sol: {
       enabled: true,
       used_for_conversation: true,
       api_key: "${OPENAI_API_KEY}",
       base_url: "${OPENAI_API_ADDRESS}",
-      model: "gpt-5.6-sol",
+      model: "gpt-6.2-sol",
       reasoning_effort: "medium",
       tool_reasoning_effort: "medium",
       reasoning_effort_options: ["low", "medium", "high"],
@@ -280,7 +280,7 @@ test("project launcher uses NOOBOT_GLOBAL_CONFIG_PATH when resolving global conf
   const customConfig = await readJson(customConfigPath);
   assert.equal(customConfig.workspace_root, "./custom-workspace");
   assert.equal(customConfig.workspace_template_path, "./custom-template");
-  assert.ok(customConfig.providers?.gpt_5_6_sol);
+  assert.ok(customConfig.providers?.gpt_6_2_sol);
   assert.equal(await exists(path.join(serviceRoot, "config", "global.config.json")), false);
   assert.equal(
     await exists(path.join(serviceRoot, "custom-workspace", "config-params.json")),
@@ -432,7 +432,7 @@ test("project launcher recursively adds new global nodes without replacing confi
       default_models: {
         audio: "gemini_3_7_flash",
         video: "gemini_3_7_flash",
-        image: "gpt_5_6_sol",
+        image: "gpt_6_2_sol",
         document: "gemini_3_7_flash",
       },
     },
@@ -644,7 +644,7 @@ test("project launcher preserves invalid model choices, continues other users an
       parsing: { default_models: { document: "gemini_3_7_flash", image: "gpt_6_1_sol" } },
     },
     providers: {
-      gpt_5_6_sol: resolveModelLibraryProvider("gpt_5_6_sol"),
+      gpt_6_2_sol: resolveModelLibraryProvider("gpt_6_2_sol"),
       gemini_3_7_flash: resolveModelLibraryProvider("gemini_3_7_flash"),
       gpt_6_1_sol: resolveModelLibraryProvider("gpt_6_1_sol"),
     },

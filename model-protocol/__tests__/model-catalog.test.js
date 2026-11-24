@@ -6,9 +6,22 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { resolveModelLibraryProvider, supportsModelMultimodalGeneration } from "../src/index.js";
+import {
+  MODEL_LIBRARY_VERSION,
+  listModelLibraryOptions,
+  resolveModelLibraryProvider,
+  resolveModelRelease,
+  supportsModelMultimodalGeneration,
+} from "../src/index.js";
 
 const additions = {
+  gpt_6_2_sol: "gpt-6.2-sol",
+  gpt_6_2_astra: "gpt-6.2-astra",
+  claude_fable_5_2: "claude-fable-5-2",
+  gemini_4_neon: "gemini-4-neon",
+  gemini_4_hydrogen: "gemini-4-hydrogen",
+  gemini_4_carbon: "gemini-4-carbon",
+  qwen4_max: "qwen4-max",
   gpt_6_sol: "gpt-6-sol",
   gpt_6_1_sol: "gpt-6.1-sol",
   gpt_6_1_terra: "gpt-6.1-terra",
@@ -21,7 +34,6 @@ const additions = {
   minimax_m3_1_flash: "MiniMax-M3.1-Flash",
   gemini_3_8_flash: "gemini-3.8-flash",
   gemini_4_argon: "gemini-4-argon",
-  gemini_3_6_flash: "gemini-3.6-flash",
   gemini_3_5_flash_lite: "gemini-3.5-flash-lite",
   gemini_3_1_flash_lite: "gemini-3.1-flash-lite",
   qwen3_7_flash: "qwen3.7-flash",
@@ -38,6 +50,13 @@ const additions = {
 test("released catalog additions use exact API IDs and project to the global configuration", () => {
   const path = "../../service/config/global.config.example.json";
   const config = JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
+  assert.equal(config.model_library_version, MODEL_LIBRARY_VERSION);
+  assert.deepEqual(
+    Object.keys(config.providers).sort(),
+    listModelLibraryOptions()
+      .map(({ key }) => key)
+      .sort(),
+  );
   for (const [alias, model] of Object.entries(additions)) {
     const provider = resolveModelLibraryProvider(alias);
     assert.equal(provider.model, model);
@@ -52,8 +71,13 @@ test("retirement and generation cleanup preserves independent active product lin
   assert.equal(resolveModelLibraryProvider("gpt_5_4"), null);
   assert.equal(resolveModelLibraryProvider("gpt_5_5"), null);
   assert.equal(resolveModelLibraryProvider("deepseek_v4_flash"), null);
+  assert.equal(resolveModelLibraryProvider("gpt_5_6_sol"), null);
+  assert.equal(resolveModelLibraryProvider("gemini_3_6_flash"), null);
+  assert.equal(resolveModelRelease("gpt-5.6-sol"), null);
+  assert.equal(resolveModelRelease("gemini-3.6-flash"), null);
   for (const alias of [
-    "gpt_5_6_sol",
+    "gpt_5_6_terra",
+    "gpt_5_6_luna",
     "claude_haiku_4_5",
     "gemini_3_1_pro_preview",
     "qwen3_6_flash",
@@ -61,6 +85,28 @@ test("retirement and generation cleanup preserves independent active product lin
   ]) {
     assert.ok(resolveModelLibraryProvider(alias), alias);
   }
+});
+
+test("November catalog entries declare the released transport and reasoning controls", () => {
+  for (const alias of ["gpt_6_2_sol", "gpt_6_2_astra"]) {
+    const provider = resolveModelLibraryProvider(alias);
+    assert.equal(resolveModelRelease(provider.model).date, "2026-11-17");
+    assert.equal(provider.use_responses_api, true);
+    assert.deepEqual(provider.reasoning_effort_options, ["low", "medium", "high", "xhigh", "max"]);
+    assert.deepEqual(provider.prompt_cache_fields, ["prompt_cache_key", "prompt_cache_options"]);
+    assert.deepEqual(provider.multimodal_parsing.input_modalities, ["image", "document"]);
+  }
+
+  const fable = resolveModelLibraryProvider("claude_fable_5_2");
+  assert.equal(resolveModelRelease(fable.model).date, "2026-11-09");
+  assert.deepEqual(fable.reasoning_effort_options, ["low", "medium", "high", "xhigh", "max"]);
+  assert.deepEqual(fable.prompt_cache_fields, ["cache_control"]);
+
+  const qwen = resolveModelLibraryProvider("qwen4_max");
+  assert.equal(resolveModelRelease(qwen.model).date, "2026-11-16");
+  assert.equal(qwen.reasoning_effort_parameter, "reasoning_effort");
+  assert.deepEqual(qwen.reasoning_effort_options, ["low", "high", "xhigh"]);
+  assert.deepEqual(qwen.prompt_cache_fields, ["cache_control"]);
 });
 
 test("October catalog additions preserve reasoning, transport and credential boundaries", () => {
@@ -102,10 +148,12 @@ test("October catalog additions preserve reasoning, transport and credential bou
 
 test("Gemini catalog covers flagship, Flash, Pro and Flash-Lite with compatible effort controls", () => {
   for (const alias of [
+    "gemini_4_neon",
+    "gemini_4_hydrogen",
+    "gemini_4_carbon",
     "gemini_4_argon",
     "gemini_3_8_flash",
     "gemini_3_7_flash",
-    "gemini_3_6_flash",
     "gemini_3_1_pro_preview",
     "gemini_3_5_flash_lite",
     "gemini_3_1_flash_lite",
@@ -126,6 +174,15 @@ test("Gemini catalog covers flagship, Flash, Pro and Flash-Lite with compatible 
     "medium",
     "high",
   ]);
+  for (const [alias, date, options] of [
+    ["gemini_4_neon", "2026-11-18", ["low", "medium", "high", "xhigh"]],
+    ["gemini_4_hydrogen", "2026-11-12", ["low", "medium", "high", "xhigh"]],
+    ["gemini_4_carbon", "2026-11-10", ["low", "medium", "high"]],
+  ]) {
+    const provider = resolveModelLibraryProvider(alias);
+    assert.equal(resolveModelRelease(provider.model).date, date);
+    assert.deepEqual(provider.reasoning_effort_options, options);
+  }
   assert.equal(resolveModelLibraryProvider("gemini_3_5_flash_lite").reasoning_effort, "minimal");
   assert.equal(resolveModelLibraryProvider("gemini_3_1_pro_preview").reasoning_effort, "high");
   const omni = resolveModelLibraryProvider("qwen3_8_omni_flash");

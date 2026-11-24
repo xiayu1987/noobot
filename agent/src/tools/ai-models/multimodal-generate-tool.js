@@ -39,6 +39,12 @@ function resolveModelBaseUrl(modelSpec = {}) {
   return text(modelSpec.base_url);
 }
 
+function trimDiagnosticUrlSuffix(value) {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") end -= 1;
+  return value.slice(0, end);
+}
+
 function describeBaseUrlForDiagnostics(baseUrl = "") {
   const value = text(baseUrl);
   if (!value) return "";
@@ -48,9 +54,9 @@ function describeBaseUrlForDiagnostics(baseUrl = "") {
     url.password = "";
     url.search = "";
     url.hash = "";
-    return url.toString().replace(/\/+$/, "");
+    return trimDiagnosticUrlSuffix(url.toString());
   } catch {
-    return value.replace(/[?#].*$/, "").replace(/\/+$/, "");
+    return trimDiagnosticUrlSuffix(value.split(/[?#]/u, 1)[0]);
   }
 }
 
@@ -71,7 +77,7 @@ function maskDiagnosticUrl(value = "") {
     url.hash = "";
     return url.toString();
   } catch {
-    return normalized.replace(/:\/\/([^:@/]+):([^@/]+)@/, "://***:***@").replace(/[?#].*$/, "");
+    return normalized.split(/[?#]/u, 1)[0].replace(/:\/\/([^:@/]+):([^@/]+)@/, "://***:***@");
   }
 }
 

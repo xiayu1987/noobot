@@ -67,6 +67,39 @@
   background: transparent;
 }
 
+.el-empty {
+  --el-empty-fill-color-0: var(--noobot-panel-bg);
+  --el-empty-fill-color-1: color-mix(in srgb, var(--noobot-text-secondary) 4%, var(--noobot-panel-bg));
+  --el-empty-fill-color-2: color-mix(in srgb, var(--noobot-text-secondary) 8%, var(--noobot-panel-bg));
+  --el-empty-fill-color-3: color-mix(in srgb, var(--noobot-text-secondary) 12%, var(--noobot-panel-bg));
+  --el-empty-fill-color-4: color-mix(in srgb, var(--noobot-text-secondary) 16%, var(--noobot-panel-bg));
+  --el-empty-fill-color-5: color-mix(in srgb, var(--noobot-text-secondary) 20%, var(--noobot-panel-bg));
+  --el-empty-fill-color-6: color-mix(in srgb, var(--noobot-text-secondary) 24%, var(--noobot-panel-bg));
+  --el-empty-fill-color-7: color-mix(in srgb, var(--noobot-text-secondary) 28%, var(--noobot-panel-bg));
+  --el-empty-fill-color-8: color-mix(in srgb, var(--noobot-text-secondary) 32%, var(--noobot-panel-bg));
+  --el-empty-fill-color-9: color-mix(in srgb, var(--noobot-text-secondary) 36%, var(--noobot-panel-bg));
+}
+
+.el-alert--primary {
+  --el-alert-bg-color: color-mix(in srgb, var(--noobot-accent) 12%, var(--noobot-panel-bg));
+}
+
+.el-alert--success {
+  --el-alert-bg-color: color-mix(in srgb, var(--noobot-status-success) 12%, var(--noobot-panel-bg));
+}
+
+.el-alert--warning {
+  --el-alert-bg-color: color-mix(in srgb, var(--noobot-status-warning) 12%, var(--noobot-panel-bg));
+}
+
+.el-alert--error {
+  --el-alert-bg-color: color-mix(in srgb, var(--noobot-status-error) 12%, var(--noobot-panel-bg));
+}
+
+.el-alert--info {
+  --el-alert-bg-color: color-mix(in srgb, var(--noobot-text-secondary) 12%, var(--noobot-panel-bg));
+}
+
 .el-empty__description p,
 .el-alert__description {
   color: var(--noobot-text-secondary);

@@ -34,10 +34,10 @@ test("packaged desktop diagnoses malformed user JSON and accepts an explicit use
       ),
     );
     assert.equal(logLines.join("\n").includes("must-not-appear-in-log"), false);
-    await writeFile(configPath, JSON.stringify({ default_provider: "gpt_5_6_sol" }), "utf8");
+    await writeFile(configPath, JSON.stringify({ default_provider: "gpt_6_2_sol" }), "utf8");
     logLines.length = 0;
     manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath });
-    assert.equal(JSON.parse(await readFile(configPath, "utf8")).default_provider, "gpt_5_6_sol");
+    assert.equal(JSON.parse(await readFile(configPath, "utf8")).default_provider, "gpt_6_2_sol");
     assert.equal(
       logLines.some((line) => line.includes("INVALID_CONFIG_DOCUMENT")),
       false,

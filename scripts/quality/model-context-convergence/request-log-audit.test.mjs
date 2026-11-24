@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, test } from "node:test";
 import { validateRequestLogOrder } from "./request-log-audit.mjs";
+import { formatModelRequestBodyCompleteness } from "@noobot/model-protocol/protocol";
 
 const tempDirs = [];
 
@@ -16,13 +17,18 @@ afterEach(() => {
   while (tempDirs.length) rmSync(tempDirs.pop(), { recursive: true, force: true });
 });
 
-function requestEntry({ operation, messages, body }) {
+function requestEntry({ operation, messages, body, bodyComplete = true }) {
   const headers = operation ? { "x-model-operation": operation } : {};
   return `
 === now ===
 [Request]
+RequestId: test-request
+Model: test-model
 Flow: test.flow
+SessionId: test-session
+ParentSessionId: [root]
 Headers: ${JSON.stringify(headers, null, 2)}
+${formatModelRequestBodyCompleteness(bodyComplete)}
 Body:
 ${JSON.stringify(body || { messages })}
 ========================
@@ -33,6 +39,12 @@ function terminalEntry(bodyText = JSON.stringify({ messages: [{ role: "assistant
   return `
 --- now ---
 [Terminal]
+RequestId: test-request
+Model: test-model
+Flow: test.flow
+SessionId: test-session
+ParentSessionId: [root]
+Outcome: client_aborted
 Headers: ${JSON.stringify({ "x-model-operation": "web_search" })}
 Body:
 ${bodyText}
@@ -40,14 +52,17 @@ ${bodyText}
 `;
 }
 
-function auditLog(text) {
+function auditLog(...texts) {
   const dir = mkdtempSync(path.join(tmpdir(), "request-log-audit-"));
   tempDirs.push(dir);
-  const logPath = path.join(dir, "requests.log");
-  writeFileSync(logPath, text);
+  const logPaths = texts.map((text, index) => {
+    const logPath = path.join(dir, `requests-${index}.log`);
+    writeFileSync(logPath, text);
+    return logPath;
+  });
   const failures = [];
   const passes = [];
-  validateRequestLogOrder(logPath, {
+  validateRequestLogOrder(logPaths, {
     fail: (title) => failures.push(title),
     pass: (title) => passes.push(title),
   });
@@ -178,4 +193,71 @@ test("a log without auditable request messages fails instead of passing silently
     assert.deepEqual(passes, []);
     assert.match(failures[0], /no auditable request messages/);
   }
+});
+
+test("transport-incomplete JSON is reported separately from audited complete requests", () => {
+  const complete = requestEntry({
+    operation: "chat",
+    messages: [{ role: "system", content: "constructed" }, ...userOnly],
+  });
+  const partial = requestEntry({ operation: "chat", bodyComplete: false }).replace(
+    "{}",
+    '{"messages":[{"role":"us',
+  );
+  const { failures, passes } = auditLog(complete + partial + terminalEntry());
+  assert.deepEqual(failures, []);
+  assert.equal(passes.length, 1);
+  assert.match(passes[0], /\(1 requests\) \(incomplete transport bodies=1\)/);
+  assert.match(auditLog(partial).failures[0], /incomplete request terminal invalid/);
+});
+
+test("complete malformed bodies and invalid completeness fields still fail", () => {
+  const complete = requestEntry({ operation: "chat", messages: userOnly });
+  assert.match(
+    auditLog(complete.replace('{"messages":', '{"broken":\n"')).failures[0],
+    /Body JSON parse failed/,
+  );
+  for (const field of ["", "BodyComplete: unknown", "BodyComplete: true\nBodyComplete: false"]) {
+    assert.match(
+      auditLog(complete.replace("BodyComplete: true", field)).failures[0],
+      /body completeness invalid/,
+    );
+  }
+  const partial = requestEntry({ operation: "unknown", bodyComplete: false });
+  assert.match(auditLog(partial).failures[0], /unknown x-model-operation/);
+});
+
+test("incomplete requests require a unique matching error terminal with identical ownership", () => {
+  const complete = requestEntry({ operation: "web_search", messages: userOnly });
+  const partial = requestEntry({ operation: "chat", bodyComplete: false });
+  const terminal = terminalEntry();
+  for (const invalid of [
+    "",
+    terminal + terminal,
+    terminal.replace("RequestId: test-request", "RequestId: another-request"),
+    terminal.replace("Outcome: client_aborted", "Outcome: response"),
+    terminal.replace("Outcome: client_aborted", "Outcome: unknown"),
+    ...["RequestId", "Model", "Flow", "SessionId", "ParentSessionId"].map((name) =>
+      terminal.replace(new RegExp(`^${name}: .*`, "m"), `${name}: wrong`),
+    ),
+  ]) {
+    const result = auditLog(complete + partial + invalid);
+    assert.match(result.failures[0], /incomplete request terminal invalid/);
+  }
+});
+
+test("rotation and interleaving preserve request-terminal correlation across files", () => {
+  const complete = requestEntry({ operation: "web_search", messages: userOnly });
+  const partial = requestEntry({ operation: "chat", bodyComplete: false });
+  const terminal = terminalEntry();
+  const otherPartial = partial.replace("RequestId: test-request", "RequestId: second-request");
+  const otherTerminal = terminal.replace("RequestId: test-request", "RequestId: second-request");
+  for (const entries of [
+    [complete + partial, terminal],
+    [terminal, complete + partial],
+    [complete + partial + otherPartial, otherTerminal, terminal],
+  ])
+    assert.deepEqual(auditLog(...entries).failures, []);
+  assert.match(auditLog(complete + partial, terminal, terminal).failures[0], /terminal invalid/);
+  assert.match(auditLog(complete + partial, otherTerminal).failures[0], /terminal invalid/);
 });
