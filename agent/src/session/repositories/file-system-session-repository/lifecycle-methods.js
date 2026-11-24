@@ -9,6 +9,7 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { createSessionDeletedError, createSessionNotFoundError } from "@noobot/session-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { requireBranchDeletionDirectoriesAvailable } from "@noobot/workspace-protocol/session-tombstone";
 import { withSessionReadCache } from "../../session-read-cache.js";
 
 function requireLifecycleSessionKey(sessionId = "") {
@@ -60,14 +61,29 @@ class SessionLifecycleMethods {
   }
 
   async withSessionPlacementMutation(userId, placement, operation, { persistenceContext } = {}) {
+    const withAvailableDirectory = (scope) => {
+      if (scope.indexed) return operation(scope);
+      return this.withSessionDeletionFence(userId, async () => {
+        const directory = path.relative(this._basePath(userId), scope.sessionDir).split(path.sep);
+        requireBranchDeletionDirectoriesAvailable(await this._readDeletedSessions(userId), [
+          { sessionId: placement.sessionId, directory },
+        ]);
+        return operation(scope);
+      });
+    };
     return this.withSessionLifecycleMutations(
       userId,
       [placement.sessionId, placement.parentSessionId],
       () =>
-        this._withScopedSessionMutation(userId, placement.sessionId, operation, async () => {
-          await this._assertParentSessionWritable(userId, placement.parentSessionId);
-          return this.placeSessionScope(userId, placement, persistenceContext);
-        }),
+        this._withScopedSessionMutation(
+          userId,
+          placement.sessionId,
+          withAvailableDirectory,
+          async () => {
+            await this._assertParentSessionWritable(userId, placement.parentSessionId);
+            return this.placeSessionScope(userId, placement, persistenceContext);
+          },
+        ),
     );
   }
 

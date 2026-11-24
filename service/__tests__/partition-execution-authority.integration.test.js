@@ -19,7 +19,7 @@ import {
   SESSION_DELETION_STAGE,
   sessionBranchDeletionKey,
 } from "@noobot/workspace-protocol/session-tombstone";
-import { writeFile } from "node:fs/promises";
+import { stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MESSAGE_EVENT_TYPE, MESSAGE_RUNTIME_PRODUCER } from "@noobot/event-protocol/message-event";
@@ -31,6 +31,7 @@ import { createTestRuntimeContext } from "../../agent/__tests__/helpers/test-run
 import { canonicalActivity } from "../../agent/__tests__/session/session-repository-boundary.summaries.fixtures.js";
 import { SessionTurnPersister } from "../../agent/src/bot/execution/turn-persister.js";
 import { commitSummaryCheckpoint } from "../../agent/src/bot/session/summary-checkpoint-committer.js";
+import { resolveSessionArtifactMutationLock } from "../../agent/src/session/session-artifact-files.js";
 import {
   createPartitionBotFixture,
   firstSend,
@@ -359,7 +360,10 @@ for (const allowedRoot of [
     assert.equal((await bot.session.applyTurnLifecycleEvent(child)).applied, true);
     await bot.close();
     const directory = child.persistenceScope.relativeDir.split("/");
-    await writeFile(join(workspaceRoot, identity.userId, ...directory, "CURRENT"), "broken head");
+    const sessionDir = join(workspaceRoot, identity.userId, ...directory);
+    const artifactLock = resolveSessionArtifactMutationLock(sessionDir);
+    await stat(artifactLock);
+    await writeFile(join(sessionDir, "CURRENT"), "broken head");
     const { bot: restarted } = await service.rebuildRuntimeConfig();
     const selection = { userId: identity.userId, executionId: first.executionId };
     const incomplete = await restarted.session.getExecution(selection);
@@ -388,12 +392,7 @@ for (const allowedRoot of [
     assert.notEqual(deleted.reason, "execution_query_incomplete");
     const repo = restarted.sessionRuntime.repositories.sessionRepository;
     await repo.removeDeletedSessionDirectory(identity.userId, directory);
-    await repo.advanceSessionBranchDeletion(
-      identity.userId,
-      sessionBranchDeletionKey([sessionId]),
-      SESSION_DELETION_STAGE.DIRECTORIES,
-    );
-    if (allowedRoot === AGENT_SCOPED_SESSION_ROOTS[0]) return;
+    await assert.rejects(stat(artifactLock), { code: "ENOENT" });
     const replacementId = "replacement-child";
     const replacement = {
       ...child,
@@ -407,7 +406,20 @@ for (const allowedRoot of [
         relativeDir,
       }),
     };
+    if (allowedRoot !== AGENT_SCOPED_SESSION_ROOTS[0]) {
+      await assert.rejects(restarted.session.applyTurnLifecycleEvent(replacement), {
+        code: "SESSION_BRANCH_DELETION_CONFLICT",
+      });
+      await assert.rejects(stat(artifactLock), { code: "ENOENT" });
+    }
+    await repo.advanceSessionBranchDeletion(
+      identity.userId,
+      sessionBranchDeletionKey([sessionId]),
+      SESSION_DELETION_STAGE.DIRECTORIES,
+    );
+    if (allowedRoot === AGENT_SCOPED_SESSION_ROOTS[0]) return;
     assert.equal((await restarted.session.applyTurnLifecycleEvent(replacement)).applied, true);
+    await stat(artifactLock);
     const reused = await restarted.session.getExecution({
       userId: identity.userId,
       executionId: replacement.executionId,

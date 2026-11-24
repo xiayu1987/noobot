@@ -12,6 +12,7 @@ import { requireSessionCaller } from "@noobot/shared/session-caller";
 import { partitionJournalError } from "@noobot/session-protocol/partition-journal";
 import { sessionDeletionStagingName } from "@noobot/workspace-protocol/session-tombstone";
 import { withSessionEventRetirement } from "@noobot/runtime-events";
+import { resolveSessionArtifactMutationLock } from "../../session-artifact-files.js";
 
 async function deletionDirectoryExists(directory) {
   try {
@@ -21,6 +22,15 @@ async function deletionDirectoryExists(directory) {
   } catch (error) {
     if (error.code === "ENOENT") return false;
     throw error;
+  }
+}
+
+async function removeSessionArtifactMutationLock(sessionDir) {
+  const lock = resolveSessionArtifactMutationLock(sessionDir);
+  try {
+    if ((await fsLstat(lock)).isFile()) await fsRm(lock);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
   }
 }
 
@@ -168,6 +178,7 @@ class SessionCrudMethods {
       await syncStorageDirectory(parent);
       await fsRm(staged, { recursive: true });
     }
+    await removeSessionArtifactMutationLock(sessionDir);
     await syncStorageDirectory(parent);
   }
 

@@ -16,6 +16,7 @@ import {
   attachSessionRoot,
 } from "../../agent/src/artifacts/service/attachment-storage-layout.js";
 import { getFsAdapter, setFsAdapter } from "../../agent/src/shared/storage/fs-adapter.js";
+import { resolveSessionArtifactMutationLock } from "../../agent/src/session/session-artifact-files.js";
 import { createPartitionBotRuntime, identity } from "./partition-bot-assembly.test-helpers.js";
 import {
   createDeletionHttpFixture,
@@ -77,9 +78,10 @@ test("terminate while processing a session deletion", async (t) => {
     writeSync(1, `crash:${crashStage}:${window}\n`);
     process.kill(process.pid, "SIGKILL");
   };
-  if (window === "recursive-rm" || window === "after-rename") {
+  if (["recursive-rm", "after-rename", "before-lock-rm"].includes(window)) {
     const { sessionDir } = await bot.session.locateSessionScope(identity);
     const staged = join(sessionDir, "..", sessionDeletionStagingName(sessionId));
+    const artifactLock = resolveSessionArtifactMutationLock(sessionDir);
     const fs = getFsAdapter();
     setFsAdapter({
       ...fs,
@@ -88,6 +90,7 @@ test("terminate while processing a session deletion", async (t) => {
         if (window === "after-rename" && source === sessionDir && target === staged) terminate();
       },
       async rm(target, options) {
+        if (window === "before-lock-rm" && target === artifactLock) terminate();
         if (window === "recursive-rm" && target === staged && options?.recursive) {
           await rm(join(target, PARTITION_JOURNAL_PUBLICATION_LOCK));
           terminate();

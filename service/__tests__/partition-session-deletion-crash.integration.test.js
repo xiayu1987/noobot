@@ -30,6 +30,7 @@ import {
 } from "../../agent/src/artifacts/service/attachment-storage-layout.js";
 import { recoverWorkspaceAttachmentCatalogs } from "../../agent/src/workspace-lifecycle/attachment-catalog-upgrade.js";
 import { readSessionDirectory } from "../../agent/src/workspace-lifecycle/session-directory-walk.js";
+import { resolveSessionArtifactMutationLock } from "../../agent/src/session/session-artifact-files.js";
 import { createPartitionBotFixture, identity } from "./partition-bot-assembly.test-helpers.js";
 import {
   createDeletionHttpFixture,
@@ -123,6 +124,7 @@ test("a parent deletion cannot take over its child's interrupted directory clean
 const windows = [
   [DIRECTORIES, "after-rename"],
   [DIRECTORIES, "recursive-rm"],
+  [DIRECTORIES, "before-lock-rm"],
   [ATTACHMENTS, "partial-attachment-rm"],
   [SHORT_MEMORY, "before-memory-publish"],
   ...stages.map((stage) => [stage, "before-ack"]),
@@ -150,6 +152,7 @@ for (const [crashStage, window] of windows) {
     assert.ok(operation.pluginHandlerIds.length > 0);
     const basePath = bot.getWorkspacePath(userId);
     const deletedDirectory = join(basePath, ...operation.targets[0].directory);
+    const artifactLock = resolveSessionArtifactMutationLock(deletedDirectory);
     const stagingName = sessionDeletionStagingName(operation.targets[0].directory.at(-1));
     const staging = join(dirname(deletedDirectory), stagingName);
     const readTree = () => treeRepo.getTree(userId);
@@ -164,7 +167,9 @@ for (const [crashStage, window] of windows) {
     const finished = (stage) =>
       stages.indexOf(stage) < crashIndex || (stage === crashStage && window === "before-ack");
     await assert.rejects(stat(deletedDirectory), { code: "ENOENT" });
-    if (crashStage === DIRECTORIES && window !== "before-ack") {
+    if (finished(DIRECTORIES)) await assert.rejects(stat(artifactLock), { code: "ENOENT" });
+    else await stat(artifactLock);
+    if (crashStage === DIRECTORIES && ["after-rename", "recursive-rm"].includes(window)) {
       await stat(join(staging, PARTITION_JOURNAL_HEAD_FILE));
       const lock = join(staging, PARTITION_JOURNAL_PUBLICATION_LOCK);
       if (window === "recursive-rm") await assert.rejects(stat(lock), { code: "ENOENT" });
@@ -322,6 +327,7 @@ for (const [crashStage, window] of windows) {
     );
     assert.deepEqual(await readOperation(), { ...operation, nextStage: COMPLETE });
     await assert.rejects(stat(deletedDirectory), { code: "ENOENT" });
+    await assert.rejects(stat(artifactLock), { code: "ENOENT" });
     await assert.rejects(stat(staging), { code: "ENOENT" });
     assert.deepEqual(Object.keys((await readTree()).nodes), [retainedId]);
     assert.deepEqual(await bot.session.listSessionIds({ userId }), [retainedId]);

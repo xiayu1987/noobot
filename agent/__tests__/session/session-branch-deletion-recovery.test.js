@@ -19,6 +19,7 @@ import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { withRuntimeEventsEnv } from "@noobot/runtime-events/testing";
 import { SessionMutationCoordinator } from "../../src/session/session-mutation-coordinator.js";
+import { resolveSessionArtifactMutationLock } from "../../src/session/session-artifact-files.js";
 import {
   scopedSessionPageIdentity,
   treeSessionPageScope,
@@ -200,7 +201,7 @@ test("deletion and placement in different repository instances preserve the sess
   });
 });
 
-test("deleting a child releases directory-scoped readers before removal and preserves the parent", async () => {
+test("deleting a child releases its readers and reclaims its mutation lock while preserving the parent", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const authoritySessionId = "parent";
@@ -225,6 +226,10 @@ test("deleting a child releases directory-scoped readers before removal and pres
         sessionId,
         repo.treePersistenceContext(userId, sessionId),
       );
+      const childLock = resolveSessionArtifactMutationLock(sessionDir);
+      const parentLock = resolveSessionArtifactMutationLock(path.dirname(sessionDir));
+      await access(childLock);
+      await access(parentLock);
       const scoped = scopedSessionPageIdentity({ userId, authoritySessionId, sessionDir }, null);
       const parent = treeSessionPageScope(userId, authoritySessionId);
       const openPage = (identity, close) =>
@@ -259,6 +264,8 @@ test("deleting a child releases directory-scoped readers before removal and pres
         { released: true },
       );
       await assert.rejects(access(sessionDir), { code: "ENOENT" });
+      await assert.rejects(access(childLock), { code: "ENOENT" });
+      await access(parentLock);
     } finally {
       await runtime.close();
     }
