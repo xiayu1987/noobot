@@ -110,8 +110,19 @@ function createUpgradeProgress(reportProgress, { upgradeId, upgradeIndex, upgrad
 
 async function prepareLayoutUpgrades(upgrades, options) {
   const prepared = new Map();
-  for (const upgrade of upgrades.filter((item) => item.preflight)) {
-    prepared.set(upgrade.id, await LAYOUT_UPGRADE_HANDLERS[upgrade.owner](options));
+  for (const [index, upgrade] of upgrades.entries()) {
+    if (!upgrade.preflight) continue;
+    prepared.set(
+      upgrade.id,
+      await LAYOUT_UPGRADE_HANDLERS[upgrade.owner]({
+        ...options,
+        onSessionProcessed: createUpgradeProgress(options.reportProgress, {
+          upgradeId: upgrade.id,
+          upgradeIndex: index + 1,
+          upgradeCount: upgrades.length,
+        }),
+      }),
+    );
   }
   return prepared;
 }

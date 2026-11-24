@@ -22,6 +22,8 @@ import {
 async function* sessionInventory(base) {
   for await (const { file, held, relativePath, reason } of readQuarantineInventory(base)) {
     if (!reason.moved || reason.restored) continue;
+    const attachmentRoot = path.join(WORKSPACE_LAYOUT.SCOPED_ATTACH_DIR, path.sep);
+    if (relativePath.startsWith(attachmentRoot)) continue;
     const record = classifyHistoricalMigrationQuarantine(reason);
     if (!record.sessionStorage) continue;
     const id = hash(

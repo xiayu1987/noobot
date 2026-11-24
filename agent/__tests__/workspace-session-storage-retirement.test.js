@@ -191,6 +191,86 @@ test("unsupported sessions do not block layout upgrade or readiness and are remo
   assert.deepEqual(await upgradeWorkspaceLayout({ base, scopedSessionRoots: [] }), []);
 });
 
+test("old session attachments are retained before catalog upgrade without parsing legacy bytes", async (t) => {
+  const base = await fixture(t);
+  await oldSession(base, "old");
+  const attachments = join(base, WORKSPACE_LAYOUT.SCOPED_ATTACH_DIR, "old");
+  await mkdir(join(attachments, "model"), { recursive: true });
+  await writeFile(join(attachments, "model", "attachments.json"), "unsupported index bytes");
+  await writeFile(join(attachments, "model", "body.txt"), "retained body");
+  const state = join(base, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE);
+  await writeFile(state, JSON.stringify({ version: 43 }));
+  const progress = [];
+  const results = await upgradeWorkspaceLayout({
+    base,
+    backupBase: join(base, "backups"),
+    scopedSessionRoots: [],
+    targetStorageBudget: createTestPartitionStorageBudget(),
+    reportProgress: (value) => progress.push(value),
+  });
+  assert.equal(
+    results.some((item) => item.failed),
+    false,
+    JSON.stringify(results),
+  );
+  assert.equal(results.find((item) => item.id === "attachment-catalog-v45").result.migrated, 0);
+  assert.ok(progress.some((value) => value.processedSessions === 1));
+  const records = await listQuarantinedUnits({ base });
+  const held = records.find(
+    (item) => item.path === join(WORKSPACE_LAYOUT.SCOPED_ATTACH_DIR, "old"),
+  );
+  assert.equal(held.sessionStorage.status, "unsupported-format");
+  assert.equal(
+    await readFile(join(base, held.quarantinePath, "model", "attachments.json"), "utf8"),
+    "unsupported index bytes",
+  );
+  assert.equal(
+    await readFile(join(base, held.quarantinePath, "model", "body.txt"), "utf8"),
+    "retained body",
+  );
+  await assertWorkspaceStorageReady(base, "test");
+  assert.deepEqual(await upgradeWorkspaceLayout({ base, scopedSessionRoots: [] }), []);
+  const sessions = await listQuarantinedSessions(base);
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].sessionId, "old");
+  assert.notEqual(sessions[0].quarantinePath, held.quarantinePath);
+});
+
+test("retirement resumes after attachments move but session move is interrupted", async (t) => {
+  const base = await fixture(t);
+  const session = await oldSession(base, "interrupted");
+  const attachments = join(base, WORKSPACE_LAYOUT.SCOPED_ATTACH_DIR, "interrupted");
+  await mkdir(attachments, { recursive: true });
+  await writeFile(join(attachments, "body.txt"), "retained body");
+  const adapter = getFsAdapter();
+  setFsAdapter({
+    ...adapter,
+    async rename(from, to) {
+      if (from === session)
+        throw Object.assign(new Error("interrupted session move"), { code: "EIO" });
+      return adapter.rename(from, to);
+    },
+  });
+  try {
+    await assert.rejects(retireUnsupportedSessionStorage({ base, scopedSessionRoots: [] }), {
+      code: "EIO",
+    });
+  } finally {
+    setFsAdapter(adapter);
+  }
+  await retireUnsupportedSessionStorage({ base, scopedSessionRoots: [] });
+  const records = await listQuarantinedUnits({ base });
+  assert.equal(records.length, 2);
+  const held = records.find(
+    (item) => item.path === join(WORKSPACE_LAYOUT.SCOPED_ATTACH_DIR, "interrupted"),
+  );
+  assert.equal(
+    await readFile(join(base, held.quarantinePath, "body.txt"), "utf8"),
+    "retained body",
+  );
+  await assertWorkspaceQuarantineEmpty(base);
+});
+
 test("non-session quarantine evidence remains unclassified and keeps its own readiness failure", async (t) => {
   const base = await fixture(t);
   await quarantineMigrationUnit({

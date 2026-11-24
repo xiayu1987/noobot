@@ -34,15 +34,13 @@ export async function withSessionDialogMessageRecords(
 ) {
   requireDialogProcessKey(dialogProcessId);
   if (!isFunction(consume)) throw new TypeError("Dialog message stream requires a consumer");
-  return this.sessionRepo.withSessionLifecycleMutation(userId, sessionId, async () => {
-    await using reader = await this.sessionRepo.requireSessionReader(userId, sessionId, {
-      persistenceContext,
-    });
-    const records = readDialogRecords(reader, dialogProcessId);
-    try {
-      return await consume(records);
-    } finally {
-      await records.return();
-    }
+  await using reader = await this.sessionRepo.requireSessionReader(userId, sessionId, {
+    persistenceContext,
   });
+  const records = readDialogRecords(reader, dialogProcessId);
+  try {
+    return await consume(records);
+  } finally {
+    await records.return();
+  }
 }

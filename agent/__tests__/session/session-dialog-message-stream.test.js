@@ -6,8 +6,88 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
+import { createSessionRepositoryFixture } from "../helpers/session-repository-fixture.js";
 
 const identity = { userId: "u1", sessionId: "s1", dialogProcessId: "d1", persistenceContext: {} };
+
+test("slow dialog consumption allows concurrent message acceptance and refresh", async (t) => {
+  const { services } = await createSessionRepositoryFixture(t);
+  const { repository, persistenceContext } = services;
+  repository.mutationCoordinator.readTiming = () => ({ timeoutMs: 200, pollMs: 2 });
+  const service = new SessionMessageService({
+    sessionRepo: repository,
+    now: repository.now,
+    allocateDialogProcessId: () => "accepted-dialog",
+  });
+  const entered = Promise.withResolvers();
+  const resume = Promise.withResolvers();
+  const stream = service.withSessionDialogMessageRecords(
+    { ...identity, dialogProcessId: "accepted-dialog", persistenceContext },
+    async (records) => {
+      entered.resolve();
+      await resume.promise;
+      const captured = [];
+      for await (const record of records) captured.push(record);
+      return captured;
+    },
+  );
+  try {
+    await entered.promise;
+    const results = await Promise.allSettled([
+      service.applyTurnLifecycleEvent({
+        userId: identity.userId,
+        sessionId: identity.sessionId,
+        persistenceContext,
+        turnScopeId: "concurrent-send",
+        commandId: "concurrent-send",
+        causationId: "concurrent-send",
+        presentationMessageId: "presentation-concurrent-send",
+        eventType: TURN_EVENT.ACTION_ACCEPTED,
+        phase: TURN_PHASE.ACTION,
+        action: "send",
+        ...createAcceptedAgentExecution("concurrent-send", identity.sessionId),
+        userMessage: {
+          content: "send while reading",
+          userMessageId: "um_send",
+          messageOrigin: "natural",
+        },
+        expectedRevision: 0,
+        sessionCaller: SESSION_CALLER.USER,
+      }),
+      (async () => {
+        await using reader = await repository.requireSessionReader(
+          identity.userId,
+          identity.sessionId,
+          {
+            persistenceContext,
+          },
+        );
+        return await reader.readMetadata();
+      })(),
+    ]);
+    assert.equal(results[0].status, "fulfilled", results[0].reason?.message);
+    assert.equal(results[1].status, "fulfilled", results[1].reason?.message);
+    assert.equal(results[0].value.applied, true);
+    await using current = await repository.requireSessionReader(
+      identity.userId,
+      identity.sessionId,
+      {
+        persistenceContext,
+      },
+    );
+    assert.equal(
+      (await current.readDialogTurnPage({ dialogProcessId: "accepted-dialog", after: 0 }))
+        .turnScopeIds[0],
+      "concurrent-send",
+    );
+  } finally {
+    resume.resolve();
+    assert.deepEqual(await stream, []);
+  }
+});
 
 function fixture({ readDialogTurnPage, readTurnPage }) {
   let opens = 0;
@@ -15,11 +95,6 @@ function fixture({ readDialogTurnPage, readTurnPage }) {
   const service = new SessionMessageService({
     now: () => "2026-01-01T00:00:00.000Z",
     sessionRepo: {
-      async withSessionLifecycleMutation(userId, sessionId, run) {
-        assert.equal(userId, identity.userId);
-        assert.equal(sessionId, identity.sessionId);
-        return run();
-      },
       async requireSessionReader(userId, sessionId, options) {
         assert.equal(userId, identity.userId);
         assert.equal(sessionId, identity.sessionId);

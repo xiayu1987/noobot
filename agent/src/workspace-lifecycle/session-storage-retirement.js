@@ -9,18 +9,35 @@ import { SESSION_STORAGE_QUARANTINE_STATUS } from "@noobot/workspace-protocol/mi
 import { inspectSessionDirectory, ignoreSessionProgress } from "./session-directory-walk.js";
 import { assertWorkspaceQuarantineEmpty, quarantineMigrationUnit } from "./migration-quarantine.js";
 import { withSessionStorageAuthorityLock } from "../session/session-storage-authority.js";
+import { fsLstat } from "../shared/storage/fs-adapter.js";
+import { attachSessionRoot } from "../artifacts/service/attachment-storage-layout.js";
 
 async function quarantineSessionStorage({ base, sessionDir, format, status, error, parentPath }) {
-  return withSessionStorageAuthorityLock(sessionDir, () =>
-    quarantineMigrationUnit({
+  return withSessionStorageAuthorityLock(sessionDir, async () => {
+    const sessionStorage = { format, status, ...(parentPath === undefined ? {} : { parentPath }) };
+    const attachments = attachSessionRoot(base, path.basename(sessionDir));
+    const present = await fsLstat(attachments).catch((cause) => {
+      if (cause.code !== "ENOENT") throw cause;
+      return null;
+    });
+    if (present !== null)
+      await quarantineMigrationUnit({
+        base,
+        kind: "session-storage-retirement",
+        relativePath: path.relative(base, attachments),
+        move: true,
+        sessionStorage,
+        error,
+      });
+    return quarantineMigrationUnit({
       base,
       kind: "session-storage-retirement",
       relativePath: path.relative(base, sessionDir),
       move: true,
-      sessionStorage: { format, status, ...(parentPath === undefined ? {} : { parentPath }) },
+      sessionStorage,
       error,
-    }),
-  );
+    });
+  });
 }
 
 export async function quarantineSessionStorageTree(options) {
