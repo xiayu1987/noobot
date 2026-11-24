@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { devices } from "@playwright/test";
-import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
+import {
+  resolveRuntimeEventFile,
+  resolveRuntimeEventsConfig,
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_SCOPES,
+} from "@noobot/runtime-events";
 import { test, expect, installE2eModelPreferences } from "../fixtures/noobot.fixture.js";
 import { connectThroughUi, readE2eCredentials } from "../fixtures/auth.fixture.js";
 import {
@@ -13,11 +18,7 @@ import {
   waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
 import { assertNoForbiddenErrors } from "../helpers/log-assertions.js";
-import {
-  readJsonLines,
-  sessionRoot,
-  waitForSessionExecutionEventTree,
-} from "../helpers/persistence-audit.js";
+import { readJsonLines, waitForSessionExecutionEventTree } from "../helpers/persistence-audit.js";
 import { waitForCommand } from "../helpers/scenario-assertions.js";
 import { findProtocolObjects } from "../helpers/websocket-capture.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
@@ -173,29 +174,30 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
       { timeout: 15000 },
     )
     .toBe(true);
-  const transportLogPath = path.join(
-    await sessionRoot(noobot.userId, noobot.sessionId),
-    "events/transport.jsonl",
+  const transportLogPath = resolveRuntimeEventFile(
+    {
+      scope: RUNTIME_EVENT_SCOPES.SYSTEM,
+      source: "frontend",
+      userId: noobot.userId,
+      category: RUNTIME_EVENT_CATEGORIES.TRANSPORT,
+    },
+    resolveRuntimeEventsConfig(),
   );
+  const isArtifactRoute = (record) =>
+    record?.event === "frontend.runtimeStream.routeCompleted" &&
+    record?.data?.eventType === "plugin.artifact.committed" &&
+    record?.data?.targetIdentity?.sessionId === noobot.sessionId &&
+    record?.data?.targetIdentity?.turnScopeId === command.identity.turnScopeId;
   await expect
     .poll(
       async () => {
         const records = await readJsonLines(transportLogPath);
-        return records.some(
-          (record) =>
-            record?.event === "frontend.runtimeStream.routeCompleted" &&
-            record?.data?.eventType === "plugin.artifact.committed" &&
-            record?.data?.routed === true,
-        );
+        return records.some((record) => isArtifactRoute(record) && record.data.routed === true);
       },
       { timeout: 15000 },
     )
     .toBe(true);
-  const artifactRoutes = (await readJsonLines(transportLogPath)).filter(
-    (record) =>
-      record?.event === "frontend.runtimeStream.routeCompleted" &&
-      record?.data?.eventType === "plugin.artifact.committed",
-  );
+  const artifactRoutes = (await readJsonLines(transportLogPath)).filter(isArtifactRoute);
   expect(artifactRoutes).toHaveLength(1);
   const liveRoute = artifactRoutes[0];
   expect(liveRoute.data).toMatchObject({

@@ -14,7 +14,11 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { randomUUID } from "node:crypto";
 import { isPlainObject, text } from "@noobot/shared/value";
 import { rotatedPluginLogName, isRotatedPluginLogName } from "@noobot/plugin-protocol/log-artifact";
-import { findDeletedRunSession, withHarnessRunsMutation } from "./run-mutation.js";
+import {
+  findDeletedRunSession,
+  manifestSessionIds,
+  withHarnessRunsMutation,
+} from "./run-mutation.js";
 
 const manifestCache = new Map();
 const manifestWriteTimers = new Map();
@@ -72,12 +76,7 @@ async function updateManifestLocked({
   const current = manifestCache.get(key)?.value ?? manifest;
 
   const next = mergeFn(current, ctx, patch, options, capabilityRuntime);
-  if (
-    next.sessionId !== paths.sessionId ||
-    (next.parentSessionId ?? null) !== paths.parentSessionId
-  ) {
-    throw new Error(`Harness manifest must preserve ownership: ${paths.runDir}`);
-  }
+  assertRunOwnership(paths, next);
   manifestCache.set(key, { run: paths, value: next, updatedAt: Date.now() });
 
   const existingTimer = manifestWriteTimers.get(key);
@@ -177,12 +176,10 @@ async function assertRunSessionActive(run) {
 }
 
 function assertRunOwnership(run, manifest) {
-  if (
-    !isPlainObject(manifest) ||
-    manifest.sessionId !== run.sessionId ||
-    (manifest.parentSessionId ?? null) !== run.parentSessionId
-  )
+  const [sessionId, parentSessionId = null] = manifestSessionIds(manifest);
+  if (sessionId !== run.sessionId || parentSessionId !== run.parentSessionId) {
     throw new Error(`Harness run ownership mismatch: ${run.runDir}`);
+  }
 }
 
 export function initializeRun(run) {

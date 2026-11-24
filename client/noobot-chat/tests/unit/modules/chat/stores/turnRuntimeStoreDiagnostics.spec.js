@@ -39,7 +39,7 @@ describe("turnRuntimeStoreDiagnostics identity", () => {
       expect(diagnostics).not.toHaveProperty("nodeSessionId");
       expect(diagnostics).not.toHaveProperty("parentSessionId");
       const record = buildLazyDebugRecord("turn-runtime-diagnostics", "e", diagnostics);
-      expect(record.sessionId).toBe("child-1");
+      expect(record.data.targetIdentity.sessionId).toBe("child-1");
       expect(record).not.toHaveProperty("parentSessionId");
     }
   });

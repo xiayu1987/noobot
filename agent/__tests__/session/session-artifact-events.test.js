@@ -16,6 +16,10 @@ import {
   PLUGIN_ARTIFACT_SEQUENCE_DOMAIN,
   PLUGIN_ARTIFACT_EVENT,
 } from "@noobot/event-protocol/plugin-artifact-event";
+import {
+  WORKFLOW_RUNTIME_EVENT,
+  WORKFLOW_SEQUENCE_DOMAIN,
+} from "@noobot/event-protocol/workflow-runtime-event";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import {
   createTestSessionServices,
@@ -139,6 +143,44 @@ async function assertOutboxCommits(reader, initialEvents, commits) {
     commits.map(({ envelope }) => envelope.identity.eventId),
   );
 }
+
+test("workflow node facts persist in the parent turn without creating a child turn there", async (t) => {
+  const { service, read, persistenceContext, initialEvents } = await fixture(t);
+  const request = {
+    persistenceContext,
+    userId: "admin",
+    sessionId: "session-1",
+    family: EVENT_FAMILY.WORKFLOW_RUNTIME,
+    identity: {
+      eventType: WORKFLOW_RUNTIME_EVENT.NODE_STATE,
+      turnScopeId: "turn-1",
+      executionId: "node-1",
+    },
+    causality: { commandId: "workflow-node:node-1", correlationId: "run-1" },
+    ordering: { domain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE, scopeId: "run-1", revision: 1 },
+    producer: { type: "plugin", id: "workflow" },
+    payload: {
+      workflowRunId: "run-1",
+      nodeSessionId: "child-session",
+      turnScopeId: "workflow-node:node-1",
+      status: "running",
+      activeChildExecutionId: "agent:node-1",
+      attemptExecutionIds: ["agent:node-1"],
+    },
+  };
+  await assert.rejects(
+    service.commitAuthorityEvent({
+      ...request,
+      identity: { ...request.identity, turnScopeId: request.payload.turnScopeId },
+    }),
+    /Authority event requires a visible turn/,
+  );
+  const committed = await service.commitAuthorityEvent(request);
+  assert.equal(committed.committed, true);
+  assert.equal(committed.envelope.identity.turnScopeId, "turn-1");
+  assert.equal(committed.envelope.payload.turnScopeId, "workflow-node:node-1");
+  await assertOutboxCommits(await read(), initialEvents, [committed]);
+});
 
 test("plugin artifact commits persist an independent Session artifact fact", async (t) => {
   const { service, read, persistenceContext, initialVersion, initialEvents } = await fixture(t);

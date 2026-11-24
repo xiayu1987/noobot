@@ -71,7 +71,7 @@ import { createReconnectCoordinator } from "../runtime/session/reconnectCoordina
 import { installSessionLifecycleHydration } from "../runtime/session/sessionLifecycleHydration.js";
 import { createRuntimeEventProjector } from "../runtime/session/runtimeEventProjector.js";
 import { requireFunctionDependencies, text } from "@noobot/shared/value";
-import { scopeSessionLogRecord } from "../../debug/loggers/lazyDebugSink.js";
+import { createSystemSessionLogObservation } from "@noobot/runtime-events/session-log-protocol";
 
 export function useChatSession({
   userId,
@@ -213,7 +213,7 @@ export function useChatSession({
       { ...normalizedEntry, ts: updatedAt },
     ].slice(-80);
     sessionLogWebSocketClient.log(
-      scopeSessionLogRecord({
+      createSystemSessionLogObservation({
         category: "state",
         event: "conversation.state",
         sessionId,
@@ -353,7 +353,7 @@ export function useChatSession({
         primaryAction: state.primaryAction || "",
       }));
       sessionLogWebSocketClient.log(
-        scopeSessionLogRecord({
+        createSystemSessionLogObservation({
           category: "debug",
           level: "debug",
           debugType: "workflow-diagnostics",
@@ -379,7 +379,7 @@ export function useChatSession({
 
   function logSessionSystemEvent(event, payload = {}) {
     sessionLogWebSocketClient.log(
-      scopeSessionLogRecord({
+      createSystemSessionLogObservation({
         category: "system",
         event,
         sessionId: payload?.sessionId || activeSessionId.value,

@@ -439,17 +439,9 @@ export async function waitForModelInvocationTraces(
   return traces;
 }
 
-export async function readAttachmentIndex(userId, sessionId, attachmentSource) {
-  return readJson(
-    path.join(
-      workspaceRoot(),
-      userId,
-      "runtime/attach/scoped",
-      sessionId,
-      attachmentSource,
-      "attachments.json",
-    ),
-  );
+export async function readAttachmentRecords(userId, sessionId, attachmentSource) {
+  await using runtime = await openSessionAuditRuntime();
+  return runtime.attachmentService.readAttachmentMetas({ userId, sessionId, attachmentSource });
 }
 
 async function findFileMutationRecords(directory) {

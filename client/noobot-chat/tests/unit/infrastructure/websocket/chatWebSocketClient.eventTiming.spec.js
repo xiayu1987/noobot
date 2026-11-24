@@ -80,12 +80,18 @@ describe("chatWebSocketClient event processing timing", () => {
       expect.objectContaining({
         debugType: "event-processing-timing",
         event: "frontend.websocket.eventProcessingTiming",
-        sessionId: "session-timing",
-        turnScopeId: "turn-timing",
+        scope: "system",
       }),
     );
+    expect(record).not.toHaveProperty("sessionId");
     expect(record.data).toEqual(
       expect.objectContaining({
+        targetIdentity: {
+          sessionId: "session-timing",
+          parentSessionId: "",
+          dialogProcessId: "dialog-timing",
+          turnScopeId: "turn-timing",
+        },
         eventId: "event-timing",
         protocolEvent: MESSAGE_EVENT_WIRE_EVENT,
         owner: "stream_handler",

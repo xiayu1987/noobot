@@ -115,6 +115,7 @@ test("session cleanup preserves missing or invalid ownership evidence and retrie
     { parentSessionId: "s1" },
     { sessionId: "../bad" },
     { sessionId: "s1", parentSessionId: false },
+    { sessionId: "s1", parentSessionId: " " },
   ]) {
     const raw = JSON.stringify(manifest);
     await fs.writeFile(manifestPath, raw);
@@ -166,7 +167,7 @@ test("cleanupOldRuns keeps runs inside the grace window even beyond maxRuns", as
 test("cleanupRunsBySessionIds only matches manifest session ownership", async (t) => {
   const basePath = await createBase(t);
   await createRun(basePath, "s-direct");
-  await createRun(basePath, "by-session", { manifest: { sessionId: "s1" } });
+  await createRun(basePath, "by-session", { manifest: { sessionId: "s1", parentSessionId: "" } });
   await createRun(basePath, "by-parent", {
     manifest: { sessionId: "child", parentSessionId: "s2" },
   });
@@ -205,6 +206,25 @@ test("cleanupRunsBySessionIds rejects missing session ids", async (t) => {
   const basePath = await createBase(t);
   await assert.rejects(() => cleanupRunsBySessionIds(basePath, []), TypeError);
   await assert.rejects(() => cleanupRunsBySessionIds(basePath, "s1"), TypeError);
+});
+
+test("an existing root run with an empty parent session ID can be resumed", async (t) => {
+  const basePath = await createBase(t);
+  const ctx = { dialogProcessId: "existing", sessionId: "s1" };
+  const run = createRunPaths(ctx, { basePath });
+  await createRun(basePath, run.runId, { manifest: { sessionId: "s1", parentSessionId: "" } });
+
+  await initializeRun(run);
+  await updateManifestCached(
+    run,
+    ctx,
+    {},
+    {},
+    null,
+    (current) => ({ ...current, resumed: true }),
+    0,
+  );
+  assert.equal((await readJson(run.manifest)).resumed, true);
 });
 
 async function markDeleted(basePath, sessionId) {

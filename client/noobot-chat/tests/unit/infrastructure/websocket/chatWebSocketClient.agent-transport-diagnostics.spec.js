@@ -48,10 +48,9 @@ describe("agent transport command diagnostics", () => {
       expect(record).toMatchObject({
         category: "debug",
         debugType: AGENT_TRANSPORT_DEBUG_TYPE,
-        scope: "session",
-        ...command.identity,
+        scope: "system",
         data: {
-          ...command.identity,
+          targetIdentity: command.identity,
           commandId: command.commandId,
           commandType: command.commandType,
           transport: "websocket",

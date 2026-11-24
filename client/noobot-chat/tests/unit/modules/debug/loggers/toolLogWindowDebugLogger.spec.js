@@ -30,10 +30,19 @@ describe("toolLogWindowDebugLogger", () => {
         category: "debug",
         level: "debug",
         debugType: "tool-log-window",
-        sessionId: "session-1",
-        data: expect.objectContaining({ selectedCount: 10 }),
+        scope: "system",
+        data: expect.objectContaining({
+          targetIdentity: {
+            sessionId: "session-1",
+            parentSessionId: "",
+            dialogProcessId: "dp-1",
+            turnScopeId: "turn-1",
+          },
+          selectedCount: 10,
+        }),
       }),
     );
+    expect(debug.mock.results[0].value).not.toHaveProperty("sessionId");
     expect(Object.hasOwn(debug.mock.results[0].value.data, "debugType")).toBe(false);
   });
 

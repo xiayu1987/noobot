@@ -5,6 +5,7 @@
  */
 import { getCurrentScope, onScopeDispose } from "vue";
 import { createLocalSessionRunEvent } from "@noobot/session-protocol/runtime-event";
+import { createSystemSessionLogObservation } from "@noobot/runtime-events/session-log-protocol";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { createAssistantMessageHelpers } from "../runtime/engine/assistantMessage.js";
 import { createChatEngineConversationState } from "../runtime/engine/conversationState.js";
@@ -179,15 +180,16 @@ export function useChatEngine({
   const logSessionStateEvent = (event, name, data) => {
     const sessionId = text(event?.sessionId);
     if (!sessionId) return false;
-    return sessionLogWebSocketClient.log({
-      scope: "session",
-      category: "state",
-      event: name,
-      sessionId,
-      dialogProcessId: text(event?.dialogProcessId),
-      turnScopeId: text(event?.turnScopeId),
-      data,
-    });
+    return sessionLogWebSocketClient.log(
+      createSystemSessionLogObservation({
+        category: "state",
+        event: name,
+        sessionId,
+        dialogProcessId: text(event?.dialogProcessId),
+        turnScopeId: text(event?.turnScopeId),
+        data,
+      }),
+    );
   };
   const applyRunStateEvent = (input) => {
     const event = input.type.startsWith("local_")

@@ -86,10 +86,14 @@ describe("useChatSession reconnect replay", () => {
         category: "debug",
         debugType: "resend",
         event: "resend.injected",
-        sessionId: "s-log",
-        dialogProcessId: "dp-log",
-        turnScopeId: "ts-log",
+        scope: "system",
         data: expect.objectContaining({
+          targetIdentity: {
+            sessionId: "s-log",
+            parentSessionId: "",
+            dialogProcessId: "dp-log",
+            turnScopeId: "ts-log",
+          },
           event: "resend.injected",
           detail: "through-session-log-client",
         }),
@@ -768,8 +772,14 @@ describe("useChatSession reconnect replay", () => {
         expect.objectContaining({
           category: "system",
           event: "reconnect.failed",
-          sessionId: "s-cross-device",
+          scope: "system",
           data: expect.objectContaining({
+            targetIdentity: {
+              sessionId: "s-cross-device",
+              parentSessionId: "",
+              dialogProcessId: "",
+              turnScopeId: "",
+            },
             event: "reconnect.failed",
             error: "socket reconnect failed",
           }),

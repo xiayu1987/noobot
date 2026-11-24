@@ -28,9 +28,18 @@ describe("resendDebugLogger", () => {
         category: "debug",
         debugType: "resend",
         event: "resend.disabled",
-        sessionId: "s-1",
+        scope: "system",
+        data: expect.objectContaining({
+          targetIdentity: {
+            sessionId: "s-1",
+            parentSessionId: "",
+            dialogProcessId: "",
+            turnScopeId: "",
+          },
+        }),
       }),
     );
+    expect(sink.debug.mock.results[0].value).not.toHaveProperty("sessionId");
   });
 
   it("constructs lazy resend details only when the authoritative policy enables them", () => {
@@ -49,14 +58,15 @@ describe("resendDebugLogger", () => {
       expect.objectContaining({
         category: "debug",
         event: "resend.trace",
-        sessionId: "s-1",
-        dialogProcessId: "dp-1",
-        turnScopeId: "ts-1",
+        scope: "system",
         data: expect.objectContaining({
           event: "resend.trace",
-          sessionId: "s-1",
-          dialogProcessId: "dp-1",
-          turnScopeId: "ts-1",
+          targetIdentity: {
+            sessionId: "s-1",
+            parentSessionId: "",
+            dialogProcessId: "dp-1",
+            turnScopeId: "ts-1",
+          },
           detail: "payload",
         }),
       }),

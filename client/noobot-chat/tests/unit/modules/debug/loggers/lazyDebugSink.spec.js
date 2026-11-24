@@ -4,16 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { buildSessionLogRecord } from "@noobot/runtime-events/session-log-protocol";
+import {
+  buildSessionLogRecord,
+  createSystemSessionLogObservation,
+} from "@noobot/runtime-events/session-log-protocol";
 import {
   buildLazyDebugRecord,
   emitLazyDebug,
-  scopeSessionLogRecord,
 } from "../../../../../src/modules/debug/loggers/lazyDebugSink.js";
 
 describe("lazyDebugSink", () => {
   it("scopes a hand-built record without an active session as a valid system record", () => {
-    const record = scopeSessionLogRecord({
+    const record = createSystemSessionLogObservation({
       category: "system",
       event: "reconnect.failed",
       sessionId: "",
@@ -29,21 +31,24 @@ describe("lazyDebugSink", () => {
     ).not.toThrow();
   });
 
-  it("scopes a hand-built record with a session as a session record", () => {
-    const record = scopeSessionLogRecord({
+  it("keeps a local session observation independent of session registration", () => {
+    const record = createSystemSessionLogObservation({
       category: "state",
       event: "conversation.state",
       sessionId: " s-1 ",
       turnScopeId: "t-1",
       data: {},
     });
-    expect(record).toMatchObject({ scope: "session", sessionId: "s-1", turnScopeId: "t-1" });
+    expect(record).toMatchObject({
+      scope: "system",
+      data: { targetIdentity: { sessionId: "s-1", turnScopeId: "t-1" } },
+    });
     expect(buildSessionLogRecord({ ...record, source: "frontend", channel: "ws" }).sessionId).toBe(
-      "s-1",
+      "",
     );
   });
 
-  it("builds a session record from the payload's own session identity", () => {
+  it("builds an observation from the payload's own session identity", () => {
     const record = buildLazyDebugRecord("stop", "stop.requested", {
       sessionId: " s-1 ",
       dialogProcessId: "dp-1",
@@ -51,19 +56,19 @@ describe("lazyDebugSink", () => {
       reason: "user",
     });
     expect(record).toEqual({
-      scope: "session",
+      scope: "system",
       category: "debug",
       level: "debug",
       debugType: "stop",
       event: "stop.requested",
-      sessionId: "s-1",
-      dialogProcessId: "dp-1",
-      turnScopeId: "t-1",
       data: {
         event: "stop.requested",
-        sessionId: " s-1 ",
-        dialogProcessId: "dp-1",
-        turnScopeId: "t-1",
+        targetIdentity: {
+          sessionId: "s-1",
+          parentSessionId: "",
+          dialogProcessId: "dp-1",
+          turnScopeId: "t-1",
+        },
         reason: "user",
       },
     });
@@ -98,17 +103,17 @@ describe("lazyDebugSink", () => {
     expect(buildLazyDebugRecord("stop", "e", { sessionId: 42 }).scope).toBe("system");
   });
 
-  it("forwards an explicit parentSessionId as the session record's parent declaration", () => {
+  it("preserves an explicit parent in the observation target without declaring ownership", () => {
     const record = buildLazyDebugRecord("turn-runtime-diagnostics", "e", {
       sessionId: "child-1",
       parentSessionId: " parent-1 ",
     });
-    expect(record.scope).toBe("session");
-    expect(record.sessionId).toBe("child-1");
-    expect(record.parentSessionId).toBe("parent-1");
+    expect(record.scope).toBe("system");
+    expect(record.data.targetIdentity.sessionId).toBe("child-1");
+    expect(record.data.targetIdentity.parentSessionId).toBe("parent-1");
     expect(
       buildSessionLogRecord({ ...record, source: "frontend", channel: "ws" }).parentSessionId,
-    ).toBe("parent-1");
+    ).toBeUndefined();
   });
 
   it("omits parentSessionId when the payload declares none or names no session", () => {
@@ -129,6 +134,6 @@ describe("lazyDebugSink", () => {
     const sink = { isEnabled: () => true, debug: vi.fn((_type, factory) => factory()) };
     const record = emitLazyDebug(sink, "stop", "e", payload);
     expect(payload).toHaveBeenCalledTimes(1);
-    expect(record.sessionId).toBe("s-1");
+    expect(record.data.targetIdentity.sessionId).toBe("s-1");
   });
 });

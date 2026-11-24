@@ -291,7 +291,8 @@ function validateEnvelopeIdentity(envelope, eventType, payload, errors) {
   if (!isCanonicalText(envelope?.identity?.executionId)) errors.push("missing_execution_id");
   const turnScopeId = envelope?.identity?.turnScopeId;
   if (!isCanonicalTurnScopeId(turnScopeId)) errors.push("invalid_turn_scope_id");
-  if (payload.turnScopeId !== turnScopeId) errors.push("turn_scope_identity_mismatch");
+  if (eventType !== WORKFLOW_RUNTIME_EVENT.NODE_STATE && payload.turnScopeId !== turnScopeId)
+    errors.push("turn_scope_identity_mismatch");
 }
 
 function validatePlanningFields(payload, errors) {
@@ -321,6 +322,7 @@ function isCanonicalPlanningNode(node) {
 
 function validateNodeStateFields(envelope, payload, errors) {
   if (!hasOnlyFields(payload, NODE_STATE_PAYLOAD_FIELDS)) errors.push("unknown_node_state_field");
+  if (!isCanonicalTurnScopeId(payload.turnScopeId)) errors.push("invalid_node_turn_scope_id");
   errors.push(...collectNodeExecutionReferenceErrors(payload));
   if (!WORKFLOW_NODE_STATUSES.has(payload.status)) errors.push("missing_node_status");
   if (!isPositiveInteger(envelope?.ordering?.revision)) errors.push("invalid_node_revision");

@@ -35,10 +35,11 @@ export async function openSessionAuditRuntime() {
   const scopedSessionRoots = resolveScopedSessionRoots(
     await collectNoobotPluginScopedSessionRootDeclarations(),
   );
+  const attachmentService = new AttachmentService(runtimeConfig);
   const runtime = createConfiguredSessionRuntime(runtimeConfig, {
     now: () => new Date().toISOString(),
-    attachmentService: new AttachmentService(runtimeConfig),
+    attachmentService,
     scopedSessionRoots,
   });
-  return { ...runtime, scopedSessionRoots };
+  return { ...runtime, scopedSessionRoots, attachmentService };
 }

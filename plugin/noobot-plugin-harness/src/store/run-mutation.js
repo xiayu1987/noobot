@@ -17,18 +17,15 @@ export function harnessRunsDirectory(basePath) {
 }
 
 export function manifestSessionIds(manifest) {
+  const parentSessionId = manifest?.parentSessionId ?? "";
   if (
     !isPlainObject(manifest) ||
     !isWorkspacePathSegment(manifest.sessionId) ||
-    (manifest.parentSessionId !== undefined &&
-      manifest.parentSessionId !== null &&
-      !isWorkspacePathSegment(manifest.parentSessionId))
+    (parentSessionId !== "" && !isWorkspacePathSegment(parentSessionId))
   ) {
     throw new TypeError("harness run requires valid session ownership");
   }
-  return manifest.parentSessionId == null
-    ? [manifest.sessionId]
-    : [manifest.sessionId, manifest.parentSessionId];
+  return parentSessionId === "" ? [manifest.sessionId] : [manifest.sessionId, parentSessionId];
 }
 
 export async function withHarnessRunsMutation(basePath, operation, { signal } = {}) {

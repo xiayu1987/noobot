@@ -5,6 +5,7 @@
  */
 
 import { isFunction } from "@noobot/shared/value";
+import { createSystemSessionLogObservation } from "@noobot/runtime-events/session-log-protocol";
 export function acceptsDebugSink(sink) {
   return Boolean(sink && isFunction(sink.debug) && isFunction(sink.isEnabled));
 }
@@ -13,43 +14,19 @@ export function isDebugTypeEnabled(sink, debugType) {
   return sink?.isEnabled?.(debugType) === true;
 }
 
-function text(value) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-export function scopeSessionLogRecord(record = {}) {
-  const {
-    sessionId: rawSessionId,
-    parentSessionId: rawParentSessionId,
-    dialogProcessId,
-    turnScopeId,
-    ...rest
-  } = record;
-  const sessionId = text(rawSessionId);
-  if (!sessionId) return { ...rest, scope: "system" };
-  const parentSessionId = text(rawParentSessionId);
-  return {
-    ...rest,
-    scope: "session",
-    sessionId,
-    ...(parentSessionId ? { parentSessionId } : {}),
-    dialogProcessId: text(dialogProcessId),
-    turnScopeId: text(turnScopeId),
-  };
-}
-
 export function buildLazyDebugRecord(debugType, event, payload = {}) {
   const data = payload && typeof payload === "object" ? payload : {};
-  return scopeSessionLogRecord({
+  const { sessionId, parentSessionId, dialogProcessId, turnScopeId, ...details } = data;
+  return createSystemSessionLogObservation({
     category: "debug",
     level: "debug",
     debugType,
     event,
-    sessionId: data.sessionId,
-    parentSessionId: data.parentSessionId,
-    dialogProcessId: data.dialogProcessId,
-    turnScopeId: data.turnScopeId,
-    data: { event, ...data },
+    sessionId,
+    parentSessionId,
+    dialogProcessId,
+    turnScopeId,
+    data: { event, ...details },
   });
 }
 

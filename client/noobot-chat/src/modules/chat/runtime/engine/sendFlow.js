@@ -13,7 +13,7 @@ import {
   selectTurnRuntimeByScope,
 } from "../run-state-machine/turnRuntimeRegistry.js";
 import { logResendDebug } from "../../../debug/loggers/resendDebugLogger.js";
-import { scopeSessionLogRecord } from "../../../debug/loggers/lazyDebugSink.js";
+import { createSystemSessionLogObservation } from "@noobot/runtime-events/session-log-protocol";
 import { createSendFlowDebugLogger } from "./sendFlowDebugLogger.js";
 import { resolveSendRequest } from "./sendRequestResolver.js";
 import { executeSendStream } from "./sendStreamExecutor.js";
@@ -69,7 +69,8 @@ export function createChatEngineSender({
     applyRunStateEvent,
     logSession: sessionLogWebSocketClient.log,
   });
-  const logSessionEvent = (event) => sessionLogWebSocketClient.log(scopeSessionLogRecord(event));
+  const logSessionEvent = (event) =>
+    sessionLogWebSocketClient.log(createSystemSessionLogObservation(event));
   const sessionAggregateVersionManager = createSessionAggregateVersionManager({
     activeSession,
     log: logResendDebug,

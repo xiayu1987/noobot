@@ -7,20 +7,9 @@ import { expect } from "@playwright/test";
 import { assertFileMutationResult } from "@noobot/file-mutation-protocol";
 import { text } from "@noobot/shared/value";
 
-export function assertCanonicalAttachment(actual, expected) {
-  const identity = actual?.identity || actual;
-  const descriptor = actual?.descriptor || actual;
-  expect(descriptor).toMatchObject({
-    name: expected.name,
-    mimeType: expected.mimeType,
-    size: expected.size,
-    contentSha256: expected.contentSha256,
-  });
-  expect(identity.attachmentId).toBeTruthy();
-}
-
 export function assertUniqueAttachmentIds(attachments = []) {
-  const ids = attachments.map((item) => (item?.identity || item).attachmentId);
+  const ids = attachments.map((item) => item.attachmentId);
+  for (const id of ids) expect(id).toBeTruthy();
   expect(new Set(ids).size).toBe(ids.length);
 }
 
@@ -51,18 +40,6 @@ export function mutationResultsForTurn(records = [], turnScopeId = "", toolName 
           : JSON.parse(String(record.data.result || "")),
       ),
     }));
-}
-
-export function attachmentKeys(attachments = []) {
-  return attachments
-    .map((attachment) =>
-      JSON.stringify([
-        String(attachment?.identity?.attachmentId || ""),
-        String(attachment?.descriptor?.name || attachment?.name || ""),
-        String(attachment?.descriptor?.contentSha256 || attachment?.contentSha256 || ""),
-      ]),
-    )
-    .sort();
 }
 
 export async function assertAttachmentHttpAccess(

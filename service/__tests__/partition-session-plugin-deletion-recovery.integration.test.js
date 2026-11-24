@@ -39,7 +39,7 @@ test("HTTP replays real Harness cleanup after partial removal and then an unconf
   await bot.session.applyTurnLifecycleEvent(firstSend({ ...identity, sessionId: retainedId }));
   const runs = join(bot.getWorkspacePath(userId), resolvePluginDataRelativePath("harness", "runs"));
   await createRun(runs, "doomed-run", { sessionId: "child", parentSessionId: sessionId });
-  await createRun(runs, "retained-run", { sessionId: retainedId });
+  await createRun(runs, "retained-run", { sessionId: retainedId, parentSessionId: "" });
 
   const app = express();
   app.use(express.json());

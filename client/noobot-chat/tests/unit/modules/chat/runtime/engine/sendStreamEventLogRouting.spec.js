@@ -55,7 +55,9 @@ describe("stream event log routing", () => {
       ["stream-delta", "stream.message_event"],
       ["stream-delta", "frontend.runtimeStream.routeCompleted"],
     ]);
-    expect(sink.records[0].sessionId).toBe("s1");
+    expect(sink.records[0].scope).toBe("system");
+    expect(sink.records[0]).not.toHaveProperty("sessionId");
+    expect(sink.records[0].data.targetIdentity.sessionId).toBe("s1");
   });
 
   it("drops delta diagnostics when the stream-delta switch is off", () => {

@@ -68,7 +68,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
         "For {{tool:patch_file}}, usually omit root; if set, root must be a workspace-relative child directory.",
     },
     executionEvidence:
-      "Report execution only from actual tool calls and corresponding results in the current context; capability lists are not execution evidence. Runtime toolTimeline and execution events are authoritative for tool auditing.",
+      "Execution claims require actual tool calls and results. System checkpoint summaries preserve completed facts; continue from them without repeating work solely because the original records were compressed. Capability lists are not execution evidence. Runtime toolTimeline and execution events are authoritative for tool auditing.",
   },
   memoryPrompt: {
     system:

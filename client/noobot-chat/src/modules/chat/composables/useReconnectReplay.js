@@ -24,7 +24,7 @@ import { renderActiveSessionBeforeReplay } from "../runtime/reconnect/hydrationR
 import { reduceInteractionRequest } from "../runtime/interactionPayload.js";
 import { handleAttachmentLifecycleStreamEvent } from "../runtime/engine/streamHandlers.js";
 import { routeRuntimeStreamEvent } from "../../../extensions/runtime-stream-router.js";
-import { scopeSessionLogRecord } from "../../debug/loggers/lazyDebugSink.js";
+import { createSystemSessionLogObservation } from "@noobot/runtime-events/session-log-protocol";
 
 export function useReconnectReplay({
   sessions,
@@ -75,7 +75,7 @@ export function useReconnectReplay({
       if (reduceSubSessionMessageEvent(messageEvent).applied === true) appliedCount += 1;
     }
     sessionLogWebSocketClient.log(
-      scopeSessionLogRecord({
+      createSystemSessionLogObservation({
         category: "debug",
         level: "debug",
         debugType: "workflow-diagnostics",

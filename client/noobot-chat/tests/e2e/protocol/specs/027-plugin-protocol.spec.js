@@ -21,7 +21,7 @@ import {
   waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
 import {
-  readAttachmentIndex,
+  readAttachmentRecords,
   modelInvocationTraces,
   readFileMutationRecords,
   readSessionExecutionEventTree,
@@ -147,21 +147,14 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
   }
   await assertExecutionProjection(noobot.userId, noobot.sessionId, send, ["harness", "workflow"]);
 
-  const attachmentIndex = await readAttachmentIndex(noobot.userId, noobot.sessionId, "user");
-  expect(attachmentIndex.sessionId).toBe(noobot.sessionId);
-  expect(attachmentIndex.attachmentSource).toBe("user");
-  const attachments = Object.values(attachmentIndex.attachments || {});
+  const attachments = await readAttachmentRecords(noobot.userId, noobot.sessionId, "user");
   expect(attachments).toHaveLength(1);
   expect(attachments[0]).toMatchObject({
-    identity: {
-      sessionId: noobot.sessionId,
-      attachmentSource: "user",
-    },
-    descriptor: {
-      name: file.name,
-    },
+    sessionId: noobot.sessionId,
+    attachmentSource: "user",
+    name: file.name,
+    generatedByModel: false,
   });
-  expect(attachments[0].descriptor.generatedByModel).not.toBe(true);
 
   const traces = await waitForModelInvocationTraces(noobot.userId, noobot.sessionId, (records) =>
     records.some(
@@ -234,26 +227,29 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
   });
 
   await expect
-    .poll(() => readAttachmentIndex(noobot.userId, noobot.sessionId, "model"), { timeout: 30000 })
-    .toMatchObject({ sessionId: noobot.sessionId, attachmentSource: "model" });
-  const modelIndex = await readAttachmentIndex(noobot.userId, noobot.sessionId, "model");
-  const generatedAttachments = Object.values(modelIndex.attachments || {});
+    .poll(
+      async () => (await readAttachmentRecords(noobot.userId, noobot.sessionId, "model")).length,
+      { timeout: 30000 },
+    )
+    .toBeGreaterThanOrEqual(2);
+  const generatedAttachments = await readAttachmentRecords(
+    noobot.userId,
+    noobot.sessionId,
+    "model",
+  );
   expect(generatedAttachments.length).toBeGreaterThanOrEqual(2);
   assertUniqueAttachmentIds(generatedAttachments);
   expect(
     generatedAttachments.every(
-      (item) =>
-        item.identity?.attachmentSource === "model" && item.descriptor?.generatedByModel === true,
+      (item) => item.attachmentSource === "model" && item.generatedByModel === true,
     ),
   ).toBe(true);
   expect(
-    generatedAttachments.some(
-      (item) => item.descriptor?.generationSource === "workflow_node_agent_result",
-    ),
+    generatedAttachments.some((item) => item.generationSource === "workflow_node_agent_result"),
   ).toBe(true);
   expect(
     generatedAttachments.some(
-      (item) => item.descriptor?.generationSource === "workflow_completed_attachment_summary",
+      (item) => item.generationSource === "workflow_completed_attachment_summary",
     ),
   ).toBe(true);
 
@@ -261,11 +257,9 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
   const envelopes = executionEvents.flatMap((record) =>
     Array.isArray(record?.data?.transferEnvelopes) ? record.data.transferEnvelopes : [],
   );
-  expect(
-    Object.values(modelIndex.attachments || {}).some((item) =>
-      String(item?.descriptor?.name || item?.name || "").startsWith("harness-guidance-"),
-    ),
-  ).toBe(false);
+  expect(generatedAttachments.some((item) => item.name.startsWith("harness-guidance-"))).toBe(
+    false,
+  );
   expect(
     envelopes.some(
       (envelope) =>
@@ -281,12 +275,12 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
       userId: noobot.userId,
       sessionId: noobot.sessionId,
       attachmentSource: "model",
-      attachmentId: attachment.identity.attachmentId,
-      expectedName: attachment.descriptor.name,
+      attachmentId: attachment.attachmentId,
+      expectedName: attachment.name,
     });
   }
 
-  const generatedNames = generatedAttachments.map((item) => item.descriptor?.name).sort();
+  const generatedNames = generatedAttachments.map((item) => item.name).sort();
   await expect
     .poll(
       () => readRenderedFileNames(noobot.page, { role: "assistant", attachmentSource: "model" }),
@@ -464,19 +458,24 @@ test("@full PBE-038 用户附件解析结果保持 canonical identity 并可预�
   });
 
   await expect
-    .poll(() => readAttachmentIndex(noobot.userId, noobot.sessionId, "user"), { timeout: 30000 })
-    .toMatchObject({ sessionId: noobot.sessionId, attachmentSource: "user" });
-  const sourceIndex = await readAttachmentIndex(noobot.userId, noobot.sessionId, "user");
-  const source = Object.values(sourceIndex.attachments || {}).find(
-    (item) => item?.descriptor?.name === file.name || item?.name === file.name,
-  );
+    .poll(
+      async () => (await readAttachmentRecords(noobot.userId, noobot.sessionId, "user")).length,
+      { timeout: 30000 },
+    )
+    .toBe(1);
+  const sources = await readAttachmentRecords(noobot.userId, noobot.sessionId, "user");
+  const source = sources.find((item) => item.name === file.name);
   expect(source).toBeTruthy();
   const parsedResultRelation = source.relations?.find(
     (relation) => relation?.relationType === "parsed_result",
   );
   expect(parsedResultRelation).toMatchObject({
     relationType: "parsed_result",
-    sourceIdentity: source.identity,
+    sourceIdentity: {
+      attachmentId: source.attachmentId,
+      sessionId: source.sessionId,
+      attachmentSource: source.attachmentSource,
+    },
     targetIdentity: {
       attachmentId: expect.any(String),
       sessionId: expect.any(String),
@@ -498,7 +497,7 @@ test("@full PBE-038 用户附件解析结果保持 canonical identity 并可预�
     sessionId: parsedResult.sessionId,
     attachmentSource: parsedResult.attachmentSource,
     attachmentId: parsedResult.attachmentId,
-    expectedName: parsedResult.name || `${source.identity?.attachmentId || source.attachmentId}.md`,
+    expectedName: parsedResult.name,
   });
 
   await expect(userCard.locator(".parsed-result-action")).toHaveCount(2);

@@ -50,12 +50,17 @@ describe("useChatEngine session state log identity", () => {
     ]);
     for (const record of records) {
       expect(record).toMatchObject({
-        scope: "session",
+        scope: "system",
         category: "state",
-        sessionId: "s-event",
-        dialogProcessId: "dp-event",
-        turnScopeId: "turn-event",
+        data: {
+          targetIdentity: {
+            sessionId: "s-event",
+            dialogProcessId: "dp-event",
+            turnScopeId: "turn-event",
+          },
+        },
       });
+      expect(record).not.toHaveProperty("sessionId");
     }
   });
 

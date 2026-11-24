@@ -16,6 +16,7 @@ import {
   waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
 import {
+  readSessionRuntimeEvents,
   readSessionTurnMessages,
   waitForSessionExecutionEventTree,
   workspaceRoot,
@@ -176,23 +177,43 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
     await expect
       .poll(() => fs.readFile(toolFinishedMarker, "utf8").catch(() => ""))
       .toBe("finished");
-    await waitForSessionExecutionEventTree(
-      noobot.userId,
-      noobot.sessionId,
-      (records) =>
-        records.some(
-          (record) =>
-            record.turnScopeId === secondSend.identity.turnScopeId &&
-            record.event === "turn_orchestrator_error" &&
-            record.data?.error?.code === "SESSION_MUTATION_BUSY",
-        ),
-      { timeoutMs: PROTOCOL_TIMEOUTS.model },
-    );
+    await expect
+      .poll(
+        async () =>
+          (await readSessionRuntimeEvents(noobot.userId, noobot.sessionId)).some(
+            (record) =>
+              record.event === "run_session_failed" &&
+              record.data?.extra?.code === "SESSION_MUTATION_BUSY",
+          ),
+        { timeout: PROTOCOL_TIMEOUTS.model },
+      )
+      .toBe(true);
   } finally {
     await releaseLock();
     await fs.rm(toolStartedMarker, { force: true });
     await fs.rm(toolFinishedMarker, { force: true });
   }
+
+  await waitForSessionExecutionEventTree(
+    noobot.userId,
+    noobot.sessionId,
+    (records) =>
+      records.some(
+        (record) =>
+          record.turnScopeId === secondSend.identity.turnScopeId &&
+          record.event === "turn_orchestrator_error" &&
+          record.data?.error?.code === "SESSION_MUTATION_BUSY",
+      ),
+    { timeoutMs: PROTOCOL_TIMEOUTS.model },
+  );
+  const failedTurn = await waitForLifecycle(
+    protocolCapture,
+    noobot.sessionId,
+    "turn.failed",
+    0,
+    secondSend.identity.turnScopeId,
+  );
+  expect(failedTurn.failure.code).toBe("SESSION_MUTATION_BUSY");
 
   await expect
     .poll(async () => {

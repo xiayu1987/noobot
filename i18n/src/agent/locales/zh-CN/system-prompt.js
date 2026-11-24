@@ -66,7 +66,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       patchRoot: "patch root 通常省略；填写时只能是工作区相对子目录。",
     },
     executionEvidence:
-      "仅凭当前上下文中的实际工具调用及对应结果报告执行；能力列表不代表已执行。工具审计以运行时 toolTimeline 和 execution events 为准。",
+      "执行事实须有实际工具调用及结果依据。系统 checkpoint 小结保留已完成事实，续接时无需因原记录已压缩而重复执行。能力列表不代表已执行。工具审计以运行时 toolTimeline 和 execution events 为准。",
   },
   memoryPrompt: {
     system:

@@ -155,6 +155,29 @@ export function shouldRecordSessionLog(event = {}, options = {}) {
   return debugControlKey ? control.debug[debugControlKey] === true : false;
 }
 
+export function createSystemSessionLogObservation({
+  sessionId,
+  parentSessionId,
+  dialogProcessId,
+  turnScopeId,
+  data,
+  ...record
+}) {
+  return {
+    ...record,
+    scope: RUNTIME_EVENT_SCOPES.SYSTEM,
+    data: {
+      ...data,
+      targetIdentity: {
+        sessionId: text(sessionId),
+        parentSessionId: text(parentSessionId),
+        dialogProcessId: text(dialogProcessId),
+        turnScopeId: text(turnScopeId),
+      },
+    },
+  };
+}
+
 export function buildSessionLogRecord(event = {}) {
   const scope = event.scope;
   if (scope !== RUNTIME_EVENT_SCOPES.SESSION && scope !== RUNTIME_EVENT_SCOPES.SYSTEM) {

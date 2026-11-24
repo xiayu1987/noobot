@@ -51,7 +51,7 @@ export async function commitWorkflowRuntimeEvent({
     userId: ctx.userId,
     sessionId: ctx.sessionId,
     family: WORKFLOW_RUNTIME_FAMILY,
-    identity: { eventType, turnScopeId: payload.turnScopeId, executionId },
+    identity: { eventType, turnScopeId: ctx.turnScopeId, executionId },
     causality: { commandId, correlationId: payload.workflowRunId },
     ordering: { domain: orderingDomain, scopeId: orderingScopeId, revision },
     producer: { type: "plugin", id: PLUGIN_ID },

@@ -29,10 +29,19 @@ describe("stateMachineLogger", () => {
     expect(sink.debug).toHaveBeenCalledWith("state-machine", expect.any(Function));
     expect(sink.debug.mock.results[0].value).toMatchObject({
       event: "stateMachine.reducer.decision",
-      sessionId: "s-1",
-      turnScopeId: "t-1",
-      data: { applied: false, reason: "stale_revision" },
+      scope: "system",
+      data: {
+        targetIdentity: {
+          sessionId: "s-1",
+          parentSessionId: "",
+          dialogProcessId: "",
+          turnScopeId: "t-1",
+        },
+        applied: false,
+        reason: "stale_revision",
+      },
     });
+    expect(sink.debug.mock.results[0].value).not.toHaveProperty("sessionId");
   });
 
   it("summarizes identity and state without serializing message or event bodies", () => {

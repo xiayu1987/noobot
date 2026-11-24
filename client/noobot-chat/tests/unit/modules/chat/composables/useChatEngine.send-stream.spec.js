@@ -435,14 +435,19 @@ describe("useChatEngine.send-stream", () => {
     expect(reductionLog).toEqual(
       expect.objectContaining({
         debugType: "transport-diagnostics",
-        sessionId: "local-1",
+        scope: "system",
         data: expect.objectContaining({
+          targetIdentity: expect.objectContaining({
+            sessionId: "local-1",
+            dialogProcessId: "dp-new",
+          }),
           presentationMessageId: expect.any(String),
           reductions: [expect.objectContaining({ result: "applied" })],
         }),
       }),
     );
 
+    expect(reductionLog).not.toHaveProperty("sessionId");
     expect(activeSession.value.sessionId).toBe("local-1");
     expect(activeSessionId.value).toBe("local-1");
     expect(activeSession.value.messages).toHaveLength(2);

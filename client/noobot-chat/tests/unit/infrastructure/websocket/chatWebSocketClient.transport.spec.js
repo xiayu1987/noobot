@@ -115,20 +115,21 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       .filter((record) => record.event === "frontend.websocket.transportEventReceived");
     expect(debug).toHaveBeenCalledWith("transport-diagnostics", expect.any(Function));
     expect(received[0]).toEqual({
-      scope: "session",
+      scope: "system",
       category: "debug",
       level: "debug",
       debugType: "transport-diagnostics",
       event: "frontend.websocket.transportEventReceived",
-      sessionId: "session-transport-log",
-      parentSessionId: "parent-transport-log",
-      dialogProcessId: "dialog-transport-log",
-      turnScopeId: "turn-transport-log",
       data: expect.objectContaining({
+        targetIdentity: {
+          sessionId: "session-transport-log",
+          parentSessionId: "parent-transport-log",
+          dialogProcessId: "dialog-transport-log",
+          turnScopeId: "turn-transport-log",
+        },
         protocolEvent: "message_event",
         eventId: "event-transport-log",
         eventType: "authoritative_final_content",
-        parentSessionId: "parent-transport-log",
         presentationMessageId: "assistant-transport-log",
         transportSequence: null,
         authoritativeSequence: 9,

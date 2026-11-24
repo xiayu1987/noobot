@@ -84,8 +84,9 @@ describe("chatWebSocketClient lifecycle receipt diagnostics", () => {
     const [entry] = receiptLogs();
     expect(entry.category).toBe("debug");
     expect(entry.debugType).toBe("transport-diagnostics");
-    expect(entry.sessionId).toBe("session-receipt");
-    expect(entry.turnScopeId).toBe("turn-receipt");
+    expect(entry.scope).toBe("system");
+    expect(entry).not.toHaveProperty("sessionId");
+    expect(entry.data.targetIdentity).toMatchObject(IDENTITY);
     expect(entry.data).toMatchObject({
       eventId: "event-receipt",
       eventType: TURN_EVENT.PROCESSING_STARTED,

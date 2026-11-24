@@ -26,7 +26,7 @@ import {
 import {
   modelInvocationTraces,
   readFileMutationRecords,
-  readAttachmentIndex,
+  readAttachmentRecords,
   readSessionExecutionEventTree,
   readSessionExecutionEvents,
 } from "../helpers/persistence-audit.js";
@@ -437,19 +437,19 @@ test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", 
   expect(generated.ok).toBe(true);
   expect(generated.summary.generated_image_count).toBe(1);
   expect(generated.summary.saved_attachment_count).toBe(1);
-  const attachmentIndex = await readAttachmentIndex(noobot.userId, noobot.sessionId, "model");
-  const generatedImages = Object.values(attachmentIndex.attachments).filter(
-    (item) => item.descriptor.mimeType === "image/png" && item.descriptor.generatedByModel === true,
+  const attachments = await readAttachmentRecords(noobot.userId, noobot.sessionId, "model");
+  const generatedImages = attachments.filter(
+    (item) => item.mimeType === "image/png" && item.generatedByModel === true,
   );
   expect(generatedImages).toHaveLength(1);
-  expect(generatedImages[0].descriptor.size).toBeGreaterThan(0);
+  expect(generatedImages[0].size).toBeGreaterThan(0);
   await assertAttachmentHttpAccess(noobot.page, {
     apiKey: noobot.connectConfig.apiKey,
     userId: noobot.userId,
     sessionId: noobot.sessionId,
     attachmentSource: "model",
-    attachmentId: generatedImages[0].identity.attachmentId,
-    expectedName: generatedImages[0].descriptor.name,
+    attachmentId: generatedImages[0].attachmentId,
+    expectedName: generatedImages[0].name,
   });
   const mcpCall = calls.find((event) => event.data.tool === "call_mcp_task");
   expect(mcpCall.data.args.mcpName).toBe(MCP_TEST_SERVICE.name);

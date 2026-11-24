@@ -23,6 +23,7 @@ test("workflow authority commit uses the protocol persistence scope", async () =
   const ctx = {
     userId: "user-1",
     sessionId: "child-session",
+    turnScopeId: "turn-owner-1",
     eventListener: {
       async onEvent(event) {
         events.push(event);
@@ -78,7 +79,8 @@ test("workflow authority commit uses the protocol persistence scope", async () =
   assert.equal(commits[0].identity.executionId, "execution-1");
   assert.equal(commits.length, 1);
   assert.equal(commits[0].persistenceScope, persistenceScope);
-  assert.equal(commits[0].identity.turnScopeId, "turn-child-1");
+  assert.equal(commits[0].identity.turnScopeId, "turn-owner-1");
+  assert.equal(commits[0].payload.turnScopeId, "turn-child-1");
   assert.equal(commits[0].userId, "user-1");
   assert.deepEqual(commits[0].causality, {
     commandId: "command-1",

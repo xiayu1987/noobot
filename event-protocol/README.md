@@ -16,6 +16,16 @@ outbox.
 - Turn ordering and identity come from `@noobot/session-protocol`; this package
   validates them but never defines or rewrites them.
 
+## Workflow event ownership
+
+Persisted Workflow events belong to the producing session and its accepted turn:
+`identity.sessionId` and `identity.turnScopeId` select that authority and its outbox.
+For node state events, `payload.nodeSessionId` and `payload.turnScopeId` identify
+the child node execution; they do not select the event's storage owner. Both turn
+identities must be canonical. Planning and session snapshot payloads retain their
+matching envelope turn identity. A node state event cannot create a child turn in
+the parent session or bypass the outbox's turn visibility checks.
+
 ## Module layout
 
 Public subpaths in `package.json#exports` are the supported import surface.
