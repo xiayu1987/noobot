@@ -23,6 +23,7 @@ function normalizeTerminalError(error = null) {
 
 function createRequestLogLifecycle({ logger, context = {} } = {}) {
   const requestContext = { ...context, requestId: randomUUID() };
+  const { promise: terminalQueued, resolve: markTerminalQueued } = Promise.withResolvers();
   let requestLogged = false;
   let terminalLogged = false;
   let pendingTerminal = null;
@@ -31,6 +32,7 @@ function createRequestLogLifecycle({ logger, context = {} } = {}) {
     if (terminalLogged) return false;
     terminalLogged = true;
     logger.logTerminal({ ...requestContext, ...terminal });
+    markTerminalQueued();
     return true;
   }
 
@@ -58,6 +60,7 @@ function createRequestLogLifecycle({ logger, context = {} } = {}) {
   return {
     recordRequest,
     settle,
+    terminalQueued,
     get requestLogged() {
       return requestLogged;
     },
@@ -150,6 +153,7 @@ function createProxyServer({
     let bodyComplete = false;
     const recordRequest = () => {
       const bodyText = Buffer.concat(chunks).toString("utf8");
+      chunks.length = 0;
       lifecycle.recordRequest({
         req,
         bodyText,
@@ -160,7 +164,7 @@ function createProxyServer({
             : null,
       });
     };
-    req.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    req.on("data", (chunk) => chunks.push(chunk));
     req.on("end", () => {
       bodyComplete = true;
       recordRequest();
@@ -177,9 +181,7 @@ function createProxyServer({
   proxy.on("proxyRes", (proxyRes, req) => {
     const chunks = [];
 
-    proxyRes.on("data", (chunk) => {
-      chunks.push(Buffer.from(chunk));
-    });
+    proxyRes.on("data", (chunk) => chunks.push(chunk));
 
     const lifecycle = req.__requestLogLifecycle;
     proxyRes.on("aborted", () => {
@@ -203,6 +205,7 @@ function createProxyServer({
     proxyRes.on("end", async () => {
       try {
         const raw = Buffer.concat(chunks);
+        chunks.length = 0;
         const decoded = await decodeBodyByEncoding(raw, proxyRes.headers["content-encoding"]);
         const inputText = decoded.toString("utf8");
         const finalText = resolveFinalResponseBodyText(inputText, proxyRes.headers["content-type"]);
@@ -246,9 +249,13 @@ function createProxyServer({
     }
   });
 
+  const pendingRequests = new Set();
   const server = http.createServer((req, res) => {
     const context = createRequestContext(req);
     const lifecycle = createRequestLogLifecycle({ logger, context });
+    const { terminalQueued } = lifecycle;
+    pendingRequests.add(terminalQueued);
+    void terminalQueued.then(() => pendingRequests.delete(terminalQueued));
     req.__requestLogLifecycle = lifecycle;
     logRequestStream(req, lifecycle, context);
     res.on("close", () => {
@@ -261,6 +268,10 @@ function createProxyServer({
     proxy.web(req, res);
   });
 
+  server.flushRequestLogs = async () => {
+    await Promise.all(pendingRequests);
+    await logger.flush();
+  };
   server.once("close", () => agent.destroy());
   server.listen(localPort, proxyHost, () => {
     console.log(

@@ -12,6 +12,7 @@ import {
   getQuarantinedSessionsApi,
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
+import BaseLoadingState from "../../../shared/ui/BaseLoadingState.vue";
 import { useUiFeedback } from "../../../shared/composables/useUiFeedback.js";
 import {
   isOverlayDismissal,
@@ -117,9 +118,7 @@ async function deleteSession(session) {
       />
     </header>
     <div class="quarantine-body noobot-workspace-body">
-      <div v-if="loading" role="status" class="quarantine-status">
-        {{ translate("quarantinedSessions.loading") }}
-      </div>
+      <BaseLoadingState v-if="loading" :text="translate('quarantinedSessions.loading')" />
       <el-alert
         v-else-if="failed"
         :title="translate('quarantinedSessions.loadFailed')"
@@ -175,11 +174,6 @@ async function deleteSession(session) {
 
 .quarantine-body {
   padding: var(--noobot-space-sm);
-}
-
-.quarantine-status {
-  padding: var(--noobot-space-lg);
-  color: var(--noobot-text-secondary);
 }
 
 .quarantine-list {

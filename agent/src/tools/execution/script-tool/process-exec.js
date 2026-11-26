@@ -19,9 +19,9 @@ import {
 } from "@noobot/execution-isolation-protocol";
 import { resolveSessionGeneratedDataRoot } from "../../../session/session-generated-data.js";
 import {
+  createProcessTreeTerminator,
   decodeCommandOutput,
   resolveCommandLookupExecutable,
-  terminateProcessTree,
   usesDetachedProcessGroup,
 } from "@noobot/platform-compatibility/process";
 import { isPlainObject, text } from "@noobot/shared/value";
@@ -94,34 +94,18 @@ function createTerminationController(child, abortSignal, timeoutMs, onTerminate,
   let aborted = abortSignal?.aborted === true;
   let outputLimitExceeded = false;
   let terminalReason = "";
-  let forceKillTimer = null;
-  let settleTimer = null;
-  let terminationHookCalled = false;
+  const processTermination = createProcessTreeTerminator(child, {
+    graceMs: TIME_THRESHOLDS.tools.processForceKillGraceMs,
+    settleMs: TIME_THRESHOLDS.tools.processSettleGraceMs,
+    onTerminate,
+  });
   const terminate = (reason = "timeout") => {
     if (terminalReason) return;
     terminalReason = reason;
     if (reason === "timeout") timedOut = true;
     else if (reason === "abort") aborted = true;
     else if (reason === "output_limit") outputLimitExceeded = true;
-    if (!terminationHookCalled) {
-      terminationHookCalled = true;
-      Promise.resolve(onTerminate?.()).catch(() => undefined);
-    }
-    void terminateProcessTree(child, "SIGTERM");
-    if (!forceKillTimer) {
-      forceKillTimer = setTimeout(
-        () => void terminateProcessTree(child, "SIGKILL"),
-        TIME_THRESHOLDS.tools.processForceKillGraceMs,
-      );
-      forceKillTimer.unref?.();
-    }
-    if (!settleTimer && typeof onSettle === "function") {
-      settleTimer = setTimeout(
-        () => onSettle(),
-        TIME_THRESHOLDS.tools.processForceKillGraceMs + TIME_THRESHOLDS.tools.processSettleGraceMs,
-      );
-      settleTimer.unref?.();
-    }
+    void processTermination.terminate().then(onSettle, onSettle);
   };
   const onAbort = () => terminate("abort");
   abortSignal?.addEventListener?.("abort", onAbort, { once: true });
@@ -138,17 +122,12 @@ function createTerminationController(child, abortSignal, timeoutMs, onTerminate,
     get outputLimitExceeded() {
       return outputLimitExceeded;
     },
-    get forceKillTimer() {
-      return forceKillTimer;
-    },
-    timeout,
-    onAbort,
     terminate,
+    wait: () => processTermination.wait(),
     dispose() {
       if (timeout) clearTimeout(timeout);
-      if (forceKillTimer) clearTimeout(forceKillTimer);
-      if (settleTimer) clearTimeout(settleTimer);
       abortSignal?.removeEventListener?.("abort", onAbort);
+      processTermination.dispose();
     },
   };
 }
@@ -189,16 +168,13 @@ async function finalizeOutputFiles(files) {
   };
 }
 
-function startTermination(child, files, abortSignal, timeoutMs, options, onSettle) {
+function startTermination(child, abortSignal, timeoutMs, options, onSettle) {
   const termination = createTerminationController(
     child,
     abortSignal,
     timeoutMs,
     options?.onTerminate,
-    () => {
-      detachChildOutput(child, files.streams);
-      onSettle();
-    },
+    onSettle,
   );
   const outputPipeOptions = {
     maxBytes: LENGTH_THRESHOLDS.attachments.maxFileSizeBytes,
@@ -267,11 +243,10 @@ function captureCommand({ cmd, cwd, timeoutMs, abortSignal, options, files, proj
     let settled = false;
     const { termination, outputPipeOptions } = startTermination(
       child,
-      files,
       abortSignal,
       timeoutMs,
       options,
-      () => settle(null, null),
+      () => settle(child.exitCode, child.signalCode),
     );
     pipeReadableToWritable(child.stdout, files.stdoutStream, null, outputPipeOptions);
     pipeReadableToWritable(child.stderr, files.stderrStream, null, outputPipeOptions);
@@ -282,9 +257,20 @@ function captureCommand({ cmd, cwd, timeoutMs, abortSignal, options, files, proj
       if (settled) return;
       settled = true;
       const finalize = async () => {
-        termination.dispose();
-        detachChildOutput(child, files.streams);
-        await Promise.all(files.finished);
+        try {
+          detachChildOutput(child, files.streams);
+          const results = await Promise.allSettled([termination.wait(), ...files.finished]);
+          const errors = results.filter((result) => result.status === "rejected");
+          if (errors.length === 1) throw errors[0].reason;
+          if (errors.length > 1) {
+            throw new AggregateError(
+              errors.map(({ reason }) => reason),
+              "Script cleanup failed",
+            );
+          }
+        } finally {
+          termination.dispose();
+        }
         const sizes = await finalizeOutputFiles(files);
         const outcome = {
           ...resolveProcessOutcome({ termination, code, signal, spawnError, timeoutMs }),

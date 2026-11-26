@@ -8,6 +8,7 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { buildDockerCommand } from "../../../sandbox/docker-sandbox.js";
+import { setTimeout as delay } from "node:timers/promises";
 import { logWarn } from "../../../observability/console/logger.js";
 import { SANDBOX_PROVIDER_NAME } from "./constants.js";
 import { enqueueDockerContainerTask } from "./docker-queue.js";
@@ -20,14 +21,20 @@ const DOCKER_CLEANUP_SCRIPT = `
 token=$1
 signal=$2
 pgids=""
+process_group() {
+  awk '{ sub(/^.*\\) /, ""); print $3 }' "$1"
+}
 for environ in /proc/[0-9]*/environ; do
   [ -r "$environ" ] || continue
   if tr '\\000' '\\n' < "$environ" 2>/dev/null | grep -Fqx "NOOBOT_EXECUTION_TOKEN=$token"; then
     pid=\${environ#/proc/}
     pid=\${pid%/environ}
-    pgid=$(awk '{ print $5 }' "/proc/$pid/stat" 2>/dev/null || true)
+    if ! pgid=$(process_group "/proc/$pid/stat" 2>/dev/null); then
+      [ ! -e "/proc/$pid/stat" ] && continue
+      exit 1
+    fi
     case "$pgid" in
-      ''|*[!0-9]*) continue ;;
+      ''|*[!0-9]*) echo "Invalid execution process group for $pid" >&2; exit 1 ;;
     esac
     case " $pgids " in
       *" $pgid "*) ;;
@@ -35,13 +42,28 @@ for environ in /proc/[0-9]*/environ; do
     esac
   fi
 done
+if [ "$signal" = CHECK ]; then
+  printf '%s' "$pgids"
+  exit 0
+fi
 for pgid in $pgids; do
-  kill -"$signal" -"$pgid" 2>/dev/null || true
+  if ! kill -"$signal" -"$pgid" 2>/dev/null; then
+    for stat in /proc/[0-9]*/stat; do
+      if ! current=$(process_group "$stat" 2>/dev/null); then
+        [ ! -e "$stat" ] && continue
+        exit 1
+      fi
+      if [ "$current" = "$pgid" ]; then
+        echo "Failed to signal execution process group $pgid" >&2
+        exit 1
+      fi
+    done
+  fi
 done
 `;
 
 function signalDockerExecution({ containerName, executionToken, executable }, signal) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     execFile(
       executable,
       [
@@ -55,7 +77,7 @@ function signalDockerExecution({ containerName, executionToken, executable }, si
         signal,
       ],
       { timeout: TIME_THRESHOLDS.tools.dockerExecuteTimeoutMs, windowsHide: true },
-      () => resolve(),
+      (error, stdout) => (error ? reject(error) : resolve(stdout)),
     );
   });
 }
@@ -103,13 +125,21 @@ async function ensureDockerContainer(built) {
   await execFileAsync(built.executable, built.startArgs, { windowsHide: true });
 }
 
-function terminateDockerExecution(built) {
-  void signalDockerExecution(built, "TERM");
-  const forceKillTimer = setTimeout(
-    () => void signalDockerExecution(built, "KILL"),
-    TIME_THRESHOLDS.tools.processForceKillGraceMs,
-  );
-  forceKillTimer.unref?.();
+async function terminateDockerExecution(built) {
+  const failures = [];
+  for (const signal of ["TERM", "KILL"]) {
+    try {
+      await signalDockerExecution(built, signal);
+    } catch (error) {
+      failures.push(error);
+    }
+    if (signal === "TERM") await delay(TIME_THRESHOLDS.tools.processForceKillGraceMs);
+  }
+  await delay(TIME_THRESHOLDS.tools.processSettleGraceMs);
+  if ((await signalDockerExecution(built, "CHECK")).trim()) {
+    throw new AggregateError(failures, `Docker execution ${built.executionToken} did not stop`);
+  }
+  if (failures.length) throw new AggregateError(failures, "Docker execution cleanup failed");
 }
 
 export async function runDockerCommand({

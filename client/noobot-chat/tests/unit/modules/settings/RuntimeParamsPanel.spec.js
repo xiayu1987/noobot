@@ -14,7 +14,10 @@ const message = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock("../../../../src/shared/i18n/useLocale.js", () => ({
   useLocale: () => ({ translate: (key) => key }),
 }));
-vi.mock("element-plus", () => ({ ElMessage: message }));
+vi.mock("element-plus", async (importOriginal) => ({
+  ...(await importOriginal()),
+  ElMessage: message,
+}));
 
 const key = "quantity.memory.maxItems";
 const fixedKey = "length.crypto.keyBytes";

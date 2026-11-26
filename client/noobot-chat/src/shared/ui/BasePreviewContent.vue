@@ -17,6 +17,7 @@ import {
   parseDelimitedText,
 } from "../utils/file-preview-format.js";
 import { useLocale } from "../i18n/useLocale.js";
+import BaseLoadingState from "./BaseLoadingState.vue";
 
 const props = defineProps({
   active: { type: Boolean, default: true },
@@ -170,10 +171,10 @@ defineExpose({ showSourceTab });
 
 <template>
   <div
-    class="preview-body noobot-preview-surface"
-    v-loading="loading || rendering"
+    class="preview-body noobot-preview-surface noobot-loading-host"
     :aria-busy="loading || rendering"
   >
+    <BaseLoadingState v-if="loading || rendering" overlay />
     <div v-if="hasTabs" class="preview-tabs" role="tablist">
       <button
         type="button"

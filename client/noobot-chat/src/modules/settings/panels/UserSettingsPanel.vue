@@ -17,6 +17,7 @@ import {
   putTemplateFileApi,
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
+import BaseLoadingState from "../../../shared/ui/BaseLoadingState.vue";
 import {
   SettingsActionGroup,
   SettingsJsonListEditorLayout,
@@ -453,9 +454,10 @@ watch(
             </template>
           </SettingsPanelHeader>
           <div class="panel-body noobot-workspace-body">
-            <el-scrollbar class="tree-scroll">
+            <el-scrollbar class="tree-scroll" :aria-busy="templateLoadingTree">
+              <BaseLoadingState v-if="templateLoadingTree" />
               <el-tree
-                v-if="!templateLoadingTree"
+                v-else
                 :data="templateTree"
                 node-key="path"
                 :props="WORKSPACE_DIRECTORY_TREE_PROPS"
@@ -493,10 +495,10 @@ watch(
           </SettingsPanelHeader>
           <div
             class="panel-body noobot-workspace-body editor-body"
-            v-loading="templateLoadingFile"
-            element-loading-background="var(--noobot-mask-bg)"
+            :aria-busy="templateLoadingFile"
           >
-            <template v-if="templateActivePath">
+            <BaseLoadingState v-if="templateLoadingFile" />
+            <template v-else-if="templateActivePath">
               <el-input
                 v-if="templateIsTextFile"
                 v-model="templateContent"

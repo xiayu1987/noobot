@@ -432,7 +432,6 @@ export function createFileMutationCoordinator(filesystem, path = nodePath) {
           refreshedAt: now - Math.max(0, Date.now() - mtimeMs),
         };
       } else if (heartbeat.mtimeMs !== mtimeMs || heartbeat.ctimeMs !== ctimeMs) {
-        // Once observed, only a change to the heartbeat can reset its monotonic age.
         Object.assign(heartbeat, { mtimeMs, ctimeMs, refreshedAt: now });
       }
       if (now - contention.heartbeat.refreshedAt <= this.staleMs) return false;

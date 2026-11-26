@@ -160,6 +160,11 @@ for (const deleteAncestor of [false, true])
       const { service, workspaceRoot, budget, setBudget } = await createPartitionBotFixture(t);
       setBudget({ ...budget, maxJournals: 3 });
       const { bot } = await service.rebuildRuntimeConfig();
+      t.mock.method(
+        bot.sessionRuntime.repositories.sessionRepository.pageSnapshots,
+        "now",
+        () => 0,
+      );
       const { userId, sessionId } = identity;
       const authoritySessionId = "parent";
       const retainedId = "retained";

@@ -6,8 +6,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
+import { get } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { json } from "node:stream/consumers";
 import { createRuntimeConfigService } from "../services/runtime-config-service.js";
 import { createServiceBotAccess } from "../services/service-bot-access.js";
 import { express, registerSessionRoutes, withTestServer } from "./routes/session-routes.helpers.js";
@@ -176,9 +178,11 @@ test("registered HTTP routes use the current runtime after each rebuild", async 
   });
   await withTestServer(app, async (baseUrl) => {
     for (const revision of [1, 2, 3]) {
-      const response = await fetch(`${baseUrl}/internal/sessions/user`);
-      assert.equal(response.status, 200);
-      assert.equal((await response.json()).revision, revision);
+      const response = await new Promise((resolve, reject) => {
+        get(`${baseUrl}/internal/sessions/user`, resolve).once("error", reject);
+      });
+      assert.equal(response.statusCode, 200);
+      assert.equal((await json(response)).revision, revision);
       if (revision < 3) await f.service.rebuildRuntimeConfig();
     }
   });

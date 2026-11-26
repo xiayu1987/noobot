@@ -31,11 +31,12 @@ if (!globalThis.localStorage?.getItem) {
   });
 }
 
-vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
+vi.mock("../../../../../../src/shared/public-api/ui.js", async (importOriginal) => {
   const { defineComponent, h } = await import("vue");
   const { useMobileViewport } =
     await import("../../../../../../src/shared/composables/useMobileViewport.js");
   return {
+    ...(await importOriginal()),
     useMobileViewport,
     BaseThinkingPanelShell: defineComponent({
       name: "BaseThinkingPanelShell",

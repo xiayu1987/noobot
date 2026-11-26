@@ -8,6 +8,7 @@ export { default as BaseActionButtons } from "../ui/BaseActionButtons.vue";
 export { default as BaseAttachmentFileCard } from "../ui/BaseAttachmentFileCard.vue";
 export { default as BaseEmptyHint } from "../ui/BaseEmptyHint.vue";
 export { default as BaseFileCardList } from "../ui/BaseFileCardList.vue";
+export { default as BaseLoadingState } from "../ui/BaseLoadingState.vue";
 export { default as BaseMessageErrorAlert } from "../ui/BaseMessageErrorAlert.vue";
 export { default as BaseMarkdownContent } from "../ui/BaseMarkdownContent.vue";
 export { default as BaseMetaLabel } from "../ui/BaseMetaLabel.vue";

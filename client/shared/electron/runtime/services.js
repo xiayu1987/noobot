@@ -68,6 +68,7 @@ export function createDesktopServiceManager({
   let managedAgentProxyProcess = null;
   let serviceStartupPromise = null;
   let stopping = false;
+  let stopPromise = null;
   let crashRestartPromise = null;
   let crashRestartPending = false;
   let crashRestartSpawning = false;
@@ -141,12 +142,13 @@ export function createDesktopServiceManager({
     await ensureAgentProxyStarted();
   }
 
-  function stopManagedChildProcess(child) {
+  async function stopManagedChildProcess(child) {
     if (!child) return;
-    void terminateProcess(child, "SIGTERM", { processGroup: false });
+    return terminateProcess(child, "SIGTERM", { processGroup: false });
   }
 
   function handleManagedChildExit(label, code, signal) {
+    if (stopping) return;
     if (code === 0 && !signal) return;
     const detail = `code=${code ?? ""}, signal=${signal || ""}`;
     sendStatus({ phase: "error", message: `Noobot ${label} exited unexpectedly (${detail}).` });
@@ -540,15 +542,18 @@ export function createDesktopServiceManager({
 
   function stopManagedService() {
     stopping = true;
-    if (managedAgentProxyProcess) {
-      const child = managedAgentProxyProcess;
+    stopPromise ??= Promise.allSettled(
+      [managedAgentProxyProcess, managedServiceProcess].map(stopManagedChildProcess),
+    ).then((results) => {
+      const errors = results.filter((result) => result.status === "rejected").map((r) => r.reason);
+      if (errors.length) {
+        stopPromise = null;
+        throw new AggregateError(errors, "Noobot backend process cleanup failed");
+      }
       managedAgentProxyProcess = null;
-      stopManagedChildProcess(child);
-    }
-    if (!managedServiceProcess) return;
-    const child = managedServiceProcess;
-    managedServiceProcess = null;
-    stopManagedChildProcess(child);
+      managedServiceProcess = null;
+    });
+    return stopPromise;
   }
 
   return { ensureServiceStarted, stopManagedService, setBackendRecoveredHandler };

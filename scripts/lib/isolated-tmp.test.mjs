@@ -10,6 +10,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -19,6 +20,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { RUNTIME_INSTANCE_PATH_ENV_KEYS } from "@noobot/runtime-topology-protocol/instance-paths";
 import { WORKSPACE_ROOT_ENV } from "@noobot/runtime-topology-protocol/workspace-root";
 import {
@@ -160,4 +162,45 @@ test("buildIsolatedTmpEnv drops inherited runtime instance paths and isolates wo
   assert.equal(env[WORKSPACE_ROOT_ENV], path.join("/x", "workspace"));
   assert.equal(env.KEEP, "1");
   assert.equal(env.TMPDIR, "/x");
+});
+
+test("Node test workers isolate default workspaces and retain them in descendant processes", async (t) => {
+  const root = createRoot(t);
+  const bootstrap = new URL("./isolated-node-runtime.mjs", import.meta.url).href;
+  const source = `import { execFileSync } from 'node:child_process';
+    import { mkdirSync, writeFileSync } from 'node:fs';
+    import test from 'node:test';
+    test('workspace ownership', () => {
+      const workspace = process.env[${JSON.stringify(WORKSPACE_ROOT_ENV)}];
+      mkdirSync(workspace, { recursive: true });
+      writeFileSync(workspace + '/owner', process.argv[1], { flag: 'wx' });
+      const inherited = execFileSync(process.execPath,
+        ['--import', ${JSON.stringify(bootstrap)}, '-e',
+          'process.stdout.write(process.env[${JSON.stringify(WORKSPACE_ROOT_ENV)}])'],
+        { encoding: 'utf8' });
+      if (inherited !== workspace) throw new Error('descendant lost workspace ownership');
+      writeFileSync(process.argv[1] + '.json', JSON.stringify({ workspace, inherited }));
+    });`;
+  const files = ["first.test.mjs", "second.test.mjs"].map((name) => path.join(root, name));
+  for (const file of files) writeFileSync(file, source);
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  delete env.NOOBOT_TEST_WORKSPACE_INITIALIZED;
+  await promisify(execFile)(
+    process.execPath,
+    [
+      fileURLToPath(new URL("../run-with-isolated-tmp.mjs", import.meta.url)),
+      "node",
+      "--test",
+      "--test-concurrency=2",
+      ...files,
+    ],
+    { env: buildIsolatedTmpEnv(root, env) },
+  );
+  const results = files.map((file) => JSON.parse(readFileSync(file + ".json", "utf8")));
+  assert.notEqual(results[0].workspace, results[1].workspace);
+  for (const { workspace, inherited } of results) {
+    assert.equal(inherited, workspace);
+    assert.equal(path.dirname(path.dirname(workspace)), root);
+  }
 });

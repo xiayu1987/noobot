@@ -15,6 +15,7 @@ export const zhCNMessages = {
     MODEL_REFERENCE_CAPABILITY_MISMATCH: "模型能力不匹配（要求：{requirement}）",
   },
   common: {
+    loading: "加载中…",
     session: "会话",
     sessionArtifacts: "Session 产物",
     extensionFeatures: "扩展功能",

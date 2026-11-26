@@ -5,6 +5,7 @@
 -->
 <script setup>
 import { Key } from "@element-plus/icons-vue";
+import BaseLoadingState from "../../../shared/ui/BaseLoadingState.vue";
 
 defineProps({
   name: { type: String, required: true },
@@ -20,12 +21,10 @@ const emit = defineEmits(["insert-param"]);
 
 <template>
   <el-collapse-item :name="name" :title="title" class="resource-collapse-item" :class="itemClass">
-    <el-scrollbar
-      class="tree-scroll"
-      v-loading="loading"
-      element-loading-background="var(--noobot-mask-bg)"
-    >
+    <el-scrollbar class="tree-scroll" :aria-busy="loading">
+      <BaseLoadingState v-if="loading" />
       <el-tree
+        v-else
         :data="treeData"
         node-key="key"
         :props="{ label: 'label', children: 'children' }"

@@ -7,6 +7,7 @@
 import { computed, ref, watch } from "vue";
 import {
   BaseEmptyHint,
+  BaseLoadingState,
   BaseSectionHeader,
   useMobileViewport,
 } from "../../../../shared/public-api/ui.js";
@@ -97,7 +98,7 @@ watch(
     class="execution-report-drawer workspace-drawer noobot-side-drawer"
     @update:model-value="emit('update:visible', $event)"
   >
-    <BaseEmptyHint v-if="loading" :text="translate('message.executionReportLoading')" />
+    <BaseLoadingState v-if="loading" :text="translate('message.executionReportLoading')" />
     <BaseEmptyHint v-else-if="errorText" :text="errorText" />
     <BaseEmptyHint v-else-if="!view" :text="translate('message.executionReportEmpty')" />
     <div v-else class="execution-report-body" data-testid="execution-report-body">

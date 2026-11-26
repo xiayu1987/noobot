@@ -68,11 +68,7 @@ defineExpose({ getTextarea });
       </template>
     </SettingsPanelHeader>
 
-    <div
-      class="panel-body noobot-workspace-body editor-body"
-      v-loading="loadingFile"
-      element-loading-background="var(--noobot-mask-bg)"
-    >
+    <div class="panel-body noobot-workspace-body editor-body">
       <template v-if="activePath && activePathType === 'file'">
         <BasePreviewContent
           ref="previewRef"

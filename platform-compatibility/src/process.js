@@ -155,7 +155,7 @@ function buildRestrictedProcessEnvironment({ home, temp, platform, sourceEnv, ru
   return environment;
 }
 
-export function terminateProcessTree(
+export async function terminateProcessTree(
   child,
   signal = "SIGTERM",
   {
@@ -166,22 +166,89 @@ export function terminateProcessTree(
   } = {},
 ) {
   const pid = Number(child?.pid || 0);
-  if (!Number.isInteger(pid) || pid <= 0) return Promise.resolve();
+  if (!Number.isInteger(pid) || pid <= 0) return;
   if (normalizePlatform(platform) === PLATFORM.WINDOWS) {
-    return new Promise((resolve) => {
-      execFileImpl("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true }, () =>
-        resolve(),
+    return new Promise((resolve, reject) => {
+      execFileImpl(
+        "taskkill",
+        ["/PID", String(pid), "/T", "/F"],
+        { windowsHide: true },
+        (error) => {
+          if (!error) return resolve();
+          try {
+            processKill(pid, 0);
+          } catch (probeError) {
+            if (probeError.code === "ESRCH") return resolve();
+          }
+          reject(error);
+        },
       );
     });
   }
-  if (processGroup) {
-    try {
+  try {
+    if (processGroup) {
       processKill(-pid, signal);
-      return Promise.resolve();
-    } catch {
-      void 0;
+    } else {
+      child.kill(signal);
+    }
+  } catch (error) {
+    if (error.code !== "ESRCH") throw error;
+  }
+}
+
+export function createProcessTreeTerminator(
+  child,
+  { graceMs, settleMs, onTerminate, terminateProcess = terminateProcessTree },
+) {
+  let operation = null;
+  const exited = Promise.withResolvers();
+  const closed = Promise.withResolvers();
+  child.once("exit", exited.resolve);
+  child.once("close", closed.resolve);
+
+  async function waitFor(completion, timeoutMs) {
+    let timer;
+    try {
+      return await Promise.race([
+        completion.then(() => true),
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve(false), timeoutMs);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
     }
   }
-  child.kill(signal);
-  return Promise.resolve();
+
+  async function stopTree() {
+    await terminateProcess(child, "SIGTERM");
+    if (await waitFor(closed.promise, graceMs)) return;
+    await terminateProcess(child, "SIGKILL");
+    if (!(await waitFor(Promise.race([exited.promise, closed.promise]), settleMs))) {
+      throw new Error(`Process tree ${child.pid} did not exit after forced termination`);
+    }
+  }
+
+  return {
+    terminate() {
+      operation ??= Promise.allSettled([
+        Promise.resolve().then(() => onTerminate?.()),
+        stopTree(),
+      ]).then((results) => {
+        const errors = results
+          .filter((result) => result.status === "rejected")
+          .map((r) => r.reason);
+        if (errors.length === 1) throw errors[0];
+        if (errors.length > 1) throw new AggregateError(errors, "Process tree cleanup failed");
+      });
+      return operation;
+    },
+    wait() {
+      return operation;
+    },
+    dispose() {
+      child.removeListener("exit", exited.resolve);
+      child.removeListener("close", closed.resolve);
+    },
+  };
 }

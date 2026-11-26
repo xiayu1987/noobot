@@ -16,7 +16,6 @@ const identity = { userId: "u1", sessionId: "s1", dialogProcessId: "d1", persist
 test("slow dialog consumption allows concurrent message acceptance and refresh", async (t) => {
   const { services } = await createSessionRepositoryFixture(t);
   const { repository, persistenceContext } = services;
-  repository.mutationCoordinator.readTiming = () => ({ timeoutMs: 200, pollMs: 2 });
   const service = new SessionMessageService({
     sessionRepo: repository,
     now: repository.now,

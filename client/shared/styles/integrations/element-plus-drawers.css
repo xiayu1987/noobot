@@ -25,11 +25,6 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.noobot-side-drawer.rtl .el-drawer__body .el-loading-mask {
-  inset: var(--noobot-space-md);
-  border-radius: var(--noobot-radius-sm);
-}
-
 .noobot-side-drawer-modal {
   background: var(--noobot-mask-bg);
 }

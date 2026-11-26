@@ -5,7 +5,12 @@
 -->
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
-import { BaseEmptyHint, BaseMessageErrorAlert, useMobileViewport } from "noobot-chat/plugin-api/ui";
+import {
+  BaseEmptyHint,
+  BaseLoadingState,
+  BaseMessageErrorAlert,
+  useMobileViewport,
+} from "noobot-chat/plugin-api/ui";
 import { AgentExecutionView, ChatMessageItem } from "noobot-chat/plugin-api/chat-ui";
 import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
@@ -208,22 +213,22 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
     destroy-on-close
     :append-to-body="true"
     :title="translate('workflow.nodeSessionTitle', { sessionId: selectedNodeSessionId || '' })"
-    modal-class="workflow-node-session-modal"
-    body-class="workflow-node-session-drawer__body"
-    header-class="workflow-node-session-drawer__header"
-    class="workflow-node-session-drawer"
+    modal-class="noobot-side-drawer-modal"
+    body-class="noobot-side-drawer__body workflow-node-session-drawer__body"
+    header-class="noobot-side-drawer__header"
+    class="workflow-node-session-drawer noobot-side-drawer"
   >
     <el-scrollbar
       ref="messageScrollRef"
       class="workflow-node-session-scroll"
       @scroll="updateFollowRealtime"
     >
-      <div
-        v-loading="viewerLoading"
-        class="workflow-node-session-content"
-        :element-loading-text="translate('workflow.loadingNodeSession')"
-        element-loading-background="var(--noobot-panel-bg)"
-      >
+      <div class="workflow-node-session-content noobot-loading-host" :aria-busy="viewerLoading">
+        <BaseLoadingState
+          v-if="viewerLoading"
+          :text="translate('workflow.loadingNodeSession')"
+          overlay
+        />
         <BaseMessageErrorAlert :error="viewerError" />
         <template v-if="!viewerError">
           <div
@@ -404,45 +409,9 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 </template>
 
 <style>
-.workflow-node-session-modal {
-  background: var(--noobot-mask-bg);
-}
-
-.workflow-node-session-drawer__header {
-  background: var(--noobot-panel-head-bg);
-  border-bottom: 1px solid var(--noobot-divider);
-  margin-bottom: 0;
-  padding: var(--noobot-space-lg) var(--noobot-space-xl);
-  color: var(--noobot-text-strong);
-}
-
 .workflow-node-session-drawer__body {
   display: flex;
   flex-direction: column;
-  background: var(--noobot-panel-bg);
-  padding: var(--noobot-space-xs);
-  box-sizing: border-box;
-  overflow: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-}
-
-@media (max-width: 768px) {
-  .workflow-node-session-drawer.el-drawer {
-    height: 100svh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .workflow-node-session-drawer__header {
-    flex: 0 0 auto;
-  }
-
-  .workflow-node-session-drawer__body {
-    flex: 1 1 auto;
-    min-height: 0;
-    padding: 0;
-  }
 }
 
 .workflow-node-session-content {
@@ -456,17 +425,6 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 .workflow-node-session-scroll {
   flex: 1 1 auto;
   min-height: 0;
-}
-
-.workflow-node-session-content .el-loading-mask {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.workflow-node-session-content .el-loading-spinner {
-  top: auto;
-  margin-top: 0;
 }
 
 .workflow-node-session-drawer__body .workflow-node-empty {

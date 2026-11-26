@@ -56,10 +56,10 @@ import { parse } from "acorn";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   buildRestrictedProcessEnv,
+  createProcessTreeTerminator,
   resolveBrowserExecutable,
   resolveBrowserProfileRoot,
   resolveLibreOfficeExecutable,
-  terminateProcessTree,
   usesDetachedProcessGroup,
 } from "@noobot/platform-compatibility/process";
 import { cleanupNativeTaskDirectory } from "./native-script-cleanup.js";
@@ -171,7 +171,7 @@ function resolveNativeTerminationMessage({
 }
 
 function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcHandlers = {} }) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [scriptPath], {
       cwd,
       env,
@@ -186,6 +186,7 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
     let timedOut = false;
     let aborted = false;
     let settled = false;
+    let terminalReason = "";
     let scriptResult = null;
     let protocolError = "";
     const capture = (target, chunk) => {
@@ -198,23 +199,22 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
     };
     child.stdout.on("data", (chunk) => capture(stdout, chunk));
     child.stderr.on("data", (chunk) => capture(stderr, chunk));
-    let forceKillTimer = null;
-    let terminationPromise = Promise.resolve();
+    const processTermination = createProcessTreeTerminator(child, {
+      graceMs: TIME_THRESHOLDS.tools.nativeScriptForceKillGraceMs,
+      settleMs: TIME_THRESHOLDS.tools.processSettleGraceMs,
+    });
     const terminate = (reason) => {
+      if (terminalReason) return;
+      terminalReason = reason;
       timedOut = reason === "timeout";
       aborted = reason === "abort";
-      terminationPromise = terminateProcessTree(child, "SIGTERM");
-      if (!forceKillTimer) {
-        forceKillTimer = setTimeout(() => {
-          terminationPromise = terminateProcessTree(child, "SIGKILL");
-        }, TIME_THRESHOLDS.tools.nativeScriptForceKillGraceMs);
-        forceKillTimer.unref?.();
-      }
+      void processTermination.terminate().catch((error) => settle(null, null, error));
     };
     const onAbort = () => terminate("abort");
     abortSignal?.addEventListener?.("abort", onAbort, { once: true });
     let timer = setTimeout(() => terminate("timeout"), timeoutMs);
     timer.unref?.();
+    if (abortSignal?.aborted) terminate("abort");
     const interactionClock = createPendingInteractionClock({
       stop: () => {
         if (timer) clearTimeout(timer);
@@ -255,14 +255,15 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
       }
     });
     let spawnError = null;
-    const settle = async (code, signal) => {
+    const finalize = async (code, signal, terminationError) => {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
       timer = null;
-      if (forceKillTimer) clearTimeout(forceKillTimer);
       abortSignal?.removeEventListener?.("abort", onAbort);
-      await terminationPromise;
+      processTermination.dispose();
+      await processTermination.wait();
+      if (terminationError) throw terminationError;
       const exitCode = spawnError || code === null ? null : code;
       const observedSignal = spawnError || !signal ? null : signal;
       if (!spawnError && !timedOut && !aborted && exitCode !== null && !scriptResult) {
@@ -297,6 +298,10 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
         scriptResult,
       });
     };
+
+    function settle(code, signal, terminationError = null) {
+      void finalize(code, signal, terminationError).catch(reject);
+    }
 
     child.on("error", (error) => {
       spawnError = error;

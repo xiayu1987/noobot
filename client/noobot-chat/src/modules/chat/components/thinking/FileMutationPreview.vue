@@ -6,7 +6,7 @@
 <script setup>
 import { computed, ref, watch, onBeforeUnmount } from "vue";
 import { DocumentAdd, Download, EditPen } from "@element-plus/icons-vue";
-import { BaseFileCardList } from "../../../../shared/public-api/ui.js";
+import { BaseFileCardList, BaseLoadingState } from "../../../../shared/public-api/ui.js";
 import MutationDiffSplit from "./MutationDiffSplit.vue";
 import MutationFileContent from "./MutationFileContent.vue";
 import { text, isFunction } from "@noobot/shared/value";
@@ -177,7 +177,7 @@ async function openCompactPreview(mutation) {
           />
         </el-tab-pane>
         <el-tab-pane :label="translate('message.mutationPreviewDiff')" :name="tabs.DIFF">
-          <el-skeleton v-if="loading" :rows="5" animated />
+          <BaseLoadingState v-if="loading" />
           <el-alert v-else-if="error" :title="error" type="error" :closable="false" />
           <MutationDiffSplit v-else-if="diff" :diff="diff" :translate="translate" />
           <el-empty

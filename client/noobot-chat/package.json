@@ -23,7 +23,7 @@
     "test": "node ../../scripts/run-with-isolated-tmp.mjs node --no-experimental-webstorage ../../node_modules/vitest/vitest.mjs run",
     "test:watch": "vitest",
     "test:e2e:protocol": "node tests/e2e/protocol/run-suite.js all",
-    "test:e2e:file-preview": "node ../../scripts/run-with-isolated-tmp.mjs node --test tests/e2e/file-preview.test.js",
+    "test:e2e:file-preview": "node ../../scripts/run-with-isolated-tmp.mjs node --test tests/e2e/file-preview.test.js tests/e2e/drawer-loading.test.js",
     "test:e2e:styles": "node ../../scripts/run-with-isolated-tmp.mjs node --test tests/e2e/shared-buttons.test.js tests/e2e/startup-styles.test.js tests/e2e/thinking-sweep.test.js tests/e2e/session-theme.test.js",
     "test:e2e:protocol:smoke": "node tests/e2e/protocol/run-suite.js smoke",
     "test:e2e:protocol:core": "node tests/e2e/protocol/run-suite.js core",

@@ -6,7 +6,7 @@
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
-import { openSync } from "node:fs";
+import { closeSync, openSync } from "node:fs";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { runBestEffort } from "@noobot/shared/best-effort";
@@ -17,12 +17,7 @@ import {
   getOpenVSCodeConfig,
 } from "./openvscode/config.js";
 import { normalizeBasePath, normalizeUserId, readJsonFileSafe, sleep } from "./openvscode/utils.js";
-import {
-  allocatePort,
-  isPortOpen,
-  isProcessAlive,
-  stopInstanceBestEffort,
-} from "./openvscode/process.js";
+import { allocatePort, isPortOpen, isProcessAlive, stopInstance } from "./openvscode/process.js";
 import { createOpenVSCodeProxy } from "./openvscode/proxy.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 
@@ -185,6 +180,14 @@ export function createOpenVSCodeService({
     );
   }
 
+  async function stopAndForgetInstance(instance) {
+    await stopInstance(instance, {
+      forceAfterMs: getOpenVSCodeConfig(getGlobalConfig()).shutdownGraceMs,
+    });
+    await removePersistedInstance(instance);
+    forgetInstance(instance);
+  }
+
   async function resolveExistingInstance(userId = "", workspacePath = "") {
     const normalizedUserId = normalizeUserId(userId);
     const memoryInstance = instancesByUser.get(normalizedUserId);
@@ -195,13 +198,7 @@ export function createOpenVSCodeService({
       ) {
         return memoryInstance;
       }
-      stopInstanceBestEffort(memoryInstance, {
-        forceAfterMs: getOpenVSCodeConfig(getGlobalConfig()).shutdownGraceMs,
-      });
-      void runBestEffort(() => removePersistedInstance(memoryInstance), {
-        operationName: "openvscode.removeIncompatibleMemoryInstance",
-        context: { userId: normalizedUserId },
-      });
+      await stopAndForgetInstance(memoryInstance);
     }
     if (memoryInstance) forgetInstance(memoryInstance);
 
@@ -214,13 +211,7 @@ export function createOpenVSCodeService({
         rememberInstance(persistedInstance);
         return persistedInstance;
       }
-      stopInstanceBestEffort(persistedInstance, {
-        forceAfterMs: getOpenVSCodeConfig(getGlobalConfig()).shutdownGraceMs,
-      });
-      void runBestEffort(() => removePersistedInstance(persistedInstance), {
-        operationName: "openvscode.removeIncompatiblePersistedInstance",
-        context: { userId: normalizedUserId },
-      });
+      await stopAndForgetInstance(persistedInstance);
     }
     return null;
   }
@@ -287,6 +278,8 @@ export function createOpenVSCodeService({
       stdio: ["ignore", stdoutFd, stderrFd],
       env: { ...process.env },
     });
+    closeSync(stdoutFd);
+    closeSync(stderrFd);
     child.once("error", (error) => {
       spawnError = error;
     });
@@ -312,8 +305,8 @@ export function createOpenVSCodeService({
       lastAccessPersistedAtMs: Date.now(),
     };
     rememberInstance(instance);
-    await persistInstance(instance);
     try {
+      await persistInstance(instance);
       const ready = await waitForInstance(
         instance,
         openVSCodeConfig.startTimeoutMs,
@@ -323,7 +316,13 @@ export function createOpenVSCodeService({
         throw new Error("OpenVSCode Server start timeout or exited early");
       }
     } catch (error) {
-      forgetInstance(instance);
+      if (instance.pid) {
+        await stopAndForgetInstance(instance).catch((cleanupError) => {
+          throw new AggregateError([error, cleanupError], "OpenVSCode startup and cleanup failed");
+        });
+      } else {
+        forgetInstance(instance);
+      }
       const message =
         error?.code === "ENOENT"
           ? `OpenVSCode Server binary not found: ${openVSCodeConfig.command}. Run "npm --prefix service run install:openvscode-server" or set OPENVSCODE_SERVER_COMMAND.`
@@ -338,12 +337,7 @@ export function createOpenVSCodeService({
     const workspacePath = await ensureWorkspace(normalizedUserId);
     const existingInstance = await resolveExistingInstance(normalizedUserId, workspacePath);
     if (existingInstance) {
-      const openVSCodeConfig = getOpenVSCodeConfig(getGlobalConfig());
-      stopInstanceBestEffort(existingInstance, {
-        forceAfterMs: openVSCodeConfig.shutdownGraceMs,
-      });
-      forgetInstance(existingInstance);
-      await removePersistedInstance(existingInstance);
+      await stopAndForgetInstance(existingInstance);
     }
     const instance = await startInstance(normalizedUserId, workspacePath);
     touchInstance(instance, { persist: true });
@@ -380,16 +374,12 @@ export function createOpenVSCodeService({
     touchInstance,
   });
 
-  function stopAllInstancesBestEffort() {
-    const openVSCodeConfig = getOpenVSCodeConfig(getGlobalConfig());
-    for (const instance of Array.from(instancesByUser.values())) {
-      stopInstanceBestEffort(instance, { forceAfterMs: openVSCodeConfig.shutdownGraceMs });
-      forgetInstance(instance);
-      void runBestEffort(() => removePersistedInstance(instance), {
-        operationName: "openvscode.removeStoppedInstance",
-        context: { userId: instance.userId },
-      });
-    }
+  async function stopAllInstances() {
+    const results = await Promise.allSettled(
+      Array.from(instancesByUser.values(), stopAndForgetInstance),
+    );
+    const errors = results.filter((result) => result.status === "rejected").map((r) => r.reason);
+    if (errors.length) throw new AggregateError(errors, "OpenVSCode instance cleanup failed");
   }
 
   async function cleanupIdleInstances({ force = false } = {}) {
@@ -408,9 +398,7 @@ export function createOpenVSCodeService({
       const idleMs = nowMs - lastAccessAtMs;
       const shouldStop = force || !reachable || idleMs >= idleTimeoutMs;
       if (!shouldStop) continue;
-      stopInstanceBestEffort(instance, { forceAfterMs: openVSCodeConfig.shutdownGraceMs });
-      forgetInstance(instance);
-      await removePersistedInstance(instance);
+      await stopAndForgetInstance(instance);
       stopped += 1;
     }
     return { stopped, total: instancesByUser.size };
@@ -427,13 +415,13 @@ export function createOpenVSCodeService({
     cleanupTimer.unref?.();
   }
 
-  function stopLifecycleManager({ stopInstances = false } = {}) {
+  async function stopLifecycleManager({ stopInstances = false } = {}) {
     if (cleanupTimer) {
       clearInterval(cleanupTimer);
       cleanupTimer = null;
     }
     if (stopInstances) {
-      stopAllInstancesBestEffort();
+      await stopAllInstances();
     }
   }
 

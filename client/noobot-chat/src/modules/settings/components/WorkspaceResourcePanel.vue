@@ -8,6 +8,7 @@ import { computed } from "vue";
 import { ElMessage } from "element-plus";
 import { WORKSPACE_DIRECTORY_TREE_PROPS } from "@noobot/workspace-protocol/directory-tree";
 import { Document, Folder } from "@element-plus/icons-vue";
+import BaseLoadingState from "../../../shared/ui/BaseLoadingState.vue";
 import SettingsPanelHeader from "./SettingsPanelHeader.vue";
 import SettingsWorkspacePanel from "./SettingsWorkspacePanel.vue";
 import WorkspaceResourceToolbar from "./WorkspaceResourceToolbar.vue";
@@ -129,9 +130,10 @@ const loadAllNode = (node, resolve, reject) => loadDirectoryNode(node, resolve, 
               {{ translate("settings.reset") }}
             </el-button>
           </div>
-          <el-scrollbar class="tree-scroll">
+          <el-scrollbar class="tree-scroll" :aria-busy="loadingTree">
+            <BaseLoadingState v-if="loadingTree" />
             <el-tree
-              v-if="!loadingTree"
+              v-else
               :data="tree"
               node-key="path"
               :props="WORKSPACE_DIRECTORY_TREE_PROPS"
@@ -186,13 +188,10 @@ const loadAllNode = (node, resolve, reject) => loadDirectoryNode(node, resolve, 
               {{ translate("settings.reset") }}
             </el-button>
           </div>
-          <el-scrollbar
-            class="tree-scroll"
-            v-loading="loadingAllTree"
-            element-loading-background="var(--noobot-mask-bg)"
-          >
+          <el-scrollbar class="tree-scroll" :aria-busy="loadingAllTree">
+            <BaseLoadingState v-if="loadingAllTree" />
             <el-tree
-              v-if="!loadingAllTree && activeResourceSection === 'all-workspace'"
+              v-else-if="activeResourceSection === 'all-workspace'"
               :data="allWorkspaceTree"
               node-key="path"
               :props="WORKSPACE_DIRECTORY_TREE_PROPS"

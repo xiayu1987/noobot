@@ -15,6 +15,7 @@ import { withNativeDesktop } from "./helpers/native-desktop.js";
 import { e2eRunId, runOpsWorkdir, runOpsWorkdirPath } from "./helpers/run-ops-workdir.js";
 import { text } from "@noobot/shared/value";
 import { validateRequestLogOrder } from "../../../../../scripts/quality/model-context-convergence/request-log-audit.mjs";
+import { waitForModelRequestLogs } from "../../../../../model-proxy/src/log-barrier.js";
 
 const REGISTRY_FILE = "suite-sessions.json";
 
@@ -190,6 +191,12 @@ export default class SuiteSessionCleanupReporter {
     }
     if (records.some((record) => record.userId !== credentials.userId)) {
       throw new Error("Suite Session cleanup requires credentials for every registered owner");
+    }
+    try {
+      await waitForModelRequestLogs(this.requestLogsRoot);
+    } catch (error) {
+      await this.preserveFailureEvidence(credentials.userId);
+      throw new Error("Pre-cleanup model request log flush failed", { cause: error });
     }
     const failures = [];
     const checked = [];

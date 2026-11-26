@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { pad } from "./common.js";
 import { sanitizeHeaders, sanitizeUrl } from "@noobot/sanitize";
@@ -14,25 +14,16 @@ function formatCacheDiagnostics(cacheDiagnostics) {
   return cacheDiagnostics ? JSON.stringify(cacheDiagnostics, null, 2) : "[none]";
 }
 
-function createLogger({
+function formatDateForFile(date = new Date()) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function createSessionLogDirectoryResolver({
   logDir,
-  logPrefix,
   unknownModelName,
   unknownFlowName,
   unknownSessionId,
-  maxLogFileSizeBytes,
-  retainMs,
-} = {}) {
-  let lastCleanupAt = 0;
-
-  function formatDateForFile(date = new Date()) {
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-  }
-
-  function ensureLogDir() {
-    fs.mkdirSync(logDir, { recursive: true });
-  }
-
+}) {
   function sanitizePathSegment(value = "", fallback = "") {
     const normalizedValue = text(value);
     if (!normalizedValue) return fallback;
@@ -69,144 +60,114 @@ function createLogger({
       ? path.join(modelFlowDir, safeParentSessionId, "children", safeSessionId)
       : path.join(modelFlowDir, safeSessionId);
   }
+  return getModelFlowSessionLogDir;
+}
 
-  function ensureModelFlowSessionLogDir(
-    modelName = "",
-    flowName = "",
-    sessionId = "",
-    parentSessionId = "",
-  ) {
-    const modelFlowSessionLogDir = getModelFlowSessionLogDir(
-      modelName,
-      flowName,
-      sessionId,
-      parentSessionId,
-    );
-    fs.mkdirSync(modelFlowSessionLogDir, { recursive: true });
-    return modelFlowSessionLogDir;
-  }
+function createLogWriter({ logDir, logPrefix, maxLogFileSizeBytes, retainMs }) {
+  let lastCleanupAt = 0;
+  let pendingWrites = Promise.resolve();
+  let writeFailure;
+  const activeFiles = new Map();
+  const logFilePattern = new RegExp(
+    `^${RegExp.escape(logPrefix)}-(\\d{4}-\\d{2}-\\d{2})-(\\d{3,})\\.log$`,
+  );
 
-  function isManagedLogFile(fileName = "") {
-    return new RegExp(`^${logPrefix}-\\d{4}-\\d{2}-\\d{2}-\\d{3}\\.log$`).test(fileName);
-  }
-
-  function cleanupOldLogsInDir(dirPath, now) {
-    const files = fs.readdirSync(dirPath);
-    for (const file of files) {
-      const filePath = path.join(dirPath, file);
-      let stat = null;
+  async function cleanupOldLogsInDir(dirPath, now) {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const filePath = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        await cleanupOldLogsInDir(filePath, now);
+        await removeEmptyLogDirectory(filePath);
+        continue;
+      }
+      if (!logFilePattern.test(entry.name)) continue;
+      let stat;
       try {
-        stat = fs.statSync(filePath);
+        stat = await fs.lstat(filePath);
       } catch (error) {
         console.warn("Unable to inspect model proxy log entry:", filePath, error);
         continue;
       }
 
-      if (stat.isDirectory()) {
-        cleanupOldLogsInDir(filePath, now);
-        removeEmptyLogDirectory(filePath);
-        continue;
-      }
-
-      if (!isManagedLogFile(file)) continue;
-      removeExpiredLogFile(filePath, stat, now);
+      await removeExpiredLogFile(filePath, stat, now);
     }
   }
 
-  function removeEmptyLogDirectory(filePath) {
+  async function removeEmptyLogDirectory(filePath) {
     try {
-      if (!fs.readdirSync(filePath).length) fs.rmdirSync(filePath);
+      if (!(await fs.readdir(filePath)).length) await fs.rmdir(filePath);
     } catch (error) {
       console.warn("Unable to remove empty model proxy log directory:", filePath, error);
     }
   }
 
-  function removeExpiredLogFile(filePath, stat, now) {
+  async function removeExpiredLogFile(filePath, stat, now) {
     if (now - stat.mtimeMs <= retainMs) return;
     try {
-      fs.unlinkSync(filePath);
+      await fs.unlink(filePath);
     } catch (error) {
       console.warn("Unable to remove expired model proxy log:", filePath, error);
     }
   }
 
-  function cleanupOldLogs(now = Date.now()) {
+  async function cleanupOldLogs(now) {
     if (now - lastCleanupAt < 60 * 1000) return;
+    await fs.mkdir(logDir, { recursive: true });
+    await cleanupOldLogsInDir(logDir, now);
+    activeFiles.clear();
     lastCleanupAt = now;
-    cleanupOldLogsInDir(logDir, now);
   }
 
-  function getWritableLogFilePath(
-    entrySizeBytes,
-    modelName = "",
-    flowName = "",
-    sessionId = "",
-    parentSessionId = "",
-  ) {
-    const modelFlowSessionLogDir = ensureModelFlowSessionLogDir(
-      modelName,
-      flowName,
-      sessionId,
-      parentSessionId,
-    );
-    const dateStr = formatDateForFile(new Date());
-    const regex = new RegExp(`^${logPrefix}-${dateStr}-(\\d{3})\\.log$`);
-    const files = fs.readdirSync(modelFlowSessionLogDir);
-
-    const indices = files
-      .map((fileName) => {
-        const matchResult = fileName.match(regex);
-        return matchResult ? Number(matchResult[1]) : null;
-      })
-      .filter((indexNumber) => Number.isInteger(indexNumber))
-      .sort((leftIndex, rightIndex) => leftIndex - rightIndex);
-
-    let index = indices.length ? indices[indices.length - 1] : 1;
-    const filePath = path.join(
-      modelFlowSessionLogDir,
-      `${logPrefix}-${dateStr}-${pad(index, 3)}.log`,
-    );
-
-    if (!logFileExceedsCapacity(filePath, entrySizeBytes)) return filePath;
-    index += 1;
-    return path.join(modelFlowSessionLogDir, `${logPrefix}-${dateStr}-${pad(index, 3)}.log`);
+  function logFilePath(dir, date, index) {
+    return path.join(dir, `${logPrefix}-${date}-${pad(index, 3)}.log`);
   }
 
-  function logFileExceedsCapacity(filePath, entrySizeBytes) {
-    try {
-      return fs.statSync(filePath).size + entrySizeBytes > maxLogFileSizeBytes;
-    } catch (error) {
-      if (error.code === "ENOENT") return false;
-      throw error;
+  async function readActiveFile(dir, date) {
+    const active = activeFiles.get(dir);
+    if (active?.date === date) return active;
+    await fs.mkdir(dir, { recursive: true });
+    let index = 0;
+    for (const name of await fs.readdir(dir)) {
+      const match = logFilePattern.exec(name);
+      if (match?.[1] === date) index = Math.max(index, Number(match[2]));
     }
+    const size = index ? (await fs.stat(logFilePath(dir, date, index))).size : 0;
+    return { date, index: index || 1, size };
   }
 
-  function appendLog(
-    logEntry,
-    modelName = unknownModelName,
-    flowName = unknownFlowName,
-    sessionId = unknownSessionId,
-    parentSessionId = "",
-  ) {
-    try {
-      ensureLogDir();
-      cleanupOldLogs(Date.now());
+  async function writeLog(dir, date, entry) {
+    await cleanupOldLogs(Date.now());
+    const active = await readActiveFile(dir, date);
+    const bytes = Buffer.byteLength(entry, "utf8");
+    const rotate = active.size > 0 && active.size + bytes > maxLogFileSizeBytes;
+    const index = active.index + Number(rotate);
+    await fs.appendFile(logFilePath(dir, date, index), entry);
+    activeFiles.set(dir, { date, index, size: (rotate ? 0 : active.size) + bytes });
+  }
 
-      const bytes = Buffer.byteLength(logEntry, "utf8");
-      const filePath = getWritableLogFilePath(
-        bytes,
-        modelName,
-        flowName,
-        sessionId,
-        parentSessionId,
-      );
-      fs.appendFile(filePath, logEntry, (err) => {
-        if (err) console.error("Error writing log:", err);
+  function append(dir, logEntry) {
+    const date = formatDateForFile();
+    pendingWrites = pendingWrites
+      .then(() => writeLog(dir, date, logEntry))
+      .catch((error) => {
+        activeFiles.delete(dir);
+        writeFailure ??= error;
+        console.error("Error writing model proxy log:", error);
       });
-    } catch (err) {
-      console.error("Logger error:", err);
-    }
   }
+
+  async function flush() {
+    await pendingWrites;
+    if (writeFailure) throw writeFailure;
+  }
+  return { append, flush };
+}
+
+function createLogger(options = {}) {
+  const { unknownModelName, unknownFlowName, unknownSessionId } = options;
+  const getSessionLogDirectory = createSessionLogDirectoryResolver(options);
+  const { append, flush } = createLogWriter(options);
 
   function logRequest({
     req,
@@ -236,7 +197,7 @@ Body:
 ${bodyText}
 ========================
 `;
-    appendLog(logEntry, modelName, flowName, sessionId, parentSessionId);
+    append(getSessionLogDirectory(modelName, flowName, sessionId, parentSessionId), logEntry);
   }
 
   function logTerminal({
@@ -269,13 +230,11 @@ Body:
 ${bodyText}
 ----------------
 `;
-    appendLog(logEntry, modelName, flowName, sessionId, parentSessionId);
+    append(getSessionLogDirectory(modelName, flowName, sessionId, parentSessionId), logEntry);
   }
 
-  ensureLogDir();
-
   return {
-    appendLog,
+    flush,
     logRequest,
     logTerminal,
   };

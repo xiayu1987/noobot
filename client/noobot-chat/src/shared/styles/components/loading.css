@@ -1,0 +1,33 @@
+.noobot-loading-host {
+  position: relative;
+}
+
+.noobot-loading-state {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
+  padding: var(--noobot-space-md);
+  overflow: hidden;
+}
+
+.noobot-loading-state > .el-skeleton {
+  width: 100%;
+  max-width: 32rem;
+  margin-inline: auto;
+}
+
+.noobot-loading-state.is-overlay {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  width: auto;
+  background: var(--noobot-panel-bg);
+  border-radius: var(--noobot-radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .noobot-loading-state .el-skeleton.is-animated .el-skeleton__item {
+    animation: none;
+  }
+}

@@ -217,6 +217,39 @@ test("runFileBacked keeps existing stderr instead of overwriting it on timeout",
   assert.equal((await readOutputs(result)).stderr, "early");
 });
 
+test("run propagates cleanup hook failure after terminating the native process", async (t) => {
+  const root = await createRoot(t);
+  await assert.rejects(
+    run(
+      { command: process.execPath, args: ["-e", "setInterval(() => {}, 1000)"] },
+      root,
+      100,
+      null,
+      {
+        generatedDataRoot: root,
+        onTerminate: async () => {
+          throw new Error("cleanup rejected");
+        },
+      },
+    ),
+    /cleanup rejected/,
+  );
+});
+
+test("runFileBacked honors a pre-aborted signal on the native platform", async (t) => {
+  const root = await createRoot(t);
+  const controller = new AbortController();
+  controller.abort();
+  const result = await runFileBacked(
+    { command: process.execPath, args: ["-e", "setInterval(() => {}, 1000)"] },
+    root,
+    5000,
+    controller.signal,
+    { generatedDataRoot: root },
+  );
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.aborted);
+});
+
 test("hasCommand distinguishes installed, missing and failed lookups", async (t) => {
   if (process.platform === "win32") return t.skip("POSIX lookup executable");
   assert.equal(await hasCommand("node"), true);

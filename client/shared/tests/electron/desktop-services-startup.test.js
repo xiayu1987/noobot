@@ -85,7 +85,7 @@ test("desktop stop delegates process tree cleanup to the platform boundary", asy
     const fixture = await createFixture({ packaged: false });
     try {
       await fixture.manager.ensureServiceStarted();
-      fixture.manager.stopManagedService();
+      await fixture.manager.stopManagedService();
 
       assert.deepEqual(fixture.terminateCalls, [
         {
@@ -99,6 +99,37 @@ test("desktop stop delegates process tree cleanup to the platform boundary", asy
       await fixture.restore();
     }
   });
+});
+
+test("desktop stop waits for termination and permits retry after a cleanup failure", async () => {
+  let rejectTermination;
+  let attempts = 0;
+  const fixture = await createFixture({
+    managerOptions: {
+      terminateProcess: () => {
+        attempts++;
+        return attempts === 1
+          ? new Promise((_, reject) => {
+              rejectTermination = reject;
+            })
+          : Promise.resolve();
+      },
+    },
+  });
+  try {
+    await fixture.manager.ensureServiceStarted();
+    const pending = fixture.manager.stopManagedService();
+    assert.equal(fixture.manager.stopManagedService(), pending);
+    rejectTermination(new Error("taskkill denied"));
+    await assert.rejects(pending, (error) => {
+      assert.equal(error.errors[0].message, "taskkill denied");
+      return true;
+    });
+    await fixture.manager.stopManagedService();
+    assert.equal(attempts, 2);
+  } finally {
+    await fixture.restore();
+  }
 });
 
 test("desktop startup uses npm for macOS development service launch", async () => {

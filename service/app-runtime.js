@@ -60,7 +60,7 @@ const {
 } = appDependencies;
 
 function stopManagedOpenVSCodeInstances() {
-  openVSCodeService?.stopLifecycleManager?.({ stopInstances: true });
+  return openVSCodeService?.stopLifecycleManager?.({ stopInstances: true });
 }
 
 let shuttingDown = false;

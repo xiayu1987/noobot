@@ -17,6 +17,7 @@ export const enUSMessages = {
     MODEL_REFERENCE_CAPABILITY_MISMATCH: "Model capability mismatch (requires {requirement})",
   },
   common: {
+    loading: "Loading…",
     session: "Session",
     sessionArtifacts: "Session artifacts",
     extensionFeatures: "Extension features",

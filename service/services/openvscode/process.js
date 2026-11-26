@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import net from "node:net";
+import { setTimeout as delay } from "node:timers/promises";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { terminateProcessTree } from "@noobot/platform-compatibility/process";
 import { DEFAULT_HOST } from "./config.js";
@@ -14,8 +15,9 @@ export function isProcessAlive(pid = 0) {
   try {
     process.kill(value, 0);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (error.code === "ESRCH") return false;
+    throw error;
   }
 }
 export function isPortOpen({
@@ -47,20 +49,25 @@ export function allocatePort(host = DEFAULT_HOST) {
     });
   });
 }
-export function stopInstanceBestEffort(instance, { forceAfterMs }) {
+async function waitForProcessExit(pid, timeoutMs) {
+  const deadline = performance.now() + timeoutMs;
+  while (isProcessAlive(pid)) {
+    const remaining = deadline - performance.now();
+    if (remaining <= 0) return false;
+    await delay(Math.min(remaining, TIME_THRESHOLDS.openvscode.waitProbeTimeoutMs));
+  }
+  return true;
+}
+
+export async function stopInstance(instance, { forceAfterMs }) {
   const pid = Number(instance?.pid || 0);
-  if (!Number.isInteger(pid) || pid <= 0) return;
+  if (!Number.isInteger(pid) || pid <= 0)
+    throw new TypeError("OpenVSCode instance PID is required");
   const child = { pid, kill: (signal) => process.kill(pid, signal) };
-  void terminateProcessTree(child, "SIGTERM").catch((error) => {
-    console.warn(`[openvscode] graceful process termination failed: ${error?.message || error}`);
-  });
-  if (forceAfterMs > 0) {
-    const timer = setTimeout(() => {
-      if (!isProcessAlive(pid)) return;
-      void terminateProcessTree(child, "SIGKILL").catch((error) => {
-        console.warn(`[openvscode] forced process termination failed: ${error?.message || error}`);
-      });
-    }, Number(forceAfterMs));
-    timer.unref?.();
+  await terminateProcessTree(child, "SIGTERM");
+  if (await waitForProcessExit(pid, forceAfterMs)) return;
+  await terminateProcessTree(child, "SIGKILL");
+  if (!(await waitForProcessExit(pid, TIME_THRESHOLDS.tools.processSettleGraceMs))) {
+    throw new Error(`OpenVSCode process tree ${pid} did not exit after forced termination`);
   }
 }

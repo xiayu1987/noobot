@@ -15,6 +15,8 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
   const { defineComponent, h } = await import("vue");
   const { default: BaseMessageTypeTag } =
     await import("../../../../../../src/shared/ui/BaseMessageTypeTag.vue");
+  const { default: BaseLoadingState } =
+    await import("../../../../../../src/shared/ui/BaseLoadingState.vue");
   const passthrough = (name) =>
     defineComponent({
       name,
@@ -39,6 +41,7 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
       },
     }),
     BaseFileCardList: passthrough("BaseFileCardList"),
+    BaseLoadingState,
     BaseMarkdownContent: defineComponent({
       name: "BaseMarkdownContent",
       props: { content: { type: String, default: "" } },

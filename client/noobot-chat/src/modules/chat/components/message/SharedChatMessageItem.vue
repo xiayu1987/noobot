@@ -41,6 +41,7 @@ import {
   BaseMarkdownContent,
   BaseAttachmentFileCard,
   BaseFileCardList,
+  BaseLoadingState,
   BaseMessageErrorAlert,
   BaseMessageShell,
   BaseMessageTypeTag,
@@ -669,7 +670,7 @@ function toggleAssistantContent() {
       :service="fileMutationPreviewService"
       :translate="translate"
     />
-    <el-skeleton v-else-if="mutationPreviewLoading" :rows="5" animated />
+    <BaseLoadingState v-else-if="mutationPreviewLoading" />
     <el-alert
       v-else-if="mutationPreviewError"
       :title="mutationPreviewError"

@@ -41,6 +41,7 @@ export const DEFAULT_TIME_THRESHOLDS = deepFreeze({
   },
   modelProxy: {
     logRetentionMs: 60 * 60 * 1000,
+    logFlushTimeoutMs: TIME_TIERS.standardCommandMs,
   },
   model: {
     emptyResponseRetryBaseDelayMs: 500,

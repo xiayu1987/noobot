@@ -28,6 +28,7 @@ import {
   listUserConnectors,
 } from "../../../infrastructure/api/connectors/connectorApi.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
+import BaseLoadingState from "../../../shared/ui/BaseLoadingState.vue";
 import { DESKTOP_DRAWER_SIZE } from "../../../shared/composables/useMobileViewport.js";
 import { useOverlayHistory } from "../../../shared/composables/useOverlayHistory.js";
 import { text } from "@noobot/shared/value";
@@ -200,7 +201,8 @@ watch(() => [props.connected, props.userId], refresh);
 </script>
 
 <template>
-  <section class="connector-manager" :class="{ compact }" v-loading="loading">
+  <section class="connector-manager noobot-loading-host" :class="{ compact }" :aria-busy="loading">
+    <BaseLoadingState v-if="loading" overlay />
     <header v-if="showHeader" class="manager-header">
       <span class="manager-title"
         ><el-icon><Connection /></el-icon>{{ translate("connectors.management") }}
@@ -288,7 +290,13 @@ watch(() => [props.connected, props.userId], refresh);
       append-to-body
       class="connector-add-drawer workspace-drawer noobot-side-drawer"
     >
-      <el-form class="connector-add-form" label-position="top" @submit.prevent="addConnector">
+      <el-form
+        class="connector-add-form noobot-loading-host"
+        label-position="top"
+        :aria-busy="loading"
+        @submit.prevent="addConnector"
+      >
+        <BaseLoadingState v-if="loading" overlay />
         <el-form-item :label="translate('connectors.name')" required
           ><el-input v-model="form.name"
         /></el-form-item>
@@ -347,8 +355,10 @@ watch(() => [props.connected, props.userId], refresh);
         </el-form-item>
       </el-form>
       <template #footer
-        ><el-button @click="dialogVisible = false">{{ translate("common.cancel") }}</el-button
-        ><el-button type="primary" @click="addConnector">{{
+        ><el-button :disabled="loading" @click="dialogVisible = false">{{
+          translate("common.cancel")
+        }}</el-button
+        ><el-button type="primary" :loading="loading" @click="addConnector">{{
           translate("connectors.connect")
         }}</el-button></template
       >

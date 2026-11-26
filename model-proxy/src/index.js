@@ -12,4 +12,8 @@ initializeRuntimeParams(
   path.join(requireWorkspaceRootEnv(), WORKSPACE_ROOT_LAYOUT.RUNTIME_PARAMS_FILE),
 );
 const { startModelProxy } = await import("./main.js");
-startModelProxy();
+const proxies = startModelProxy();
+if (process.env.NOOBOT_MODEL_PROXY_LOG_DIR !== undefined) {
+  const { startRequestLogBarrier } = await import("./log-barrier.js");
+  await startRequestLogBarrier(process.env.NOOBOT_MODEL_PROXY_LOG_DIR, proxies);
+}

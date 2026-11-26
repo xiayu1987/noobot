@@ -27,7 +27,6 @@ function mountPreview({ name = "preview.md", ...props } = {}) {
       ...props,
     },
     global: {
-      directives: { loading: () => {} },
       stubs: {
         "el-button": defineComponent({
           name: "ElButton",
@@ -177,9 +176,11 @@ describe("BasePreviewContent", () => {
     expect(wrapper.find("iframe").exists()).toBe(false);
     await flushPromises();
     expect(wrapper.attributes("aria-busy")).toBe("true");
+    expect(wrapper.findAll('.noobot-loading-state[role="status"]')).toHaveLength(1);
     await wrapper.setProps({ textContent: "<h1>New</h1>" });
     await flushPromises();
     expect(wrapper.attributes("aria-busy")).toBe("false");
+    expect(wrapper.find(".noobot-loading-state").exists()).toBe(false);
     expect(wrapper.find("iframe").attributes("srcdoc")).toContain("<h1>New</h1>");
     finishResource(new Blob(["image"]));
     await flushPromises();

@@ -4,17 +4,16 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import BaseLoadingState from "../../../shared/ui/BaseLoadingState.vue";
+
 defineProps({
   loading: { type: Boolean, default: false },
 });
 </script>
 
 <template>
-  <div
-    class="workspace-layout noobot-workspace-layout"
-    v-loading="loading"
-    element-loading-background="var(--noobot-mask-bg)"
-  >
+  <div class="workspace-layout noobot-workspace-layout noobot-loading-host" :aria-busy="loading">
     <slot />
+    <BaseLoadingState v-if="loading" overlay />
   </div>
 </template>

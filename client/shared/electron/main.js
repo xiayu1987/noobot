@@ -272,7 +272,23 @@ app.on("activate", () => {
   }
 });
 app.on("window-all-closed", () => {});
-app.on("before-quit", () => {
+let backendStopped = false;
+let backendStopping = false;
+app.on("before-quit", (event) => {
   allowQuit();
-  stopManagedService();
+  if (backendStopped) return;
+  event.preventDefault();
+  if (backendStopping) return;
+  backendStopping = true;
+  void stopManagedService().then(
+    () => {
+      backendStopped = true;
+      app.quit();
+    },
+    (error) => {
+      backendStopping = false;
+      appendDesktopLog(`Backend shutdown failed: ${error.stack || error.message}`);
+      dialog.showErrorBox("Noobot backend shutdown failed", error.message);
+    },
+  );
 });

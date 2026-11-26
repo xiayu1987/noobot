@@ -6,6 +6,10 @@
  */
 import { spawn } from "node:child_process";
 import { acquireIsolatedTmpDir, buildIsolatedTmpEnv } from "./lib/isolated-tmp.mjs";
+import {
+  terminateProcessTree,
+  usesDetachedProcessGroup,
+} from "@noobot/platform-compatibility/process";
 
 const KEEP_TMP_DIRS = 3;
 const TMP_PREFIX = "noobot-test-tmp-";
@@ -23,18 +27,22 @@ const { dir: runTmpDir, created } = await acquireIsolatedTmpDir({
 
 const runtimeArgs =
   command === "node"
-    ? [
-        "--import",
-        new URL("../shared/testing/runtime-params.js", import.meta.url).href,
-        ...commandArgs,
-      ]
+    ? ["--import", new URL("./lib/isolated-node-runtime.mjs", import.meta.url).href, ...commandArgs]
     : commandArgs;
 const child = spawn(command, runtimeArgs, {
   stdio: "inherit",
   env: buildIsolatedTmpEnv(runTmpDir),
+  detached: usesDetachedProcessGroup(),
 });
+let cancellation;
+let terminationFailure;
 for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.on(signal, () => child.kill(signal));
+  process.on(signal, () => {
+    cancellation ??= terminateProcessTree(child, "SIGKILL").catch((error) => {
+      terminationFailure = error;
+      process.stderr.write(`${error.stack || error.message}\n`);
+    });
+  });
 }
 
 function finish(exitCode) {
@@ -48,4 +56,7 @@ child.on("error", (error) => {
   process.stderr.write(`${error.stack || error.message}\n`);
   finish(1);
 });
-child.on("close", (code, signal) => finish(code ?? (signal ? 1 : 0)));
+child.on("close", async (code, signal) => {
+  await cancellation;
+  finish(cancellation || terminationFailure ? 1 : (code ?? (signal ? 1 : 0)));
+});

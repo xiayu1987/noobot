@@ -19,7 +19,7 @@ test("@full PBE-025 断网重连后停止", async ({ noobot, protocolCapture }, 
     noobot.page,
     uniquePrompt(
       testInfo,
-      "Call execute_script once with command `sleep 60`, foreground mode and low risk. Wait for its result before replying.",
+      'Call execute_script once with command `node -e "setTimeout(() => {}, 60000)"`, foreground mode and low risk. Wait for its result before replying.',
     ),
   );
   const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");

@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import "../../shared/testing/runtime-params.js";
 import { createRequestPrefixTracker, measureResponseUsage } from "../src/cache-diagnostics.js";
 
 const chatUrl = new URL("http://upstream.test/v1/chat/completions");

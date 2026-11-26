@@ -25,6 +25,10 @@ export default {
       name: "Model proxy log retention",
       description: "Age after which model proxy log files are eligible for cleanup.",
     },
+    logFlushTimeoutMs: {
+      name: "Model proxy log flush timeout",
+      description: "Maximum wait for the model proxy to write request logs before audit.",
+    },
   },
   model: {
     maxRetryDelayMs: {

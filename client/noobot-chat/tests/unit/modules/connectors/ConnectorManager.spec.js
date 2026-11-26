@@ -12,7 +12,8 @@ import { createElementPlusMountOptions } from "../../fixtures/elementPlusStubs.j
 
 const { confirm } = vi.hoisted(() => ({ confirm: vi.fn() }));
 
-vi.mock("element-plus", () => ({
+vi.mock("element-plus", async (importOriginal) => ({
+  ...(await importOriginal()),
   ElMessage: { error: vi.fn() },
   ElMessageBox: { confirm },
 }));
@@ -133,7 +134,6 @@ describe("ConnectorManager", () => {
         fetcher,
       },
       global: {
-        directives: { loading: () => {} },
         ...createElementPlusMountOptions({
           ElButton: ButtonStub,
           "el-button": ButtonStub,

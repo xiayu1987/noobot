@@ -25,6 +25,10 @@ export default {
       name: "模型代理日志保留时长",
       description: "超过此时长的模型代理日志可被清理。",
     },
+    logFlushTimeoutMs: {
+      name: "模型代理日志写入确认超时",
+      description: "审计等待模型代理写完请求日志的最长时间。",
+    },
   },
   model: {
     maxRetryDelayMs: {

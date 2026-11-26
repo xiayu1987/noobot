@@ -9,11 +9,14 @@ import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { afterEach, expect, it, vi } from "vitest";
 import Reporter, { registerSuiteSession } from "../../e2e/protocol/suite-session-cleanup.js";
 
-const { newContext, validateRequestLogOrder, withNativeDesktop } = vi.hoisted(() => ({
-  newContext: vi.fn(),
-  validateRequestLogOrder: vi.fn(),
-  withNativeDesktop: vi.fn(),
-}));
+const { newContext, validateRequestLogOrder, waitForModelRequestLogs, withNativeDesktop } =
+  vi.hoisted(() => ({
+    newContext: vi.fn(),
+    validateRequestLogOrder: vi.fn(),
+    waitForModelRequestLogs: vi.fn(),
+    withNativeDesktop: vi.fn(),
+  }));
+vi.mock("../../../../../model-proxy/src/log-barrier.js", () => ({ waitForModelRequestLogs }));
 vi.mock("../../e2e/protocol/helpers/native-desktop.js", () => ({ withNativeDesktop }));
 vi.mock("../../../../../scripts/quality/model-context-convergence/request-log-audit.mjs", () => ({
   validateRequestLogOrder,
@@ -164,6 +167,20 @@ it("preserves failure evidence and deletes it once the full suite passes", async
   expect(context.dispose).toHaveBeenCalledOnce();
   await expect(fs.access(runRegistry("current-run"))).rejects.toMatchObject({ code: "ENOENT" });
   await expect(fs.access(evidenceDir)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("preserves sessions and evidence when the proxy cannot confirm that request logs are complete", async () => {
+  const { runRegistry, evidenceRoot, context, createReporter, registerSuiteSession } =
+    await setupSuite();
+  await registerSuiteSession({ userId: "owner", sessionId: "session-1" });
+  waitForModelRequestLogs.mockRejectedValueOnce(new Error("barrier unavailable"));
+  await expect(createReporter().onEnd({ status: "passed" })).rejects.toThrow(
+    /Pre-cleanup model request log flush failed/,
+  );
+  expect(validateRequestLogOrder).not.toHaveBeenCalled();
+  expect(context.delete).not.toHaveBeenCalled();
+  await expect(fs.readFile(runRegistry("current-run"), "utf8")).resolves.toContain("session-1");
+  await expect(fs.access(evidenceRoot)).resolves.toBeUndefined();
 });
 
 it("preserves sessions and evidence when the pre-cleanup request audit fails", async () => {

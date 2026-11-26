@@ -5,6 +5,9 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
+import { once } from "node:events";
+import { createServer } from "node:http";
+import { terminateProcessTree } from "@noobot/platform-compatibility/process";
 import { runDeletionWorker } from "./deletion-worker-process.test-helpers.js";
 
 const helper = new URL("./deletion-worker-process.test-helpers.js", import.meta.url).href;
@@ -51,4 +54,48 @@ test("deletion worker keeps a separate deadline for a stalled operation", async 
     runDeletionWorker(sourceArgs(source), {}, { startupMs: 60000, operationMs: 100 }),
     /timed out during deletion[\s\S]*operation stalled/,
   );
+});
+
+test(
+  "deletion worker cancellation waits for its descendants to exit",
+  { timeout: 15000 },
+  async (t) => {
+    const controller = new AbortController();
+    const reason = new Error("deletion cancelled by caller");
+    let descendantPid;
+    const server = createServer((req, res) => {
+      descendantPid = Number(req.url.slice(1));
+      res.end();
+      controller.abort(reason);
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    t.after(async () => {
+      if (descendantPid) await terminateProcessTree({ pid: descendantPid }, "SIGKILL");
+    });
+    const source = `
+    import { spawn } from 'node:child_process';
+    import { once } from 'node:events';
+    import { get } from 'node:http';
+    import { waitForDeletionStart } from ${JSON.stringify(helper)};
+    await waitForDeletionStart();
+    const descendant = spawn(process.execPath, ['-e', 'process.send(process.pid); setInterval(() => {}, 1000)'], {
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'], windowsHide: true
+    });
+    const [pid] = await once(descendant, 'message');
+    get('http://127.0.0.1:${server.address().port}/' + pid, res => res.resume()).on('error', () => {});
+  `;
+    await assert.rejects(
+      runDeletionWorker(sourceArgs(source), { signal: controller.signal }),
+      reason,
+    );
+    assert.ok(descendantPid > 0);
+    assert.throws(() => process.kill(descendantPid, 0), { code: "ESRCH" });
+  },
+);
+
+test("deletion worker rejects cancellation before spawning", async () => {
+  const reason = new Error("already cancelled");
+  await assert.rejects(runDeletionWorker([], { signal: AbortSignal.abort(reason) }), reason);
 });
