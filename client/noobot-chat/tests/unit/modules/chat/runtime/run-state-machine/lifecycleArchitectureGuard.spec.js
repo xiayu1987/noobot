@@ -9,8 +9,16 @@ import { clientFilePath } from "@noobot/client-shared/path-resolver";
 import { TURN_EVENT } from "@noobot/session-protocol";
 
 const projectRoot = clientFilePath.resolve(import.meta.dirname, "../../../../../../");
-const source = (relativePath) =>
-  readFileSync(clientFilePath.resolve(projectRoot, relativePath), "utf8");
+const sourceByPath = new Map();
+function source(relativePath) {
+  if (!sourceByPath.has(relativePath)) {
+    sourceByPath.set(
+      relativePath,
+      readFileSync(clientFilePath.resolve(projectRoot, relativePath), "utf8"),
+    );
+  }
+  return sourceByPath.get(relativePath);
+}
 
 const files = {
   messageMeta: "src/modules/chat/composables/message/useMessageMeta.js",
@@ -195,11 +203,12 @@ describe("lifecycle architecture guard", () => {
       /hydrateSessionTurnRuntime|legacy_runtime_projection_disabled/,
       /(?:message|messageItem)\?*\.(?:realtimeLogs|completedToolLogs|processRealtimeLogs|processCompletedToolLogs)/,
     ];
-    const violations = productionFiles().flatMap((relativePath) =>
-      legacyPatterns
-        .filter((pattern) => pattern.test(source(relativePath)))
-        .map((pattern) => ({ relativePath, pattern: String(pattern) })),
-    );
+    const violations = productionFiles().flatMap((relativePath) => {
+      const code = source(relativePath);
+      return legacyPatterns
+        .filter((pattern) => pattern.test(code))
+        .map((pattern) => ({ relativePath, pattern: String(pattern) }));
+    });
     expect(violations).toEqual([]);
   });
 

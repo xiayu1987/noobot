@@ -54,7 +54,9 @@ export default defineConfig({
   expect: { timeout: 15000 },
   reporter: [
     ["line"],
-    [path.join(protocolRoot, "suite-session-cleanup.js"), { failureEvidenceRoot }],
+    ...(process.argv.includes("--list")
+      ? []
+      : [[path.join(protocolRoot, "suite-session-cleanup.js"), { failureEvidenceRoot }]]),
     [
       "html",
       {

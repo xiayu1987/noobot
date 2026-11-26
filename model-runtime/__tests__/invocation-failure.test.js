@@ -111,15 +111,22 @@ for (const stage of [
   });
 }
 
-test("normalization protocol error records a failed response attempt and rethrows the typed error", async () => {
+test("normalization protocol error retries within budget and preserves each failed response", async () => {
   const h = harness({ adapter: { resolveResponseSource: () => MODEL_RESPONSE_SOURCE.RESPONSES } });
-  await assert.rejects(h.executor.invoke(request), ModelProtocolError);
+  await assert.rejects(
+    h.executor.invoke({ ...request, policies: { retry: { transport: { maxAttempts: 2 } } } }),
+    ModelProtocolError,
+  );
   assert.equal(h.terminals().length, 1);
   const { payload } = h.terminals()[0];
-  assert.equal(payload.attemptCount, 1);
-  assert.equal(payload.failedAttempts.length, 1);
-  assert.equal(payload.failedAttempts[0].kind, "response");
-  assert.equal(payload.failedAttempts[0].error.code, "MODEL_PROTOCOL_ERROR");
+  assert.equal(payload.attemptCount, 2);
+  assert.deepEqual(
+    payload.failedAttempts.map(({ attempt, kind, error }) => [attempt, kind, error.code]),
+    [
+      [1, "response", "MODEL_PROTOCOL_ERROR"],
+      [2, "response", "MODEL_PROTOCOL_ERROR"],
+    ],
+  );
 });
 
 test("transport exhaustion preserves each attempt error instead of filling from terminal error", async () => {

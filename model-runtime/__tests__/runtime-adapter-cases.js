@@ -233,10 +233,11 @@ for (const [code, classification] of [
     );
     assert.equal(error.code, code);
     assert.equal(error.message, message);
-    assert.deepEqual(
-      openAiCompatibleAdapter.classifyError(error, { operatorId: "openai" }),
-      classification,
-    );
+    const actual = openAiCompatibleAdapter.classifyError(error, { operatorId: "openai" });
+    assert.equal(actual.kind, classification.kind);
+    assert.equal(actual.providerEvidence.code, code);
+    assert.equal(actual.providerEvidence.recognized, code !== "unregistered_vendor_code");
+    assert.equal(actual.providerEvidence.modeRelated, false);
   });
 }
 

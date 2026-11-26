@@ -8,6 +8,7 @@ import test from "node:test";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { PLATFORM } from "@noobot/platform-compatibility/platform";
 import { FileMutationCoordinator } from "@noobot/shared/file-mutation-coordinator";
 import {
   executionLogProjectionIdentity,
@@ -98,9 +99,13 @@ for (const stage of ["directory", "read", "data"]) {
       if (stage === "read") await fs.writeFile(pending, encodeExecutionProjectionOutputRecord({}));
       const failure = new Error("output operation failed");
       const closeFailure = new Error("output close failed");
+      if (stage === "directory") t.mock.property(process, "platform", PLATFORM.LINUX);
       const open = fs.open.bind(fs);
       const mock = t.mock.method(fs, "open", async (target, ...options) => {
-        const handle = await open(target, ...options);
+        const handle =
+          stage === "directory" && target === root
+            ? { sync: async () => {}, close: async () => {} }
+            : await open(target, ...options);
         const selected =
           stage === "directory"
             ? target === root

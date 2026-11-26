@@ -19,7 +19,7 @@ import {
   TURN_STATE,
 } from "@noobot/session-protocol";
 import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
-import { normalizeRuntimeEventEnvelope } from "@noobot/runtime-events";
+import { attachRuntimeEventPayload, normalizeRuntimeEventEnvelope } from "@noobot/runtime-events";
 import { AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
 import { createChannelKey, parseChannelKey } from "../../src/shared/utils.js";
 
@@ -160,7 +160,7 @@ test("command registry surfaces removal callback contract failures", () => {
   assert.throws(() => registry.take("q-1", EXECUTION, "delivered"), /invalid removal log/);
 });
 
-test("command removal session log events satisfy the runtime event schema", () => {
+test("command removal transport observations do not claim a registered session", () => {
   const logged = [];
   const manager = new ChannelManager(class {}, {
     sessionLogClient: { log: (apiKey, event) => logged.push({ apiKey, event }) },
@@ -178,13 +178,21 @@ test("command removal session log events satisfy the runtime event schema", () =
   manager.commandRegistry.take("q-orphaned", pending, "forward_failed");
 
   assert.equal(logged.length, 1);
-  const record = normalizeRuntimeEventEnvelope({
+  const envelope = normalizeRuntimeEventEnvelope({
     source: "agent-proxy",
     ...logged[0].event,
     userId: "admin",
   });
-  assert.equal(record.scope, "session");
-  assert.equal(record.sessionId, "session-1");
+  const record = attachRuntimeEventPayload(envelope, logged[0].event);
+  assert.equal(record.scope, "system");
+  assert.ok(!record.sessionId);
+  assert.equal(logged[0].apiKey, "key-1");
+  assert.deepEqual(record.data.targetIdentity, {
+    sessionId: "session-1",
+    parentSessionId: "",
+    dialogProcessId: "",
+    turnScopeId: "",
+  });
   assert.equal(record.event, "agentProxy.commandRegistry.removed");
   assert.equal(record.category, "transport");
   assert.equal(logged[0].event.data.reason, "forward_failed");

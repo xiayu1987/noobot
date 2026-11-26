@@ -5,7 +5,8 @@
  */
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import fs from "node:fs/promises";
+import * as fs from "@noobot/shared/file-system";
+import nativeFs from "node:fs/promises";
 import path from "node:path";
 import { createdDirectoryDepth } from "@noobot/platform-compatibility/file-system";
 import { FileMutationCoordinator } from "@noobot/shared/file-mutation-coordinator";
@@ -13,7 +14,7 @@ import {
   executionProjectionOutputRecordBytes,
   EXECUTION_PROJECTION_OUTPUT_MAX_RECEIPTS,
   executionProjectionOutputEntryBytes,
-} from "@noobot/session-protocol";
+} from "@noobot/session-protocol/execution-log-projection-output";
 import { reportRuntimeEventFailure } from "../failure-report.js";
 import {
   recoverProjectionOutput,
@@ -85,7 +86,7 @@ async function rotateIfNeeded(file, line, state, options = {}) {
   if (!state.exists) return null;
   if (state.bytes + Buffer.byteLength(line, "utf8") <= maxFileBytes) return null;
   const archive = await nextArchiveFile(file);
-  await fs.rename(file, archive);
+  await nativeFs.rename(file, archive);
   state.bytes = 0;
   return archive;
 }
@@ -145,7 +146,7 @@ function trimDirectoryStates(limit = MAX_CACHED_FILES) {
 
 async function createDurableDirectory(directory, state) {
   if (state.syncDepth === null) {
-    const firstCreated = await fs.mkdir(directory, { recursive: true });
+    const firstCreated = await nativeFs.mkdir(directory, { recursive: true });
     if (firstCreated === undefined) return;
     state.syncDepth = createdDirectoryDepth(directory, firstCreated);
   }
@@ -236,7 +237,7 @@ async function appendLockedLineBatch(file, entries) {
 
 async function appendOrdinaryOutput(file, payload, state, rotatedFile) {
   try {
-    await fs.appendFile(file, payload, { encoding: "utf8", flush: true });
+    await nativeFs.appendFile(file, payload, { encoding: "utf8", flush: true });
     if (rotatedFile || !state.exists || syncedOutputEntries.get(file) !== state.identity) {
       await syncDirectory(path.dirname(file));
       const published = rotatedFile || !state.exists ? await readActiveFileState(file) : state;

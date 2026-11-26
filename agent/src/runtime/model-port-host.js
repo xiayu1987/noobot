@@ -144,7 +144,10 @@ function createModelPort({ resolveTurnModelSpec, modelState }) {
       const projectedTools = projectToolsForModel(tools, {
         strict: options?.toolBinding?.strict === true,
       }).map((tool) => projectToolDefinitionNames(tool, binding));
-      const projectedOptions = { ...options };
+      const projectedOptions = {
+        streaming: modelState.runtime.runConfig.streaming,
+        ...options,
+      };
       for (const key of ["invoke", "toolBinding"]) {
         if (options[key]?.tool_choice !== undefined) {
           projectedOptions[key] = {

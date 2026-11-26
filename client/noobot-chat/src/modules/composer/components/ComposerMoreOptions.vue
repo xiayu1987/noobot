@@ -315,10 +315,9 @@ const composerExtensionBaseProps = computed(() => ({
 
 <style scoped>
 .composer-options {
-  display: flex;
-  align-items: center;
-  gap: var(--noobot-space-sm);
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--noobot-space-md);
 }
 
 .interaction-switch {
@@ -401,9 +400,10 @@ const composerExtensionBaseProps = computed(() => ({
 }
 
 .option-selector {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--noobot-space-xs);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--noobot-space-sm);
   min-height: var(--noobot-control-height-sm);
   min-width: 0;
   padding: var(--noobot-space-sm) var(--noobot-space-md);
@@ -464,7 +464,7 @@ const composerExtensionBaseProps = computed(() => ({
 }
 
 .model-status-tag {
-  max-width: 220px;
+  max-width: min(220px, 45%);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -475,7 +475,7 @@ const composerExtensionBaseProps = computed(() => ({
 
 .model-select-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 360px);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: var(--noobot-space-md);
   width: 100%;
@@ -486,8 +486,7 @@ const composerExtensionBaseProps = computed(() => ({
 .model-field-copy {
   display: flex;
   flex-direction: column;
-  min-width: 150px;
-  flex: 1 1 180px;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 

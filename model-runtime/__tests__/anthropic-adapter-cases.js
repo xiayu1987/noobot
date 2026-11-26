@@ -525,7 +525,7 @@ test("Anthropic non-JSON error body surfaces as the upstream message with status
   }
 });
 
-test("Anthropic error body declared as JSON but malformed is a protocol error", async () => {
+test("Anthropic malformed HTTP error body preserves status and JSON parse cause", async () => {
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async () =>
     new Response("<html>bad gateway</html>", {
@@ -539,7 +539,7 @@ test("Anthropic error body declared as JSON but malformed is a protocol error", 
         modelSpec: anthropicOperationSpec,
         operation: { kind: "multimodal_parse", input: { prompt: "describe", attachments: [] } },
       }),
-      (error) => error instanceof ModelProtocolError && error.details.status === 502,
+      (error) => error.status === 502 && error.cause instanceof SyntaxError,
     );
   } finally {
     globalThis.fetch = previousFetch;

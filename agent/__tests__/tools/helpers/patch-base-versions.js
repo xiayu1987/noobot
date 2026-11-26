@@ -33,7 +33,12 @@ export async function invokePatchFile(tool, basePath, args, options) {
         if (error.code === "ENOENT" || error.code === "ENOTDIR") return null;
         throw error;
       });
-      return { filePath, sha256: buffer === null ? null : fileContentSha256(buffer) };
+      return {
+        filePath: path.isAbsolute(filePath)
+          ? filePath.replaceAll("\\", "/")
+          : path.relative(basePath, target).replaceAll("\\", "/"),
+        sha256: buffer === null ? null : fileContentSha256(buffer),
+      };
     }),
   );
   return tool.invoke({ baseVersions, ...args }, options);

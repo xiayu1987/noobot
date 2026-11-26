@@ -58,6 +58,98 @@ function setup(alias, outputType = "image", options = {}, responses = []) {
 const image = { data: [{ b64_json: "AQ==" }] };
 const doneVideo = { status: "done", video: { url: "https://cdn.example.test/result.mp4" } };
 
+function sse(events) {
+  return new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""), {
+    headers: { "content-type": "text/event-stream" },
+  });
+}
+
+for (const editing of [false, true]) {
+  test(`OpenAI image SSE collects final images and excludes previews: editing=${editing}`, async () => {
+    const ctx = setup(
+      "gpt_image_2_6_sunburst",
+      "image",
+      {
+        n: 2,
+        ...(editing ? { imageUrls: ["https://cdn.example.test/source.png"] } : {}),
+      },
+      [
+        ...(editing
+          ? [new Response(new Uint8Array([1]), { headers: { "content-type": "image/png" } })]
+          : []),
+        sse([
+          { type: "image_generation.partial_image", b64_json: "AA==" },
+          {
+            type: editing ? "image_edit.completed" : "image_generation.completed",
+            b64_json: "AQ==",
+          },
+          {
+            type: editing ? "image_edit.completed" : "image_generation.completed",
+            b64_json: "Ag==",
+          },
+        ]),
+      ],
+    );
+    ctx.input.streaming = true;
+    const result = await ctx.run();
+    assert.deepEqual(
+      result.artifacts.map((item) => item.contentBase64),
+      ["AQ==", "Ag=="],
+    );
+    const body = ctx.calls.at(-1).body;
+    assert.equal(editing ? body.get("stream") : JSON.parse(body).stream, editing ? "true" : true);
+  });
+}
+
+for (const streaming of [false, true]) {
+  for (const source of [
+    { url: "https://cdn.example.test/generated.png" },
+    { b64_json: "AQ==" },
+    { url: "https://cdn.example.test/generated.png", b64_json: "AQ==" },
+    {},
+  ]) {
+    test(`OpenAI image sources share the media contract: streaming=${streaming}, fields=${Object.keys(source)}`, async () => {
+      const ctx = setup("gpt_image_2_6_flare", "image", {}, [
+        streaming ? sse([{ type: "image_generation.completed", ...source }]) : { data: [source] },
+      ]);
+      ctx.input.streaming = streaming;
+      if (Boolean(source.url) === Boolean(source.b64_json)) {
+        await assert.rejects(ctx.run(), /exactly one of contentBase64 or url/);
+        return;
+      }
+      const result = await ctx.run();
+      assert.equal(result.artifacts[0].url, source.url || "");
+      assert.equal(result.artifacts[0].contentBase64, source.b64_json || "");
+    });
+  }
+}
+
+test("Gemini Interactions SSE collects interleaved text and complete images", async () => {
+  const ctx = setup("gemini_nano_banana_2_1", "image", {}, [
+    sse([
+      { event_type: "interaction.created", interaction: { id: "stream-1" } },
+      { event_type: "step.delta", delta: { type: "text", text: "generated" } },
+      { event_type: "step.delta", delta: { type: "image", mime_type: "image/png", data: "AQ==" } },
+      { event_type: "interaction.completed" },
+    ]),
+  ]);
+  ctx.input.streaming = true;
+  const result = await ctx.run();
+  assert.equal(JSON.parse(ctx.calls[0].body).stream, true);
+  assert.equal(result.rawText, "generated");
+  assert.equal(result.artifacts[0].contentBase64, "AQ==");
+  assert.equal(result.taskId, "stream-1");
+});
+
+for (const alias of ["gpt_image_2_6_sunburst", "gemini_nano_banana_2_1"]) {
+  test(`${alias} truncated image stream fails instead of accepting partial media`, async () => {
+    const ctx = setup(alias, "image", {}, [sse([])]);
+    ctx.input.streaming = true;
+    await assert.rejects(ctx.run(), /stream ended before/);
+    assert.equal(ctx.calls.length, 1);
+  });
+}
+
 test("OpenAI native Images sends model parameters directly without tools", async () => {
   const ctx = setup(
     "gpt_image_2_6_sunburst",
@@ -416,3 +508,40 @@ test("executor never resubmits a billable native generation after a transport fa
   );
   assert.equal(submissions, 1);
 });
+
+for (const alias of ["wan2_7_image", "wan2_7_image_pro"]) {
+  test(`${alias} uses synchronous JSON even when the turn requests streaming`, async () => {
+    const calls = [];
+    const executor = createModelRequestExecutor({
+      credentialPort: { resolve: () => "test-key" },
+      providerRuntime: {
+        fetchImpl: async (url, init) => {
+          calls.push({ url: String(url), ...init });
+          return json({
+            output: {
+              choices: [{ message: { content: [{ image: "https://cdn.example.test/wan.png" }] } }],
+            },
+          });
+        },
+      },
+    });
+    const result = await executor.invoke({
+      model: {
+        ...resolvedTestProvider(alias),
+        operatorId: "alibaba",
+        adapterId: "openai-compatible",
+      },
+      invocation,
+      messages: [],
+      options: { streaming: true, signal: new AbortController().signal },
+      operation: { kind: "media_generation", input: { prompt: "bird", outputType: "image" } },
+    });
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].url, /\/api\/v1\/services\/aigc\/multimodal-generation\/generation$/);
+    assert.equal(calls[0].headers["X-DashScope-Async"], undefined);
+    assert.equal(calls[0].headers["X-DashScope-Sse"], undefined);
+    assert.equal(JSON.parse(calls[0].body).stream, undefined);
+    assert.equal(result.execution.attempts[0].streaming, false);
+    assert.equal(result.result.artifacts[0].url, "https://cdn.example.test/wan.png");
+  });
+}

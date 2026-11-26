@@ -27,6 +27,7 @@ import {
 import { getFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import { sessionDeletionStagingName } from "@noobot/workspace-protocol/session-tombstone";
 import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
+import { journalRemovalLockPath } from "../../src/session/partition-storage/journal-publication-lock.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -265,6 +266,7 @@ test("deleting a child releases its readers and reclaims its mutation lock while
       );
       await assert.rejects(access(sessionDir), { code: "ENOENT" });
       await assert.rejects(access(childLock), { code: "ENOENT" });
+      await assert.rejects(access(journalRemovalLockPath(sessionDir)), { code: "ENOENT" });
       await access(parentLock);
     } finally {
       await runtime.close();
@@ -450,10 +452,15 @@ test("branch deletion resumes in an independent process after a durable tree rem
         workspaceRoot,
         JSON.stringify(request),
       ],
-      { encoding: "utf8", timeout: 10000 },
+      { cwd: new URL(".", import.meta.url), encoding: "utf8", timeout: 10000 },
     );
-    assert.equal(child.signal, "SIGKILL", child.stderr);
-    assert.equal(child.stdout, "tree removed");
+    assert.ifError(child.error);
+    assert.equal(child.stdout, "tree removed", child.stderr);
+    assert.deepEqual(
+      [child.status, child.signal],
+      process.platform === "win32" ? [1, null] : [null, "SIGKILL"],
+      child.stderr,
+    );
     const reopened = createTestSessionServices({ workspaceRoot });
     try {
       assert.deepEqual((await reopened.sessionTreeService.getSessionTree({ userId })).nodes, {});

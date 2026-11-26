@@ -32,9 +32,12 @@ class SessionLifecycleMethods {
   }
 
   async withSessionLifecycleMutation(userId, sessionId, operation) {
-    const lockPath = this._sessionLifecycleLockPath(userId, sessionId);
     await this.sessionTreeRepository.assertWorkspaceInitialized(userId);
-    return this._withMutationLock(lockPath, operation);
+    return this._withSessionLifecycleLock(userId, sessionId, operation);
+  }
+
+  _withSessionLifecycleLock(userId, sessionId, operation) {
+    return this._withMutationLock(this._sessionLifecycleLockPath(userId, sessionId), operation);
   }
 
   async withSessionLifecycleMutations(userId, sessionIds = [], operation) {

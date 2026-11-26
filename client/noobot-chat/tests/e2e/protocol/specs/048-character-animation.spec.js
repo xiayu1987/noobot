@@ -13,6 +13,8 @@ import {
 import { test, expect, installE2eModelPreferences } from "../fixtures/noobot.fixture.js";
 import { connectThroughUi, readE2eCredentials } from "../fixtures/auth.fixture.js";
 import {
+  openComposerOptions,
+  closeComposerOptions,
   selectPlugins,
   sendMessage,
   waitForNaturalCompletion,
@@ -79,12 +81,12 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
     "RobotExpressive.glb",
   );
 
-  await page.locator(".composer-icon-btn").first().click();
-  const selected = page.locator(
+  const options = await openComposerOptions(page);
+  const selected = options.locator(
     '[data-asset-id="sample.three.robot-expressive"] [data-testid="character-select-asset"]',
   );
   await expect(selected).toBeChecked();
-  await page.locator(".more-collapse-btn").click();
+  await closeComposerOptions(page);
 
   await sendMessage(
     page,

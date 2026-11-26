@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createLocator } from "@noobot/shared/locator";
 import {
   test,
   assert,
@@ -192,7 +193,7 @@ test("read_file: configured super user can read another user workspace through h
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
   assert.equal(result.numberedContent, "     1\tvisible");
-  assert.deepEqual(result.path, { view: "host", path: otherUserFile });
+  assert.deepEqual(result.path, createLocator({ view: "host", path: otherUserFile }));
 });
 
 test("read_file: sandboxed super user in docker user scope cannot read another user through /workspace", async () => {
@@ -314,7 +315,7 @@ test("read_file: super user can read an absolute file outside workspace root", a
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
   assert.equal(result.numberedContent, "     1\tvisible-outside");
-  assert.deepEqual(result.path, { view: "host", path: outsideFile });
+  assert.deepEqual(result.path, createLocator({ view: "host", path: outsideFile }));
 });
 
 test("read_file: global sandbox forbids super user host paths without widening mounts", async () => {

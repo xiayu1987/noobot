@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
-import { access, readdir, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "@noobot/shared/file-system";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   contributionsForSurface,

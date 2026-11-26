@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { closeUserInterjectionQueue, findActiveRun } from "./run-registry.js";
+import { closeUserInterjectionQueue, findActiveRun, orderRunSettlement } from "./run-registry.js";
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
 import {
   EXECUTION_ABORT_TYPE,
@@ -134,14 +134,7 @@ export function createMessageStopHandler({
     rejectedCommit(command, completed);
   };
 
-  const handleStop = async (command) => {
-    const { identity } = command;
-    const target = {
-      userId: canonicalRunOwnerId,
-      turnScopeId: identity.turnScopeId,
-      sessionId: identity.sessionId,
-      stopCommandId: command.commandId,
-    };
+  const acceptAndSignalStop = async (command, target) => {
     const accepted = await commitStopAccepted(command, target);
     if (rejectedCommit(command, accepted)) return;
     target.dialogProcessId = accepted.turn.dialogProcessId;
@@ -155,6 +148,19 @@ export function createMessageStopHandler({
       return;
     }
     await completeIdleStop(command, target, stopPayload);
+  };
+
+  const handleStop = (command) => {
+    const { identity } = command;
+    const target = {
+      userId: canonicalRunOwnerId,
+      turnScopeId: identity.turnScopeId,
+      sessionId: identity.sessionId,
+      stopCommandId: command.commandId,
+    };
+    const activeRun = findActiveRun(target);
+    const accept = () => acceptAndSignalStop(command, target);
+    return activeRun ? orderRunSettlement(activeRun, accept) : accept();
   };
 
   return handleStop;

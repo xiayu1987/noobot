@@ -182,6 +182,83 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it("keeps a send stream alive when another session's reconnect fails", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const command = streamCommand({ sessionId: "sending-session", turnScopeId: "sending-turn" });
+    const streamPromise = client.stream(command);
+    const socket = MockWebSocket.instances[0];
+    const reconnectPromise = client.reconnect({
+      identity: { sessionId: "other-session", parentSessionId: ROOT_PARENT_SESSION_ID },
+      knownLifecycleSequenceMap: {},
+    });
+    const rejected = expect(reconnectPromise).rejects.toThrow("snapshot timed out");
+
+    socket.emit(
+      AGENT_TRANSPORT_EVENT.ERROR,
+      createAgentTransportError({
+        code: AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED,
+        message: "snapshot timed out",
+        identity: { sessionId: "other-session" },
+        occurredAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+    expect(vi.getTimerCount()).toBe(0);
+    await rejected;
+    expect(client.getActiveSocket()).toBe(socket);
+    emitCompletedCommand(socket, command.commandId, "sending-session", "sending-turn");
+    await streamPromise;
+  });
+
+  it("routes a different session's stopped turn to the lifecycle subscriber during another send", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const onReconnectData = vi.fn();
+    const reconnectPromise = client.reconnect({
+      identity: { sessionId: "stopped-session", parentSessionId: ROOT_PARENT_SESSION_ID },
+      knownLifecycleSequenceMap: {},
+      onReconnectData,
+    });
+    const socket = MockWebSocket.instances[0];
+    socket.onopen?.();
+    emitReconnectComplete(socket, 1);
+    await reconnectPromise;
+
+    const onStreamEvent = vi.fn();
+    const command = streamCommand({ sessionId: "sending-session", turnScopeId: "sending-turn" });
+    const streamPromise = client.stream(command, onStreamEvent);
+    const stopped = turnLifecycleProtocolEvent(
+      createTurnLifecycleEnvelope({
+        occurredAt: "2026-01-01T00:00:01.000Z",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        finishedAt: "2026-01-01T00:00:01.000Z",
+        updatedAt: "2026-01-01T00:00:01.000Z",
+        eventType: TURN_EVENT.STOP_COMPLETED,
+        eventId: "event-stopped",
+        commandId: "stop-command",
+        sessionId: "stopped-session",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+        turnScopeId: "stopped-turn",
+        presentationMessageId: "stopped-message",
+        dialogProcessId: "stopped-dialog",
+        revision: 5,
+        sequence: 5,
+        phase: TURN_PHASE.STOP,
+        state: TURN_STATE.STOP_COMPLETED,
+        completionCommitId: "stopped-turn:completed",
+        summaryVersion: 1,
+      }),
+    );
+
+    socket.emitChannel("stopped-session", StreamEventEnum.TURN_LIFECYCLE, stopped);
+    expect(onReconnectData).toHaveBeenCalledWith({
+      event: StreamEventEnum.TURN_LIFECYCLE,
+      channelSessionId: "stopped-session",
+      data: stopped,
+    });
+    expect(onStreamEvent).not.toHaveBeenCalled();
+    emitCompletedCommand(socket, command.commandId, "sending-session", "sending-turn");
+    await streamPromise;
+  });
+
   it("delivers child canonical live events with a business requestId while reconnect replay is running", async () => {
     const onReconnectData = vi.fn();
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });

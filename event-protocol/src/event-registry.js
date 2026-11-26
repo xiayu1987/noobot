@@ -8,7 +8,7 @@ import {
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_SNAPSHOT_WIRE_EVENT,
   validateTurnLifecycleEnvelope,
-} from "@noobot/session-protocol";
+} from "@noobot/session-protocol/turn-lifecycle";
 import {
   ATTACHMENT_LIFECYCLE_WIRE_EVENT,
   ATTACHMENT_LIFECYCLE_SCHEMA_VERSION,

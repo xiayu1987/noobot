@@ -37,7 +37,7 @@ export async function repositoryPathExists(relativePath) {
     await access(path.join(repositoryRoot, relativePath));
     return true;
   } catch (error) {
-    if (error.code === "ENOENT") return false;
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return false;
     throw error;
   }
 }

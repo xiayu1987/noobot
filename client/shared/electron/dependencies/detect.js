@@ -8,6 +8,7 @@ import { joinClientPath } from "../../path-resolver.js";
 import fs from "node:fs";
 import { desktopDependencyTimeouts } from "./specs.js";
 import { sleep } from "./process.js";
+import { resolveLibreOfficeExecutable } from "@noobot/platform-compatibility/process";
 
 export function createDependencyDetector({
   backendRoot = "",
@@ -96,11 +97,10 @@ export function createDependencyDetector({
       if (!result.ok) continue;
       const installPath = parseWindowsRegistryDefaultValue(result.stdout);
       if (!installPath) continue;
+      const command = resolveLibreOfficeExecutable({ platform: "win32", sourceEnv: {} });
       const candidates = [
-        joinClientPath(installPath, "soffice.exe"),
-        joinClientPath(installPath, "libreoffice.exe"),
-        joinClientPath(installPath, "program", "soffice.exe"),
-        joinClientPath(installPath, "program", "libreoffice.exe"),
+        joinClientPath(installPath, command),
+        joinClientPath(installPath, "program", command),
       ];
       if (candidates.some(hasExistingFile)) return true;
     }

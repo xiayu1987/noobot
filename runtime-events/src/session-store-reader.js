@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from "node:fs/promises";
+import * as fs from "@noobot/shared/file-system";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { fileIdentityKey } from "@noobot/shared/file-identity";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";

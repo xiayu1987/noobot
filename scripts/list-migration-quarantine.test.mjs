@@ -9,7 +9,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { WORKSPACE_ROOT_LAYOUT } from "@noobot/workspace-protocol/layout";
-import { quarantineMigrationUnit } from "../agent/src/workspace-lifecycle/migration-quarantine.js";
+import {
+  quarantineMigrationUnit,
+  restoreQuarantinedUnits,
+} from "../agent/src/workspace-lifecycle/migration-quarantine.js";
 import { collectMigrationQuarantine } from "./list-migration-quarantine.mjs";
 import { retireUnsupportedSessionStorage } from "../agent/src/workspace-lifecycle/session-storage-retirement.js";
 
@@ -139,4 +142,29 @@ test("quarantine report retains format, terminal status and source location acro
     await readFile(path.join(base, child.quarantinePath, "CURRENT"), "utf8"),
     "partition bytes",
   );
+});
+
+test("a stored Windows receipt resolves its original object and restores without moving the receipt", async (t) => {
+  const base = await mkdtemp(path.join(os.tmpdir(), "noobot-quarantine-restore-"));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  const relativePath = "runtime/session/old";
+  const original = path.join(base, relativePath);
+  await mkdir(path.dirname(original), { recursive: true });
+  await writeFile(original, "original bytes");
+  const kind = "sessionLifecycle";
+  const receipt = await quarantineMigrationUnit({
+    base,
+    kind,
+    relativePath: relativePath.replaceAll("/", "\\"),
+    error: new Error("migration failed"),
+    move: true,
+  });
+  const file = `${path.join(base, receipt.quarantinePath)}.reason.json`;
+  const record = JSON.parse(await readFile(file, "utf8"));
+  assert.equal(record.path, relativePath);
+  await writeFile(file, JSON.stringify({ ...record, path: relativePath.replaceAll("/", "\\") }));
+
+  await restoreQuarantinedUnits({ base, kind, released: [] });
+  assert.equal(await readFile(original, "utf8"), "original bytes");
+  assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { ...record, restored: true });
 });

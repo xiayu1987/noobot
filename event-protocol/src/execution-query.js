@@ -10,7 +10,7 @@ import {
   isDirectExecutionChild,
   isExecutionInRoot,
   validateExecutionRecord,
-} from "@noobot/session-protocol";
+} from "@noobot/session-protocol/execution-lifecycle";
 import { isPlainObject, text } from "@noobot/shared/value";
 import { createEventEnvelope } from "./envelope.js";
 

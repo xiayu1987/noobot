@@ -80,6 +80,41 @@ test("patch_file: schema path hints only describe the active path view", async (
   assert.doesNotMatch(sandboxDescription, /超级管理员/);
 });
 
+test("patch_file: root uses read_file identity, not root-relative version aliases", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-read-root-"));
+  try {
+    await fs.mkdir(path.join(basePath, "app"));
+    await fs.writeFile(path.join(basePath, "app/a.txt"), "one\ntwo\n", "utf8");
+    const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+    const read = tools.find((item) => item.name === "read_file");
+    const patch = tools.find((item) => item.name === "patch_file");
+    const options = { signal: new AbortController().signal };
+    const snapshot = parseToolResult(
+      await read.invoke({ filePath: "app/a.txt", riskLevel: "low" }, options),
+    );
+    const args = {
+      riskLevel: "low",
+      root: "app",
+      strip: 1,
+      patch: "--- a/a.txt\n+++ b/a.txt\n@@ -1,2 +1,2 @@\n one\n-two\n+TWO\n",
+      baseVersions: [{ filePath: snapshot.path.path, sha256: snapshot.baseSha256 }],
+    };
+    await assert.rejects(
+      () =>
+        patch.invoke(
+          { ...args, baseVersions: [{ filePath: "a.txt", sha256: snapshot.baseSha256 }] },
+          options,
+        ),
+      /baseVersions/,
+    );
+    assert.equal(await fs.readFile(path.join(basePath, "app/a.txt"), "utf8"), "one\ntwo\n");
+    assert.equal(parseToolResult(await patch.invoke(args, options)).ok, true);
+    assert.equal(await fs.readFile(path.join(basePath, "app/a.txt"), "utf8"), "one\nTWO\n");
+  } finally {
+    await fs.rm(basePath, { recursive: true, force: true });
+  }
+});
+
 test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-"));
   await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\n", "utf8");

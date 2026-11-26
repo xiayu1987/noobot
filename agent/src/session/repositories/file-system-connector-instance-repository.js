@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile } from "node:fs/promises";
+import { ensurePrivateStorageDirectory } from "@noobot/platform-compatibility/private-storage";
 import { filePath as path } from "@noobot/path-resolver";
 import {
   CONNECTOR_INSTANCE_REGISTRY_VERSION as REGISTRY_VERSION,
@@ -84,11 +85,17 @@ export class FileSystemConnectorInstanceRepository {
     const ownerUserId = requiredText(userId, "connector owner userId");
     const registryPath = this._registryPath(ownerUserId);
     await ensureDurableStorageDirectory(path.dirname(registryPath));
-    return this.mutationCoordinator.run(`${registryPath}.lock`, operation);
+    return this.mutationCoordinator.run(`${registryPath}.lock`, async () => {
+      await ensurePrivateStorageDirectory(path.dirname(registryPath), [
+        REGISTRY_FILE_NAME,
+        `${REGISTRY_FILE_NAME}.publication.tmp`,
+      ]);
+      return operation();
+    });
   }
 
   async list(userId = "") {
-    return (await this._read(requiredText(userId, "connector owner userId"))).connectors;
+    return this._withUserLock(userId, async () => (await this._read(userId)).connectors);
   }
 
   async get({ userId = "", connectorId = "" } = {}) {
@@ -172,12 +179,14 @@ export class FileSystemConnectorInstanceRepository {
   }
 
   async readLegacy(userId = "") {
-    try {
-      return await this._readLegacy(requiredText(userId, "connector owner userId"));
-    } catch (error) {
-      if (error?.code === "ENOENT") return null;
-      throw error;
-    }
+    return this._withUserLock(userId, async () => {
+      try {
+        return await this._readLegacy(userId);
+      } catch (error) {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      }
+    });
   }
 
   async migrateLegacy({ userId = "", connectors = [] } = {}) {

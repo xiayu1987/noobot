@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createLocator } from "@noobot/shared/locator";
 import {
   test,
   assert,
@@ -67,7 +68,7 @@ test("search: super admin can search an external host directory", async () => {
 
   assert.equal(result.ok, true);
   assert.equal(result.matches.length, 1);
-  assert.deepEqual(result.matches[0].path, { view: "host", path: externalFile });
+  assert.deepEqual(result.matches[0].path, createLocator({ view: "host", path: externalFile }));
 });
 
 test("search: global sandbox mount is searched through its logical target", async () => {

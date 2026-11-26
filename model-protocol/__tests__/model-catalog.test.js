@@ -295,6 +295,18 @@ test("native generation catalog declares executable APIs while excluding chat se
   assert.equal(resolveModelLibraryProvider("veo_3_1_generate_preview"), null);
 });
 
+test("the global template defaults image generation to an available native image model", () => {
+  const config = JSON.parse(
+    readFileSync(new URL("../../service/config/global.config.example.json", import.meta.url)),
+  );
+  const alias = config.multimodal.generation.default_models.image;
+  const provider = config.providers[alias];
+  assert.ok(["gpt-image-2.6-flare", "gpt-image-2.6-sunburst"].includes(provider.model));
+  assert.deepEqual(provider, resolveModelLibraryProvider(alias));
+  assert.equal(provider.enabled, true);
+  assert.equal(supportsModelMultimodalGeneration(provider, ["image"]), true);
+});
+
 test("every built-in provider keeps credentials and addresses in configuration parameters", () => {
   const config = JSON.parse(
     readFileSync(new URL("../../service/config/global.config.example.json", import.meta.url)),

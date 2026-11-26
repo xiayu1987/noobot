@@ -193,7 +193,10 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
   );
   const followupText = String(followupMessage?.content || "");
   assert.match(followupText, /\[Harness operation dir\] runtime\/ops_workdir/);
-  assert.equal(followupText.includes(`Use (host): ${basePath}/runtime/ops_workdir`), true);
+  assert.equal(
+    followupText.includes(`Use (host): ${basePath.replaceAll("\\", "/")}/runtime/ops_workdir`),
+    true,
+  );
 });
 
 test("harness planning does not inject refinement tool by default in programming scenario", async () => {

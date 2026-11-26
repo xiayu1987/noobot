@@ -231,13 +231,21 @@ test("rollover syncs the sealed tail and new partition before CURRENT; append do
       if (String(directory).startsWith(`${partitions}${path.sep}`)) created.push(String(directory));
       return adapter.mkdir(directory, ...args);
     },
+    async syncDirectory(directory) {
+      const result = await adapter.syncDirectory(directory);
+      for (const partition of [0, 1]) {
+        if (directory === path.dirname(journalPartitionPath(root, partition)))
+          events.push(`${partition}:directory`);
+      }
+      return result;
+    },
     async open(file, ...args) {
       const handle = await adapter.open(file, ...args);
       const relative = path.relative(partitions, String(file));
       const parts = relative.split(path.sep);
       if (parts[0] === ".." || parts.length < 3) return handle;
-      const kind = parts.length === 3 ? "directory" : parts.at(-1);
-      if (!["directory", "records.log", "offsets.idx"].includes(kind)) return handle;
+      const kind = parts.at(-1);
+      if (!["records.log", "offsets.idx"].includes(kind)) return handle;
       const partition =
         String(file).startsWith(`${path.dirname(journalPartitionPath(root, 0))}${path.sep}`) ||
         String(file) === path.dirname(journalPartitionPath(root, 0))
@@ -303,16 +311,11 @@ test("first append retry makes existing unpublished directory ancestors durable 
   let interrupt = true;
   setFsAdapter({
     ...adapter,
-    async open(file, ...args) {
-      const handle = await adapter.open(file, ...args);
-      if (String(file) !== parent) return handle;
-      return wrapHandle(handle, {
-        async sync() {
-          if (interrupt) throw failure;
-          await handle.sync();
-          events.push("ancestor synced");
-        },
-      });
+    async syncDirectory(directory) {
+      if (directory === parent && interrupt) throw failure;
+      const result = await adapter.syncDirectory(directory);
+      if (directory === parent) events.push("ancestor synced");
+      return result;
     },
     async rename(source, target, ...args) {
       await adapter.rename(source, target, ...args);
@@ -347,17 +350,11 @@ test("initialization retry syncs every journal ancestor up to the durable contai
   let interrupt = true;
   setFsAdapter({
     ...adapter,
-    async open(file, ...args) {
-      const handle = await adapter.open(file, ...args);
-      const directory = String(file);
-      if (![inner, outer, durableAncestor].includes(directory)) return handle;
-      return wrapHandle(handle, {
-        async sync() {
-          if (interrupt && directory === outer) throw failure;
-          await handle.sync();
-          events.push(directory);
-        },
-      });
+    async syncDirectory(directory) {
+      if (interrupt && directory === outer) throw failure;
+      const result = await adapter.syncDirectory(directory);
+      if ([inner, outer, durableAncestor].includes(directory)) events.push(directory);
+      return result;
     },
     async link(source, target, ...args) {
       await adapter.link(source, target, ...args);
@@ -406,15 +403,9 @@ test("bootstrap can retry after creating the root but before installing CURRENT"
   const failure = Object.assign(new Error("Interrupted bootstrap parent sync"), { code: "EIO" });
   setFsAdapter({
     ...adapter,
-    async open(file, ...args) {
-      const handle = await adapter.open(file, ...args);
-      return String(file) === durableAncestor
-        ? wrapHandle(handle, {
-            sync: async () => {
-              throw failure;
-            },
-          })
-        : handle;
+    async syncDirectory(directory) {
+      if (directory === durableAncestor) throw failure;
+      return adapter.syncDirectory(directory);
     },
   });
   try {
@@ -449,9 +440,16 @@ for (const target of ["lock file", "root directory"]) {
     const syncs = [];
     setFsAdapter({
       ...adapter,
+      async syncDirectory(directory) {
+        if (directory === root) {
+          syncs.push("root directory");
+          if (target === "root directory") throw failure;
+        }
+        return adapter.syncDirectory(directory);
+      },
       async open(file, ...args) {
         const handle = await adapter.open(file, ...args);
-        const kind = file === lock ? "lock file" : file === root ? "root directory" : null;
+        const kind = file === lock ? "lock file" : null;
         if (!kind) return handle;
         return wrapHandle(handle, {
           async sync() {
@@ -517,14 +515,9 @@ test("a visible bootstrap is reopened only after a successful durability barrier
       await adapter.link(source, target);
       if (target === current) linked = true;
     },
-    async open(file, ...args) {
-      const handle = await adapter.open(file, ...args);
-      if (String(file) !== root || !linked) return handle;
-      return wrapHandle(handle, {
-        async sync() {
-          throw failure;
-        },
-      });
+    async syncDirectory(directory) {
+      if (directory === root && linked) throw failure;
+      return adapter.syncDirectory(directory);
     },
   });
   let published;
@@ -730,19 +723,21 @@ for (const boundary of [
     };
     setFsAdapter({
       ...previousAdapter,
+      async syncDirectory(directory) {
+        if (
+          (boundary === "after-directory-publication" &&
+            directoryPublished &&
+            directory.startsWith(path.join(root, "partitions"))) ||
+          (boundary === "after-publication" && directory === root && published)
+        )
+          fail();
+        return previousAdapter.syncDirectory(directory);
+      },
       async open(file, ...args) {
         const handle = await previousAdapter.open(file, ...args);
         const isData = String(file).endsWith("records.log");
         const isIndex = String(file).endsWith("offsets.idx");
-        const isPartitionSync =
-          directoryPublished && String(file).startsWith(path.join(root, "partitions"));
-        const isPublicationSync = String(file) === root && published;
-        if (
-          (boundary === "data-sync" && isData) ||
-          (boundary === "index-sync" && isIndex) ||
-          (boundary === "after-directory-publication" && isPartitionSync) ||
-          (boundary === "after-publication" && isPublicationSync)
-        )
+        if ((boundary === "data-sync" && isData) || (boundary === "index-sync" && isIndex))
           return wrapHandle(handle, { sync: fail });
         return handle;
       },

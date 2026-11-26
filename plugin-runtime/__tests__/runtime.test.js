@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import fs, { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -505,7 +505,7 @@ test("runtime rejects legacy manifests instead of translating them", async () =>
   assert.match(runtime.errors[0].message, /protocolVersion|unrecognized/i);
 });
 
-test("scoped session root declarations come from every installed manifest without loading entries", async () => {
+test("scoped session root declarations come from every installed manifest without loading entries", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "noobot-plugin-runtime-roots-"));
   const writeManifest = async (id, agent, extra = {}) => {
     await mkdir(path.join(root, id));
@@ -560,23 +560,31 @@ test("scoped session root declarations come from every installed manifest withou
 
     const lockedRoot = path.join(root, "locked-root");
     await mkdir(lockedRoot);
-    await chmod(lockedRoot, 0o000);
+    const readdir = fs.readdir.bind(fs);
+    const denied = Object.assign(new Error("plugin root access denied"), {
+      code: "EACCES",
+      path: lockedRoot,
+      syscall: "scandir",
+    });
+    const accessFailure = t.mock.method(fs, "readdir", async (target, ...args) => {
+      if (target === lockedRoot) throw denied;
+      return readdir(target, ...args);
+    });
     try {
-      if (process.getuid?.() !== 0) {
-        await assert.rejects(
-          collectNoobotPluginScopedSessionRootDeclarations({ pluginRootDir: lockedRoot }),
-          { code: "EACCES" },
-        );
-        await assert.rejects(loadNoobotPlugins({ pluginRootDir: lockedRoot, surface: "agent" }), {
-          code: "EACCES",
-        });
-      }
+      await assert.rejects(
+        collectNoobotPluginScopedSessionRootDeclarations({ pluginRootDir: lockedRoot }),
+        (error) => error === denied,
+      );
+      await assert.rejects(
+        loadNoobotPlugins({ pluginRootDir: lockedRoot, surface: "agent" }),
+        (error) => error === denied,
+      );
     } finally {
-      await chmod(lockedRoot, 0o700);
+      accessFailure.mock.restore();
     }
 
     const loopRoot = path.join(root, "loop-root");
-    await symlink(loopRoot, loopRoot);
+    await symlink(loopRoot, loopRoot, "junction");
     await assert.rejects(loadNoobotPlugins({ pluginRootDir: loopRoot, surface: "agent" }), {
       code: "ELOOP",
     });

@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { computed, ref, watch } from "vue";
-import { ArrowDown } from "@element-plus/icons-vue";
+import { useMobileViewport } from "../../../shared/composables/useMobileViewport.js";
 import ConnectorSelectorPanel from "./ConnectorSelectorPanel.vue";
 import ComposerAttachmentToolbar from "./ComposerAttachmentToolbar.vue";
 import ComposerSelectedTags from "./ComposerSelectedTags.vue";
@@ -65,6 +65,7 @@ const attachmentToolbarRef = ref();
 const localMorePanelVisible = ref(false);
 const fileDragDepth = ref(0);
 const { translate } = useLocale();
+const { drawerSize } = useMobileViewport();
 
 const effectiveMorePanelVisible = computed({
   get: () =>
@@ -317,77 +318,63 @@ defineExpose({
     />
 
     <div class="composer">
-      <el-collapse-transition>
-        <div v-show="effectiveMorePanelVisible" class="more-panel-overlay">
-          <div class="more-panel noobot-overlay-card">
-            <div class="more-actions-row noobot-overlay-card-header">
-              <span class="more-panel-title">{{ translate("common.moreActions") }}</span>
-              <el-button class="more-collapse-btn" @click="effectiveMorePanelVisible = false">
-                <span>{{ translate("message.collapse") }}</span>
-                <el-icon><ArrowDown /></el-icon>
-              </el-button>
-            </div>
+      <el-drawer
+        v-model="effectiveMorePanelVisible"
+        :title="translate('common.moreActions')"
+        :size="drawerSize"
+        direction="rtl"
+        append-to-body
+        destroy-on-close
+        class="workspace-drawer noobot-side-drawer composer-more-drawer"
+      >
+        <div class="more-panel-content">
+          <ConnectorSelectorPanel
+            v-if="connectorPanelState !== null"
+            embedded
+            :connector-panel-state="connectorPanelState"
+            @selection-change="onConnectorSelectionChange"
+          />
 
-            <div class="more-panel-content">
-              <ConnectorSelectorPanel
-                v-if="connectorPanelState !== null"
-                embedded
-                :connector-panel-state="connectorPanelState"
-                @selection-change="onConnectorSelectionChange"
-              />
+          <ExtensionOutlet
+            :point="EXTENSION_POINTS.COMPOSER_MORE_ACTIONS"
+            :context="moreActionsExtensionContext"
+            :extra-props="moreActionsExtensionContext"
+          />
 
-              <ExtensionOutlet
-                :point="EXTENSION_POINTS.COMPOSER_MORE_ACTIONS"
-                :context="moreActionsExtensionContext"
-                :extra-props="moreActionsExtensionContext"
-              />
-
-              <ComposerMoreOptions
-                :allow-user-interaction="allowUserInteraction"
-                :safe-confirm="safeConfirm"
-                :safe-confirm-level="safeConfirmLevel"
-                :sanitize-output="sanitizeOutput"
-                :stream-output="streamOutput"
-                :bot-scenario="botScenario"
-                :selected-model="selectedModel"
-                :memory-model="memoryModel"
-                :model-options="modelOptions"
-                :plugin-model-config="pluginModelConfig"
-                :frontend-thresholds-enabled="frontendThresholdsEnabled"
-                :summary-policy="summaryPolicy"
-                :normalized-scenario-options="normalizedScenarioOptions"
-                :selected-scenario-description="selectedScenarioDescription"
-                :normalized-plugin-options="normalizedPluginOptions"
-                :selected-plugin-key-set="selectedPluginKeySet"
-                :resolve-scenario-label="resolveScenarioLabel"
-                @update:allow-user-interaction="onAllowUserInteractionChange"
-                @update:safe-confirm="onSafeConfirmChange"
-                @update:safe-confirm-level="onSafeConfirmLevelChange"
-                @update:sanitize-output="onSanitizeOutputChange"
-                @update:stream-output="onStreamOutputChange"
-                @update:selected-model="emit('update:selectedModel', $event)"
-                @update:memory-model="emit('update:memoryModel', $event)"
-                @update:plugin-model-config="emit('update:pluginModelConfig', $event)"
-                @update:frontend-thresholds-enabled="
-                  emit('update:frontendThresholdsEnabled', $event)
-                "
-                @update:summary-policy="emit('update:summaryPolicy', $event)"
-                @select-scenario="onScenarioSelect"
-                @toggle-programming-scenario="onProgrammingScenarioToggle"
-                @toggle-plugin="onPluginToggle"
-              />
-
-              <ComposerAttachmentToolbar
-                ref="attachmentToolbarRef"
-                :upload-files="uploadFiles"
-                @append-uploads="emitAppendUploads"
-                @clear-uploads="onClearUploads"
-                @remove-upload="onRemoveUpload"
-              />
-            </div>
-          </div>
+          <ComposerMoreOptions
+            :allow-user-interaction="allowUserInteraction"
+            :safe-confirm="safeConfirm"
+            :safe-confirm-level="safeConfirmLevel"
+            :sanitize-output="sanitizeOutput"
+            :stream-output="streamOutput"
+            :bot-scenario="botScenario"
+            :selected-model="selectedModel"
+            :memory-model="memoryModel"
+            :model-options="modelOptions"
+            :plugin-model-config="pluginModelConfig"
+            :frontend-thresholds-enabled="frontendThresholdsEnabled"
+            :summary-policy="summaryPolicy"
+            :normalized-scenario-options="normalizedScenarioOptions"
+            :selected-scenario-description="selectedScenarioDescription"
+            :normalized-plugin-options="normalizedPluginOptions"
+            :selected-plugin-key-set="selectedPluginKeySet"
+            :resolve-scenario-label="resolveScenarioLabel"
+            @update:allow-user-interaction="onAllowUserInteractionChange"
+            @update:safe-confirm="onSafeConfirmChange"
+            @update:safe-confirm-level="onSafeConfirmLevelChange"
+            @update:sanitize-output="onSanitizeOutputChange"
+            @update:stream-output="onStreamOutputChange"
+            @update:selected-model="emit('update:selectedModel', $event)"
+            @update:memory-model="emit('update:memoryModel', $event)"
+            @update:plugin-model-config="emit('update:pluginModelConfig', $event)"
+            @update:frontend-thresholds-enabled="emit('update:frontendThresholdsEnabled', $event)"
+            @update:summary-policy="emit('update:summaryPolicy', $event)"
+            @select-scenario="onScenarioSelect"
+            @toggle-programming-scenario="onProgrammingScenarioToggle"
+            @toggle-plugin="onPluginToggle"
+          />
         </div>
-      </el-collapse-transition>
+      </el-drawer>
 
       <ComposerInputActions
         :model-value="modelValue"
@@ -410,7 +397,18 @@ defineExpose({
         @mic-pointer-down="onMicPointerDown"
         @mic-pointer-move="onMicPointerMove"
         @mic-pointer-up-or-cancel="onMicPointerUpOrCancel"
-      />
+      >
+        <template #attachments>
+          <ComposerAttachmentToolbar
+            ref="attachmentToolbarRef"
+            :upload-files="uploadFiles"
+            :disabled="auxiliaryActionsDisabled"
+            @append-uploads="emitAppendUploads"
+            @clear-uploads="onClearUploads"
+            @remove-upload="onRemoveUpload"
+          />
+        </template>
+      </ComposerInputActions>
     </div>
 
     <div v-if="fileDragActive" class="composer-drop-overlay" aria-hidden="true">
@@ -494,65 +492,14 @@ defineExpose({
   box-shadow: var(--noobot-focus-ring), var(--noobot-shadow-raised);
 }
 
-.more-panel-overlay {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: calc(100% + 12px);
-  z-index: var(--noobot-layer-mobile-sidebar);
-}
-
-.more-panel {
-  max-height: calc(100vh - 120px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.more-actions-row {
-  position: relative;
-  z-index: 2;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--noobot-space-md) var(--noobot-space-xl);
-  background: var(--noobot-panel-bg);
-}
-
-.more-panel-title {
-  font-size: var(--noobot-font-size-md);
-  font-weight: var(--noobot-font-weight-bold);
-  letter-spacing: var(--noobot-letter-spacing-subtle);
-  color: var(--noobot-text-strong);
-}
-
-.more-collapse-btn {
-  height: 28px;
-  min-height: 28px;
-  padding: 0 var(--noobot-space-sm);
-  border-radius: var(--noobot-radius-pill);
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 70%, transparent);
-  background: color-mix(in srgb, var(--noobot-surface-sidebar) 78%, transparent);
-  color: var(--noobot-text-main);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--noobot-space-2xs);
-}
-
-.more-collapse-btn:hover {
-  background: color-mix(in srgb, var(--noobot-accent) 10%, var(--noobot-surface-sidebar));
-  color: var(--noobot-text-strong);
-}
-
 .more-panel-content {
   min-height: 0;
-  padding: var(--noobot-space-lg);
+  width: 100%;
+  max-width: var(--noobot-content-max-width);
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--noobot-space-md);
-  overflow-x: hidden;
-  overflow-y: auto;
+  gap: var(--noobot-space-lg);
 }
 
 @media (max-width: 768px) {
@@ -575,38 +522,8 @@ defineExpose({
     padding: var(--noobot-space-md) var(--noobot-space-lg);
     border-radius: var(--noobot-radius-md);
   }
-  .more-panel-overlay {
-    position: fixed;
-    z-index: var(--noobot-layer-mobile-sidebar);
-    left: 12px;
-    right: 12px;
-    bottom: calc(84px + env(safe-area-inset-bottom));
-    max-height: calc(100dvh - 112px - env(safe-area-inset-bottom));
-  }
-  .more-panel {
-    max-height: inherit;
-    border-radius: var(--noobot-radius-lg);
-  }
   .more-panel-content {
-    padding: var(--noobot-space-md);
     gap: var(--noobot-space-md);
-  }
-}
-
-@media (max-width: 480px) {
-  .more-panel-overlay {
-    left: 8px;
-    right: 8px;
-    bottom: calc(76px + env(safe-area-inset-bottom));
-    max-height: calc(100dvh - 96px - env(safe-area-inset-bottom));
-  }
-
-  .more-actions-row {
-    padding: var(--noobot-space-md);
-  }
-
-  .more-panel-content {
-    padding: var(--noobot-space-sm);
   }
 }
 </style>

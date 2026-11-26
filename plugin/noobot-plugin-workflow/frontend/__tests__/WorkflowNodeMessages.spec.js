@@ -9,6 +9,59 @@ import { describe, expect, it, vi } from "vitest";
 import { useWorkflowNodeMessages } from "../composables/useWorkflowNodeMessages.js";
 
 describe("workflow node message projection", () => {
+  it("projects only a selected child session across initial mount, reset and reselection", async () => {
+    const selectedNodeSessionId = ref("");
+    const selectedNodeMessages = ref([]);
+    let messages;
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          messages = useWorkflowNodeMessages({
+            props: { userId: "user-1", logWorkflowDiagnostics: vi.fn() },
+            selectedNode: ref(null),
+            selectedRuntimeNode: ref(null),
+            selectedNodeMessages,
+            selectedNodeSessionMetadata: ref(null),
+            selectedNodeSessionId,
+          });
+          return () =>
+            h(
+              "div",
+              messages.displayNodeMessages.value.map((item) => item.content),
+            );
+        },
+      }),
+    );
+    try {
+      expect(messages.selectedNodeSessionDocs.value).toEqual([]);
+      expect(messages.displayNodeMessages.value).toEqual([]);
+      for (const sessionId of ["first-child", "second-child"]) {
+        selectedNodeSessionId.value = sessionId;
+        selectedNodeMessages.value = [
+          {
+            messageUid: `message-${sessionId}`,
+            presentationMessageId: `presentation-${sessionId}`,
+            sessionId,
+            ts: "2026-01-01T00:00:00.000Z",
+            role: "assistant",
+            content: sessionId,
+          },
+        ];
+        await nextTick();
+        expect(wrapper.text()).toBe(sessionId);
+        expect(messages.selectedNodeSessionDocs.value[0].sessionId).toBe(sessionId);
+        selectedNodeMessages.value = [];
+        selectedNodeSessionId.value = "";
+        await nextTick();
+        expect(wrapper.text()).toBe("");
+        expect(messages.displayNodeMessages.value).toEqual([]);
+        expect(messages.selectedNodeSessionDocs.value).toEqual([]);
+      }
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
   it("renders the canonical live messages from the top-level detail", async () => {
     const final = {
       messageUid: "sm-final",

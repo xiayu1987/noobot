@@ -120,7 +120,7 @@ test("concurrent flush barriers report failed writes after draining healthy writ
   await flushJsonLineBatches();
 });
 
-test("sequentially awaited appends do not wait for the batch window", async () => {
+test("sequentially awaited appends persist every record in order", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-jsonl-sequential-"));
   const file = path.join(root, "sequential.jsonl");
   const count = 40;
@@ -135,7 +135,9 @@ test("sequentially awaited appends do not wait for the batch window", async () =
       lines.map((line) => JSON.parse(line).sequence),
       Array.from({ length: count }, (_, sequence) => sequence),
     );
-    assert.ok(elapsedMs < 1000, `sequential appends took ${elapsedMs.toFixed(0)}ms`);
+    await t.test("performance: sequential append elapsed time", () => {
+      assert.ok(elapsedMs < 1000, `sequential appends took ${elapsedMs.toFixed(0)}ms`);
+    });
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

@@ -7,6 +7,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import {
   enqueueUserInterjection,
   findActiveRun,
+  orderRunSettlement,
   publishRunEvent,
   unregisterActiveRun,
 } from "./run-registry.js";
@@ -130,7 +131,7 @@ export function createMessageHandler({
       });
     } catch (error) {
       if (!boundRunHandle || !state.currentRunMeta) throw error;
-      await settleFailedRun(context, error);
+      await orderRunSettlement(boundRunHandle, () => settleFailedRun(context, error));
     } finally {
       if (boundRunHandle) releaseRun(context, boundRunHandle);
     }

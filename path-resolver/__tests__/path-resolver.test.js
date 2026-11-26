@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -57,14 +59,20 @@ const mountRuntime = {
   },
 };
 
-function sandboxRuntime(scope) {
+function sandboxRuntime(scope, { basePath = mountRuntime.basePath, mounts } = {}) {
+  const { executionIsolation } = mountRuntime.globalConfig.security;
   return {
     ...mountRuntime,
+    basePath,
     globalConfig: {
       security: {
         executionIsolation: {
-          ...mountRuntime.globalConfig.security.executionIsolation,
-          sandbox: { ...mountRuntime.globalConfig.security.executionIsolation.sandbox, scope },
+          ...executionIsolation,
+          sandbox: {
+            ...executionIsolation.sandbox,
+            scope,
+            mounts: mounts ?? executionIsolation.sandbox.mounts,
+          },
         },
       },
     },
@@ -130,33 +138,42 @@ test("resolveSandboxMount requires explicit runtime identity and basePath in san
 });
 
 test("resolveToolInputPath authorizes workspace mount paths as host workspace paths", () => {
+  const workspacePath = path.join(tmpdir(), "workspaces", "u1");
+  const assetPath = path.join(tmpdir(), "assets");
+  const runtime = sandboxRuntime("user", {
+    basePath: workspacePath,
+    mounts: [
+      { source: path.join(tmpdir(), "data"), target: "/data" },
+      { source: assetPath, target: "/data/assets" },
+    ],
+  });
   const result = resolveToolInputPath({
     inputPath: "/workspace/runtime/a.txt",
-    runtime: sandboxRuntime("user"),
-    workspacePath: mountRuntime.basePath,
+    runtime,
+    workspacePath,
     allowSandbox: true,
   });
   assert.equal(result.ok, true);
-  assert.equal(result.resolvedPath, "/srv/workspaces/u1/runtime/a.txt");
+  assert.equal(result.resolvedPath, path.join(workspacePath, "runtime", "a.txt"));
   assert.equal(result.mountPathRef, undefined);
   const mounted = resolveToolInputPath({
     inputPath: "/data/assets/a.png",
-    runtime: mountRuntime,
-    workspacePath: mountRuntime.basePath,
+    runtime,
+    workspacePath,
     allowHostAbsolute: true,
     allowSandbox: true,
   });
   assert.deepEqual(mounted.mountPathRef, { view: "mount", mount: "/data/assets", path: "a.png" });
-  assert.equal(mounted.resolvedPath, "/srv/assets/a.png");
+  assert.equal(mounted.resolvedPath, path.join(assetPath, "a.png"));
   const mountRoot = resolveToolInputPath({
     inputPath: "/data/assets",
-    runtime: mountRuntime,
-    workspacePath: mountRuntime.basePath,
+    runtime,
+    workspacePath,
     allowSandbox: true,
   });
   assert.deepEqual(mountRoot.mountPathRef, { view: "mount", mount: "/data/assets", path: "." });
   assert.deepEqual(
-    resolveConfiguredSandboxMounts(mountRuntime).map((item) => item.target),
+    resolveConfiguredSandboxMounts(runtime).map((item) => item.target),
     ["/data", "/data/assets"],
   );
   assert.deepEqual(resolveConfiguredSandboxMounts({ ...mountRuntime, globalConfig: {} }), []);
@@ -180,9 +197,10 @@ test("classifies tool input views as one canonical result", () => {
 });
 
 test("rejects workspace-relative traversal before it can be reclassified as a host path", () => {
+  const workspacePath = path.join(tmpdir(), "workspaces", "alice");
   const escaped = resolveToolInputPath({
     inputPath: "../outside.txt",
-    workspacePath: "/srv/workspaces/alice",
+    workspacePath,
   });
   assert.equal(escaped.ok, false);
   assert.equal(escaped.view, TOOL_PATH_VIEWS.WORKSPACE_RELATIVE);
@@ -191,17 +209,17 @@ test("rejects workspace-relative traversal before it can be reclassified as a ho
 
   const normalizedInside = resolveToolInputPath({
     inputPath: "reports/drafts/../final.txt",
-    workspacePath: "/srv/workspaces/alice",
+    workspacePath,
   });
   assert.equal(normalizedInside.ok, true);
-  assert.equal(normalizedInside.resolvedPath, "/srv/workspaces/alice/reports/final.txt");
+  assert.equal(normalizedInside.resolvedPath, path.join(workspacePath, "reports", "final.txt"));
 
   const dotPrefixedInside = resolveToolInputPath({
     inputPath: "..reports/final.txt",
-    workspacePath: "/srv/workspaces/alice",
+    workspacePath,
   });
   assert.equal(dotPrefixedInside.ok, true);
-  assert.equal(dotPrefixedInside.resolvedPath, "/srv/workspaces/alice/..reports/final.txt");
+  assert.equal(dotPrefixedInside.resolvedPath, path.join(workspacePath, "..reports", "final.txt"));
 });
 
 test("sandbox mode treats unmapped absolute paths as execution paths, never host refs", () => {
@@ -231,13 +249,14 @@ test("sandbox mode treats unmapped absolute paths as execution paths, never host
 });
 
 test("resolveToolInputPath resolves inputs normalizing to empty as the workspace root", () => {
+  const workspacePath = path.join(tmpdir(), "ws");
   for (const inputPath of [".", "./", "./.", "a/.."]) {
-    const result = resolveToolInputPath({ inputPath, workspacePath: "/srv/ws" });
+    const result = resolveToolInputPath({ inputPath, workspacePath });
     assert.equal(result.ok, true, inputPath);
     assert.equal(result.view, TOOL_PATH_VIEWS.WORKSPACE_RELATIVE, inputPath);
-    assert.equal(result.resolvedPath, "/srv/ws", inputPath);
+    assert.equal(result.resolvedPath, workspacePath, inputPath);
   }
-  const empty = resolveToolInputPath({ inputPath: "  ", workspacePath: "/srv/ws" });
+  const empty = resolveToolInputPath({ inputPath: "  ", workspacePath });
   assert.equal(empty.error, TOOL_PATH_RESOLUTION_ERROR.EMPTY_PATH);
 });
 
@@ -250,9 +269,10 @@ test("task-local paths have one token and resolution protocol", () => {
     kind: TASK_PATH_KINDS.OUTPUT,
     relative: "media/result.mp4",
   });
+  const outputRoot = path.join(tmpdir(), "output");
   assert.equal(
-    resolveTaskPath({ token: output, roots: { output: "/runtime/output" } }).path,
-    "/runtime/output/media/result.mp4",
+    resolveTaskPath({ token: output, roots: { output: outputRoot } }).path,
+    path.join(outputRoot, "media", "result.mp4"),
   );
   assert.equal(createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, allowRoot: true }), "output://");
   assert.throws(

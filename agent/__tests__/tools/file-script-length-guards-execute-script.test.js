@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
+import { nodeScriptCommand } from "../helpers/node-script-command.js";
 import {
   test,
   assert,
@@ -147,10 +148,13 @@ test("execute_script: host 执行以 workspace 根作为统一相对路径基准
   });
   const tool = tools.find((item) => item?.name === "execute_script");
   assert.ok(tool);
-  assert.match(tool.description, /\/bin\/sh/);
+  assert.match(tool.description, process.platform === "win32" ? /cmd\.exe/ : /\/bin\/sh/);
 
   const result = parseToolResult(
-    await invokeScript(tool, { command: "printf 'ok'", riskLevel: "low" }),
+    await invokeScript(tool, {
+      command: await nodeScriptCommand(basePath, "process.stdout.write('ok');"),
+      riskLevel: "low",
+    }),
   );
 
   assert.equal(result.toolName, "execute_script");
@@ -176,7 +180,10 @@ test("execute_script: 可选给 stdout/stderr 加行号", async () => {
   assert.ok(tool);
 
   const defaultResult = parseToolResult(
-    await invokeScript(tool, { command: "printf 'a\\nb\\n'", riskLevel: "low" }),
+    await invokeScript(tool, {
+      command: await nodeScriptCommand(basePath, "process.stdout.write('a\\nb\\n');"),
+      riskLevel: "low",
+    }),
   );
   assert.equal(defaultResult.ok, true);
   assert.equal(Object.hasOwn(defaultResult, "includeLineNumbers"), false);
@@ -184,7 +191,10 @@ test("execute_script: 可选给 stdout/stderr 加行号", async () => {
 
   const withLines = parseToolResult(
     await invokeScript(tool, {
-      command: "printf 'a\\nb\\n'; printf 'err\\n' >&2",
+      command: await nodeScriptCommand(
+        basePath,
+        "process.stdout.write('a\\nb\\n'); process.stderr.write('err\\n');",
+      ),
       riskLevel: "low",
       includeLineNumbers: true,
     }),
@@ -207,7 +217,10 @@ test("execute_script: foreground 模式保留 shell 管道、stderr 与非零退
   assert.ok(tool);
 
   const shellResult = parseToolResult(
-    await invokeScript(tool, { command: "printf 'alpha\\nbeta\\n' | grep beta", riskLevel: "low" }),
+    await invokeScript(tool, {
+      command: `${await nodeScriptCommand(basePath, "process.stdout.write('alpha\\nbeta\\n');")} | ${await nodeScriptCommand(basePath, "let input = ''; for await (const chunk of process.stdin) input += chunk; process.stdout.write(input.split('\\n').filter(line => line === 'beta').join('\\n') + '\\n');")}`,
+      riskLevel: "low",
+    }),
   );
   assert.equal(shellResult.ok, true);
   assert.equal(shellResult.stdout, "beta\n");
@@ -332,7 +345,10 @@ test("execute_script: background 模式将 stdout/stderr 交给附件层并返�
 
   const result = parseToolResult(
     await invokeScript(tool, {
-      command: "printf 'out'; printf 'err' >&2",
+      command: await nodeScriptCommand(
+        basePath,
+        "process.stdout.write('out'); process.stderr.write('err');",
+      ),
       riskLevel: "low",
       executionMode: "background",
     }),

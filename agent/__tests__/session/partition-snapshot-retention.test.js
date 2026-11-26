@@ -161,13 +161,13 @@ test("old snapshots retain their publication across updates, reopen and writer c
 });
 
 test("failed retention deletion leaves reads closed and can be retried", async (t) => {
-  const { journal } = await createJournalCase(t, { retentionRecords: 1 });
+  const { journal, root } = await createJournalCase(t, { retentionRecords: 1 });
   const snapshot = await journal.snapshot();
   const adapter = getFsAdapter();
   setFsAdapter({
     ...adapter,
     async rm(file, ...args) {
-      if (String(file).endsWith("retentions/0.json"))
+      if (String(file) === path.join(root, "retentions", "0.json"))
         throw Object.assign(new Error("Deletion failed"), { code: "EIO" });
       return adapter.rm(file, ...args);
     },
@@ -220,14 +220,9 @@ test("reopen makes interrupted lease removal durable without touching referenced
     const failure = Object.assign(new Error("Retention directory sync failed"), { code: "EIO" });
     setFsAdapter({
       ...adapter,
-      async open(file, ...args) {
-        const handle = await adapter.open(file, ...args);
-        if (String(file) === directory) {
-          handle.sync = async () => {
-            throw failure;
-          };
-        }
-        return handle;
+      async syncDirectory(target) {
+        if (target === directory) throw failure;
+        return adapter.syncDirectory(target);
       },
     });
     try {
@@ -319,19 +314,12 @@ test("a retention slot is reusable only after its deletion is durable", async (t
   let injected = false;
   setFsAdapter({
     ...adapter,
-    async open(file, ...args) {
-      const handle = await adapter.open(file, ...args);
-      if (String(file) === path.join(root, "retentions")) {
-        const original = handle.sync.bind(handle);
-        handle.sync = async () => {
-          if (!injected) {
-            injected = true;
-            throw Object.assign(new Error("Directory sync failed"), { code: "EIO" });
-          }
-          return original();
-        };
+    async syncDirectory(directory) {
+      if (directory === path.join(root, "retentions") && !injected) {
+        injected = true;
+        throw Object.assign(new Error("Directory sync failed"), { code: "EIO" });
       }
-      return handle;
+      return adapter.syncDirectory(directory);
     },
   });
   try {

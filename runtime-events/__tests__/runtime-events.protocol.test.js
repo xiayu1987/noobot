@@ -213,7 +213,17 @@ test("agent transport debug uses its own file and excludes business payloads", a
   });
 
   assert.equal(result.ok, true);
-  assert.match(result.file, /session-transport\/events\/debug-agent-transport\.jsonl$/);
+  assert.equal(
+    result.file,
+    path.join(
+      root,
+      "admin",
+      WORKSPACE_LAYOUT.SESSION_DIR,
+      "session-transport",
+      "events",
+      "debug-agent-transport.jsonl",
+    ),
+  );
   const [record] = await readJsonl(result.file);
   assert.equal(record.data.commandId, "command-1");
   assert.equal(Object.hasOwn(record.data, "message"), false);
@@ -246,7 +256,17 @@ test("tool log window debug uses its own file when enabled", async () => {
 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, undefined);
-  assert.match(result.file, /session-tool-window\/events\/debug-tool-log-window\.jsonl$/);
+  assert.equal(
+    result.file,
+    path.join(
+      root,
+      "admin",
+      WORKSPACE_LAYOUT.SESSION_DIR,
+      "session-tool-window",
+      "events",
+      "debug-tool-log-window.jsonl",
+    ),
+  );
   assert.equal((await readJsonl(result.file))[0].data.selectedCount, 10);
 });
 
@@ -296,7 +316,17 @@ test("workflow diagnostics debug follows explicit disabled and enabled controls"
 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, undefined);
-  assert.match(result.file, /session-workflow\/events\/debug-workflow-diagnostics\.jsonl$/);
+  assert.equal(
+    result.file,
+    path.join(
+      root,
+      "admin",
+      WORKSPACE_LAYOUT.SESSION_DIR,
+      "session-workflow",
+      "events",
+      "debug-workflow-diagnostics.jsonl",
+    ),
+  );
   assert.equal((await readJsonl(result.file))[0].data.workflowRunId, "workflow-1");
 });
 

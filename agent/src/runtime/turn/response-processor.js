@@ -69,7 +69,20 @@ export async function processToolResults({
     .filter((entry) => entry.status === "rejected")
     .map((entry) => entry.reason);
   if (startErrors.length === 1) throw startErrors[0];
-  if (startErrors.length > 1) throw new AggregateError(startErrors, "tool call start failed");
+  if (startErrors.length > 1) {
+    const [first] = startErrors;
+    const sharedFailure =
+      first instanceof Error &&
+      first.code &&
+      startErrors.every((error) => error?.code === first.code && error.message === first.message);
+    const failure = new AggregateError(
+      startErrors,
+      sharedFailure ? first.message : "tool call start failed",
+      { cause: first },
+    );
+    if (sharedFailure) failure.code = first.code;
+    throw failure;
+  }
 
   let toolCallSettlements;
   let toolCallResults;

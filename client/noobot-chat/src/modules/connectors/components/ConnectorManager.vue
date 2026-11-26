@@ -310,6 +310,13 @@ watch(() => [props.connected, props.userId], refresh);
                 :value="subType" /></el-select
           ></el-form-item>
         </div>
+        <el-alert
+          v-if="definition?.instanceType === 'builtin.terminal.ssh'"
+          :title="translate('connectors.sshAuthenticationHint')"
+          type="info"
+          :closable="false"
+          show-icon
+        />
         <el-form-item
           v-for="field in definition?.fields || []"
           :key="field.name"
@@ -322,6 +329,14 @@ watch(() => [props.connected, props.userId], refresh);
             v-model="form.parameters[field.name]"
             :min="1"
             controls-position="right"
+          />
+          <el-input
+            v-else-if="field.kind === 'multiline'"
+            v-model="form.parameters[field.name]"
+            type="textarea"
+            :autosize="{ minRows: 4, maxRows: 10 }"
+            autocomplete="off"
+            :spellcheck="false"
           />
           <el-input
             v-else
@@ -460,6 +475,10 @@ watch(() => [props.connected, props.userId], refresh);
 
 .connector-add-form :deep(.el-form-item:last-child) {
   margin-bottom: 0;
+}
+
+.connector-add-form :deep(.el-alert) {
+  margin-bottom: var(--noobot-space-xl);
 }
 
 .connector-add-form :deep(.el-input),

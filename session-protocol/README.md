@@ -306,17 +306,18 @@ An isolated record persists automatically without requiring a final flush.
 
 `executionLogQueueWaitBudget()` reads `time.agent.executionLogQueueWaitMs`
 (default 2000 ms). Queue age uses a monotonic clock and excludes active writes.
-At the exact boundary admission remains valid; an overdue queued record causes
-new admission to throw `EXECUTION_LOG_BACKPRESSURE_REQUIRED` with an
-`EXECUTION_LOG_QUEUE_WAIT_EXCEEDED` cause. At dispatch, overdue accepted batches
-still persist once and register the violation at the final `flush()` barrier,
-even if no producer attempted another admission. The barrier waits for accepted
-work and preserves concurrent write and delivery failures. A reported queue
-violation does not mean that the accepted records were rolled back.
+Once queued records exceed this threshold, the listener admits the event within
+its byte and record limits and returns a barrier that waits for persistence and
+upstream delivery. Awaited event producers pause until accepted records drain.
+Transient message events also wait for an overdue queue without adding a log
+record. Queued records persist in order, and successful delayed writes allow the
+final `flush()` to succeed. Actual persistence and delivery failures still fail
+the final barrier.
 
-This budget bounds admission under backlog; it does not cancel filesystem I/O
-or acknowledge unfinished writes. `flush()` continues to wait for in-flight
-persistence. Wall-clock log timestamps do not define queue age. Runtime parameter
+The byte and record limits bound admission under backlog and still reject
+overflow with `EXECUTION_LOG_BACKPRESSURE_REQUIRED`. The wait threshold does
+not cancel filesystem I/O or acknowledge unfinished writes. `flush()` waits for
+in-flight persistence. Wall-clock log timestamps do not define queue age. Runtime parameter
 changes apply to newly constructed listeners.
 
 ## Turn recovery

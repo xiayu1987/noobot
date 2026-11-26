@@ -31,6 +31,8 @@ import { bindTestDispatchLifecycle } from "./turn-runtime-test-helper.js";
 import { findCommittedMessagePayload } from "./tool-runner.test-helpers.js";
 
 import { TOOL_CALL_NAME_BINDING, createToolNameBinding } from "@noobot/model-protocol";
+import { executionLogQueueWaitBudget } from "@noobot/session-protocol";
+import { createExecutionEventListener } from "../../../src/events/execution-listener.js";
 const bindCall = (call) => ({
   ...call,
   [TOOL_CALL_NAME_BINDING]: createToolNameBinding({ tools: [{ name: call.name }] }),
@@ -298,6 +300,115 @@ test("timing emission failure after success propagates without a second end", as
     (error) => error === failure,
   );
   assert.equal(endCount, 1);
+});
+
+test("parallel tools wait for an overdue log queue and continue after persistence drains", async (context) => {
+  let now = 0;
+  context.mock.method(performance, "now", () => now);
+  const runtime = createRuntime();
+  const started = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  context.after(() => release.resolve());
+  const persisted = [];
+  const listener = createExecutionEventListener({
+    userId: "admin",
+    sessionId: "session-tool-batch",
+    parentSessionId: "",
+    dialogProcessId: "dialog-tool-batch",
+    turnScopeId: "turn-tool-batch",
+    persistenceScope: null,
+    now: () => "2026-11-25T00:00:00.000Z",
+    sessionManager: {
+      async appendExecutionLogs({ records }) {
+        started.resolve();
+        await release.promise;
+        persisted.push(...records);
+      },
+    },
+  });
+  runtime.eventListener = listener;
+  listener.onEvent({ event: "queued_diagnostic", data: {} });
+  await started.promise;
+  listener.onEvent({ event: "queued_diagnostic", data: {} });
+  now = executionLogQueueWaitBudget() + 1;
+  let invocations = 0;
+  const committed = [];
+  const processing = processToolResults({
+    modelState: { runtime, agentContext: createTestAgentExecutionScope(runtime) },
+    loopState: { errorLogger: null },
+    turn: 1,
+    calls: [
+      { id: "first", name: "read_file", args: {} },
+      { id: "second", name: "read_file", args: {} },
+    ],
+    toolMap: new Map([
+      [
+        "read_file",
+        {
+          name: "read_file",
+          async invoke() {
+            invocations += 1;
+            return { ok: true };
+          },
+        },
+      ],
+    ]),
+    stateCommitter: {
+      async pushToolResult(result) {
+        committed.push(result.call.id);
+      },
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(invocations, 0);
+  release.resolve();
+  await processing;
+  await listener.flush();
+  assert.equal(invocations, 2);
+  assert.deepEqual(committed, ["first", "second"]);
+  assert.equal(persisted.filter(({ event }) => event === "tool_call_start").length, 2);
+  assert.equal(persisted.filter(({ event }) => event === "tool_call_end").length, 2);
+});
+
+test("parallel tool starts report a shared log backpressure failure", async () => {
+  const runtime = createRuntime();
+  const failures = [];
+  runtime.eventListener = {
+    onEvent({ data }) {
+      if (data?.envelope?.payload.eventType !== "tool_call_start") return;
+      const error = Object.assign(
+        new Error("execution log pending record limit exceeded; await event delivery"),
+        {
+          code: "EXECUTION_LOG_BACKPRESSURE_REQUIRED",
+        },
+      );
+      failures.push(error);
+      throw error;
+    },
+  };
+  const calls = [
+    { id: "first", name: "read_file", args: {} },
+    { id: "second", name: "read_file", args: {} },
+  ];
+
+  await assert.rejects(
+    processToolResults({
+      modelState: { runtime, agentContext: createTestAgentExecutionScope(runtime) },
+      loopState: { errorLogger: null },
+      turn: 1,
+      calls,
+      toolMap: new Map(),
+    }),
+    (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(failures.length, 2);
+      assert.deepEqual(error.errors, failures);
+      assert.equal(error.cause, failures[0]);
+      assert.equal(error.code, failures[0].code);
+      assert.equal(error.message, failures[0].message);
+      return true;
+    },
+  );
 });
 
 test("a failed parallel settlement drains peers and persists their results before propagating", async () => {

@@ -35,9 +35,19 @@ const OPENAI_CODES = codes([
 const ANTHROPIC_CODES = codes([
   [K.QUOTA_EXHAUSTED, ["enforced_spend_limit_reached"]],
   [K.AUTHENTICATION, ["authentication_error", "permission_error"]],
-  [K.INVALID_REQUEST, ["invalid_request_error", "not_found_error", "request_too_large"]],
-  [K.RATE_LIMIT, ["rate_limit_error"]],
-  [K.TEMPORARY_UNAVAILABLE, ["overloaded_error", "api_error"]],
+  [
+    K.INVALID_REQUEST,
+    [
+      "invalid_request_error",
+      "not_found_error",
+      "request_too_large",
+      "query_too_long",
+      "invalid_tool_input",
+      "max_uses_exceeded",
+    ],
+  ],
+  [K.RATE_LIMIT, ["rate_limit_error", "too_many_requests"]],
+  [K.TEMPORARY_UNAVAILABLE, ["overloaded_error", "api_error", "unavailable"]],
 ]);
 const GOOGLE_CODES = codes([
   [K.INVALID_REQUEST, ["INVALID_ARGUMENT", "FAILED_PRECONDITION", "NOT_FOUND"]],
@@ -101,13 +111,12 @@ function providerCodeKind({ operatorId, status, code, type, detailCode, retryAft
   return undefined;
 }
 
-function providerKind(facts) {
+function providerKind(facts, codeKind) {
   const { operatorId, status } = facts;
   if (status === 401 || status === 403) return K.AUTHENTICATION;
   if (status === 524) return K.TIMEOUT;
   if (!SOURCES[operatorId]) return K.UNKNOWN;
   if (status === 402 && [P.DEEPSEEK, P.ANTHROPIC].includes(operatorId)) return K.QUOTA_EXHAUSTED;
-  const codeKind = providerCodeKind(facts);
   if (codeKind !== undefined) return codeKind;
   if (status === 400 || status === 404 || status === 413 || status === 422)
     return K.INVALID_REQUEST;
@@ -118,6 +127,46 @@ function providerKind(facts) {
   return K.UNKNOWN;
 }
 
+function isModeRelatedFailure(facts) {
+  return (
+    ["stream", "streaming"].includes(facts.param) &&
+    ["invalid_request_error", "unsupported_parameter", "unsupported_value"].some(
+      (code) => facts.code === code || facts.type === code,
+    )
+  );
+}
+
+function hasRecognizedProviderEvidence(facts, kind, codeKind) {
+  const broadRequestError =
+    kind === K.INVALID_REQUEST &&
+    !facts.param &&
+    [undefined, null, "invalid_request_error", "INVALID_ARGUMENT"].includes(facts.code);
+  if (broadRequestError) return false;
+  if (codeKind !== undefined) return true;
+  if (STATUS_RULES.get(facts.operatorId)?.has(facts.status)) return true;
+  if ([401, 403, 408].includes(facts.status)) return true;
+  if (facts.status === 402) return [P.DEEPSEEK, P.ANTHROPIC].includes(facts.operatorId);
+  return facts.status === 429 && [P.DEEPSEEK, P.XAI].includes(facts.operatorId);
+}
+
 export function classifyProviderFailure(facts) {
-  return createModelFailureClassification(providerKind(facts));
+  const codeKind = providerCodeKind(facts);
+  const kind = providerKind(facts, codeKind);
+  const source = SOURCES[facts.operatorId] ?? null;
+  const modeRelated = source !== null && isModeRelatedFailure(facts);
+  const recognized =
+    source !== null && (modeRelated || hasRecognizedProviderEvidence(facts, kind, codeKind));
+  return Object.freeze({
+    ...createModelFailureClassification(kind),
+    providerEvidence: Object.freeze({
+      recognized,
+      modeRelated,
+      source,
+      code: facts.code ?? null,
+      type: facts.type ?? null,
+      detailCode: facts.detailCode ?? null,
+      param: facts.param ?? null,
+      status: facts.status ?? null,
+    }),
+  });
 }

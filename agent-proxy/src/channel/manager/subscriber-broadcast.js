@@ -12,7 +12,7 @@ import {
   isTerminalTurnEvent,
   TURN_LIFECYCLE_WIRE_EVENT,
   validateTurnLifecycleReceipt,
-} from "@noobot/session-protocol";
+} from "@noobot/session-protocol/turn-lifecycle";
 import {
   AGENT_TRANSPORT_EVENT,
   createAgentChannelFrame,

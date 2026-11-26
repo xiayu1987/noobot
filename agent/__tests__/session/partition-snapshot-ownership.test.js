@@ -108,13 +108,9 @@ test(
     const failure = Object.assign(new Error("Retention directory sync failed"), { code: "EIO" });
     setFsAdapter({
       ...adapter,
-      async open(file, ...args) {
-        const handle = await adapter.open(file, ...args);
-        if (String(file) === directory)
-          handle.sync = async () => {
-            throw failure;
-          };
-        return handle;
+      async syncDirectory(target) {
+        if (target === directory) throw failure;
+        return adapter.syncDirectory(target);
       },
     });
     try {
@@ -140,14 +136,12 @@ test("ownership directory sync failure closes the lock and rejects retention pub
   let injected = false;
   setFsAdapter({
     ...adapter,
-    async open(file, ...args) {
-      const handle = await adapter.open(file, ...args);
-      if (String(file) === ownerDirectory)
-        handle.sync = async () => {
-          injected = true;
-          throw failure;
-        };
-      return handle;
+    async syncDirectory(directory) {
+      if (directory === ownerDirectory) {
+        injected = true;
+        throw failure;
+      }
+      return adapter.syncDirectory(directory);
     },
   });
   try {

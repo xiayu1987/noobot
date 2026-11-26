@@ -46,15 +46,17 @@ watch(
   },
   { flush: "pre" },
 );
-async function restorePlayback() {
+async function restorePlayback({ currentTarget: media }) {
   if (!playback) return;
   const saved = playback;
   playback = null;
+  media.currentTime = saved.time;
+  if (!saved.playing) return;
   try {
-    mediaElement.value.currentTime = saved.time;
-    if (saved.playing) await mediaElement.value.play();
+    await media.play();
   } catch (error) {
-    renderError.value = error.message;
+    const playbackWasCanceled = error instanceof DOMException && error.name === "AbortError";
+    if (!playbackWasCanceled) renderError.value = error.message;
   }
 }
 const tab = ref("preview");

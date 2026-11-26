@@ -10,7 +10,7 @@ import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/i
 import {
   isInjectedSessionMessageRecord,
   resolveSessionMessageRecordInternalMessageType,
-} from "@noobot/session-protocol";
+} from "@noobot/session-protocol/session-message-record";
 import {
   THINKING_DETAIL_CONTENT_KIND,
   isThinkingDetailContentFact,
@@ -59,6 +59,15 @@ function compareContentFacts(left = {}, right = {}) {
   const sequenceDifference = left.sequence - right.sequence;
   if (sequenceDifference) return sequenceDifference;
   return left.contentId.localeCompare(right.contentId);
+}
+
+export function selectLatestUserInterjection(timeline) {
+  let latest = null;
+  for (const fact of timeline) {
+    if (fact.contentKind !== THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION) continue;
+    if (latest === null || fact.sequence > latest.sequence) latest = fact;
+  }
+  return latest;
 }
 
 export function reduceThinkingDetailContentTimelines(...timelines) {

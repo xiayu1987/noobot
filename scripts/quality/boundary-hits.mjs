@@ -10,6 +10,7 @@ import {
   readRepositoryText,
   repositoryPathExists,
 } from "./repository-files.mjs";
+import { parseSource } from "./source-ast.mjs";
 
 export function addPatternLineHits({ measurement, file, source, pattern, message }) {
   for (const hit of matchingLineHits(file, source, (text) => pattern.test(text), message)) {
@@ -77,13 +78,25 @@ export function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function resolveContractScope(source, scope) {
+function exportedFunctionRanges(source, file) {
+  const ranges = new Map();
+  for (const node of parseSource(source, file).body) {
+    if (
+      node.type === "ExportNamedDeclaration" &&
+      node.declaration?.type === "FunctionDeclaration"
+    ) {
+      ranges.set(node.declaration.id.name, node.range);
+    }
+  }
+  return ranges;
+}
+
+function resolveContractScope(source, scope, functionRanges) {
   if (scope.fn) {
-    const pattern = new RegExp(
-      String.raw`export\s+function\s+${escapeRegExp(scope.fn)}\b[\s\S]*?\n}\n`,
-    );
-    const match = pattern.exec(source);
-    return match && { text: match[0], start: match.index, label: `function ${scope.fn}` };
+    const range = functionRanges.get(scope.fn);
+    if (!range) return null;
+    const [start, end] = range;
+    return { text: source.slice(start, end), start };
   }
   const index = source.indexOf(scope.around);
   if (index < 0) return null;
@@ -91,7 +104,6 @@ function resolveContractScope(source, scope) {
   return {
     text: source.slice(start, index + scope.after),
     start,
-    label: `window around ${scope.around}`,
   };
 }
 
@@ -110,8 +122,12 @@ function addSectionHits({ measured, file, source, section, start }) {
 
 export function addContractHits({ measured, file, source, contract }) {
   addSectionHits({ measured, file, source, section: { ...contract, text: source }, start: 0 });
-  for (const scoped of contract.scoped ?? []) {
-    const scope = resolveContractScope(source, scoped.scope);
+  const sections = contract.scoped ?? [];
+  const functionRanges = sections.some(({ scope }) => scope.fn)
+    ? exportedFunctionRanges(source, file)
+    : null;
+  for (const scoped of sections) {
+    const scope = resolveContractScope(source, scoped.scope, functionRanges);
     if (!scope) {
       addHit(measured.missingMarker, {
         file,

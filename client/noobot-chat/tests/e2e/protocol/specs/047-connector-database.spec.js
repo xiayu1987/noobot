@@ -4,8 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { createHash, randomUUID } from "node:crypto";
+import { projectSelectedConnectorContext } from "@noobot/connector-protocol";
+import { composeSystemInfoSections } from "../../../../../../agent/src/context/formatters/system-prompt-formatter.js";
 import { test, expect } from "../fixtures/noobot.fixture.js";
-import { sendMessage, waitForNaturalCompletion } from "../helpers/browser-actions.js";
+import {
+  openComposerOptions,
+  closeComposerOptions,
+  sendMessage,
+  waitForNaturalCompletion,
+} from "../helpers/browser-actions.js";
 import {
   modelInvocationTraces,
   readSessionExecutionEventTree,
@@ -17,14 +24,19 @@ import { commandsForSession, waitForCommand } from "../helpers/scenario-assertio
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
-function mysqlHost() {
-  return String(process.env.NOOBOT_E2E_MYSQL_HOST || "127.0.0.1").trim();
-}
-
-function requiredMysqlPassword() {
-  const password = String(process.env.NOOBOT_E2E_MYSQL_PASSWORD || "");
-  if (!password) throw new Error("NOOBOT_E2E_MYSQL_PASSWORD is required");
-  return password;
+function requiredMysqlConfig() {
+  const config = {};
+  for (const field of ["HOST", "PORT", "USER", "PASSWORD", "DATABASE"]) {
+    const name = `NOOBOT_E2E_MYSQL_${field}`;
+    const value = process.env[name];
+    if (typeof value !== "string" || !value.trim()) throw new Error(`${name} is required`);
+    config[field.toLowerCase()] = field === "PASSWORD" ? value : value.trim();
+  }
+  const port = Number(config.port);
+  if (!/^\d+$/.test(config.port) || !Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("NOOBOT_E2E_MYSQL_PORT must be a valid TCP port");
+  }
+  return config;
 }
 
 async function selectOption(select, text) {
@@ -39,35 +51,18 @@ async function selectOption(select, text) {
   await option.click();
 }
 
-function connectorContextMessage(connectorId, connectorName) {
-  const section = {
-    connectors: [
-      {
-        connector_id: connectorId,
-        connector_name: connectorName,
-        connector_type: "database",
-        connector_sub_type: "mysql",
-        connector_operations: [
-          {
-            name: "execute",
-            description: "Execute one SQL statement against the configured database.",
-            input_schema: {
-              type: "object",
-              properties: {
-                command: {
-                  type: "string",
-                  description: "SQL statement to execute.",
-                },
-              },
-              required: ["command"],
-              additionalProperties: false,
-            },
-          },
-        ],
-      },
-    ],
+function connectorContextMessage(connector, locale) {
+  const connectorStatusSection = {
+    connectors: projectSelectedConnectorContext([connector.connectorId], [connector]),
   };
-  return `# Current connector information\n${JSON.stringify(section, null, 2)}`;
+  const sections = composeSystemInfoSections({ locale, connectorStatusSection });
+  const connectorSections = sections.filter(
+    (section) =>
+      typeof section === "string" &&
+      section.endsWith(JSON.stringify(connectorStatusSection, null, 2)),
+  );
+  expect(connectorSections).toHaveLength(1);
+  return connectorSections[0];
 }
 
 function diagnosticContentHash(content) {
@@ -80,6 +75,7 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
   request,
 }, testInfo) => {
   test.setTimeout(PROTOCOL_TIMEOUTS.model * 2 + PROTOCOL_TIMEOUTS.audit);
+  const mysql = requiredMysqlConfig();
   await sendMessage(noobot.page, uniquePrompt(testInfo, "只回复 OK。"));
   const provisionCommand = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   expect(provisionCommand.session).toEqual({
@@ -109,13 +105,11 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
   const connectorTypeSelects = drawer.locator(".type-grid .el-select");
   await selectOption(connectorTypeSelects.nth(0), "database");
   await selectOption(connectorTypeSelects.nth(1), "mysql");
-  await drawer.getByRole("textbox", { name: /^\*?(主机|Host)$/i }).fill(mysqlHost());
-  await drawer.getByRole("spinbutton", { name: /^(端口|Port)$/i }).fill("3306");
-  await drawer.getByRole("textbox", { name: /^\*?(用户名|Username)$/i }).fill("root");
-  await drawer
-    .getByRole("textbox", { name: /^\*?(密码|Password)$/i })
-    .fill(requiredMysqlPassword());
-  await drawer.getByRole("textbox", { name: /^\*?(数据库|Database)$/i }).fill("test_db");
+  await drawer.getByRole("textbox", { name: /^\*?(主机|Host)$/i }).fill(mysql.host);
+  await drawer.getByRole("spinbutton", { name: /^(端口|Port)$/i }).fill(mysql.port);
+  await drawer.getByRole("textbox", { name: /^\*?(用户名|Username)$/i }).fill(mysql.user);
+  await drawer.getByRole("textbox", { name: /^\*?(密码|Password)$/i }).fill(mysql.password);
+  await drawer.getByRole("textbox", { name: /^\*?(数据库|Database)$/i }).fill(mysql.database);
 
   const createdResponse = noobot.page.waitForResponse(
     (response) =>
@@ -137,8 +131,8 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
       connectorRow.locator('[aria-label="已连接"], [aria-label="Connected"]'),
     ).toBeVisible();
 
-    await noobot.page.locator(".composer-icon-btn").first().click();
-    const connectorOption = noobot.page.locator(".connector-option", { hasText: connectorName });
+    const options = await openComposerOptions(noobot.page);
+    const connectorOption = options.locator(".connector-option", { hasText: connectorName });
     await expect(connectorOption).toBeVisible();
 
     let markSelectionWriteStarted;
@@ -158,7 +152,7 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
     );
     await connectorOption.click();
     await selectionWriteStarted;
-    await noobot.page.locator(".more-collapse-btn").click();
+    await closeComposerOptions(noobot.page);
 
     const pendingSend = sendMessage(
       noobot.page,
@@ -177,7 +171,9 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
     const selectionPayload = await selectionHttpResponse.json();
     expect(selectionPayload.selectedConnectorIds).toEqual([connectorId]);
     await pendingSend;
+    await openComposerOptions(noobot.page);
     await expect(connectorOption.locator(".el-checkbox__input")).toHaveClass(/is-checked/);
+    await closeComposerOptions(noobot.page);
 
     const command = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send", 1);
     expect(command.session).toEqual({ createIfAbsent: false, selectedConnectorIds: [] });
@@ -223,7 +219,10 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
       );
       traces = traces.filter((record) => record.turnScopeId === command.identity.turnScopeId);
     }
-    const expectedConnectorContext = connectorContextMessage(connectorId, connectorName);
+    const expectedConnectorContext = connectorContextMessage(
+      createdPayload.connection.connector,
+      command.preferences.locale,
+    );
     const primaryEvidence = traces
       .filter((record) => record.data?.invocation?.flow === "agent.main")
       .flatMap((record) => record.data?.messages?.evidence || []);

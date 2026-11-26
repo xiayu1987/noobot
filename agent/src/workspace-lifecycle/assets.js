@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { readFile, readdir } from "@noobot/shared/file-system";
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import {
   WORKSPACE_ASSET_ACTION,

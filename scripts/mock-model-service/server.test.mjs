@@ -5,6 +5,8 @@
  */
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { request as httpRequest } from "node:http";
+import { Readable } from "node:stream";
 import { test } from "node:test";
 import { createMockModelServer } from "./server.mjs";
 import { nextReply, scenarioSteps } from "./scenario.mjs";
@@ -198,6 +200,16 @@ test("MCP replay uses the protocol tool identity and completes after its result"
   );
 });
 
+function requestMockServer(url, { method = "GET", body } = {}) {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(url, { method }, (response) => {
+      resolve(new Response(Readable.toWeb(response), { status: response.statusCode }));
+    });
+    request.on("error", reject);
+    request.end(body);
+  });
+}
+
 test("mock HTTP provider supports streaming tool deltas, plain responses, and invalid requests", async (t) => {
   const server = createMockModelServer();
   server.listen(0, "127.0.0.1");
@@ -209,23 +221,26 @@ test("mock HTTP provider supports streaming tool deltas, plain responses, and in
       ),
   );
   const url = `http://127.0.0.1:${server.address().port}`;
-  assert.equal((await fetch(`${url}/health`)).status, 200);
-  assert.equal((await fetch(`${url}/unknown`)).status, 404);
-  const search = await fetch(`${url}/search?q=NOOBOT-PERF-SEARCH`);
+  assert.equal((await requestMockServer(`${url}/health`)).status, 200);
+  assert.equal((await requestMockServer(`${url}/unknown`)).status, 404);
+  const search = await requestMockServer(`${url}/search?q=NOOBOT-PERF-SEARCH`);
   assert.equal((await search.json()).results[0].title, "NOOBOT-PERF-SEARCH");
-  const image = await fetch(`${url}/v1/images/generations`, {
+  const image = await requestMockServer(`${url}/v1/images/generations`, {
     method: "POST",
     body: JSON.stringify({ prompt: "NOOBOT-PERF-IMAGE" }),
   });
   const bytes = Buffer.from((await image.json()).data[0].b64_json, "base64");
   assert.equal(bytes.subarray(1, 4).toString(), "PNG");
-  const parsed = await fetch(`${url}/v1/responses`, {
+  const parsed = await requestMockServer(`${url}/v1/responses`, {
     method: "POST",
     body: JSON.stringify({ model: "e2e_mock", input: [] }),
   });
   assert.equal((await parsed.json()).output[0].content[0].text, "NOOBOT-PERF-PARSED-IMAGE");
   const request = (body) =>
-    fetch(`${url}/v1/chat/completions`, { method: "POST", body: JSON.stringify(body) });
+    requestMockServer(`${url}/v1/chat/completions`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   const streamed = await request({
     stream: true,
     tools,

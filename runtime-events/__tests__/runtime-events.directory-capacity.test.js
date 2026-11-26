@@ -8,10 +8,12 @@ import test from "node:test";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { PLATFORM } from "@noobot/platform-compatibility/platform";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { appendJsonLine } from "../src/transports/jsonl.js";
 
 test("failed directory preparations have bounded admission and keep their complete retry boundary", async (t) => {
+  t.mock.property(process, "platform", PLATFORM.LINUX);
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "runtime-directory-capacity-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const failure = new Error("directory sync failed");

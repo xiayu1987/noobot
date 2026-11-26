@@ -14,13 +14,16 @@ import { createHeaderExtractors, createProxyServer } from "./server.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-export function startModelProxy() {
-  const config = loadConfig();
+export function startModelProxy(config = loadConfig()) {
+  const configuredLogDir = process.env.NOOBOT_MODEL_PROXY_LOG_DIR;
+  if (configuredLogDir !== undefined && !path.isAbsolute(configuredLogDir)) {
+    throw new Error("NOOBOT_MODEL_PROXY_LOG_DIR must be an absolute path");
+  }
   const proxyHost = config.proxyHost;
   const proxyEntries = config.proxies;
   const { unknownModelName, unknownFlowName, unknownSessionId } = config;
   const logger = createLogger({
-    logDir: path.resolve(projectRoot, config.logDir),
+    logDir: configuredLogDir ?? path.resolve(projectRoot, config.logDir),
     logPrefix: config.logPrefix,
     unknownModelName,
     unknownFlowName,
@@ -48,7 +51,7 @@ export function startModelProxy() {
   });
   const measureRequestPrefix = createRequestPrefixTracker();
 
-  for (const entry of proxyEntries) {
+  return proxyEntries.map((entry) =>
     createProxyServer({
       localPort: entry.localPort,
       targetUrl: entry.targetUrl,
@@ -59,6 +62,6 @@ export function startModelProxy() {
       unknownModelName,
       unknownFlowName,
       unknownSessionId,
-    });
-  }
+    }),
+  );
 }

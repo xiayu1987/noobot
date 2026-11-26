@@ -46,26 +46,18 @@ export function useWorkflowNodeMessages({
     ];
   });
 
-  const selectedNodeProjection = computed(() =>
-    buildSessionDetailProjection({
+  const displayNodeMessages = computed(() => {
+    if (!selectedNodeSessionId.value) return [];
+    const projection = buildSessionDetailProjection({
       sessionDetail: {
         sessionId: selectedNodeSessionId.value,
         messages: selectedNodeMessages.value,
       },
       sessionDocs: selectedNodeSessionDocs.value,
       makeViewMessage: buildNodeViewMessage,
-    }),
-  );
-
-  const normalizedNodeSessionMessages = computed(() => {
-    return selectedNodeProjection.value.messages;
+    });
+    return projection.messages.map(normalizeNodeMessageForDisplay);
   });
-
-  const displayNodeMessages = computed(() =>
-    normalizedNodeSessionMessages.value.map((messageItem) =>
-      normalizeNodeMessageForDisplay(messageItem),
-    ),
-  );
 
   function summarizeMessage(messageItem = {}) {
     return {

@@ -48,6 +48,14 @@ npm run -w client/noobot-chat test:e2e:protocol:full
 Evidence is written to `test-results/protocol/`. Credentials must never enter logs, traces,
 screenshots, or reports.
 
+PBE-047 requires an isolated MySQL fixture with synthetic `users` rows. Supply all five
+connection fields explicitly: `NOOBOT_E2E_MYSQL_HOST`, `NOOBOT_E2E_MYSQL_PORT`,
+`NOOBOT_E2E_MYSQL_USER`, `NOOBOT_E2E_MYSQL_PASSWORD`, and `NOOBOT_E2E_MYSQL_DATABASE`.
+Use a dedicated account with only `SELECT` on the fixture database. The database may run
+in WSL Docker while the client and backend run natively on Windows; verify the configured
+endpoint from Windows before starting the scenario. The test does not assume port 3306
+or a root account and does not provision or modify database data.
+
 ### Model invocation observation
 
 All production provider requests are executed and observed only at
@@ -129,6 +137,13 @@ npm run -w client/noobot-chat test:e2e:protocol:full
 ```
 
 证据默认写入仓库根目录的 `test-results/protocol/`。凭证禁止进入日志、trace、截图或报告。
+
+PBE-047 需要独立 MySQL 测试库及合成的 `users` 表数据。必须显式提供五个连接字段：
+`NOOBOT_E2E_MYSQL_HOST`、`NOOBOT_E2E_MYSQL_PORT`、`NOOBOT_E2E_MYSQL_USER`、
+`NOOBOT_E2E_MYSQL_PASSWORD`、`NOOBOT_E2E_MYSQL_DATABASE`。专用账号仅授予该测试库的
+`SELECT` 权限。数据库可以运行在 WSL Docker，客户端和后端仍在原生 Windows 运行；
+开始用例前应从 Windows 验证配置端点可达。测试不假定 3306 端口或 root 账号，
+也不负责创建、修改数据库数据。
 
 ## 模型调用观测协议
 

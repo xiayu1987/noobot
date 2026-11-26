@@ -12,7 +12,7 @@ import {
 } from "@noobot/model-protocol";
 import { createMeasuredFetch } from "../src/executor/request-measurement.js";
 
-test("protocol failures have an explicit category and cannot replay in another transfer mode", () => {
+test("protocol failures preserve their category and retry in the same transfer mode", () => {
   const classification = classifyModelFailure(new ModelProtocolError("missing terminal"), () => {
     assert.fail("protocol failure must not call adapter classifier");
   });
@@ -20,7 +20,10 @@ test("protocol failures have an explicit category and cannot replay in another t
     kind: "protocol",
     classificationError: null,
   });
-  assert.equal(resolveModelFailureRecovery(classification).action, MODEL_RECOVERY_ACTION.STOP);
+  assert.deepEqual(resolveModelFailureRecovery(classification), {
+    action: MODEL_RECOVERY_ACTION.RETRY_SAME,
+    revision: null,
+  });
 });
 
 test("prefix baseline is isolated by executor and scope, with exact block boundary bytes", async () => {

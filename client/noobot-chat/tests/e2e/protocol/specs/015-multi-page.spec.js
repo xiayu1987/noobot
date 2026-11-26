@@ -18,7 +18,8 @@ import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 test("@full PBE-015 双标签页生命周期一致性", async ({
   noobot,
   protocolCapture,
-  browser,
+  createClient,
+  baseURL,
 }, testInfo) => {
   test.setTimeout(PROTOCOL_TIMEOUTS.model * 2 + PROTOCOL_TIMEOUTS.audit);
   await sendMessage(
@@ -40,17 +41,23 @@ test("@full PBE-015 双标签页生命周期一致性", async ({
     turnScopeId: provision.identity.turnScopeId,
   });
 
-  const secondContext = await browser.newContext();
-  const secondPage = await secondContext.newPage();
+  const secondClient = await createClient();
+  const secondPage = secondClient.page;
   protocolCapture.bindPage(secondPage);
   try {
-    await secondPage.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
+    await secondPage.goto(
+      new URL(`/?session=${encodeURIComponent(noobot.sessionId)}`, baseURL).href,
+    );
     await connectThroughUi(secondPage, readE2eCredentials());
     await expect(secondPage.locator('.session-item[aria-current="true"]')).toHaveAttribute(
       "data-session-id",
       noobot.sessionId,
     );
     await expect(secondPage.locator(".stop-float-btn")).toBeHidden();
+    await expect(secondPage.locator(".base-message-shell.assistant")).toHaveCount(1);
+    await expect(
+      secondPage.locator(".base-message-shell.assistant .base-markdown-content"),
+    ).toContainText(/\S+/);
 
     const livePrompt = uniquePrompt(testInfo, "multi-page active turn answer briefly");
     const assistantCountBefore = await secondPage.locator(".base-message-shell.assistant").count();
@@ -85,14 +92,15 @@ test("@full PBE-015 双标签页生命周期一致性", async ({
     await expect(secondPage.locator(".stop-float-btn")).toBeHidden();
     await expect(noobot.page.locator(".stop-float-btn")).toBeHidden();
   } finally {
-    await secondContext.close();
+    await secondClient.close();
   }
 });
 
 test("@full PBE-046 双标签页 Workflow 消息与卡片一致性", async ({
   noobot,
   protocolCapture,
-  browser,
+  createClient,
+  baseURL,
 }, testInfo) => {
   test.setTimeout(PROTOCOL_TIMEOUTS.model * 2 + PROTOCOL_TIMEOUTS.audit);
   await sendMessage(
@@ -115,11 +123,13 @@ test("@full PBE-046 双标签页 Workflow 消息与卡片一致性", async ({
     timeoutMs: PROTOCOL_TIMEOUTS.model,
   });
 
-  const secondContext = await browser.newContext();
-  const secondPage = await secondContext.newPage();
+  const secondClient = await createClient();
+  const secondPage = secondClient.page;
   protocolCapture.bindPage(secondPage);
   try {
-    await secondPage.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
+    await secondPage.goto(
+      new URL(`/?session=${encodeURIComponent(noobot.sessionId)}`, baseURL).href,
+    );
     await connectThroughUi(secondPage, readE2eCredentials());
     await expect(secondPage.locator('.session-item[aria-current="true"]')).toHaveAttribute(
       "data-session-id",
@@ -164,6 +174,6 @@ test("@full PBE-046 双标签页 Workflow 消息与卡片一致性", async ({
     await expect(noobot.page.locator(".stop-float-btn")).toBeHidden();
     await expect(secondPage.locator(".stop-float-btn")).toBeHidden();
   } finally {
-    await secondContext.close();
+    await secondClient.close();
   }
 });

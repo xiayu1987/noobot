@@ -90,6 +90,11 @@ for (const committed of [false, true]) {
     const synced = new Set();
     setFsAdapter({
       ...adapter,
+      async syncDirectory(directory) {
+        const result = await adapter.syncDirectory(directory);
+        synced.add(directory);
+        return result;
+      },
       async open(file, ...args) {
         const handle = await adapter.open(file, ...args);
         return new Proxy(handle, {
@@ -132,10 +137,10 @@ test("recovery does not hide directory durability failures", async (t) => {
   const parent = path.dirname(path.dirname(journalPartitionPath(root, 0)));
   setFsAdapter({
     ...adapter,
-    async open(file, ...args) {
-      if (String(file) === parent)
+    async syncDirectory(directory) {
+      if (directory === parent)
         throw Object.assign(new Error("directory sync failed"), { code: "EIO" });
-      return adapter.open(file, ...args);
+      return adapter.syncDirectory(directory);
     },
   });
   try {

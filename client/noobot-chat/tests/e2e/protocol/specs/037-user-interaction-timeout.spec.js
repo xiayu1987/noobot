@@ -5,7 +5,7 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import { selectPlugins, sendMessage } from "../helpers/browser-actions.js";
-import { waitForCommand } from "../helpers/scenario-assertions.js";
+import { waitForCommand, waitForTurnTerminal } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { toolEventsForTurn, waitForToolSet } from "../helpers/thinking-tool-assertions.js";
@@ -84,4 +84,10 @@ test("@core PBE-037 user_interaction timeout closes the real modal and is not re
     (event) => event.event === "tool_call_end" && event.data?.tool === "user_interaction",
   );
   expect(String(result?.data?.result || "")).toMatch(/timeout|超时/i);
+  const terminal = await waitForTurnTerminal(
+    protocolCapture,
+    noobot.sessionId,
+    command.identity.turnScopeId,
+  );
+  expect(terminal.eventType, JSON.stringify(terminal.failure || {})).toBe("turn.completed");
 });

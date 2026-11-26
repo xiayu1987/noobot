@@ -38,7 +38,7 @@
     },
     "generation": {
       "default_models": {
-        "image": "gpt_image_2_5_flare",
+        "image": "gpt_image_2_6_flare",
         "video": "grok_imagine_video_1_5"
       }
     }

@@ -8,14 +8,16 @@ import test from "node:test";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { normalizePlatform, PLATFORM } from "@noobot/platform-compatibility/platform";
 import { appendJsonLine } from "../src/transports/jsonl.js";
 
-test("group receipt waits for synced data and a synced directory entry", async (t) => {
+test("group receipt waits for flushed data and host-supported directory synchronization", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "runtime-event-durability-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const file = path.join(root, "events.jsonl");
   const events = [];
   const append = fs.appendFile.bind(fs);
+  const windows = normalizePlatform(process.platform) === PLATFORM.WINDOWS;
   const open = fs.open.bind(fs);
   t.mock.method(fs, "appendFile", async (target, data, options) => {
     assert.equal(options.flush, true);
@@ -23,6 +25,7 @@ test("group receipt waits for synced data and a synced directory entry", async (
     events.push("data-synced");
   });
   t.mock.method(fs, "open", async (target, ...options) => {
+    if (target === root) assert.equal(windows, false);
     const handle = await open(target, ...options);
     if (target === root) {
       const sync = handle.sync.bind(handle);
@@ -35,7 +38,10 @@ test("group receipt waits for synced data and a synced directory entry", async (
   });
   await Promise.all([appendJsonLine(file, { n: 1 }), appendJsonLine(file, { n: 2 })]);
   events.push("acknowledged");
-  assert.deepEqual(events, ["data-synced", "directory-synced", "acknowledged"]);
+  assert.deepEqual(
+    events,
+    windows ? ["data-synced", "acknowledged"] : ["data-synced", "directory-synced", "acknowledged"],
+  );
 });
 
 test("directory sync failure rejects every receipt and releases the append queue", async (t) => {
@@ -43,24 +49,21 @@ test("directory sync failure rejects every receipt and releases the append queue
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const file = path.join(root, "events.jsonl");
   const failure = new Error("directory sync failed");
+  t.mock.property(process, "platform", PLATFORM.LINUX);
   const open = fs.open.bind(fs);
   let fail = true;
   let closed = 0;
   t.mock.method(fs, "open", async (target, ...options) => {
-    const handle = await open(target, ...options);
-    if (target === root) {
-      const sync = handle.sync.bind(handle);
-      const close = handle.close.bind(handle);
-      handle.sync = async () => {
+    if (target !== root) return open(target, ...options);
+    assert.equal(options[0], "r");
+    return {
+      async sync() {
         if (fail) throw failure;
-        await sync();
-      };
-      handle.close = async () => {
+      },
+      async close() {
         closed += 1;
-        await close();
-      };
-    }
-    return handle;
+      },
+    };
   });
   const results = await Promise.allSettled([
     appendJsonLine(file, { n: 1 }),

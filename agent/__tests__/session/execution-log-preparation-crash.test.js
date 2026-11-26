@@ -5,10 +5,10 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { open, readdir, mkdir, writeFile, rename, rm } from "node:fs/promises";
+import { readdir, mkdir, writeFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { durableJsonPublicationTarget } from "../../src/shared/storage/durable-file.js";
-import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
+import { getFsAdapter, setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import {
   appendRollingJsonlArtifactLogs,
   resolveExecutionTurnDir,
@@ -135,20 +135,11 @@ for (let ancestor = 0; ancestor < 4; ancestor += 1) {
         sessionDir,
       ];
       const failure = new Error("preparation directory sync interrupted");
+      const adapter = getFsAdapter();
       setFsAdapter({
-        async open(file, ...args) {
-          const handle = await open(file, ...args);
-          if (file !== directories[ancestor]) return handle;
-          return new Proxy(handle, {
-            get(target, property) {
-              if (property === "sync")
-                return async () => {
-                  throw failure;
-                };
-              const value = Reflect.get(target, property, target);
-              return typeof value === "function" ? value.bind(target) : value;
-            },
-          });
+        async syncDirectory(directory) {
+          if (directory === directories[ancestor]) throw failure;
+          return adapter.syncDirectory(directory);
         },
       });
       try {

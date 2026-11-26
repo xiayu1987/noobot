@@ -69,7 +69,7 @@ log(probe.stdout);
   assert.doesNotMatch(result.stderr, /\/tmp\/noobot-native-|runtime\/native_tasks/);
 });
 
-test("execute_native_script fails when LibreOffice reports success without an output artifact", async (t) => {
+test("execute_native_script rejects an unsupported LibreOffice export without publishing artifacts", async (t) => {
   if (!(await hasLibreOfficeCapability())) {
     t.skip("LibreOffice is not installed");
     return;
@@ -98,7 +98,11 @@ await libreoffice.convert({ input: source, outputDirectory: output.directory, ou
   assert.equal(result.ok, false);
   assert.equal(result.status, "failed");
   assert.equal(result.output_file_count, 0);
-  assert.match(result.error, /LibreOffice conversion/);
+  assert.match(result.error, /LibreOffice/);
+  assert.match(
+    result.error,
+    /no export filter|conversion (?:reported an error|produced no non-empty output)/,
+  );
   assert.doesNotMatch(result.error, /\/tmp\/noobot-native-|runtime\/native_tasks|\/home\/xiayu/);
 });
 

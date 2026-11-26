@@ -5,7 +5,7 @@
  */
 import { text, isObjectLike } from "@noobot/shared/value";
 import { createContextMessageId } from "@noobot/session-protocol/message-identity";
-import { MESSAGE_ORIGIN } from "@noobot/session-protocol";
+import { MESSAGE_ORIGIN } from "@noobot/session-protocol/message-entity-contract";
 
 export const CONTEXT_MESSAGE_ROLE = Object.freeze({
   SYSTEM: "system",

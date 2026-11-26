@@ -6,7 +6,7 @@
 
 import { isPlainObject, text } from "@noobot/shared/value";
 
-const CONNECTOR_FIELD_KINDS = new Set(["text", "number", "boolean", "workspace_path"]);
+const CONNECTOR_FIELD_KINDS = new Set(["text", "multiline", "number", "boolean", "workspace_path"]);
 const CONNECTOR_IDENTIFIER_PATTERN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
 
 export const connectorField = (

@@ -223,7 +223,9 @@ export function useThinkingTimeline(
   const currentToolTimelineLogs = computed(() => {
     const current = timelineMessage(props.messageItem);
     if (props.variant === "details")
-      return selectToolTimelineLogs(current, { includeDetail: false });
+      return selectToolTimelineLogs(current, { includeDetail: false }).filter(
+        (log) => log.detailValue !== undefined,
+      );
     const detail = loadedThinkingDetail.value?.messageItem;
     const message = detail
       ? {

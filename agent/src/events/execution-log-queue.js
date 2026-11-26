@@ -82,12 +82,6 @@ export function createExecutionLogQueue({ sessionManager, route, persistenceScop
   const drainBatches = async () => {
     while (pending.length > 0) {
       await waitForBatch();
-      const oldest = pending[0];
-      const failure = executionLogQueueWaitFailure(
-        performance.now() - oldest.enqueuedAt,
-        queueWaitBudget,
-      );
-      if (failure) recordFailure(oldest.record.event, failure);
       await persistBatch(takeBatch(pending, byteBudget));
     }
   };
@@ -102,17 +96,6 @@ export function createExecutionLogQueue({ sessionManager, route, persistenceScop
 
   const append = (record) => {
     const enqueuedAt = performance.now();
-    if (pending.length > 0) {
-      const cause = executionLogQueueWaitFailure(
-        enqueuedAt - pending[0].enqueuedAt,
-        queueWaitBudget,
-      );
-      if (cause)
-        throw Object.assign(
-          new Error("execution log queue wait budget exceeded; await persistence drain", { cause }),
-          { code: "EXECUTION_LOG_BACKPRESSURE_REQUIRED" },
-        );
-    }
     if (pendingCount >= EXECUTION_LOG_MAX_PENDING_RECORDS) {
       const error = new Error("execution log pending record limit exceeded; await event delivery");
       error.code = "EXECUTION_LOG_BACKPRESSURE_REQUIRED";
@@ -142,6 +125,13 @@ export function createExecutionLogQueue({ sessionManager, route, persistenceScop
   };
   return {
     append,
+    get backpressured() {
+      return (
+        pending.length > 0 &&
+        executionLogQueueWaitFailure(performance.now() - pending[0].enqueuedAt, queueWaitBudget) !==
+          null
+      );
+    },
     async flush() {
       flushing += 1;
       wakeBatch?.();

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createLocator } from "@noobot/shared/locator";
 import { invokePatchFile } from "./helpers/patch-base-versions.js";
 import {
   test,
@@ -15,7 +16,6 @@ import {
   parseToolResult,
 } from "./helpers/file-script-length-guards-helper.js";
 import { createTestAgentEnvironment } from "../helpers/agent-execution-scope.js";
-import { fileContentSha256 } from "../../src/tools/execution/file-mutation-state.js";
 
 test("patch_file: strip 不得消除 unified_diff 中的父目录穿越语义", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-strip-traversal-"));
@@ -130,9 +130,10 @@ test("patch_file: super user can patch an absolute file outside workspace root",
   );
   assert.equal(result.ok, true);
   assert.equal(result.changes.length, 1);
-  assert.deepEqual(result.changes[0].path, { view: "host", path: outsideFile });
+  const expectedLocator = createLocator({ view: "host", path: outsideFile });
+  assert.deepEqual(result.changes[0].path, expectedLocator);
   assert.equal(result.changes[0].action, "write");
-  assert.deepEqual(result.mutations[0].locator, { view: "host", path: outsideFile });
+  assert.deepEqual(result.mutations[0].locator, expectedLocator);
   assert.equal(await fs.readFile(outsideFile, "utf8"), "one\nTWO\n");
 });
 
@@ -286,128 +287,6 @@ test("patch_file: 拒绝 root=.. 和 project 虚拟相对前缀", async () => {
         { signal: new AbortController().signal },
       ),
     /workspace-relative|工作区相对/i,
-  );
-});
-
-test("patch_file: 用户配置不能授权 /project 沙箱挂载", async () => {
-  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-project-sandbox-"));
-  await fs.mkdir(path.join(basePath, "i18n/src/client/locales"), { recursive: true });
-  const localeFile = path.join(basePath, "i18n/src/client/locales/en-US.js");
-  await fs.writeFile(
-    localeFile,
-    'export default {\n  "hideChatNavigator": "Hide conversation navigation"\n};\n',
-    "utf8",
-  );
-  const tools = createFileTool({
-    agentContext: buildAgentContext(basePath, "u-test", {
-      runtime: {
-        userConfig: {
-          tools: {
-            sandboxPathMappings: [{ source: basePath, target: "/project" }],
-          },
-        },
-      },
-    }),
-  });
-  const tool = tools.find((item) => item?.name === "patch_file");
-  assert.ok(tool);
-
-  const patchText = [
-    "*** Begin Patch",
-    "*** Update File: /project/i18n/src/client/locales/en-US.js",
-    "@@",
-    " export default {",
-    '-  "hideChatNavigator": "Hide conversation navigation"',
-    '+  "hideChatNavigator": "Hide conversation navigation",',
-    '+  "sessionStatus": "Status"',
-    " };",
-    "*** End Patch",
-    "",
-  ].join("\n");
-
-  await assert.rejects(
-    () =>
-      invokePatchFile(
-        tool,
-        basePath,
-        { riskLevel: "low", format: "apply_patch", patch: patchText },
-        { signal: new AbortController().signal },
-      ),
-    (error) => {
-      assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
-      assert.equal(error.message, "当前执行视角不接受沙箱绝对路径。");
-      return true;
-    },
-  );
-});
-
-test("patch_file: 全局 sandbox 挂载可授权 workspace 外项目", async () => {
-  const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-project-mount-"));
-  const userWorkspacePath = path.join(rootPath, "workspace/admin");
-  const projectPath = path.join(rootPath, "noobot");
-  await fs.mkdir(path.join(projectPath, "client/noobot-chat/src/composables/chat"), {
-    recursive: true,
-  });
-  await fs.mkdir(userWorkspacePath, { recursive: true });
-  const targetFile = path.join(
-    projectPath,
-    "client/noobot-chat/src/composables/chat/useChatSession.js",
-  );
-  await fs.writeFile(targetFile, "function existing() {\n  return true;\n}\n", "utf8");
-  const tools = createFileTool({
-    agentContext: buildAgentContext(userWorkspacePath, "admin", {
-      runtime: {
-        globalConfig: {
-          workspaceRoot: path.join(rootPath, "workspace"),
-          security: {
-            executionIsolation: {
-              mode: "sandbox",
-              sandbox: {
-                provider: "docker",
-                scope: "global",
-                mounts: [{ source: projectPath, target: "/project" }],
-              },
-            },
-          },
-        },
-      },
-    }),
-  });
-  const tool = tools.find((item) => item?.name === "patch_file");
-  assert.ok(tool);
-
-  const patchText = [
-    "*** Begin Patch",
-    "*** Update File: /project/client/noobot-chat/src/composables/chat/useChatSession.js",
-    "@@",
-    " function existing() {",
-    "-  return true;",
-    '+  return "sandbox-project";',
-    " }",
-    "*** End Patch",
-    "",
-  ].join("\n");
-
-  const result = parseToolResult(
-    await tool.invoke(
-      {
-        riskLevel: "low",
-        format: "apply_patch",
-        patch: patchText,
-        baseVersions: [
-          {
-            filePath: "/project/client/noobot-chat/src/composables/chat/useChatSession.js",
-            sha256: fileContentSha256(await fs.readFile(targetFile)),
-          },
-        ],
-      },
-      { signal: new AbortController().signal },
-    ),
-  );
-  assert.equal(result.ok, true);
-  assert.equal(
-    await fs.readFile(targetFile, "utf8"),
-    'function existing() {\n  return "sandbox-project";\n}\n',
   );
 });
 

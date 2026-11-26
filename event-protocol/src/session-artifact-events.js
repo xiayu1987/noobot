@@ -6,7 +6,7 @@
 import {
   collectSessionArtifactEventIdentityErrors,
   sessionArtifactEventsError,
-} from "@noobot/session-protocol";
+} from "@noobot/session-protocol/session-artifact-events";
 import { isDeepFrozen } from "@noobot/shared/deep-freeze";
 import { validateProtocolEvent } from "./event-registry.js";
 

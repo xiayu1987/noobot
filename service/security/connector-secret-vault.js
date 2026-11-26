@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { createCipheriv, createDecipheriv, randomBytes, scrypt as deriveKey } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { writeFileAtomic } from "@noobot/platform-compatibility/atomic-file-write";
+import { ensurePrivateStorageDirectory } from "@noobot/platform-compatibility/private-storage";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   CONNECTOR_SECRET_ALGORITHM,
@@ -120,7 +121,13 @@ export class ConnectorSecretVault {
   async _withUserLock(userId, operation) {
     const normalizedUserId = requiredText(userId, "connector secret userId");
     const previous = this.userLocks.get(normalizedUserId) || Promise.resolve();
-    const current = previous.then(operation, operation);
+    const run = async () => {
+      await ensurePrivateStorageDirectory(path.dirname(this._keyPath(normalizedUserId)), [
+        KEY_FILE_NAME,
+      ]);
+      return operation();
+    };
+    const current = previous.then(run, run);
     this.userLocks.set(normalizedUserId, current);
     try {
       return await current;
@@ -131,7 +138,6 @@ export class ConnectorSecretVault {
 
   async _writeKeyDocument(userId, document) {
     const keyPath = this._keyPath(userId);
-    await mkdir(path.dirname(keyPath), { recursive: true });
     await writeFileAtomic({
       filePath: keyPath,
       content: `${JSON.stringify(document, null, 2)}\n`,

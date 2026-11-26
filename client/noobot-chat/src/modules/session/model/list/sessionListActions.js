@@ -234,7 +234,7 @@ export function createSessionListActions({
   }
 
   async function loadSessionList(preferredActiveId, { silent, forceCurrentSessionRerender }) {
-    const prevActiveId = String(preferredActiveId || activeSessionId.value || "");
+    const initialActiveId = activeSessionId.value;
     const requestedSessionId = text(preferredActiveId);
 
     const listResult = await requestSessionListData();
@@ -258,15 +258,19 @@ export function createSessionListActions({
       createLocalSession();
       return true;
     }
-    if (requestedResult.status === "loaded") {
+    const selectionChanged = activeSessionId.value !== initialActiveId;
+    if (requestedResult.status === "loaded" && !selectionChanged) {
       activeSessionId.value = requestedResult.resolvedSessionId;
       applySessionDetail(requestedResult.detail);
       refreshSessionConnectorsAsync(requestedResult.resolvedSessionId);
       return true;
     }
 
-    const retainedPrimaryId = findSessionByAnyIdInList(sessions.value, prevActiveId)
-      ? resolveSessionPrimaryIdInList(sessions.value, prevActiveId)
+    const selectionId = selectionChanged
+      ? activeSessionId.value
+      : requestedSessionId || activeSessionId.value;
+    const retainedPrimaryId = findSessionByAnyIdInList(sessions.value, selectionId)
+      ? resolveSessionPrimaryIdInList(sessions.value, selectionId)
       : "";
     await selectSession(
       retainedPrimaryId || resolveInitialSessionId(listResult.data, nextSessions),

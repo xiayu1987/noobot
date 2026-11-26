@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { rename } from "node:fs/promises";
+import { journalHeadPath } from "../../src/session/partition-storage/journal-io.js";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import {
   sessionMutationFixture,
@@ -288,10 +289,13 @@ test("deleteFromMessage recomputes the title when removing all messages", async 
 test("deleteFromMessage exposes no partial state on CURRENT failure and retries after reopening", async (t) => {
   const f = await sessionMutationFixture(t, { messages: [message("keep"), message("drop")] });
   const before = await f.open();
+  let injected = false;
   setFsAdapter({
     rename: async (source, target) => {
-      if (target === `${f.scope.sessionDir}/CURRENT`)
+      if (target === journalHeadPath(f.scope.sessionDir)) {
+        injected = true;
         throw Object.assign(new Error("injected"), { code: "EIO" });
+      }
       return rename(source, target);
     },
   });
@@ -302,6 +306,7 @@ test("deleteFromMessage exposes no partial state on CURRENT failure and retries 
   } finally {
     resetFsAdapter();
   }
+  assert.equal(injected, true);
   const generation = before.generation;
   await f.reopen();
   const failed = await f.open();

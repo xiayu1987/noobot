@@ -8,9 +8,11 @@ import test from "node:test";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { PLATFORM } from "@noobot/platform-compatibility/platform";
 import { appendJsonLine } from "../src/transports/jsonl.js";
 
 async function workspace(t) {
+  t.mock.property(process, "platform", PLATFORM.LINUX);
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "runtime-append-sync-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const operations = [];
@@ -22,15 +24,16 @@ async function workspace(t) {
     operations.push("data");
   });
   t.mock.method(fs, "open", async (target, ...options) => {
-    const handle = await open(target, ...options);
     if (target === root) {
-      const sync = handle.sync.bind(handle);
-      handle.sync = async () => {
-        await sync();
-        operations.push("directory");
+      assert.equal(options[0], "r");
+      return {
+        async sync() {
+          operations.push("directory");
+        },
+        async close() {},
       };
     }
-    return handle;
+    return open(target, ...options);
   });
   return { root, file: path.join(root, "events.jsonl"), operations };
 }

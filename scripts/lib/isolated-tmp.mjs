@@ -5,6 +5,8 @@
  */
 import { DEVELOPMENT_THRESHOLDS } from "./development-thresholds.mjs";
 import { lstatSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { open } from "node:fs/promises";
+import { withDescriptorLock } from "@noobot/platform-compatibility/descriptor-lock";
 import os from "node:os";
 import path from "node:path";
 import { withoutRuntimeInstancePaths } from "@noobot/runtime-topology-protocol/instance-paths";
@@ -14,10 +16,25 @@ import { text } from "@noobot/shared/value";
 export const ISOLATED_TMP_ENV = "NOOBOT_TEST_TMP_DIR";
 const DEFAULT_TMP_MIN_AGE_MS = DEVELOPMENT_THRESHOLDS.time.isolatedTmpMinAgeMs;
 
-export function pruneOldest(dir, matches, keep, { minAgeMs = 0, now = Date.now() } = {}) {
+export async function pruneOldest(dir, matches, keep, options = {}) {
+  const handle = await open(path.join(dir, ".noobot-prune.lock"), "a+");
+  return withDescriptorLock(
+    handle,
+    {
+      deadline: performance.now() + DEVELOPMENT_THRESHOLDS.time.isolatedTmpLockTimeoutMs,
+      pollMs: DEVELOPMENT_THRESHOLDS.time.isolatedTmpLockPollMs,
+      timeoutError: () => new Error(`Timed out acquiring cleanup ownership: ${dir}`),
+    },
+    () => pruneOwnedEntries(dir, matches, keep, options),
+  );
+}
+
+function pruneOwnedEntries(dir, matches, keep, { minAgeMs = 0, now = Date.now() }) {
   const uid = os.userInfo().uid;
   const entries = [];
-  for (const name of readdirSync(dir).filter(matches)) {
+  for (const name of readdirSync(dir).filter(
+    (name) => name !== ".noobot-prune.lock" && matches(name),
+  )) {
     const stat = lstatSync(path.join(dir, name), { throwIfNoEntry: false });
     if (!stat || stat.isSymbolicLink() || (uid >= 0 && stat.uid !== uid)) continue;
     entries.push({ name, mtimeMs: stat.mtimeMs });
@@ -29,7 +46,7 @@ export function pruneOldest(dir, matches, keep, { minAgeMs = 0, now = Date.now()
   }
 }
 
-export function acquireIsolatedTmpDir({
+export async function acquireIsolatedTmpDir({
   prefix,
   keep,
   minAgeMs = DEFAULT_TMP_MIN_AGE_MS,
@@ -38,7 +55,9 @@ export function acquireIsolatedTmpDir({
 }) {
   const inherited = text(env[ISOLATED_TMP_ENV]);
   if (inherited) return { dir: inherited, created: false };
-  pruneOldest(tmpRoot, (name) => name.startsWith(prefix), Math.max(0, keep - 1), { minAgeMs });
+  await pruneOldest(tmpRoot, (name) => name.startsWith(prefix), Math.max(0, keep - 1), {
+    minAgeMs,
+  });
   return { dir: mkdtempSync(path.join(tmpRoot, prefix)), created: true };
 }
 

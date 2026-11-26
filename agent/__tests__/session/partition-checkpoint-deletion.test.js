@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { filePath as path } from "@noobot/path-resolver";
 import { PartitionJournal } from "../../src/session/partition-storage/partition-journal.js";
 import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
 import { getFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
@@ -158,7 +159,7 @@ test("failed deletion publication preserves checkpoints and cold retry retires t
   setFsAdapter({
     ...adapter,
     async rename(source, target) {
-      if (String(target).endsWith("/CURRENT")) {
+      if (String(target) === path.join(root, "CURRENT")) {
         injected = true;
         throw new Error("checkpoint deletion publication fault");
       }

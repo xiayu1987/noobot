@@ -472,15 +472,15 @@ export function createDesktopServiceManager({
     throwIfStartupInterrupted();
     sendStatus({ phase: "starting", message: "Starting Noobot agent proxy..." });
     syncPackagedProxyConfigs();
-    const alreadyHealthy = await isHealthy(agentProxyHealthUrl);
+    if (!(await isHealthy(agentProxyHealthUrl))) {
+      startAgentProxy();
+      if (!(await waitForHealthyAgentProxy())) {
+        throw new Error(
+          `Noobot agent proxy did not become healthy within ${agentProxyStartupTimeoutMs}ms.`,
+        );
+      }
+    }
     throwIfStartupInterrupted();
-    if (!alreadyHealthy) startAgentProxy();
-    const proxyHealthy = await waitForHealthyAgentProxy();
-    throwIfStartupInterrupted();
-    if (!proxyHealthy)
-      throw new Error(
-        `Noobot agent proxy did not become healthy within ${agentProxyStartupTimeoutMs}ms.`,
-      );
     sendStatus({ phase: "ready", message: "Noobot agent proxy is ready." });
   }
 

@@ -21,7 +21,7 @@ import {
 } from "@noobot/session-protocol/partition-journal";
 import { sessionPageSnapshotError } from "@noobot/session-protocol/message-read-budget";
 import { fsOpen, fsRm, fsStat } from "../../shared/storage/fs-adapter.js";
-import { withJournalPublicationLock } from "./journal-publication-lock.js";
+import { withJournalPublicationLock, withJournalRemovalLock } from "./journal-publication-lock.js";
 import {
   assertSnapshotOwnersDrained,
   tryLockSnapshotOwner,
@@ -114,13 +114,16 @@ export async function drainJournalRetentions(journal, head, decode) {
     throw partitionJournalError("SESSION_MUTATION_BUSY", "Journal readers must drain");
 }
 
-export function withUnretainedJournal(root, operation, { residentJournal } = {}) {
+export function withUnretainedJournal(root, operation, { residentJournal, sessionDir } = {}) {
   const lockPath = path.join(root, PARTITION_JOURNAL_PUBLICATION_LOCK);
-  return withJournalPublicationLock(lockPath, async () => {
+  const remove = async () => {
     if (residentJournal) await relinquishUnclaimedSnapshots(residentJournal);
     await assertSnapshotOwnersDrained(root);
     return operation();
-  });
+  };
+  return sessionDir
+    ? withJournalRemovalLock(sessionDir, lockPath, remove)
+    : withJournalPublicationLock(lockPath, remove);
 }
 
 export async function acquireJournalSnapshot(journal) {

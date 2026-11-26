@@ -20,6 +20,7 @@ test(
       configFile: false,
       appType: "custom",
       root,
+      resolve: { alias: { "fixture-startup-style": startupStyle } },
       server: { host: "127.0.0.1", port: 0 },
     });
     server.middlewares.use("/__buttons", async (req, res) => {
@@ -37,7 +38,7 @@ test(
           : `
       import '@noobot/client-shared/styles/theme.css';
       import '@noobot/client-shared/styles/element-plus.css';
-      import '/@fs/${startupStyle}';`
+      import 'fixture-startup-style';`
       }
       createApp({ render: () => h('div', [
         ...[

@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from "node:fs/promises";
+import * as fs from "@noobot/shared/file-system";
+import nativeFs from "node:fs/promises";
 import { syncDirectory } from "@noobot/platform-compatibility/file-system";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import path from "node:path";
@@ -198,16 +199,16 @@ async function publishRun(run) {
   const runsDir = path.dirname(run.runDir);
   const stagingDir = path.join(path.dirname(runsDir), ".run-publication");
   const sync = (directory) => syncDirectory({ directory, open: fs.open });
-  await fs.mkdir(runsDir, { recursive: true });
-  await fs.rm(stagingDir, { recursive: true, force: true });
-  await fs.mkdir(stagingDir);
-  await fs.writeFile(
+  await nativeFs.mkdir(runsDir, { recursive: true });
+  await nativeFs.rm(stagingDir, { recursive: true, force: true });
+  await nativeFs.mkdir(stagingDir);
+  await nativeFs.writeFile(
     path.join(stagingDir, path.basename(run.manifest)),
     JSON.stringify({ sessionId: run.sessionId, parentSessionId: run.parentSessionId }),
     { flag: "wx", flush: true },
   );
   await sync(stagingDir);
-  await fs.rename(stagingDir, run.runDir);
+  await nativeFs.rename(stagingDir, run.runDir);
   await sync(runsDir);
   await sync(path.dirname(runsDir));
 }
@@ -467,9 +468,9 @@ async function writeJsonValidated(filePath, data) {
   await cleanupStaleTmpFilesForTarget(filePath);
 
   try {
-    await fs.writeFile(tmpPath, content, "utf-8");
+    await nativeFs.writeFile(tmpPath, content, "utf-8");
     await verifyJsonWrite(tmpPath, content);
-    await fs.rename(tmpPath, filePath);
+    await nativeFs.rename(tmpPath, filePath);
   } finally {
     await unlinkIfPresent(tmpPath);
   }
@@ -549,11 +550,11 @@ async function rotateJsonlIfNeeded(filePath, content, strategy) {
     throw error;
   }
   if (currentSize <= 0 || currentSize + estimateUtf8Bytes(content) <= maxFileBytes) return;
-  await fs.rename(filePath, buildRotatedJsonlPath(filePath));
+  await nativeFs.rename(filePath, buildRotatedJsonlPath(filePath));
   await pruneRotatedJsonlFiles(filePath, strategy.maxFiles);
 }
 
 async function appendFileValidated(filePath, content, strategy) {
   await rotateJsonlIfNeeded(filePath, content, strategy);
-  await fs.appendFile(filePath, content, "utf-8");
+  await nativeFs.appendFile(filePath, content, "utf-8");
 }

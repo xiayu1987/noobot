@@ -642,12 +642,16 @@ export const zhCNMessages = {
     disconnect: "断开",
     deleteConfirm: "删除此连接器？它也会从所有会话的勾选项中移除。",
     empty: "暂无连接器",
+    sshAuthenticationHint:
+      "填写密码或粘贴完整私钥。填写私钥时优先使用密钥登录；加密私钥还需填写私钥口令。私钥与口令会加密保存。",
     status: { connected: "已连接", disconnected: "未连接", error: "异常" },
     fields: {
       host: "主机",
       port: "端口",
       username: "用户名",
       password: "密码",
+      privateKey: "SSH 私钥",
+      passphrase: "私钥口令（可选）",
       database: "数据库",
       file_path: "文件路径",
       smtp_host: "SMTP 主机",

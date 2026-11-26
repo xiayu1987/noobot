@@ -96,7 +96,10 @@ test("harness summary relay without captured plan keeps final acceptance on defa
   const summaryRelayText = String(summaryRelayMessage?.content || "");
   assert.match(summaryRelayText, /已完成：完成初始检查/);
   assert.match(summaryRelayText, /\[Harness operation dir\] runtime\/ops_workdir/);
-  assert.equal(summaryRelayText.includes(`Use (host): ${basePath}/runtime/ops_workdir`), true);
+  assert.equal(
+    summaryRelayText.includes(`Use (host): ${basePath.replaceAll("\\", "/")}/runtime/ops_workdir`),
+    true,
+  );
   assert.equal(
     summaryRelayText.indexOf("[Harness operation dir]") >
       summaryRelayText.indexOf("已完成：完成初始检查"),

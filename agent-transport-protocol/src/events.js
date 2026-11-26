@@ -5,11 +5,9 @@
  */
 
 import { text, isPlainObject, isCanonicalText } from "@noobot/shared/value";
-import {
-  isSessionAggregateVersion,
-  SESSION_ERROR_CODE,
-  TURN_SNAPSHOT_WIRE_EVENT,
-} from "@noobot/session-protocol";
+import { isSessionAggregateVersion } from "@noobot/session-protocol/session-command";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol/errors";
+import { TURN_SNAPSHOT_WIRE_EVENT } from "@noobot/session-protocol/turn-lifecycle";
 import { EXECUTION_QUERY_CONTRACT } from "@noobot/session-protocol/execution-lifecycle";
 import {
   TURN_ATTACHMENTS_BOUND_WIRE_EVENT,

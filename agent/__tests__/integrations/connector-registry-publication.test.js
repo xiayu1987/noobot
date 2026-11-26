@@ -7,11 +7,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { FileSystemConnectorInstanceRepository } from "../../src/session/repositories/file-system-connector-instance-repository.js";
 import { getFsAdapter, setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
+import { assertPrivateStoragePermissions } from "../../../platform-compatibility/__tests__/helpers/private-storage.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const execute = promisify(execFile);
 const repositoryUrl = new URL(
@@ -45,6 +47,7 @@ async function fixture(t) {
 }
 
 function writer(workspaceRoot, ids, crash) {
+  const workerLifetimeMs = TIME_THRESHOLDS.fileMutation.lockTimeoutMs * (ids.length + 1);
   const source = `
     import { FileSystemConnectorInstanceRepository } from ${JSON.stringify(repositoryUrl)};
     import { getFsAdapter, setFsAdapter } from ${JSON.stringify(adapterUrl)};
@@ -61,7 +64,7 @@ function writer(workspaceRoot, ids, crash) {
   return execute(
     process.execPath,
     ["--import", runtimeParamsUrl, "--input-type=module", "--eval", source],
-    { timeout: 15000 },
+    { timeout: workerLifetimeMs },
   );
 }
 
@@ -88,14 +91,13 @@ for (const phase of ["before", "after"]) {
     );
     const published = await readFile(file, "utf8");
     assert.equal(JSON.parse(published).connectors.length, visible.length);
-    if (phase === "before")
-      assert.equal((await stat(`${file}.publication.tmp`)).mode & 0o777, 0o600);
+    if (phase === "before") await assertPrivateStoragePermissions(`${file}.publication.tmp`);
     await registry.create(input("retry"));
     assert.deepEqual(
       (await registry.list("u1")).map(({ connectorId }) => connectorId),
       [...visible, "retry"],
     );
-    assert.equal((await stat(file)).mode & 0o777, 0o600);
+    await assertPrivateStoragePermissions(file);
     assert.equal(
       (await readdir(path.dirname(file))).some((name) => name.endsWith(".tmp")),
       false,

@@ -7,12 +7,13 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import http from "node:http";
 import { randomUUID } from "node:crypto";
+import WebSocket, { WebSocketServer } from "ws";
 import { config } from "../shared/config.js";
 import { ChannelManager } from "../channel/channel-manager.js";
 import { WsRouter } from "../websocket/ws-router.js";
 import { initializeDownstreamSocketState } from "../websocket/downstream-socket-state.js";
 import { AGENT_PROXY_HTTP_ERROR_CODE } from "../shared/constants.js";
-import { TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION } from "@noobot/session-protocol";
+import { TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION } from "@noobot/session-protocol/turn-lifecycle";
 import { AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
 import {
   proxyHttpRequest,
@@ -42,14 +43,6 @@ import {
   isLogProxyPath,
   proxyUpgradeToHttpUpstream,
 } from "./upgrade-proxy.js";
-
-async function loadWebSocketLibrary() {
-  try {
-    return await import("ws");
-  } catch {
-    return import("../../../service/node_modules/ws/wrapper.mjs");
-  }
-}
 
 function createRateLimiters() {
   const httpRateLimiter = createFixedWindowRateLimiter({
@@ -336,10 +329,6 @@ function startMaintenanceTimers(runtime) {
 }
 
 export async function startAgentProxy() {
-  const websocketLibrary = await loadWebSocketLibrary();
-  const WebSocket = websocketLibrary.default || websocketLibrary.WebSocket;
-  const WebSocketServer = websocketLibrary.WebSocketServer;
-
   const sessionLogClient = createSessionLogClient({ WebSocketImpl: WebSocket });
   const channelManager = new ChannelManager(WebSocket, { sessionLogClient });
   const wsRouter = new WsRouter(channelManager);

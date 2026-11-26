@@ -124,14 +124,10 @@ export const CHECK = defineCheck({
       rules: ["unusedDependencies"],
       reason:
         "Connector channels pass these package names to loadDriverModule, which imports a variable",
-      match: [
-        "connector-instances/package.json#mysql2",
-        "connector-instances/package.json#pg",
-        "connector-instances/package.json#ssh2",
-      ],
+      match: ["connector-instances/package.json#mysql2", "connector-instances/package.json#pg"],
     },
   ],
-  baseline: { unusedFiles: 0, unusedExports: 0, unusedDependencies: 0, exemptions: 3 },
+  baseline: { unusedFiles: 0, unusedExports: 0, unusedDependencies: 0, exemptions: 2 },
   measure: async (usage) =>
     measureDeadCodeReport(scanDeadCode(repositoryRoot, "knip.config.mjs"), usage),
 });

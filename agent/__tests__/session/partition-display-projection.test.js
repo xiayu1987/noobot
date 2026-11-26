@@ -645,6 +645,7 @@ test("partition display derives pending presentations and plugin artifacts from 
     }),
   );
   let before;
+  let expectedEventIds;
   {
     await using reader = await openPartitionSessionReader({
       journal,
@@ -682,6 +683,7 @@ test("partition display derives pending presentations and plugin artifacts from 
     }
     const consumerId = "runtime-events";
     const pending = await reader.readOutboxPage({ consumerId });
+    expectedEventIds = pending.events.map(({ eventId }) => eventId);
     assert.deepEqual(pending.events.at(-1).eventId, envelope.identity.eventId);
     assert.equal(pending.hasMore, false);
     await messages.commit(
@@ -718,7 +720,7 @@ test("partition display derives pending presentations and plugin artifacts from 
     return reader.readDisplayProjection();
   });
   assert.deepEqual(result, before);
-  assert.deepEqual([...decodedEvents], [envelope.identity.eventId]);
+  assert.deepEqual([...decodedEvents].sort(), expectedEventIds.sort());
   t.diagnostic(`Cold display: ${work.readBytes} B, ${decodedEvents.size} decoded event`);
   await using reader = await openPartitionSessionReader(options);
   const delivered = await reader.readOutboxPage({ consumerId: "runtime-events" });

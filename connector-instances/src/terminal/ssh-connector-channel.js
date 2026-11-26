@@ -26,6 +26,8 @@ function resolveSshConnection(connectionInfo) {
     port: source.port === undefined || source.port === "" ? SSH_DEFAULT_PORT : Number(source.port),
     username: text(source.username),
     password: source.password === undefined ? "" : String(source.password),
+    privateKey: source.privateKey === undefined ? "" : String(source.privateKey),
+    passphrase: source.passphrase === undefined ? "" : String(source.passphrase),
     timeoutMs: TIME_THRESHOLDS.connectorInstances.sshCommandTimeoutMs,
   };
 }
@@ -103,7 +105,12 @@ async function ensureSshShellState({ channelKey, conn, Client }) {
         host: conn.host,
         port: conn.port,
         username: conn.username,
-        password: conn.password,
+        ...(conn.privateKey
+          ? {
+              privateKey: conn.privateKey,
+              ...(conn.passphrase ? { passphrase: conn.passphrase } : {}),
+            }
+          : { password: conn.password }),
         readyTimeout: conn.timeoutMs,
       });
   });
@@ -215,10 +222,10 @@ export async function executeSshCommand({ command, connectionInfo, channelKey })
   const cmd = text(command);
   if (!cmd) return connectorFailure(CONNECTOR_FAILURE_CODE.INPUT_INVALID, "ssh command required");
   const conn = resolveSshConnection(connectionInfo);
-  if (!conn.host || !conn.username || !conn.password) {
+  if (!conn.host || !conn.username || (!conn.password && !conn.privateKey)) {
     return connectorFailure(
       CONNECTOR_FAILURE_CODE.CONFIG_INVALID,
-      "SSH host, username and password are required",
+      "SSH host, username and either password or private key are required",
     );
   }
   const loaded = await loadDriverModule("ssh2");

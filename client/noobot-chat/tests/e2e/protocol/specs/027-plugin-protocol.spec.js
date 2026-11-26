@@ -408,7 +408,7 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     .filter({ hasText: "failure-check" })
     .last();
   await expect(failureNode).toBeVisible();
-  await expect(failureNode).toContainText("Succeeded");
+  await expect(failureNode.locator(".workflow-node-status.succeeded")).toBeVisible();
   await failureNode.click();
   const drawer = noobot.page.locator(".workflow-node-session-drawer:visible");
   await expect(drawer).toBeVisible();

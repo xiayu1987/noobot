@@ -150,6 +150,20 @@ export class FakeUpstreamWebSocket {
   }
 }
 
+export function observeReconnectCommands(forwarded) {
+  return class extends FakeUpstreamWebSocket {
+    constructor(url) {
+      super(url);
+      queueMicrotask(() => this.emit("open"));
+    }
+
+    send(raw) {
+      super.send(raw);
+      forwarded.push(JSON.parse(raw));
+    }
+  };
+}
+
 export function sortReconnectSessions(payload = {}) {
   const sessions = Array.isArray(payload?.sessions) ? payload.sessions : [];
   return sessions

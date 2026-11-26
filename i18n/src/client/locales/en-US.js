@@ -649,12 +649,16 @@ export const enUSMessages = {
     disconnect: "Disconnect",
     deleteConfirm: "Delete this connector? It will be removed from all session selections.",
     empty: "No connectors",
+    sshAuthenticationHint:
+      "Enter a password or paste the complete private key. When provided, the private key takes priority; encrypted keys also require a passphrase. Private keys and passphrases are stored encrypted.",
     status: { connected: "Connected", disconnected: "Disconnected", error: "Error" },
     fields: {
       host: "Host",
       port: "Port",
       username: "Username",
       password: "Password",
+      privateKey: "SSH private key",
+      passphrase: "Private key passphrase (optional)",
       database: "Database",
       file_path: "File path",
       smtp_host: "SMTP host",

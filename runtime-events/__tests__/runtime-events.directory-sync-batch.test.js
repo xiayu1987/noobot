@@ -8,37 +8,35 @@ import test from "node:test";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { PLATFORM } from "@noobot/platform-compatibility/platform";
 import { syncOutputDirectory } from "../src/transports/projection-output.js";
 
 for (const failed of [false, true]) {
   test(`directory barriers share admitted requests and isolate later writes; failure=${failed}`, async (t) => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "directory-sync-batch-"));
     t.after(() => fs.rm(root, { recursive: true, force: true }));
-    const open = fs.open.bind(fs);
+    t.mock.property(process, "platform", PLATFORM.LINUX);
     const entered = Promise.withResolvers();
     const release = Promise.withResolvers();
     const failure = new Error("directory sync failed");
     let barriers = 0;
     let closes = 0;
-    const mock = t.mock.method(fs, "open", async (target, ...flags) => {
-      const handle = await open(target, ...flags);
-      if (target !== root) return handle;
-      const sync = handle.sync.bind(handle);
-      const close = handle.close.bind(handle);
-      handle.sync = async () => {
-        const ordinal = ++barriers;
-        if (ordinal === 1) {
-          entered.resolve();
-          await release.promise;
-          if (failed) throw failure;
-        }
-        await sync();
+    const mock = t.mock.method(fs, "open", async (target, flags) => {
+      assert.equal(target, root);
+      assert.equal(flags, "r");
+      return {
+        async sync() {
+          const ordinal = ++barriers;
+          if (ordinal === 1) {
+            entered.resolve();
+            await release.promise;
+            if (failed) throw failure;
+          }
+        },
+        async close() {
+          closes += 1;
+        },
       };
-      handle.close = async () => {
-        await close();
-        closes += 1;
-      };
-      return handle;
     });
     const first = syncOutputDirectory(root);
     const shared = syncOutputDirectory(path.join(root, "."));
@@ -72,11 +70,16 @@ test("directory open failures reject every admitted caller and allow retry", asy
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "directory-sync-open-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const failure = new Error("directory open failed");
-  const mock = t.mock.method(fs, "open", async () => {
-    throw failure;
+  t.mock.property(process, "platform", PLATFORM.LINUX);
+  let attempts = 0;
+  t.mock.method(fs, "open", async (target, flags) => {
+    assert.equal(target, root);
+    assert.equal(flags, "r");
+    if (++attempts === 1) throw failure;
+    return { sync: async () => {}, close: async () => {} };
   });
   const results = await Promise.allSettled([syncOutputDirectory(root), syncOutputDirectory(root)]);
   assert.ok(results.every((result) => result.status === "rejected" && result.reason === failure));
-  mock.mock.restore();
   await syncOutputDirectory(root);
+  assert.equal(attempts, 2);
 });

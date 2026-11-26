@@ -8,9 +8,12 @@ import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { readDirectoryEntriesIfPresent } from "../shared/storage/dir-entries.js";
 import {
+  FileMutationCoordinator,
   isHeartbeatFresh,
   readConfiguredLockTiming,
 } from "@noobot/shared/file-mutation-coordinator";
+
+const retirementCoordinator = new FileMutationCoordinator();
 
 function retirementError(code, lockPath) {
   const error = new Error(`directory lock retirement cannot proceed: ${lockPath}`);
@@ -44,7 +47,7 @@ async function isDirectoryIfPresent(lockPath) {
   }
 }
 
-export async function retireDirectoryLockIfPresent(lockPath) {
+async function retireDirectoryIfPresent(lockPath) {
   try {
     if (!(await isDirectoryIfPresent(lockPath))) return false;
     return await retireDirectory(lockPath);
@@ -53,6 +56,13 @@ export async function retireDirectoryLockIfPresent(lockPath) {
     if (error?.code === "ENOTDIR" && !(await isDirectoryIfPresent(lockPath))) return false;
     throw error;
   }
+}
+
+export async function retireDirectoryLockIfPresent(lockPath) {
+  if (!(await isDirectoryIfPresent(lockPath))) return false;
+  return retirementCoordinator.run(`${lockPath}.retirement-lock`, () =>
+    retireDirectoryIfPresent(lockPath),
+  );
 }
 
 async function* walkLockDirectories(directory, matches) {

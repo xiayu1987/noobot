@@ -15,6 +15,8 @@ import {
   requireTurnReplaceResponse,
 } from "@noobot/session-protocol";
 import { selectMainSessionDetailEntry } from "@noobot/session-protocol/session-detail";
+import { createUserInterjectionAuthorityBridge } from "../ws/chat-websocket/user-interjection-authority-bridge.js";
+import { selectLatestUserInterjection } from "@noobot/event-protocol/thinking-detail-content";
 import { readApiResponseEnvelope } from "@noobot/shared/request-error";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
@@ -40,6 +42,64 @@ import {
   firstSend,
   identity,
 } from "./partition-bot-assembly.test-helpers.js";
+
+test("display snapshots recover the latest committed interjection before model consumption", async (t) => {
+  const f = await createPartitionBotFixture(t);
+  const { bot } = await f.service.rebuildRuntimeConfig();
+  const accepted = firstSend();
+  await bot.session.applyTurnLifecycleEvent(accepted);
+  const commit = createUserInterjectionAuthorityBridge({
+    resolveBot: () => bot,
+    persistenceScope: identity.persistenceScope,
+  });
+  const readAssistant = async (runtime) => {
+    const entry = selectMainSessionDetailEntry(
+      await runtime.session.getSessionDisplayData(identity),
+    );
+    return entry.messages.find((message) => message.role === "assistant");
+  };
+  const initial = await readAssistant(bot);
+  const activeRun = { ...accepted, dialogProcessId: initial.dialogProcessId };
+  assert.equal(selectLatestUserInterjection(initial.thinkingContentTimeline ?? []), null);
+  let last;
+  for (const sequence of [1, 2]) {
+    last = await commit({
+      activeRun,
+      interjection: {
+        commandId: `interject-${sequence}`,
+        messageUid: `interjection-${sequence}`,
+        message: `Input ${sequence}`,
+        receivedAt: "2026-11-20T00:00:00.000Z",
+        interjectionSequence: sequence,
+      },
+    });
+    const row = await readAssistant(bot);
+    assert.equal(row.hasThinkingDetails, true);
+    assert.deepEqual(
+      selectLatestUserInterjection(row.thinkingContentTimeline),
+      last.payload.contentFact,
+    );
+  }
+  const { bot: reopened } = await f.service.rebuildRuntimeConfig();
+  const row = await readAssistant(reopened);
+  assert.deepEqual(
+    selectLatestUserInterjection(row.thinkingContentTimeline),
+    last.payload.contentFact,
+  );
+  const page = await reopened.session.getSessionDisplayPage({
+    userId: identity.userId,
+    request: {
+      sessionId: identity.sessionId,
+      cursor: null,
+      limit: 2,
+      maxBytes: 4096,
+      direction: "backward",
+    },
+  });
+  const assistant = page.messages.find((message) => message.role === "assistant");
+  assert.equal(assistant.hasThinkingDetails, true);
+  assert.deepEqual(assistant.thinkingContentTimeline, [last.payload.contentFact]);
+});
 
 test("Bot requires explicit storage assembly without choosing an implicit backend", () => {
   assert.throws(() => new BotManager({}), /BotManager requires createSessionRuntime/);

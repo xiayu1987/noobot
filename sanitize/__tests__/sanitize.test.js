@@ -54,6 +54,19 @@ test("does not mask invalid international identifiers or file paths", () => {
   assert.equal(sanitizePersonalInformation(input), input);
 });
 
+test("bank card detection respects identifier boundaries while retaining formatted card detection", () => {
+  const file = "runtime/ops_workdir/e2e-ba315038-aaf4-441b-8c8d-124714357637/case036.txt";
+  const input = `${file} id_4111111111111111 card 4111-1111-1111-1111`;
+  assert.equal(
+    sanitizePersonalInformation(input),
+    `${file} id_4111111111111111 card xxxx-xxxx-xxxx-xxxx`,
+  );
+  const result = JSON.parse(
+    sanitizeToolResultText(JSON.stringify({ locator: { view: "workspace", path: file } })),
+  );
+  assert.deepEqual(result.locator, { view: "workspace", path: file });
+});
+
 test("does not mask loopback, private network, or link-local IP addresses", () => {
   const input = [
     "loopback 127.0.0.1 127.255.255.254 ::1 0:0:0:0:0:0:0:1",

@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { open, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   appendRollingJsonlArtifactLogs,
@@ -13,7 +13,7 @@ import {
   resolveExecutionTurnDir,
   resolveExecutionEventsDir,
 } from "../../src/session/session-artifact-execution-logs.js";
-import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
+import { getFsAdapter, setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
 import { withTemp } from "../helpers/temporary-directory.js";
 
@@ -41,25 +41,16 @@ for (const failurePosition of [0, 1, 2, 3]) {
       const failure = new Error("directory synchronization interrupted");
       let interrupted = false;
       const synced = [];
+      const adapter = getFsAdapter();
       setFsAdapter({
-        async open(file, ...args) {
-          const handle = await open(file, ...args);
-          if (!directories.includes(file)) return handle;
-          return new Proxy(handle, {
-            get(target, property) {
-              if (property === "sync")
-                return async () => {
-                  if (!interrupted && file === directories[failurePosition]) {
-                    interrupted = true;
-                    throw failure;
-                  }
-                  await target.sync();
-                  synced.push(file);
-                };
-              const value = Reflect.get(target, property, target);
-              return typeof value === "function" ? value.bind(target) : value;
-            },
-          });
+        async syncDirectory(directory) {
+          if (!interrupted && directory === directories[failurePosition]) {
+            interrupted = true;
+            throw failure;
+          }
+          const result = await adapter.syncDirectory(directory);
+          if (directories.includes(directory)) synced.push(directory);
+          return result;
         },
       });
       try {

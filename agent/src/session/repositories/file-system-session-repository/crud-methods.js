@@ -13,6 +13,7 @@ import { partitionJournalError } from "@noobot/session-protocol/partition-journa
 import { sessionDeletionStagingName } from "@noobot/workspace-protocol/session-tombstone";
 import { withSessionEventRetirement } from "@noobot/runtime-events";
 import { resolveSessionArtifactMutationLock } from "../../session-artifact-files.js";
+import { removeJournalRemovalLock } from "../../partition-storage/journal-publication-lock.js";
 
 async function deletionDirectoryExists(directory) {
   try {
@@ -36,15 +37,17 @@ async function removeSessionArtifactMutationLock(sessionDir) {
 
 class SessionCrudMethods {
   async listSessionIds(userId) {
-    return (await this.listLiveSessionTreeNodes(userId)).map(({ sessionId }) => sessionId);
+    const { liveNodes } = await this._readSessionTreeListing(userId);
+    return liveNodes.map(({ sessionId }) => sessionId);
   }
 
-  async listLiveSessionTreeNodes(userId) {
+  async _readSessionTreeListing(userId) {
     const sessionTree = await this.sessionTreeRepository.getTree(userId);
     const deletedSessions = await this._readDeletedSessions(userId);
-    return Object.values(sessionTree.nodes).filter(
+    const liveNodes = Object.values(sessionTree.nodes).filter(
       ({ sessionId }) => !Object.hasOwn(deletedSessions.sessions, sessionId),
     );
+    return { sessionTree, liveNodes };
   }
 
   async ensureSession({ userId, sessionId, parentSessionId, caller, persistenceContext }) {
@@ -178,6 +181,7 @@ class SessionCrudMethods {
       await syncStorageDirectory(parent);
       await fsRm(staged, { recursive: true });
     }
+    await removeJournalRemovalLock(sessionDir);
     await removeSessionArtifactMutationLock(sessionDir);
     await syncStorageDirectory(parent);
   }

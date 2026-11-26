@@ -6,13 +6,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import express from "express";
+import { generateKeyPairSync } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { ConnectorRuntime } from "../../../connector-runtime/src/index.js";
+import { SSH_DEFINITION } from "../../../connector-instances/src/definitions.js";
+import { CONNECTOR_ACCESS_CANCELLATION } from "@noobot/connector-protocol";
+import { ConnectorSecretVault } from "../../security/connector-secret-vault.js";
 import { SUPER_ADMIN_ROLE } from "#agent/utils";
 import { registerConnectorRoutes } from "../../routes/connectors-routes.js";
 import { createAuthService, USER_SCOPE_POLICY } from "../../services/auth-service.js";
 import { createServiceBotAccess } from "../../services/service-bot-access.js";
 import { withTestServer } from "./session-routes.helpers.js";
 
-function createHarness({ auth = { userId: "alice", role: "user" } } = {}) {
+function createHarness({ auth = { userId: "alice", role: "user" }, runtimeOverride } = {}) {
   const catalog = [
     {
       instanceType: "builtin.database.postgres",
@@ -126,7 +134,7 @@ function createHarness({ auth = { userId: "alice", role: "user" } } = {}) {
   registerConnectorRoutes(app, {
     bot: access,
     runBotOperation: access.runOperation,
-    connectorRuntime,
+    connectorRuntime: runtimeOverride || connectorRuntime,
     translateText: (key) => key,
     ownerOnlyUserScopeParam: createUserScopeParam(USER_SCOPE_POLICY.OWNER_ONLY),
   });
@@ -265,6 +273,78 @@ test("creating a connector immediately runs its runtime connection lifecycle", a
       ["create", "connect"],
     );
     assert.equal(lifecycleCalls[1].connectorId, "con_created");
+  });
+});
+
+test("SSH creation preserves encrypted multiline credentials and exposes only public metadata", async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-ssh-create-"));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  const secretStore = new ConnectorSecretVault({ workspaceRoot });
+  await secretStore.unlockUser({ userId: "alice", connectCode: "test-connect-code" });
+  let stored;
+  let received;
+  const runtime = new ConnectorRuntime({
+    workspaceRoot,
+    secretStore,
+    repository: {
+      create: async (input) => (stored = { ...input, ownerUserId: input.userId }),
+      get: async () => stored,
+      list: async () => (stored ? [stored] : []),
+    },
+  });
+  runtime.register({
+    definition: SSH_DEFINITION,
+    accessCancellation: CONNECTOR_ACCESS_CANCELLATION.NOT_CANCELLABLE,
+    create: async ({ connector }) => {
+      received = connector.parameters;
+      return {};
+    },
+    health: async () => ({ ok: true }),
+    access: async () => ({ ok: true, output: {} }),
+    dispose: async () => {},
+  });
+  const passphrase = " key passphrase ";
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: "pkcs1", format: "pem", cipher: "aes-256-cbc", passphrase },
+    publicKeyEncoding: { type: "spki", format: "pem" },
+  });
+  const parameters = { host: "localhost", port: 22, username: "test-user", privateKey, passphrase };
+  const { app } = createHarness({ runtimeOverride: runtime });
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/connectors/alice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "SSH key",
+        instanceType: SSH_DEFINITION.instanceType,
+        parameters,
+      }),
+    });
+    assert.equal(response.status, 201);
+    const payload = await response.json();
+    assert.equal(payload.connection.connected, true);
+    assert.equal(received.privateKey, privateKey);
+    assert.equal(received.passphrase, passphrase);
+    assert.equal("parameters" in stored, false);
+    for (const value of [privateKey, passphrase]) {
+      assert.ok(!JSON.stringify(stored).includes(value));
+      assert.ok(!JSON.stringify(payload).includes(value));
+    }
+    secretStore.lockUser("alice");
+    await secretStore.unlockUser({ userId: "alice", connectCode: "test-connect-code" });
+    const recovered = secretStore.unseal({
+      userId: "alice",
+      connectorId: stored.connectorId,
+      instanceType: SSH_DEFINITION.instanceType,
+      sealedParameters: stored.sealedParameters,
+    });
+    assert.equal(recovered.privateKey, privateKey);
+    assert.equal(recovered.passphrase, passphrase);
+    const list = await (await fetch(`${baseUrl}/internal/connectors/alice`)).json();
+    assert.equal("parameters" in list.connectors[0], false);
+    assert.ok(!JSON.stringify(list).includes(passphrase));
+    await runtime.disconnect({ userId: "alice", connectorId: stored.connectorId });
   });
 });
 

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_COMMAND } from "@noobot/session-protocol";
+import { TURN_COMMAND } from "@noobot/session-protocol/turn-event";
 import {
   EXECUTION_QUERY_COMMAND,
   EXECUTION_QUERY_CONTRACT,

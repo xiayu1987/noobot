@@ -5,18 +5,22 @@
  */
 import {
   access as nodeAccess,
-  link as nodeLink,
-  mkdir as nodeMkdir,
   readFile as nodeReadFile,
-  writeFile as nodeWriteFile,
-  rename as nodeRename,
-  rm as nodeRm,
   stat as nodeStat,
   readdir as nodeReaddir,
   realpath as nodeRealpath,
   lstat as nodeLstat,
   open as nodeOpen,
+} from "@noobot/shared/file-system";
+import {
+  link as nodeLink,
+  mkdir as nodeMkdir,
+  writeFile as nodeWriteFile,
+  rename as nodeRename,
+  rm as nodeRm,
 } from "node:fs/promises";
+import { syncDirectory } from "@noobot/platform-compatibility/file-system";
+import { isFunction } from "@noobot/shared/value";
 
 function createDefaultFsAdapter() {
   return {
@@ -32,6 +36,7 @@ function createDefaultFsAdapter() {
     realpath: (...args) => nodeRealpath(...args),
     lstat: (...args) => nodeLstat(...args),
     open: (...args) => nodeOpen(...args),
+    syncDirectory: (directory) => syncDirectory({ directory, open: fsOpen }),
   };
 }
 
@@ -54,6 +59,9 @@ function normalizeFsAdapter(adapter = null) {
     realpath: typeof source.realpath === "function" ? source.realpath : defaultFsAdapter.realpath,
     lstat: typeof source.lstat === "function" ? source.lstat : defaultFsAdapter.lstat,
     open: typeof source.open === "function" ? source.open : defaultFsAdapter.open,
+    syncDirectory: isFunction(source.syncDirectory)
+      ? source.syncDirectory
+      : defaultFsAdapter.syncDirectory,
   };
 }
 
@@ -113,6 +121,10 @@ export async function fsRealpath(...args) {
 
 export async function fsLstat(...args) {
   return activeFsAdapter.lstat(...args);
+}
+
+export function fsSyncDirectory(directory) {
+  return activeFsAdapter.syncDirectory(directory);
 }
 
 export async function fsOpen(...args) {

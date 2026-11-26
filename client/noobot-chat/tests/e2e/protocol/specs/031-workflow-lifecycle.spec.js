@@ -68,7 +68,7 @@ async function assertCompletedWorkflowChildPresentation(page) {
 async function assertLiveWorkflowChildAssistantMessage(page, timeout = PROTOCOL_TIMEOUTS.model) {
   const actionNode = page
     .locator(".workflow-node:not(.is-state-node)")
-    .filter({ hasText: /Running/ })
+    .filter({ has: page.locator(".workflow-node-status.running") })
     .last();
   await expect(actionNode).toBeVisible();
   await actionNode.click();

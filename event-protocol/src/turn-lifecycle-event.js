@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
+import { TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol/turn-lifecycle";
 import { isCanonicalText, stableValue } from "@noobot/shared/value";
 import { createEventEnvelope } from "./envelope.js";
 import { EVENT_FAMILY, getEventFamily, validateProtocolEvent } from "./event-registry.js";

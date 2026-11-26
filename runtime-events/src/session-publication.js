@@ -6,7 +6,7 @@
 import { open } from "node:fs/promises";
 import path from "node:path";
 import { withDescriptorLock } from "@noobot/platform-compatibility/descriptor-lock";
-import { createSessionMutationBusyError } from "@noobot/session-protocol";
+import { createSessionMutationBusyError } from "@noobot/session-protocol/errors";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 import { createWorkspaceNotInitializedError } from "@noobot/workspace-protocol/session-store";

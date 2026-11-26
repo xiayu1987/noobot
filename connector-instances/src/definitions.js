@@ -80,7 +80,10 @@ export const SSH_DEFINITION = createConnectorInstanceDefinition({
   fields: [
     authFields()[0],
     connectorField("port", { kind: "number", defaultValue: 22 }),
-    ...authFields().slice(1),
+    connectorField("username", { required: true }),
+    connectorField("password", { secret: true }),
+    connectorField("privateKey", { kind: "multiline", secret: true }),
+    connectorField("passphrase", { secret: true }),
   ],
   operations: [
     connectorOperation("execute", {

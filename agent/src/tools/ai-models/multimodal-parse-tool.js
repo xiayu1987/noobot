@@ -261,7 +261,7 @@ export function createMultimodalParseTool({ agentContext }) {
             attachments: inputAttachments,
           },
         },
-        options: { streaming: false, signal: toolConfig.signal },
+        options: { signal: toolConfig.signal },
         invocation: {
           flow: "tool.multimodal_parse",
           purpose: "multimodal_extraction",

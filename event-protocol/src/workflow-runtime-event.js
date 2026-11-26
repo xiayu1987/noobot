@@ -5,7 +5,7 @@
  */
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 import { isCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
-import { validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
+import { validateTurnLifecycleSnapshot } from "@noobot/session-protocol/turn-lifecycle";
 import { createEventEnvelope } from "./envelope.js";
 import { resolveMessageViewKey } from "./message-event.js";
 

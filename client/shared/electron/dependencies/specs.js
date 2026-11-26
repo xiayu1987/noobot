@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { resolveLibreOfficeExecutable } from "@noobot/platform-compatibility/process";
+
+const windowsLibreOfficeCommand = resolveLibreOfficeExecutable({
+  platform: "win32",
+  sourceEnv: {},
+});
+
 export const desktopDependencyTimeouts = Object.freeze({
   commandProbeMs: 15000,
   checkMs: 45000,
@@ -23,12 +30,10 @@ export const dependencySpecs = {
   },
   libreoffice: {
     label: "LibreOffice",
-    checkCommands: ["libreoffice", "soffice"],
+    checkCommands: [resolveLibreOfficeExecutable({ sourceEnv: {} })],
     win32ExecutableCandidates: [
-      "LibreOffice\\program\\soffice.exe",
-      "LibreOffice\\program\\libreoffice.exe",
-      "The Document Foundation\\LibreOffice\\program\\soffice.exe",
-      "The Document Foundation\\LibreOffice\\program\\libreoffice.exe",
+      `LibreOffice\\program\\${windowsLibreOfficeCommand}`,
+      `The Document Foundation\\LibreOffice\\program\\${windowsLibreOfficeCommand}`,
     ],
     win32RegistryKeys: [
       "HKLM\\SOFTWARE\\LibreOffice\\UNO\\InstallPath",

@@ -51,6 +51,7 @@ export async function finalizeAgentTurn({
     agentResult,
     turnPersistence,
     runtimeEventListener,
+    runConfig: resolvedRunConfig,
     userConfig: {
       ...userConfig,
       ...(resolvedRunConfig.memoryModel ? { memoryModel: resolvedRunConfig.memoryModel } : {}),

@@ -36,6 +36,7 @@ export class SessionExecutionFinalizer {
     turnPersistence,
     runtimeEventListener,
     userConfig,
+    runConfig,
     lifecycle,
     persistenceScope,
   }) {
@@ -77,6 +78,7 @@ export class SessionExecutionFinalizer {
       dialogProcessId,
       persistenceScope,
       userConfig,
+      runConfig,
     };
     if (memoryPostProcessAsyncEnabled) {
       emitEvent(runtimeEventListener, "memory_postprocess_scheduled", {

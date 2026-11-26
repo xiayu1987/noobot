@@ -58,7 +58,7 @@ export async function assertAttachmentHttpAccess(
   const url =
     `/api/internal/attachment/${encodeURIComponent(userId)}/${encodeURIComponent(attachmentId)}` +
     `?sessionId=${encodeURIComponent(sessionId)}&attachmentSource=${encodeURIComponent(attachmentSource)}`;
-  const response = await page.request.get(url, {
+  const response = await page.request.get(new URL(url, page.url()).href, {
     headers: { "x-api-key": authenticatedApiKey },
   });
   expect(response.status()).toBe(200);

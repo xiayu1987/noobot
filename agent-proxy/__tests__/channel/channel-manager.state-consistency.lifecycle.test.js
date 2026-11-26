@@ -224,7 +224,7 @@ test("invalid upstream lifecycle is rejected at the entry with no journal or sta
   assert.deepEqual(manager.successfulDataPlaneMetrics, metricsBefore);
 });
 
-test("upstream snapshot responses resolve and release the reconnect command", async () => {
+test("the run upstream cannot settle a reconnect snapshot response", () => {
   FakeUpstreamWebSocket.instances = [];
   const manager = new ChannelManager(FakeUpstreamWebSocket);
   const channel = manager.ensureChannel(
@@ -257,11 +257,11 @@ test("upstream snapshot responses resolve and release the reconnect command", as
   });
   upstream.emit("message", JSON.stringify({ event: "turn_snapshot", data: snapshot }));
 
-  assert.deepEqual(resolution, { ok: true, snapshot });
-  assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 0);
+  assert.equal(resolution, null);
+  assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 1);
 });
 
-test("upstream snapshot failure receipts resolve and release the reconnect command", () => {
+test("the run upstream cannot settle a reconnect snapshot failure receipt", () => {
   FakeUpstreamWebSocket.instances = [];
   const manager = new ChannelManager(FakeUpstreamWebSocket);
   const sessionId = "session-snapshot-receipt";
@@ -302,8 +302,8 @@ test("upstream snapshot failure receipts resolve and release the reconnect comma
     }),
   );
 
-  assert.deepEqual(resolution, { ok: false, reason: "snapshot_not_found" });
-  assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 0);
+  assert.equal(resolution, null);
+  assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 1);
 });
 
 function connectInvalidFrameChannel(sessionId) {

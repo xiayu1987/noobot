@@ -10,7 +10,7 @@ import * as esbuild from "esbuild";
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), "../../..");
-const desktopProjectDir = process.env.NOOBOT_DESKTOP_PROJECT_DIR || process.cwd();
+const desktopProjectDir = process.cwd();
 const outRoot = path.join(desktopProjectDir, "build/electron");
 const sharedElectronRoot = path.join(repoRoot, "client/shared/electron");
 const entryPoint = path.join(desktopProjectDir, "src/main.js");

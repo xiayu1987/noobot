@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { test } from "node:test";
+import { filePath as path } from "@noobot/path-resolver";
 import {
   PARTITION_JOURNAL_FRAME,
   createPartitionJournalReference,
@@ -191,7 +192,7 @@ test("cold entity directory damage and close failure fence collection transactio
 
 test("control decoding failure survives simultaneous descriptor close failure", async (t) => {
   const { journal, root } = await createJournalCase(t, {}, { autoClose: false });
-  const control = `${root}/CURRENT`;
+  const control = path.join(root, "CURRENT");
   await writeFile(control, "invalid control");
   const closeFailure = new Error("injected control close failure");
   const restore = failClose(control, closeFailure);

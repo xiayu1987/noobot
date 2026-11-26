@@ -7,6 +7,7 @@ import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 import { holdSessionLock } from "../../../../../../agent/__tests__/helpers/session-lock-process.js";
+import { nodeScriptCommand } from "../../../../../../agent/__tests__/helpers/node-script-command.js";
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import {
   deleteLatestUserMessage,
@@ -30,6 +31,16 @@ import {
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 import { toolEventsForTurn } from "../helpers/thinking-tool-assertions.js";
+import { runOpsWorkdir } from "../helpers/run-ops-workdir.js";
+
+async function readMarker(file) {
+  try {
+    return await fs.readFile(file, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
 
 test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canonical 复现", async ({
   noobot,
@@ -128,7 +139,12 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
     "pbe052-tool-finished",
   );
   const secondOffset = commandsForSession(protocolCapture, noobot.sessionId).length;
-  const delayedCommand = `node -e "const fs=require('node:fs');fs.writeFileSync('${toolStartedMarker}','started');setTimeout(()=>{fs.writeFileSync('${toolFinishedMarker}','finished');console.log('PBE052-DURABLE')},8000)"`;
+  const commandDirectory = path.join(workspaceRoot(), noobot.userId, runOpsWorkdir());
+  await fs.mkdir(commandDirectory, { recursive: true });
+  const delayedCommand = await nodeScriptCommand(
+    commandDirectory,
+    `import fs from 'node:fs';fs.writeFileSync(${JSON.stringify(toolStartedMarker)},'started');setTimeout(()=>{fs.writeFileSync(${JSON.stringify(toolFinishedMarker)},'finished');console.log('PBE052-DURABLE')},8000)`,
+  );
   await sendMessage(
     noobot.page,
     uniquePrompt(
@@ -158,7 +174,7 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
       ),
     { timeoutMs: PROTOCOL_TIMEOUTS.model },
   );
-  await expect.poll(() => fs.readFile(toolStartedMarker, "utf8").catch(() => "")).toBe("started");
+  await expect.poll(() => readMarker(toolStartedMarker)).toBe("started");
 
   await expect
     .poll(async () => {
@@ -174,9 +190,7 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
 
   const releaseLock = await holdSessionLock(lockPath);
   try {
-    await expect
-      .poll(() => fs.readFile(toolFinishedMarker, "utf8").catch(() => ""))
-      .toBe("finished");
+    await expect.poll(() => readMarker(toolFinishedMarker)).toBe("finished");
     await expect
       .poll(
         async () =>

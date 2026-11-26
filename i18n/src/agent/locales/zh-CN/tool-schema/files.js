@@ -109,7 +109,7 @@ export const FILE_TOOL_SCHEMA = {
       },
       baseVersions: {
         key: "tools.patch_file.fieldBaseVersions",
-        text: "所有源文件与目标文件的基准版本 [{filePath, sha256}]；filePath 对应补丁路径（strip 后、root 前），sha256 使用读取结果 baseSha256，不存在的新增目标用 null。",
+        text: "所有源文件与目标文件的基准版本 [{filePath, sha256}]。工作区或主机读取结果的 filePath 使用 path.path，挂载读取结果用 / 拼接 path.mount 和 path.path。strip 和 root 不改变 filePath。sha256 使用 baseSha256，不存在的新增目标用完整目标路径和 null。",
       },
       format: {
         key: "tools.patch_file.fieldFormat",

@@ -5,6 +5,7 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import { findProtocolObjects, waitForCaptured } from "../helpers/websocket-capture.js";
+import { createWebSocketAuthProtocols } from "@noobot/shared/websocket-auth";
 
 test("@full PBE-026 非法和旧协议拒绝", async ({ noobot, protocolCapture }) => {
   const transportReady = findProtocolObjects(protocolCapture.websocketReceived).find(
@@ -37,8 +38,8 @@ test("@full PBE-026 非法和旧协议拒绝", async ({ noobot, protocolCapture 
     },
   ];
   const results = await noobot.page.evaluate(
-    async ({ url, frames }) => {
-      const socket = new WebSocket(url);
+    async ({ url, frames, protocols }) => {
+      const socket = new WebSocket(url, protocols);
       const received = [];
       socket.addEventListener("message", (event) => received.push(String(event.data)));
       await new Promise((resolve, reject) => {
@@ -50,7 +51,11 @@ test("@full PBE-026 非法和旧协议拒绝", async ({ noobot, protocolCapture 
       socket.close();
       return received;
     },
-    { url: socketUrl, frames: invalidFrames },
+    {
+      url: socketUrl,
+      frames: invalidFrames,
+      protocols: createWebSocketAuthProtocols(noobot.connectConfig.apiKey),
+    },
   );
   await waitForCaptured(() => results.length > 0 && results);
   const evidence = results.join("\n");

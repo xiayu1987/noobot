@@ -5,6 +5,10 @@
  */
 import { buildSessionDisplayProjectionFromCounts } from "../session-summary-builders/session-display-summary.js";
 import { readPartitionSessionSource } from "./partition-session-source.js";
+import {
+  bindDisplayInterjections,
+  projectDisplayThinkingFacets,
+} from "./partition-display-thinking.js";
 
 export async function readPartitionDisplayProjection(options) {
   const ordinals = new Map();
@@ -17,8 +21,16 @@ export async function readPartitionDisplayProjection(options) {
     },
   });
   const counts = await options.messages.readDisplaySourceCounts({ snapshot: options.snapshot });
-  return buildSessionDisplayProjectionFromCounts(source, counts, {
+  const projection = buildSessionDisplayProjectionFromCounts(source, counts, {
     includeThinkingTimeline: options.includeThinkingTimeline,
     selectSourceOrdinal: (message) => ordinals.get(message.messageUid),
   });
+  const { journal, scope, snapshot } = options;
+  const readInterjection = bindDisplayInterjections(journal, scope, snapshot);
+  for (const message of projection.messages) {
+    if (message.role !== "assistant") continue;
+    const interjection = await readInterjection(message.turnScopeId);
+    Object.assign(message, projectDisplayThinkingFacets(message.hasThinkingDetails, interjection));
+  }
+  return projection;
 }

@@ -122,6 +122,7 @@ export class MemoryPostProcessService {
     sessionId,
     parentSessionId,
     userConfig = {},
+    runConfig,
     identity,
     memoryEventListener,
     mode,
@@ -149,6 +150,7 @@ export class MemoryPostProcessService {
           sessionId,
           parentSessionId,
           userConfig,
+          runConfig,
           abortSignal: memorySummaryAbortController.signal,
           invocationIdentity: identity,
           eventListener: memoryEventListener,
@@ -195,6 +197,7 @@ export class MemoryPostProcessService {
     dialogProcessId,
     persistenceScope,
     userConfig,
+    runConfig,
     mode,
   }) {
     const identity = createMemoryPostprocessIdentity({
@@ -246,6 +249,7 @@ export class MemoryPostProcessService {
       sessionId,
       parentSessionId,
       userConfig,
+      runConfig,
       identity,
       memoryEventListener,
       mode: "async",

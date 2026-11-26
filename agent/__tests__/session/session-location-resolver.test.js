@@ -16,7 +16,7 @@ import {
 } from "../../src/session/session-location-resolver.js";
 
 const pathResolver = {
-  resolveBasePath: (userId) => path.join("/workspace", userId),
+  resolveBasePath: (userId) => path.resolve("/workspace", userId),
   sessionRoot: (basePath) => path.join(basePath, "runtime/session"),
 };
 
@@ -30,7 +30,8 @@ const scopedOptions = Object.freeze({
 });
 
 test("buildSessionLocationScope uses the canonical artifact map", () => {
-  const scope = buildSessionLocationScope("/tmp/session", "parent", {
+  const sessionDir = path.resolve("/tmp/session");
+  const scope = buildSessionLocationScope(sessionDir, "parent", {
     indexed: true,
     registered: true,
   });
@@ -38,20 +39,20 @@ test("buildSessionLocationScope uses the canonical artifact map", () => {
     resolvedParentSessionId: "parent",
     indexed: true,
     registered: true,
-    sessionDir: "/tmp/session",
-    sessionFile: "/tmp/session/session.json",
-    sessionSummaryFile: "/tmp/session/session-summary.json",
-    executionEventsDir: "/tmp/session/execution-events",
-    turnsDir: "/tmp/session/turns",
-    turnSnapshotsDir: "/tmp/session/turn-snapshots",
-    metadataFile: "/tmp/session/meta.json",
+    sessionDir,
+    sessionFile: path.join(sessionDir, "session.json"),
+    sessionSummaryFile: path.join(sessionDir, "session-summary.json"),
+    executionEventsDir: path.join(sessionDir, "execution-events"),
+    turnsDir: path.join(sessionDir, "turns"),
+    turnSnapshotsDir: path.join(sessionDir, "turn-snapshots"),
+    metadataFile: path.join(sessionDir, "meta.json"),
   });
   assert.ok(Object.isFrozen(scope));
 });
 
 test("scoped resolver locates and places only its bound session under the bound parent", async () => {
   const resolver = new ScopedSessionLocationResolver(scopedOptions);
-  const sessionDir = "/workspace/alice/runtime/plugin-data/workflow/session/run/node";
+  const sessionDir = path.resolve("/workspace/alice/runtime/plugin-data/workflow/session/run/node");
   const located = await resolver.locateSessionScope("alice", "child");
   assert.equal(located.sessionDir, sessionDir);
   assert.equal(located.resolvedParentSessionId, "parent");

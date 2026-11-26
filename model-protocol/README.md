@@ -47,7 +47,10 @@ An error-classifier exception or invalid result is explicitly classified as
 it cannot trigger transport or streaming-mode retries. The original invocation
 exception is rethrown unchanged. Classification is evaluated once per error per invocation.
 `classifyModelFailure` is the only classification entry and always returns a frozen
-`{ kind, classificationError }`. Only `ModelProtocolError` carries a declared
+`{ kind, classificationError }`, with optional `providerEvidence` extracted from upstream errors.
+The evidence declares `recognized` (a documented provider rule matched), `modeRelated`
+(the structured parameter identifies a stream-mode error), source URL, code, parameter and status.
+Local and transport errors do not carry provider evidence. Only `ModelProtocolError` carries a declared
 classification; every other error is classified by the adapter's `classifyError`, whose
 `kind` must be a `MODEL_ERROR_KIND` other than `classification`. Invalid classifier results become
 `classification`. Retry eligibility has no separate flag: the recovery action is the only authority.
@@ -58,7 +61,10 @@ is a `ModelProtocolError` with kind `response_mode_mismatch` and code
 `MODEL_RESPONSE_MODE_MISMATCH`. Recovery actions are defined by `resolveModelFailureRecovery`:
 mode mismatches change the streaming parameter to a declared mode not yet tried in the invocation
 and stop once every declared mode has been tried; rate limits, timeouts, temporary failures and
-unknown/unregistered provider errors retry unchanged within the transport budget. Other kinds stop.
+unknown/unregistered provider errors retry unchanged within the transport budget for chat. Other kinds stop.
+For `multimodal_parse` and model `web_search`, documented mode errors and unrecognized upstream
+errors change mode once before same-mode transport recovery. Documented unrelated errors retain
+their existing stop or same-mode retry action. Local errors never imply a mode change.
 Transport, mode-change and empty-response retries use `resolveModelRetryDelay` for exponential
 backoff; a valid provider `Retry-After` is a minimum wait, not a separate retry budget.
 Exponential delays are capped by `TIME_THRESHOLDS.model.maxRetryDelayMs` (60 seconds by default).
@@ -71,7 +77,14 @@ the timer and listener. All recovery waits use the invocation signal.
 Output progress (`outputObserved`) comes only from transport events classified by `hasModelStreamOutput`:
 non-empty text, reasoning, refusals and tool calls count; roles, empty deltas and lifecycle
 metadata do not. Caller callbacks only deliver notifications; `mayReplayModelRequest` is the only replay gate.
-Preferred modes are cached only after response validation succeeds. Non-stream Responses require a JSON media type. The transport
+Only chat caches a preferred mode after response validation succeeds. Parsing and model search
+always start with the current invocation's `options.streaming`, supplied by the host from the turn
+configuration; a recovery never changes that configuration. Native generation modes are declared
+only by `resolveModelGenerationStreamingModes`: dual-mode endpoints follow the invocation choice,
+single-mode endpoints use their documented transport. Generation submissions remain single-attempt.
+OpenAI GPT Image and Gemini Interactions image SSE collect final media; video uses task polling.
+Gemini GenerateContent currently uses its JSON endpoint only; no SSE capability is declared without
+a verified model/endpoint implementation. Non-stream Responses require a JSON media type. The transport
 shares its decoded JSON with measurement and adapter validation through `Response.json()`;
 the SDK supplies the raw response through `asResponse()`. Protocol validation precedes SDK
 output projection and normalization, so malformed bodies never enter SDK conversion retries.

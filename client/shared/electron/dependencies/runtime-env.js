@@ -13,6 +13,7 @@ import {
   normalizeClientPath,
 } from "../../path-resolver.js";
 import { text } from "@noobot/shared/value";
+import { resolveLibreOfficeExecutable as resolveLibreOfficeCommand } from "@noobot/platform-compatibility/process";
 
 function uniqueTruthyStrings(values = []) {
   const seen = new Set();
@@ -42,7 +43,7 @@ function splitPathEnv(pathValue = "", platform = process.platform) {
 function resolveExecutableName(command = "", platform = process.platform) {
   const normalized = text(command);
   if (!normalized) return "";
-  if (platform !== "win32" || normalized.toLowerCase().endsWith(".exe")) return normalized;
+  if (platform !== "win32" || /\.(exe|com)$/i.test(normalized)) return normalized;
   return `${normalized}.exe`;
 }
 
@@ -118,10 +119,10 @@ function listWindowsLibreOfficeCandidates(env = {}) {
   const programFiles = env.PROGRAMFILES || "C:\\Program Files";
   const programFilesX86 =
     env["PROGRAMFILES(X86)"] || env.PROGRAMFILES_X86 || "C:\\Program Files (x86)";
-  return [programFiles, programFilesX86].flatMap((base) => [
-    joinClientPath(base, "LibreOffice", "program", "soffice.exe"),
-    joinClientPath(base, "LibreOffice", "program", "libreoffice.exe"),
-  ]);
+  const command = resolveLibreOfficeCommand({ platform: "win32", sourceEnv: {} });
+  return [programFiles, programFilesX86].map((base) =>
+    joinClientPath(base, "LibreOffice", "program", command),
+  );
 }
 
 const LINUX_LIBRE_OFFICE_CANDIDATES = Object.freeze([
@@ -152,8 +153,11 @@ function resolveLibreOfficeExecutable({
   const candidates = [...configuredCandidates, ...listPlatformLibreOfficeCandidates(platform, env)];
   return (
     resolveFirstExistingPath(candidates, exists) ||
-    findExecutableInPath("soffice", { env, platform, exists }) ||
-    findExecutableInPath("libreoffice", { env, platform, exists }) ||
+    findExecutableInPath(resolveLibreOfficeCommand({ platform, sourceEnv: {} }), {
+      env,
+      platform,
+      exists,
+    }) ||
     ""
   );
 }

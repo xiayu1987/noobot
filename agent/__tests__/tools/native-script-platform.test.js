@@ -139,7 +139,7 @@ test("native LibreOffice executable uses the host-resolved dependency path", () 
     }),
     "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
   );
-  assert.equal(resolveLibreOfficeExecutable({ platform: "win32", sourceEnv: {} }), "soffice.exe");
+  assert.equal(resolveLibreOfficeExecutable({ platform: "win32", sourceEnv: {} }), "soffice.com");
   assert.equal(resolveLibreOfficeExecutable({ platform: "darwin", sourceEnv: {} }), "libreoffice");
 });
 

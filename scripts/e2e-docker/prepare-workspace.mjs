@@ -102,7 +102,7 @@ async function copyUserConfiguration(source, target, userId) {
   const copied = [];
   await mkdir(path.join(target, userId), { recursive: true });
   for (const entry of WORKSPACE_USER_CONFIGURATION_ENTRIES) {
-    const relative = path.join(userId, entry);
+    const relative = path.posix.join(userId, entry);
     if (await copyEntry(source, target, relative)) copied.push(relative);
   }
   return copied;
@@ -127,7 +127,7 @@ async function prepareE2eWorkspace({ sourceRoot, targetRoot, globalConfigPath })
   }
   for (const userId of userIds) {
     copied.push(...(await copyUserConfiguration(source, target, userId)));
-    const userConfigRelative = path.join(userId, WORKSPACE_LAYOUT.CONFIG_FILE);
+    const userConfigRelative = path.posix.join(userId, WORKSPACE_LAYOUT.CONFIG_FILE);
     if (!copied.includes(userConfigRelative)) {
       throw new Error(`e2e workspace user ${userId} requires ${userConfigRelative} in source`);
     }

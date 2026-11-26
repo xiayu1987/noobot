@@ -78,10 +78,10 @@ async function upstreamErrorDetails(response) {
   try {
     return JSON.parse(body)?.error || {};
   } catch (cause) {
-    throw new ModelProtocolError("Anthropic error response declares JSON but is not JSON", {
+    return {
+      message: `Anthropic API returned ${response.status} with an invalid JSON error body`,
       cause,
-      details: { status: response.status },
-    });
+    };
   }
 }
 
@@ -131,6 +131,25 @@ function stringifyToolResultContent(content) {
   }
 }
 
+function assistantContent(message) {
+  const content = textBlocks(message.content);
+  const existingToolUseIds = new Set(
+    content.filter((block) => block?.type === "tool_use").map((block) => String(block.id || "")),
+  );
+  for (const call of message.tool_calls || []) {
+    const fn = call?.function || call || {};
+    const id = String(call.id || call.call_id || "");
+    if (id && existingToolUseIds.has(id)) continue;
+    content.push({
+      type: "tool_use",
+      id,
+      name: String(fn.name || call.name || ""),
+      input: toolUseInput(call, fn),
+    });
+  }
+  return content.length ? content : "";
+}
+
 function convertMessages(messages = []) {
   const output = [];
   let pendingToolResults = [];
@@ -153,24 +172,7 @@ function convertMessages(messages = []) {
     }
     flushTools();
     if (role === "assistant") {
-      const content = textBlocks(message.content);
-      const existingToolUseIds = new Set(
-        content
-          .filter((block) => block?.type === "tool_use")
-          .map((block) => String(block.id || "")),
-      );
-      for (const call of message.tool_calls || []) {
-        const fn = call?.function || call || {};
-        const id = String(call.id || call.call_id || "");
-        if (id && existingToolUseIds.has(id)) continue;
-        content.push({
-          type: "tool_use",
-          id,
-          name: String(fn.name || call.name || ""),
-          input: toolUseInput(call, fn),
-        });
-      }
-      output.push({ role: "assistant", content: content.length ? content : "" });
+      output.push({ role: "assistant", content: assistantContent(message) });
       continue;
     }
     const content = textBlocks(message.content);
@@ -331,7 +333,9 @@ async function requestAnthropicMessages({
   });
   if (!response.ok) {
     const upstream = await upstreamErrorDetails(response);
-    const error = new Error(upstream.message || `Anthropic API returned ${response.status}`);
+    const error = new Error(upstream.message || `Anthropic API returned ${response.status}`, {
+      cause: upstream.cause,
+    });
     error.status = response.status;
     error.type = upstream.type;
     error.details = upstream.details;
@@ -342,6 +346,13 @@ async function requestAnthropicMessages({
   await assertResponseMode({ requestedStreaming, response });
   if (requestedStreaming) return readAnthropicMessageStream(response, { onText, signal });
   const parsed = await response.json();
+  if (parsed.type === "error") {
+    throw Object.assign(new Error(parsed.error?.message || "Anthropic API error"), {
+      type: parsed.error?.type,
+      details: parsed.error?.details,
+      providerFailure: true,
+    });
+  }
   requireModelResponseTerminal("anthropic", parsed);
   return parsed;
 }
@@ -403,6 +414,7 @@ async function executeAnthropicServerToolTurn({
   headers,
   signal,
   serverTools,
+  streaming,
   system,
   content,
   fetch,
@@ -422,6 +434,7 @@ async function executeAnthropicServerToolTurn({
       fetch,
       payload: {
         model: spec.model,
+        stream: streaming,
         max_tokens: Number(spec.max_tokens || 10000),
         system,
         tools: serverTools,
@@ -430,15 +443,27 @@ async function executeAnthropicServerToolTurn({
       },
     });
     const turnBlocks = Array.isArray(parsed?.content) ? parsed.content : [];
+    for (const block of turnBlocks) {
+      if (
+        block.type === "web_search_tool_result" &&
+        block.content?.type === "web_search_tool_result_error"
+      ) {
+        throw Object.assign(new Error(`Anthropic web search failed: ${block.content.error_code}`), {
+          code: block.content.error_code,
+          providerFailure: true,
+        });
+      }
+    }
     collected.push(...turnBlocks.map((block) => ({ ...block })));
-    if (parsed?.stop_reason !== ANTHROPIC_PAUSE_TURN_STOP_REASON) break;
+    if (parsed?.stop_reason !== ANTHROPIC_PAUSE_TURN_STOP_REASON) return collected;
     messages.push({ role: "assistant", content: turnBlocks.map((block) => ({ ...block })) });
   }
-  return collected;
+  throw new ModelProtocolError("Anthropic web search exceeded pause_turn continuation budget");
 }
 
 async function executeAnthropicOperation({
   modelSpec,
+  streaming,
   credential,
   operation,
   headers = {},
@@ -462,6 +487,7 @@ async function executeAnthropicOperation({
       headers,
       signal,
       serverTools: [ANTHROPIC_SERVER_WEB_SEARCH_TOOL],
+      streaming,
       system: MODEL_WEB_SEARCH_INSTRUCTION,
       content: [{ type: "text", text: text(operation.input.query) }],
       fetch,
@@ -479,6 +505,7 @@ async function executeAnthropicOperation({
     fetch,
     payload: {
       model: spec.model,
+      stream: streaming,
       max_tokens: Number(spec.max_tokens || 10000),
       messages: [
         {
@@ -525,7 +552,7 @@ export const anthropicMessagesAdapter = Object.freeze({
   },
 
   resolveOperationStreamingModes() {
-    return [false];
+    return [false, true];
   },
 });
 

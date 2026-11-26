@@ -12,7 +12,7 @@ import {
 import { writeAgentProxyRouteDebugEvent } from "../runtime-events/route-debug-runtime-events.js";
 import { writeAgentTransportDebugEvent } from "../runtime-events/agent-transport-debug-runtime-events.js";
 import { PENDING_COMMAND_KIND } from "../channel/command-registry.js";
-import { TURN_LIFECYCLE_RECEIPT_ACTION } from "@noobot/session-protocol";
+import { TURN_LIFECYCLE_RECEIPT_ACTION } from "@noobot/session-protocol/turn-lifecycle";
 import {
   AGENT_COMMAND,
   AGENT_TRANSPORT_ERROR_CODE,

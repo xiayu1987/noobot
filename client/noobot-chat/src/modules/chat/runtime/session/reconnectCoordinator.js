@@ -35,7 +35,7 @@ export function createReconnectCoordinator({
   async function handleReconnect() {
     const session = activeSession.value;
     const reconnectSessionId = text(session?.sessionId);
-    if (!reconnectSessionId) return false;
+    if (!reconnectSessionId || session.isLocal === true) return false;
     let pendingReconnectReplayCount = 0;
     let reconnectReplayQueue = Promise.resolve();
     const reconnectReplayFailures = [];

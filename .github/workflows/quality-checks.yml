@@ -43,6 +43,9 @@ jobs:
       - name: Run lightweight code quality checks
         run: npm run check:quality
 
+      - name: Verify Bash orchestration with command doubles
+        run: npm run test:e2e:docker-orchestration
+
       - name: Run repository regression tests
         run: npm test
 

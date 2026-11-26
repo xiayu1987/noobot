@@ -86,6 +86,48 @@ describe("mergeCanonicalSessionDetail", () => {
     expect(merged).not.toHaveProperty("turnTimings");
   });
 
+  it.each([false, true])(
+    "keeps live interjections across stale snapshots (replace=%s)",
+    (replace) => {
+      const assistant = {
+        role: "assistant",
+        turnScopeId: "turn-interjections",
+        dialogProcessId: "dialog-interjections",
+        presentationMessageId: "assistant-interjections",
+      };
+      const interjection = (sequence) => ({
+        contentId: `message:interjection-${sequence}`,
+        contentKind: "user_interjection",
+        sourceMessageUid: `interjection-${sequence}`,
+        text: `Interjection ${sequence}`,
+        sequence,
+      });
+      const earlier = interjection(2);
+      const latest = interjection(5);
+      const replaceFields = replace ? ["messages"] : [];
+      const merged = mergeCanonicalSessionDetail(
+        { messages: [{ ...assistant, pending: true, thinkingContentTimeline: [earlier, latest] }] },
+        {
+          messages: [
+            { ...assistant, type: "message", content: "Final", thinkingContentTimeline: [earlier] },
+          ],
+        },
+        { replaceFields },
+      );
+
+      expect(merged.messages).toHaveLength(1);
+      expect(merged.messages[0].content).toBe("Final");
+      expect(merged.messages[0].thinkingContentTimeline).toEqual([earlier, latest]);
+      expect(merged.messages[0].hasThinkingDetails).toBe(true);
+      const replacement = mergeCanonicalSessionDetail(
+        merged,
+        { messages: [{ ...assistant, turnScopeId: "new-turn", dialogProcessId: "new-dialog" }] },
+        { replaceFields: ["messages"] },
+      );
+      expect(replacement.messages[0]).not.toHaveProperty("thinkingContentTimeline");
+    },
+  );
+
   it("rejects turn timings carried through the session detail", () => {
     expect(() =>
       mergeCanonicalSessionDetail(

@@ -25,6 +25,10 @@ const REPORTED_SAMPLE_LIMIT = DEVELOPMENT_THRESHOLDS.quantity.reportedSampleLimi
 const TOP_FILE_LIMIT = DEVELOPMENT_THRESHOLDS.quantity.topFileLimit;
 const repositoryRoot = path.resolve(import.meta.dirname, "../..");
 
+export function qualityReportPath(root, filePath) {
+  return path.relative(root, filePath).split(path.sep).join("/");
+}
+
 function requireText(value, label) {
   if (typeof value !== "string" || !value.trim()) {
     throw new TypeError(`${label} must be a non-empty string`);

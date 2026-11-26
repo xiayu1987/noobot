@@ -28,7 +28,7 @@ test("session runtime event requires userId and sessionId", async () => {
 });
 
 test("startup and system events write JSONL without session context", async () => {
-  await tempRoot();
+  const root = await tempRoot();
   const startup = await writeRuntimeEvent({
     scope: RUNTIME_EVENT_SCOPES.STARTUP,
     source: "service",
@@ -47,8 +47,14 @@ test("startup and system events write JSONL without session context", async () =
 
   assert.equal(startup.ok, true);
   assert.equal(system.ok, true);
-  assert.match(startup.file, /runtime\/events\/startup\/service\/state\.jsonl$/);
-  assert.match(system.file, /runtime\/events\/system\/agent\/transport\.jsonl$/);
+  assert.equal(
+    startup.file,
+    path.join(root, "system", "runtime", "events", "startup", "service", "state.jsonl"),
+  );
+  assert.equal(
+    system.file,
+    path.join(root, "system", "runtime", "events", "system", "agent", "transport.jsonl"),
+  );
   assert.equal((await readJsonl(startup.file))[0].scope, "startup");
   assert.equal((await readJsonl(system.file))[0].scope, "system");
 });
@@ -106,7 +112,10 @@ test("session runtime events write to runtime session events path", async () => 
   });
 
   assert.equal(result.ok, true);
-  assert.match(result.file, /admin\/runtime\/session\/s_1\/events\/system\.jsonl$/);
+  assert.equal(
+    result.file,
+    path.join(workspaceRoot, "admin", "runtime", "session", "s_1", "events", "system.jsonl"),
+  );
   const [record] = await readJsonl(result.file);
   assert.equal(record.sessionId, "s_1");
   assert.equal(record.userId, "admin");
@@ -138,7 +147,10 @@ test("explicit session scope writes to the session events path", async () => {
   assert.equal(result.record.scope, "session");
   assert.equal(result.record.sessionId, "session_1");
   assert.equal(result.record.data.token, "[Redacted]");
-  assert.match(result.file, /admin\/runtime\/session\/session_1\/events\/system\.jsonl$/);
+  assert.equal(
+    result.file,
+    path.join(workspaceRoot, "admin", "runtime", "session", "session_1", "events", "system.jsonl"),
+  );
 });
 
 test("runtime events without a declared scope are rejected", async () => {
@@ -171,7 +183,18 @@ test("routed runtime events write under NOOBOT_WORKSPACE_ROOT and fail when it i
     assert.equal(result.ok, true);
     assert.equal(result.record.workspaceRoot, undefined);
     assert.equal(result.file.startsWith(`${workspaceRoot}${path.sep}`), true);
-    assert.match(result.file, /runtime\/events\/startup\/agent-proxy\/state\.jsonl$/);
+    assert.equal(
+      result.file,
+      path.join(
+        workspaceRoot,
+        "system",
+        "runtime",
+        "events",
+        "startup",
+        "agent-proxy",
+        "state.jsonl",
+      ),
+    );
 
     delete process.env.NOOBOT_WORKSPACE_ROOT;
     await assert.rejects(writeRuntimeEvent(event), /NOOBOT_WORKSPACE_ROOT/);

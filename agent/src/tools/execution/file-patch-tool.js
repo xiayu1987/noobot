@@ -54,6 +54,7 @@ import {
   classifyResourceSetRisk,
 } from "@noobot/security-assessment-protocol";
 import { text } from "@noobot/shared/value";
+import { locatorDisplayPath } from "@noobot/shared/locator";
 
 function buildPatchFailurePayload({ error, original, pathRef, encoding }) {
   const { details } = error;
@@ -153,6 +154,19 @@ function validateDeletedContent({ original, hunks, contentEncoding }) {
   }
 }
 
+function indexPatchTargetPaths(targets) {
+  const paths = new Map();
+  for (const item of targets) {
+    if (item.oldPathRef) {
+      paths.set(locatorDisplayPath(mutationLocator(item.oldPathRef)), item.resolvedOldPath);
+    }
+    if (item.newPathRef) {
+      paths.set(locatorDisplayPath(mutationLocator(item.newPathRef)), item.resolvedNewPath);
+    }
+  }
+  return paths;
+}
+
 async function buildPatchPlans({ targets, contentEncoding, baseVersions, workspaceIo, encoding }) {
   const writePlans = [];
   const deletePlans = [];
@@ -172,11 +186,7 @@ async function buildPatchPlans({ targets, contentEncoding, baseVersions, workspa
     if (!contentHashes.has(buffer)) contentHashes.set(buffer, fileContentSha256(buffer));
     return contentHashes.get(buffer);
   };
-  const paths = new Map();
-  for (const item of targets) {
-    if (item.oldPath) paths.set(item.oldPath, item.resolvedOldPath);
-    if (item.newPath) paths.set(item.newPath, item.resolvedNewPath);
-  }
+  const paths = indexPatchTargetPaths(targets);
   let versions;
   let operations;
   try {

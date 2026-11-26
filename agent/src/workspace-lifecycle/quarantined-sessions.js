@@ -20,17 +20,17 @@ import {
 } from "./migration-quarantine.js";
 
 async function* sessionInventory(base) {
-  for await (const { file, held, relativePath, reason } of readQuarantineInventory(base)) {
+  for await (const entry of readQuarantineInventory(base)) {
+    const { file, held, relativePath, reason, quarantinePath } = entry;
     if (!reason.moved || reason.restored) continue;
-    const attachmentRoot = path.join(WORKSPACE_LAYOUT.SCOPED_ATTACH_DIR, path.sep);
-    if (relativePath.startsWith(attachmentRoot)) continue;
+    if (reason.path.startsWith(`${WORKSPACE_LAYOUT.SCOPED_ATTACH_DIR}/`)) continue;
     const record = classifyHistoricalMigrationQuarantine(reason);
     if (!record.sessionStorage) continue;
     const id = hash(
       "sha256",
       JSON.stringify([reason.kind, relativePath, reason.moveIdentity, reason.quarantinedAt]),
     );
-    yield { file, held, relativePath, record, id };
+    yield { file, held, relativePath, quarantinePath, record, id };
   }
 }
 
@@ -55,14 +55,14 @@ async function readSessionTitle(held, sessionId) {
 export function listQuarantinedSessions(base) {
   return withQuarantineMutation(base, async () => {
     const sessions = [];
-    for await (const { held, relativePath, record, id } of sessionInventory(base)) {
+    for await (const { held, relativePath, quarantinePath, record, id } of sessionInventory(base)) {
       const sessionId = path.basename(relativePath);
       sessions.push({
         id,
         sessionId,
         title: record.deleting ? "" : await readSessionTitle(held, sessionId),
         quarantinedAt: record.quarantinedAt,
-        quarantinePath: path.relative(base, held),
+        quarantinePath,
         status: record.sessionStorage.status,
         errorCode: record.error.code,
         deleting: record.deleting === true,

@@ -10,6 +10,7 @@ import {
   addHit,
   defineCheck,
   emptyMeasurement,
+  qualityReportPath,
   runCheckWhenMain,
 } from "./quality/check-protocol.mjs";
 import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
@@ -54,7 +55,7 @@ export function measureLintResults(results, repositoryRoot = root) {
     [...Object.keys(COUNTED_RULES), "maxComplexity"].map((name) => [name, emptyMeasurement()]),
   );
   for (const result of results) {
-    const file = path.relative(repositoryRoot, result.filePath);
+    const file = qualityReportPath(repositoryRoot, result.filePath);
     addCountedRuleHits(measured, file, result.messages);
     const values = result.messages
       .filter(({ ruleId }) => ruleId === "complexity")
@@ -107,12 +108,12 @@ export const CHECK = defineCheck({
   },
   exemptions: [],
   baseline: {
-    complexityCount: 102,
+    complexityCount: 101,
     longFunctionCount: 55,
     maxComplexity: 48,
     nestedTernaryCount: 72,
-    deepNestingCount: 215,
-    longParameterListCount: 36,
+    deepNestingCount: 214,
+    longParameterListCount: 35,
     exemptions: 0,
   },
   measure,

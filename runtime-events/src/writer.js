@@ -9,7 +9,7 @@ import {
   requireExecutionProjectionDeliveryContext,
   requireExecutionProjectionSourceOwner,
   executionProjectionReceiptName,
-} from "@noobot/session-protocol";
+} from "@noobot/session-protocol/execution-log-projection-output";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { attachRuntimeEventPayload, normalizeRuntimeEventEnvelope } from "./schema.js";
 import { resolveRuntimeEventFile, resolveRuntimeEventsConfig } from "./paths.js";

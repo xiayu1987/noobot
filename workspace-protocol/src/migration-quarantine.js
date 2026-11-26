@@ -43,6 +43,16 @@ export const SESSION_STORAGE_QUARANTINE_STATUS = Object.freeze({
   HISTORICAL_FAILURE: "historical-upgrade-failed",
 });
 
+export function normalizeMigrationQuarantinePath(value) {
+  const parts = typeof value === "string" ? value.split(/[\\/]/u) : [];
+  if (
+    !parts.length ||
+    parts.some((part) => !part || part === "." || part === ".." || /[:\0]/u.test(part))
+  )
+    throw new TypeError("Invalid workspace migration quarantine path");
+  return parts.join("/");
+}
+
 export function requireSessionStorageQuarantine(value) {
   if (
     !isPlainObject(value) ||
@@ -60,7 +70,25 @@ export function requireSessionStorageQuarantine(value) {
       : Object.hasOwn(value, "parentPath"))
   )
     throw new TypeError("Invalid session storage quarantine classification");
+  if (Object.hasOwn(value, "parentPath")) normalizeMigrationQuarantinePath(value.parentPath);
   return value;
+}
+
+export function readWorkspaceMigrationQuarantineRecord(value) {
+  const record = assertWorkspaceMigrationQuarantineRecord(value);
+  const { sessionStorage } = record;
+  return {
+    ...record,
+    path: normalizeMigrationQuarantinePath(record.path),
+    ...(sessionStorage && Object.hasOwn(sessionStorage, "parentPath")
+      ? {
+          sessionStorage: {
+            ...sessionStorage,
+            parentPath: normalizeMigrationQuarantinePath(sessionStorage.parentPath),
+          },
+        }
+      : {}),
+  };
 }
 
 export function classifyHistoricalMigrationQuarantine(record) {
@@ -94,6 +122,7 @@ export function assertWorkspaceMigrationQuarantineRecord(record) {
     typeof record.error.message !== "string"
   )
     throw new TypeError("Invalid workspace migration quarantine record");
+  normalizeMigrationQuarantinePath(record.path);
   if (
     record.moved
       ? typeof record.moveIdentity !== "string" || !/^\d+:\d+$/u.test(record.moveIdentity)

@@ -16,7 +16,7 @@ if (!command) {
   process.exit(2);
 }
 
-const { dir: runTmpDir, created } = acquireIsolatedTmpDir({
+const { dir: runTmpDir, created } = await acquireIsolatedTmpDir({
   prefix: TMP_PREFIX,
   keep: KEEP_TMP_DIRS,
 });

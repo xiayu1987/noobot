@@ -14,6 +14,7 @@
     "./config-file": "./config-file.js",
     "./deep-freeze": "./deep-freeze.js",
     "./file-identity": "./file-identity.js",
+    "./file-system": "./file-system.js",
     "./file-mutation-coordinator": "./file-mutation-coordinator.js",
     "./read-file-prefix": "./read-file-prefix.js",
     "./debug-projection": "./debug-projection.js",

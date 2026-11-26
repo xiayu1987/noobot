@@ -10,6 +10,7 @@ import {
   executionLogQueueWaitFailure,
 } from "@noobot/session-protocol";
 import { createExecutionEventListener } from "../../src/events/execution-listener.js";
+import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
 
 const route = {
   userId: "u1",
@@ -55,13 +56,14 @@ test("queue wait protocol accepts its boundary and reports structured budget vio
 });
 
 for (const fails of [false, true]) {
-  test(`overdue queue rejects admission and drains accepted records after write ${fails ? "failure" : "success"}`, async (t) => {
+  test(`overdue admission waits for accepted records after write ${fails ? "failure" : "success"}`, async (t) => {
     const setTime = clockFor(t);
     const budget = executionLogQueueWaitBudget();
     const started = Promise.withResolvers();
     const release = Promise.withResolvers();
     t.after(() => release.resolve());
     const batches = [];
+    const writeFailure = new Error("disk failure");
     let first = true;
     const listener = createListener(async ({ records }) => {
       batches.push(records.map(({ data }) => data.sequence));
@@ -69,7 +71,7 @@ for (const fails of [false, true]) {
         first = false;
         started.resolve();
         await release.promise;
-        if (fails) throw new Error("disk failure");
+        if (fails) throw writeFailure;
       }
     });
     emit(listener, "active");
@@ -78,32 +80,35 @@ for (const fails of [false, true]) {
     setTime(budget);
     emit(listener, "at-boundary");
     setTime(budget + 1);
-    assert.throws(
-      () => emit(listener, "rejected"),
-      (error) => {
-        assert.equal(error.code, "EXECUTION_LOG_BACKPRESSURE_REQUIRED");
-        assert.equal(error.cause.code, "EXECUTION_LOG_QUEUE_WAIT_EXCEEDED");
-        return true;
-      },
-    );
-    release.resolve();
-    await assert.rejects(listener.flush(), (error) => {
-      assert.equal(error.code, "EXECUTION_LOG_PERSISTENCE_FAILED");
-      assert.ok(
-        error.failures.some(({ error }) => error === "execution log queue wait budget exceeded"),
-      );
-      assert.equal(error.failures.length, fails ? 2 : 1);
-      return true;
+    let admitted = false;
+    const admission = emit(listener, "after-budget").then(() => {
+      admitted = true;
     });
-    assert.deepEqual(batches, [["active"], ["queued", "at-boundary"]]);
+    await Promise.resolve();
+    assert.equal(admitted, false);
+    release.resolve();
+    await admission;
+    assert.equal(admitted, true);
+    if (fails) {
+      await assert.rejects(listener.flush(), (error) => {
+        assert.equal(error.code, "EXECUTION_LOG_PERSISTENCE_FAILED");
+        assert.equal(error.cause, writeFailure);
+        assert.equal(error.failures.length, 1);
+        return true;
+      });
+    } else {
+      await listener.flush();
+    }
+    assert.deepEqual(batches, [["active"], ["queued", "at-boundary", "after-budget"]]);
     await emit(listener, "after-drain");
 
-    await assert.rejects(listener.flush(), { code: "EXECUTION_LOG_PERSISTENCE_FAILED" });
+    if (fails) await assert.rejects(listener.flush(), { code: "EXECUTION_LOG_PERSISTENCE_FAILED" });
+    else await listener.flush();
     assert.deepEqual(batches.at(-1), ["after-drain"]);
   });
 }
 
-test("flush reports overdue accepted records even when no producer attempts another admission", async (t) => {
+test("flush completes delayed accepted records when no producer attempts another admission", async (t) => {
   const setTime = clockFor(t);
   const started = Promise.withResolvers();
   const release = Promise.withResolvers();
@@ -121,14 +126,9 @@ test("flush reports overdue accepted records even when no producer attempts anot
   emit(listener, 1);
   setTime(executionLogQueueWaitBudget() + 1);
   let settled = false;
-  const completion = assert
-    .rejects(listener.flush(), (error) => {
-      assert.equal(error.cause.code, "EXECUTION_LOG_QUEUE_WAIT_EXCEEDED");
-      return true;
-    })
-    .then(() => {
-      settled = true;
-    });
+  const completion = listener.flush().then(() => {
+    settled = true;
+  });
   await Promise.resolve();
   assert.equal(settled, false);
   release.resolve();
@@ -160,7 +160,7 @@ test("active persistence duration alone does not consume the queue wait budget",
   assert.deepEqual(persisted, [0, 1]);
 });
 
-test("overdue diagnostic admission preserves subsequent delivery and the final combined failure", async (t) => {
+test("overdue diagnostics preserve subsequent delivery and report the actual delivery failure", async (t) => {
   const setTime = clockFor(t);
   const started = Promise.withResolvers();
   const release = Promise.withResolvers();
@@ -195,12 +195,113 @@ test("overdue diagnostic admission preserves subsequent delivery and the final c
   await listener.forwardEvent({ event: "message", data: { presentationMessageId: "next" }, route });
   release.resolve();
   await assert.rejects(listener.flush(), (error) => {
-    assert.equal(error.code, "EXECUTION_EVENT_FLUSH_FAILED");
-    assert.equal(error.errors[0].code, "EVENT_UPSTREAM_DELIVERY_FAILED");
-    assert.equal(error.errors[1].cause.code, "EXECUTION_LOG_BACKPRESSURE_REQUIRED");
-    assert.equal(error.errors[1].cause.cause.code, "EXECUTION_LOG_QUEUE_WAIT_EXCEEDED");
+    assert.equal(error.code, "EVENT_UPSTREAM_DELIVERY_FAILED");
+    assert.equal(error.failures.length, 1);
     return true;
   });
   assert.deepEqual(delivered, ["failed", "next"]);
-  assert.deepEqual(persisted, [0, 1]);
+  assert.deepEqual(persisted, [0, 1, 0]);
+});
+
+test("overdue lifecycle admission waits for persistence and preserves its delivery result", async (t) => {
+  const setTime = clockFor(t);
+  const started = Promise.withResolvers();
+  const releasePersistence = Promise.withResolvers();
+  const deliveryStarted = Promise.withResolvers();
+  const releaseDelivery = Promise.withResolvers();
+  t.after(() => {
+    releasePersistence.resolve();
+    releaseDelivery.resolve();
+  });
+  const delivered = { delivered: true };
+  const listener = createListener(
+    async () => {
+      started.resolve();
+      await releasePersistence.promise;
+    },
+    {
+      async onEvent() {
+        deliveryStarted.resolve();
+        await releaseDelivery.promise;
+        return delivered;
+      },
+    },
+  );
+  emit(listener, "active");
+  await started.promise;
+  emit(listener, "queued");
+  setTime(executionLogQueueWaitBudget() + 1);
+  let completed = false;
+  const admission = listener
+    .onEvent({ event: "turn_lifecycle_committed", data: {} })
+    .then((result) => {
+      completed = true;
+      return result;
+    });
+  await deliveryStarted.promise;
+  assert.equal(completed, false);
+  releasePersistence.resolve();
+  await Promise.resolve();
+  assert.equal(completed, false);
+  releaseDelivery.resolve();
+  assert.equal(await admission, delivered);
+  await listener.flush();
+});
+
+test("transient message delivery waits for an overdue queue without adding a log record", async (context) => {
+  const setTime = clockFor(context);
+  const started = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  context.after(() => release.resolve());
+  const persisted = [];
+  const forwarded = [];
+  const listener = createListener(
+    async ({ records }) => {
+      started.resolve();
+      await release.promise;
+      persisted.push(...records);
+    },
+    {
+      async onEvent(event) {
+        forwarded.push(event);
+        return true;
+      },
+    },
+  );
+  emit(listener, "active");
+  await started.promise;
+  emit(listener, "queued");
+  setTime(executionLogQueueWaitBudget() + 1);
+  const envelope = createEventEnvelope({
+    family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
+    identity: { eventId: "delta", eventType: "message_event", sessionId: "s1", turnScopeId: "t1" },
+    causality: {},
+    ordering: { domain: "message-event", scopeId: "presentation", sequence: 0 },
+    producer: { type: "agent", id: "message-runtime" },
+    occurredAt: "2026-11-25T00:00:00.000Z",
+    payload: {
+      eventType: "llm_delta",
+      presentationMessageId: "presentation",
+      dialogProcessId: "d1",
+      text: "continued answer",
+    },
+  });
+  let completed = false;
+  const admission = listener
+    .onEvent({ event: "authority_event_committed", data: { envelope } })
+    .then((result) => {
+      completed = true;
+      return result;
+    });
+  await Promise.resolve();
+  assert.equal(completed, false);
+  release.resolve();
+  assert.equal(await admission, true);
+  await listener.flush();
+  assert.equal(forwarded[0].data.envelope, envelope);
+  assert.deepEqual(
+    persisted.map(({ data }) => data.sequence),
+    ["active", "queued"],
+  );
 });

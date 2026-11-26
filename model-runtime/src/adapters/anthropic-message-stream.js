@@ -5,6 +5,15 @@
 import { streamServerSentEvents } from "@noobot/shared/event-stream";
 import { ModelProtocolError, createAnthropicStreamTerminalTracker } from "@noobot/model-protocol";
 
+function streamFailure(event) {
+  return Object.assign(new Error(event.error?.message || "Anthropic stream failed"), {
+    code: event.error?.type,
+    type: event.error?.type,
+    details: event.error?.details,
+    providerFailure: true,
+  });
+}
+
 export async function readAnthropicMessageStream(response, { onText, signal }) {
   if (!response.body) throw new ModelProtocolError("missing Anthropic SSE response body");
   const tracker = createAnthropicStreamTerminalTracker({ retainMessage: true });
@@ -12,22 +21,15 @@ export async function readAnthropicMessageStream(response, { onText, signal }) {
     const event = JSON.parse(data);
     signal?.throwIfAborted();
     const terminal = tracker.accept(event);
-    if (terminal?.status === "failed") {
-      const error = new Error(event.error?.message || "Anthropic stream failed");
-      error.code = event.error?.type;
-      error.type = event.error?.type;
-      error.details = event.error?.details;
-      error.providerFailure = true;
-      throw error;
-    }
+    if (terminal?.status === "failed") throw streamFailure(event);
     if (
       event.type === "content_block_start" &&
       event.content_block.type === "text" &&
       event.content_block.text
     )
-      await onText(event.content_block.text);
+      await onText?.(event.content_block.text);
     if (event.type === "content_block_delta" && event.delta.type === "text_delta")
-      await onText(event.delta.text);
+      await onText?.(event.delta.text);
     if (terminal?.status === "completed") return tracker.message;
   }
   signal?.throwIfAborted();

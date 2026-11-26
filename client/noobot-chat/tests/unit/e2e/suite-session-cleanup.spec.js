@@ -9,10 +9,12 @@ import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { afterEach, expect, it, vi } from "vitest";
 import Reporter, { registerSuiteSession } from "../../e2e/protocol/suite-session-cleanup.js";
 
-const { newContext, validateRequestLogOrder } = vi.hoisted(() => ({
+const { newContext, validateRequestLogOrder, withNativeDesktop } = vi.hoisted(() => ({
   newContext: vi.fn(),
   validateRequestLogOrder: vi.fn(),
+  withNativeDesktop: vi.fn(),
 }));
+vi.mock("../../e2e/protocol/helpers/native-desktop.js", () => ({ withNativeDesktop }));
 vi.mock("../../../../../scripts/quality/model-context-convergence/request-log-audit.mjs", () => ({
   validateRequestLogOrder,
 }));
@@ -47,6 +49,7 @@ async function setupSuite() {
   vi.stubEnv("NOOBOT_E2E_USER_ID", "owner");
   vi.stubEnv("NOOBOT_E2E_CONNECT_CODE", "test-code");
   vi.stubEnv("NOOBOT_E2E_FULL_SUITE", "1");
+  vi.stubEnv("NOOBOT_MODEL_PROXY_LOG_DIR", requestLogsRoot);
   const response = (payload) => ({ ok: () => true, json: async () => payload });
   const context = {
     post: vi.fn().mockResolvedValue(response({ ok: true, apiKey: "fresh-key" })),
@@ -56,7 +59,7 @@ async function setupSuite() {
   newContext.mockResolvedValue(context);
   const project = { outputDir, testDir, testMatch: /\.spec\.js$/, grep: /.*/, grepInvert: null };
   const createReporter = (overrides = {}) => {
-    const reporter = new Reporter({ failureEvidenceRoot: evidenceRoot, requestLogsRoot });
+    const reporter = new Reporter({ failureEvidenceRoot: evidenceRoot });
     const config = { grep: /.*/, grepInvert: null, shard: null, projects: [project], ...overrides };
     const suite = { allTests: () => (overrides.selectedFiles ?? [specFile]).map(fileTest) };
     reporter.onBegin(config, suite);
@@ -80,6 +83,16 @@ it("requires an absolute failure evidence root", () => {
   expect(() => new Reporter()).toThrow(/failureEvidenceRoot/);
   expect(() => new Reporter({ failureEvidenceRoot: "relative" })).toThrow(/failureEvidenceRoot/);
 });
+
+it.each([undefined, "relative"])(
+  "rejects a full suite without an absolute log root (%s)",
+  (root) => {
+    vi.stubEnv("NOOBOT_E2E_FULL_SUITE", "1");
+    vi.stubEnv("NOOBOT_MODEL_PROXY_LOG_DIR", root);
+    const reporter = new Reporter({ failureEvidenceRoot: os.tmpdir() });
+    expect(() => reporter.onBegin({ projects: [] }, {})).toThrow(/NOOBOT_MODEL_PROXY_LOG_DIR/);
+  },
+);
 
 it("rejects filtered full suite runs before touching evidence or sessions", async () => {
   const { evidenceRoot, context, createReporter, registerSuiteSession } = await setupSuite();
@@ -150,7 +163,7 @@ it("preserves failure evidence and deletes it once the full suite passes", async
   });
   expect(context.dispose).toHaveBeenCalledOnce();
   await expect(fs.access(runRegistry("current-run"))).rejects.toMatchObject({ code: "ENOENT" });
-  await expect(fs.access(evidenceRoot)).rejects.toMatchObject({ code: "ENOENT" });
+  await expect(fs.access(evidenceDir)).rejects.toMatchObject({ code: "ENOENT" });
 });
 
 it("preserves sessions and evidence when the pre-cleanup request audit fails", async () => {
@@ -166,8 +179,26 @@ it("preserves sessions and evidence when the pre-cleanup request audit fails", a
   await expect(fs.access(evidenceRoot)).resolves.toBeUndefined();
 });
 
-it("scopes the registry to its run so a later run never reclaims earlier records", async () => {
-  const { runRegistry, context, createReporter, registerSuiteSession } = await setupSuite();
+it("audits before starting the native cleanup lifecycle and deletes within it", async () => {
+  const { context, createReporter, registerSuiteSession } = await setupSuite();
+  await registerSuiteSession({ userId: "owner", sessionId: "session-1" });
+  const profile = path.join(directory, "profile");
+  vi.stubEnv("NOOBOT_E2E_DESKTOP_EXECUTABLE", path.join(directory, "Noobot.exe"));
+  vi.stubEnv("NOOBOT_E2E_DESKTOP_USER_DATA_DIR", profile);
+  withNativeDesktop.mockImplementation(async (actualProfile, use) => {
+    expect(actualProfile).toBe(profile);
+    expect(validateRequestLogOrder).toHaveBeenCalledOnce();
+    expect(context.delete).not.toHaveBeenCalled();
+    await use();
+    expect(context.delete).toHaveBeenCalledOnce();
+  });
+  await createReporter().onEnd({ status: "passed" });
+  expect(withNativeDesktop).toHaveBeenCalledOnce();
+});
+
+it("scopes registry and evidence cleanup to the current run", async () => {
+  const { runRegistry, evidenceRoot, context, createReporter, registerSuiteSession } =
+    await setupSuite();
   await registerSuiteSession({ userId: "owner", sessionId: "session-1" });
   await createReporter().onEnd({ status: "failed" });
   vi.stubEnv("NOOBOT_E2E_RUN_ID", "next-run");
@@ -179,4 +210,7 @@ it("scopes the registry to its run so a later run never reclaims earlier records
   });
   await expect(fs.access(runRegistry("next-run"))).rejects.toMatchObject({ code: "ENOENT" });
   await expect(fs.readFile(runRegistry("current-run"), "utf8")).resolves.toContain("session-1");
+  await expect(
+    fs.readFile(path.join(evidenceRoot, "current-run", "raw", "trace.zip"), "utf8"),
+  ).resolves.toBe("trace");
 });

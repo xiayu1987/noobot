@@ -19,7 +19,7 @@ import {
   TURN_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_SNAPSHOT_WIRE_EVENT,
-} from "@noobot/session-protocol";
+} from "@noobot/session-protocol/turn-lifecycle";
 import { EXECUTION_QUERY_CONTRACT } from "@noobot/session-protocol/execution-lifecycle";
 import {
   AGENT_CHANNEL_STATE,
@@ -125,10 +125,7 @@ class UpstreamConnectionMethods {
             event: "agentProxy.route.upstreamConnect.succeeded",
             channel,
           });
-          if (
-            channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED &&
-            purpose !== "snapshot_query"
-          ) {
+          if (channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED) {
             this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.CLOSED);
             return;
           }
@@ -303,30 +300,6 @@ class UpstreamConnectionMethods {
     return this.commandRegistry.take(commandId, { channelKey: channel.key, kind }, reason);
   }
 
-  routeUpstreamSnapshot(channel, eventData) {
-    const { commandId } = eventData.causality;
-    const record = this.takePendingCommand(
-      channel,
-      commandId,
-      PENDING_COMMAND_KIND.TURN_SNAPSHOT,
-      "delivered",
-    );
-    if (!record) return;
-    record.settle({ ok: true, snapshot: eventData });
-  }
-
-  resolvePendingSnapshotFailure(channel, receipt) {
-    const record = this.takePendingCommand(
-      channel,
-      receipt.commandId,
-      PENDING_COMMAND_KIND.TURN_SNAPSHOT,
-      "snapshot_failed",
-    );
-    if (!record) return false;
-    record.settle({ ok: false, reason: receipt.error.code });
-    return true;
-  }
-
   deliverExecutionQueryResult(channel, eventName, eventData, commandId) {
     const record = this.takePendingCommand(
       channel,
@@ -361,10 +334,7 @@ class UpstreamConnectionMethods {
   routeFailedQueryReceipt(channel, eventName, eventData) {
     if (eventName !== AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT) return false;
     if (eventData.outcome !== AGENT_COMMAND_RECEIPT_OUTCOME.FAILED) return false;
-    return (
-      this.resolvePendingSnapshotFailure(channel, eventData) ||
-      this.rejectPendingExecutionQuery(channel, eventData)
-    );
+    return this.rejectPendingExecutionQuery(channel, eventData);
   }
 
   routeExecutionQueryResponse(channel, eventName, eventData) {
@@ -392,7 +362,12 @@ class UpstreamConnectionMethods {
     const { eventName, eventData } = this.parseUpstreamMessage(rawData);
     this.logUpstreamActionAccepted(channel, eventName, eventData);
     if (eventName === TURN_SNAPSHOT_WIRE_EVENT) {
-      this.routeUpstreamSnapshot(channel, eventData);
+      this.logChannelEvent(channel, {
+        category: "transport",
+        level: "warn",
+        event: "agentProxy.upstream.snapshot.wrongTransport",
+        data: { channelKey: channel.key },
+      });
       return;
     }
     if (this.routeExecutionQueryResponse(channel, eventName, eventData)) return;

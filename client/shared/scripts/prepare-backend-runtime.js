@@ -19,7 +19,7 @@ import { shouldCopyBackendRuntimeFile } from "./backend-runtime-copy-filter.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), "../../..");
-const desktopProjectDir = process.env.NOOBOT_DESKTOP_PROJECT_DIR || process.cwd();
+const desktopProjectDir = process.cwd();
 const desktopTargetArch =
   process.env.NOOBOT_DESKTOP_ARCH || process.env.npm_config_arch || process.arch;
 const outRoot = path.join(desktopProjectDir, "build/backend-runtime");

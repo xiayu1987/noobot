@@ -143,7 +143,11 @@ test("production report excludes test and generated files and scopes dynamic dri
   );
   assert.equal(measured.unusedFiles.total, 0);
   assert.equal(measured.unusedExports.total, 1);
-  assert.equal(measured.unusedDependencies.total, 1);
+  assert.equal(measured.unusedDependencies.total, 2);
+  assert.deepEqual(measured.unusedDependencies.files, {
+    "connector-instances/package.json": 1,
+    "agent/package.json": 1,
+  });
   assert.deepEqual(usage.staleEntries(), []);
 });
 

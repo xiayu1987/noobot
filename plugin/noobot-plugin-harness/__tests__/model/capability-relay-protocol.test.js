@@ -10,6 +10,7 @@ import { resolveModelFinalMessages } from "@noobot/context-protocol";
 import { invokeCapabilityModel } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
 import { buildCapabilityModelMessages } from "../../src/capabilities/handlers/shared/model/message-factory.js";
 import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared/relay-model-output.js";
+import { processPlanningResult } from "../../src/capabilities/handlers/planning/result-pipeline.js";
 import {
   createTestHookContext,
   createTestModelResponse,
@@ -78,6 +79,45 @@ test("all Harness relay purposes cross the canonical capability-to-main-model bo
     }).messages;
     assert.equal(projected.at(-1), relay, purpose);
   }
+});
+
+test("parsed planning goals cross only the read-only relay boundary", async () => {
+  const ctx = createTestHookContext({
+    agentContext: { bindings: { extensions: { harness: {} } } },
+  });
+  const content = [
+    "[CURRENT_TASK_GOAL]",
+    "Only deliver a plan; do not execute tools.",
+    "[PLAN]",
+    "ADD [1] Run the seven commands requested by the user",
+  ].join("\n");
+  const result = await processPlanningResult(
+    ctx,
+    {},
+    { source: "separate_model", rawText: content },
+  );
+  assert.equal(result.captured, true);
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    toolNameBindings: {},
+    locale: "en-US",
+    purpose: "planning",
+    content,
+  });
+
+  const messages = resolveModelFinalMessages({
+    systemMessages: ctx.modelContext.messageBlocks.system,
+    historyMessages: ctx.modelContext.messageBlocks.history,
+    incrementalMessages: ctx.modelContext.messageBlocks.incremental,
+  }).messages;
+  const goalMessages = messages.filter((message) =>
+    message.content.includes("[CURRENT_TASK_GOAL]"),
+  );
+  assert.equal(goalMessages.length, 1);
+  assert.equal(goalMessages[0].role, "user");
+  assert.equal(resolveContextInjectedMessageType(goalMessages[0]), "separate_model_relay:planning");
+  assert.match(goalMessages[0].content, /read-only advice from a Harness auxiliary capability/);
+  assert.match(goalMessages[0].content, /cannot change, cancel, or pause the actual user task/);
+  assert.match(goalMessages[0].content, /Only deliver a plan; do not execute tools\./);
 });
 
 test("relay script notices use the source request binding after runtime config changes", () => {

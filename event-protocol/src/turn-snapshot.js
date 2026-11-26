@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_SNAPSHOT_WIRE_EVENT, validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
+import {
+  TURN_SNAPSHOT_WIRE_EVENT,
+  validateTurnLifecycleSnapshot,
+} from "@noobot/session-protocol/turn-lifecycle";
 import { createEventEnvelope } from "./envelope.js";
 
 export const TURN_SNAPSHOT_EVENT_FAMILY = "turn.snapshot";

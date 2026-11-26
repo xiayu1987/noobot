@@ -19,6 +19,7 @@ import {
   buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
 import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
+import { nodeScriptCommand } from "../helpers/node-script-command.js";
 
 const TEST_TRANSFER_IDENTITY = Object.freeze({
   transferId: "transfer:test:execute-script:output-files",
@@ -71,7 +72,15 @@ for (const executionMode of ["background", "foreground"]) {
     const output = "x".repeat(LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars + 1);
     const result = parseToolResult(
       await invokeScript(tool, {
-        command: `printf 'report' > '普通 文件.txt'\nprintf '${output}'\nprintf 'diagnostic' >&2`,
+        command: await nodeScriptCommand(
+          basePath,
+          `
+          import { writeFile } from 'node:fs/promises';
+          await writeFile('普通 文件.txt', 'report');
+          process.stdout.write('x'.repeat(${output.length}));
+          process.stderr.write('diagnostic');
+        `,
+        ),
         executionMode,
         riskLevel: "low",
         outputFiles: [path.join(basePath, "普通 文件.txt")],
@@ -118,7 +127,13 @@ test("execute_script: outputFiles 登记为附件并写入规范化 origin", asy
 
   const result = parseToolResult(
     await invokeScript(tool, {
-      command: `printf 'data' > "${filePath}"`,
+      command: await nodeScriptCommand(
+        basePath,
+        `
+        import { writeFile } from 'node:fs/promises';
+        await writeFile(${JSON.stringify(filePath)}, 'data');
+      `,
+      ),
       riskLevel: "low",
       outputFiles: [filePath],
     }),
@@ -147,7 +162,13 @@ test("execute_script: 超管工作区外的 outputFiles 以 host locator 记录 
 
   const result = parseToolResult(
     await invokeScript(tool, {
-      command: `printf 'data' > "${filePath}"`,
+      command: await nodeScriptCommand(
+        basePath,
+        `
+        import { writeFile } from 'node:fs/promises';
+        await writeFile(${JSON.stringify(filePath)}, 'data');
+      `,
+      ),
       riskLevel: "low",
       outputFiles: [filePath],
     }),
@@ -164,11 +185,12 @@ test("execute_script: outputFiles 声明不存在的文件时明确失败且不�
   const { captured, service } = buildCapturingAttachmentService();
   const tool = buildHostTool(basePath, service);
   const missingPath = path.join(basePath, "never-created.xlsx");
+  const command = await nodeScriptCommand(basePath, "process.stdout.write('ok');");
 
   await assert.rejects(
     () =>
       invokeScript(tool, {
-        command: "printf 'ok'",
+        command,
         riskLevel: "low",
         outputFiles: [missingPath],
       }),
@@ -195,11 +217,18 @@ test("execute_script: outputFiles 单文件超出附件策略时明确失败且�
   const tool = tools.find((item) => item?.name === "execute_script");
   assert.ok(tool);
   const filePath = path.join(basePath, "big.xlsx");
+  const command = await nodeScriptCommand(
+    basePath,
+    `
+    import { writeFile } from 'node:fs/promises';
+    await writeFile(${JSON.stringify(filePath)}, 'abcdef');
+  `,
+  );
 
   await assert.rejects(
     () =>
       invokeScript(tool, {
-        command: `printf 'abcdef' > "${filePath}"`,
+        command,
         riskLevel: "low",
         outputFiles: [filePath],
       }),

@@ -120,7 +120,7 @@ class ReconnectMethods {
       return;
     }
     const snapshotRequests = [];
-    const reconnectTransaction = createReconnectTransaction(this, snapshotRequests);
+    const reconnectTransaction = createReconnectTransaction(snapshotRequests);
     socket.__agentProxyReconnectTransaction = reconnectTransaction;
     const channelsBySessionId = groupReconnectChannels(this, reconnectChannelKeys);
     const { sessionsMap } = prepareSessionReplays({

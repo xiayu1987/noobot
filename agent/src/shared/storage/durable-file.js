@@ -6,8 +6,16 @@
 import { randomUUID } from "node:crypto";
 import { filePath as path } from "@noobot/path-resolver";
 import { renameFileAtomic } from "@noobot/platform-compatibility/atomic-file-write";
-import { createdDirectoryDepth, syncDirectory } from "@noobot/platform-compatibility/file-system";
-import { fsLink, fsMkdir, fsOpen, fsReaddir, fsRename, fsRm } from "./fs-adapter.js";
+import { createdDirectoryDepth } from "@noobot/platform-compatibility/file-system";
+import {
+  fsLink,
+  fsMkdir,
+  fsOpen,
+  fsReaddir,
+  fsRename,
+  fsRm,
+  fsSyncDirectory,
+} from "./fs-adapter.js";
 
 export async function withStorageCleanup(operation, cleanup) {
   let failed = false;
@@ -33,7 +41,7 @@ export async function withStorageCleanup(operation, cleanup) {
 }
 
 export function syncStorageDirectory(directory) {
-  return syncDirectory({ directory, open: fsOpen });
+  return fsSyncDirectory(directory);
 }
 
 export async function ensureDurableStorageDirectory(directory) {

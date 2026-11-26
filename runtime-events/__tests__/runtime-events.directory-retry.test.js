@@ -8,10 +8,12 @@ import test from "node:test";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { PLATFORM } from "@noobot/platform-compatibility/platform";
 import { appendJsonLine } from "../src/transports/jsonl.js";
 
 for (const level of ["turn", "session", "root"]) {
   test(`directory preparation retries the complete durability boundary after ${level} sync failure`, async (t) => {
+    t.mock.property(process, "platform", PLATFORM.LINUX);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "runtime-event-directory-retry-"));
     t.after(() => fs.rm(root, { recursive: true, force: true }));
     const session = path.join(root, "session");
@@ -23,16 +25,17 @@ for (const level of ["turn", "session", "root"]) {
     const synced = [];
     let fail = true;
     t.mock.method(fs, "open", async (target, ...options) => {
-      const handle = await open(target, ...options);
       if (Object.values(directories).includes(target)) {
-        const sync = handle.sync.bind(handle);
-        handle.sync = async () => {
-          synced.push(target);
-          if (fail && target === directories[level]) throw failure;
-          await sync();
+        assert.equal(options[0], "r");
+        return {
+          async sync() {
+            synced.push(target);
+            if (fail && target === directories[level]) throw failure;
+          },
+          async close() {},
         };
       }
-      return handle;
+      return open(target, ...options);
     });
     await assert.rejects(appendJsonLine(file, { n: 1 }), (error) => error === failure);
     await assert.rejects(fs.stat(file), { code: "ENOENT" });

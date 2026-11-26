@@ -10,6 +10,7 @@ import {
 } from "@noobot/session-protocol/session-detail";
 import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import { mergeCanonicalActivityTimelines } from "@noobot/event-protocol/activity-timeline";
+import { reduceThinkingDetailContentTimelines } from "@noobot/event-protocol/thinking-detail-content";
 import { mergeToolTimelines } from "../runtime/engine/toolTimeline.js";
 
 function messageRole(item = {}) {
@@ -45,6 +46,23 @@ function selectMessageFacts(previous, incoming) {
   return { ...previous, ...incoming };
 }
 
+function mergeThinkingContent(merged, previous, incoming) {
+  const observed =
+    previous.turnScopeId === incoming.turnScopeId &&
+    previous.dialogProcessId === incoming.dialogProcessId
+      ? previous.thinkingContentTimeline
+      : undefined;
+  const snapshot = incoming.thinkingContentTimeline;
+  if (observed === undefined && snapshot === undefined) {
+    delete merged.thinkingContentTimeline;
+    return merged;
+  }
+  const timeline = reduceThinkingDetailContentTimelines(observed ?? [], snapshot ?? []);
+  merged.thinkingContentTimeline = timeline;
+  if (timeline.length > 0) merged.hasThinkingDetails = true;
+  return merged;
+}
+
 function mergeMessage(previous = {}, incoming = {}) {
   const merged = selectMessageFacts(previous, incoming);
   if (previous.toolTimeline !== undefined || incoming.toolTimeline !== undefined) {
@@ -59,14 +77,21 @@ function mergeMessage(previous = {}, incoming = {}) {
       incoming.activityTimeline ?? [],
     );
   }
-  return merged;
+  return mergeThinkingContent(merged, previous, incoming);
+}
+
+function replaceMessages(baseItems, incomingItems) {
+  const observed = new Map();
+  for (const item of baseItems) {
+    if (item.thinkingContentTimeline !== undefined) observed.set(messageKey(item), item);
+  }
+  return incomingItems.map((item) =>
+    mergeThinkingContent({ ...item }, observed.get(messageKey(item)) ?? {}, item),
+  );
 }
 
 function mergeMessages(baseItems, incomingItems, { replace }) {
-  if (replace) {
-    incomingItems.forEach(messageKey);
-    return incomingItems.map((item) => ({ ...item }));
-  }
+  if (replace) return replaceMessages(baseItems, incomingItems);
   const merged = new Map();
   baseItems.forEach((item) => merged.set(messageKey(item), { ...item }));
   incomingItems.forEach((item) => {

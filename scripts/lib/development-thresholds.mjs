@@ -27,6 +27,8 @@ export const DEVELOPMENT_THRESHOLDS = Object.freeze({
     releasePollIntervalMs: 5 * 1000,
     releaseTimeoutMs: 30 * 60 * 1000,
     isolatedTmpMinAgeMs: 60 * 60 * 1000,
+    isolatedTmpLockTimeoutMs: 30000,
+    isolatedTmpLockPollMs: 10,
     modelAccessTimeoutMs: 2 * 60 * 1000,
   }),
   quantity: Object.freeze({

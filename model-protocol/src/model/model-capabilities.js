@@ -54,6 +54,15 @@ export function resolveModelGenerationApiType(modelSpec = {}) {
 
 const MULTIMODAL_MODALITIES = new Set(Object.values(MODEL_MULTIMODAL_MODALITY));
 
+export function resolveModelGenerationStreamingModes(modelSpec, operation) {
+  const apiType = resolveModelGenerationApiType(modelSpec);
+  if (operation.input.outputType === "video") return [false];
+  if (apiType === MODEL_GENERATION_API_TYPE.OPENAI_IMAGES)
+    return /^gpt-image-/u.test(modelSpec.model) ? [false, true] : [false];
+  if (apiType === MODEL_GENERATION_API_TYPE.GEMINI_INTERACTIONS) return [false, true];
+  return [false];
+}
+
 function normalizeModalities(value) {
   return Object.freeze(
     Array.from(

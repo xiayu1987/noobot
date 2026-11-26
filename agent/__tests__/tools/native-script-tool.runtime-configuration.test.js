@@ -7,9 +7,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
+import fs from "node:fs/promises";
 import { createNativeScriptTool } from "../../src/tools/execution/native-script-tool.js";
 import {
   buildLibreOfficeUserInstallationUrl,
+  createNativeScriptRuntime,
   resolveLibreOfficeOutputFormat,
 } from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
@@ -36,6 +40,47 @@ test("native LibreOffice uses authoritative Office Open XML export filters", () 
     extension: "pptx",
     convertTo: "pptx:Impress MS PowerPoint 2007 XML",
   });
+});
+
+test("LibreOffice success cannot publish a missing or empty converted artifact", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "native-office-artifact-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const inputRoot = path.join(root, "input");
+  const outputRoot = path.join(root, "output");
+  await fs.mkdir(inputRoot);
+  await fs.writeFile(path.join(inputRoot, "0"), "<html>input</html>");
+  const calls = [];
+  const mocked = t.mock.method(childProcess, "execFile", (command, args, options, callback) => {
+    calls.push({ command, args, options });
+    queueMicrotask(() => callback(null, "", ""));
+    return {};
+  });
+  syncBuiltinESMExports();
+  t.after(() => {
+    mocked.mock.restore();
+    syncBuiltinESMExports();
+  });
+  const runtime = await createNativeScriptRuntime({
+    inputRoot,
+    outputRoot,
+    tempRoot: path.join(root, "temp"),
+    inputMap: { 0: "0" },
+    timeoutMs: 30000,
+    libreOfficeExecutable: "office-test-command",
+  });
+  for (const emptyFile of [false, true]) {
+    if (emptyFile) await fs.writeFile(path.join(outputRoot, "0.pdf"), "");
+    await assert.rejects(
+      runtime.capabilities.libreoffice.convert({
+        input: "input://0",
+        outputDirectory: runtime.capabilities.output.directory,
+        outputFormat: "pdf",
+      }),
+      /LibreOffice conversion produced no non-empty output/,
+    );
+  }
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every((call) => call.command === "office-test-command"));
 });
 
 test("execute_native_script is absent when effective configuration disables it", () => {

@@ -5,14 +5,14 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { open, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   appendRollingJsonlArtifactLogs,
   readTurnExecutionLogs,
   resolveExecutionTurnDir,
 } from "../../src/session/session-artifact-execution-logs.js";
-import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
+import { getFsAdapter, setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import { ExecutionLogRepository } from "../../src/observability/execution-log/execution-log-repository.js";
 import { FileSystemExecutionRepository } from "../../src/session/repositories/file-system-execution-repository.js";
 import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
@@ -104,20 +104,11 @@ test("directory sync loss after a segment append marks only its attempted record
     const turnDir = resolveExecutionTurnDir(sessionDir, "turn-1");
     const failure = new Error("new segment directory sync lost");
     failure.code = "EEXIST";
+    const adapter = getFsAdapter();
     setFsAdapter({
-      async open(file, ...args) {
-        const handle = await open(file, ...args);
-        if (file !== turnDir) return handle;
-        return new Proxy(handle, {
-          get(target, property) {
-            if (property === "sync")
-              return async () => {
-                throw failure;
-              };
-            const value = Reflect.get(target, property, target);
-            return typeof value === "function" ? value.bind(target) : value;
-          },
-        });
+      async syncDirectory(directory) {
+        if (directory === turnDir) throw failure;
+        return adapter.syncDirectory(directory);
       },
     });
     try {

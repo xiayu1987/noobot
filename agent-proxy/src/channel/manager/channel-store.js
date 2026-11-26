@@ -16,14 +16,13 @@ import {
   createAgentChannelState,
 } from "@noobot/agent-transport-protocol";
 import { nowMs, parseChannelKey } from "../../shared/utils.js";
+import { TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol/turn-lifecycle";
+import { isTerminalTurnEvent, TURN_EVENT } from "@noobot/session-protocol/turn-event";
 import {
   isFailedTurnState,
-  isTerminalTurnEvent,
   isTerminalTurnState,
-  TURN_EVENT,
-  TURN_LIFECYCLE_WIRE_EVENT,
   TURN_STATE,
-} from "@noobot/session-protocol";
+} from "@noobot/session-protocol/turn-state";
 import {
   INTERACTION_EVENT_TYPE,
   isTerminalInteractionLifecycle,

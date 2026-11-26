@@ -87,7 +87,7 @@ export function registerLogWebSocketServer(
     wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
   });
   wss.on("connection", (ws, request) => {
-    const reportWriteFailure = (error, count = 0) => {
+    const reportWriteFailure = (error, count = 0, record) => {
       void writeRuntimeEvent({
         scope: "system",
         source: "service",
@@ -95,7 +95,23 @@ export function registerLogWebSocketServer(
         category: "transport",
         level: "warn",
         event: "service.logWebSocket.write.failed",
-        data: { userIdLength: String(request?.auth?.userId || "").length },
+        data: {
+          userIdLength: String(request?.auth?.userId || "").length,
+          ...(record
+            ? {
+                rejectedEvent: {
+                  event: record.event,
+                  source: record.source,
+                  scope: record.scope,
+                  channel: record.channel,
+                  sessionId: record.sessionId,
+                  parentSessionId: record.parentSessionId,
+                  dialogProcessId: record.dialogProcessId,
+                  turnScopeId: record.turnScopeId,
+                },
+              }
+            : {}),
+        },
         error,
       });
       if (ws.readyState === ws.OPEN)
@@ -114,6 +130,7 @@ export function registerLogWebSocketServer(
     }
     async function processLogMessage(raw) {
       let receiptCount = 1;
+      let rejectedRecord;
       try {
         if (Buffer.byteLength(raw || "") > MAX_LOG_MESSAGE_BYTES) {
           throw new Error("log payload too large");
@@ -135,15 +152,17 @@ export function registerLogWebSocketServer(
           normalizeRuntimeEventEnvelope(record);
         }
         const reliableWrites = [];
+        const reliableRecords = [];
         for (const record of records) {
           if (isSessionLogDebugEvent(record)) {
             void Promise.resolve(writeLogEvent(record)).then(
               (result) => {
-                if (result.ok === false) reportWriteFailure(result.error);
+                if (result.ok === false) reportWriteFailure(result.error, 0, record);
               },
-              (error) => reportWriteFailure(error),
+              (error) => reportWriteFailure(error, 0, record),
             );
           } else {
+            reliableRecords.push(record);
             reliableWrites.push(
               Promise.resolve(writeLogEvent(record)).then((result) => {
                 if (result.ok === false) throw result.error;
@@ -153,12 +172,15 @@ export function registerLogWebSocketServer(
           }
         }
         const results = await Promise.allSettled(reliableWrites);
-        const failure = results.find((result) => result.status === "rejected");
-        if (failure) throw failure.reason;
+        const failureIndex = results.findIndex((result) => result.status === "rejected");
+        if (failureIndex !== -1) {
+          rejectedRecord = reliableRecords[failureIndex];
+          throw results[failureIndex].reason;
+        }
         if (ws.readyState === ws.OPEN)
           ws.send(JSON.stringify(requireSessionLogReceipt({ event: "ack", count: events.length })));
       } catch (error) {
-        reportWriteFailure(error, receiptCount);
+        reportWriteFailure(error, receiptCount, rejectedRecord);
       }
     }
     let messageQueue = Promise.resolve();

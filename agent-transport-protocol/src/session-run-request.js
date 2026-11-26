@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { validateSessionPersistenceScope } from "@noobot/session-protocol";
+import { validateSessionPersistenceScope } from "@noobot/session-protocol/persistence-scope";
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
 const SESSION_RUN_PAYLOAD_FIELDS = Object.freeze([

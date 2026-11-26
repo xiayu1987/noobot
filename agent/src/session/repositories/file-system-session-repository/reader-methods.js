@@ -14,13 +14,13 @@ function readerScope(sessionId, scope) {
 }
 
 class SessionReaderMethods {
-  _openSessionReader(userId, sessionId, { persistenceContext, required }) {
-    return this.withSessionLifecycleMutation(userId, sessionId, async () => {
+  _openSessionReader(userId, sessionId, { locateScope, required }) {
+    return this._withSessionLifecycleLock(userId, sessionId, async () => {
       if (await this.isSessionDeleted(userId, sessionId)) {
         if (required) throw createSessionDeletedError({ userId, sessionId });
         return null;
       }
-      const scope = await this.locateSessionScope(userId, sessionId, persistenceContext);
+      const scope = await locateScope();
       if (!scope) {
         if (required) throw createSessionNotFoundError({ userId, sessionId });
         return null;
@@ -29,12 +29,26 @@ class SessionReaderMethods {
     });
   }
 
+  async _openReaderWithPersistenceContext(userId, sessionId, { persistenceContext, required }) {
+    await this.sessionTreeRepository.assertWorkspaceInitialized(userId);
+    return this._openSessionReader(userId, sessionId, {
+      locateScope: () => this.locateSessionScope(userId, sessionId, persistenceContext),
+      required,
+    });
+  }
+
   findSessionReader(userId, sessionId, { persistenceContext } = {}) {
-    return this._openSessionReader(userId, sessionId, { persistenceContext, required: false });
+    return this._openReaderWithPersistenceContext(userId, sessionId, {
+      persistenceContext,
+      required: false,
+    });
   }
 
   requireSessionReader(userId, sessionId, { persistenceContext } = {}) {
-    return this._openSessionReader(userId, sessionId, { persistenceContext, required: true });
+    return this._openReaderWithPersistenceContext(userId, sessionId, {
+      persistenceContext,
+      required: true,
+    });
   }
 
   withSessionCommit(userId, sessionId, run, { persistenceContext } = {}) {

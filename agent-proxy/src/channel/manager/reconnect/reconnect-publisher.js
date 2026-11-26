@@ -8,7 +8,7 @@ import {
   createReconnectComplete,
   createReconnectData,
 } from "@noobot/agent-transport-protocol";
-import { TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
+import { TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol/turn-lifecycle";
 import { writeAgentProxyRouteLifecycleEvent } from "../../../runtime-events/ws-runtime-events.js";
 
 export function publishEmptyReconnect(manager, socket, control) {

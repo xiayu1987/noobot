@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readdir } from "node:fs/promises";
+import { readdir } from "@noobot/shared/file-system";
 import { filePath as path } from "@noobot/path-resolver";
 import { isSessionRepairTempDirectoryName } from "@noobot/session-repair";
 import { isSessionDeletionStagingName } from "@noobot/workspace-protocol/session-tombstone";

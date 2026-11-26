@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { MODEL_ERROR_KIND as K } from "../protocol/constants.js";
+import { MODEL_OPERATION_KIND } from "../protocol/operation.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 export const MODEL_RECOVERY_ACTION = Object.freeze({
@@ -17,10 +18,23 @@ export const MODEL_REQUEST_REVISION = Object.freeze({
 
 const REVISIONS = new Map([[K.RESPONSE_MODE_MISMATCH, MODEL_REQUEST_REVISION.SET_STREAMING_MODE]]);
 
-const RETRY_SAME_KINDS = new Set([K.RATE_LIMIT, K.TIMEOUT, K.TEMPORARY_UNAVAILABLE, K.UNKNOWN]);
+const RETRY_SAME_KINDS = new Set([
+  K.RATE_LIMIT,
+  K.TIMEOUT,
+  K.TEMPORARY_UNAVAILABLE,
+  K.UNKNOWN,
+  K.PROTOCOL,
+]);
 
-export function resolveModelFailureRecovery({ kind }) {
-  const revision = REVISIONS.get(kind) ?? null;
+export function resolveModelFailureRecovery({ kind, providerEvidence }, { operationKind } = {}) {
+  const modeRecovery =
+    [MODEL_OPERATION_KIND.MULTIMODAL_PARSE, MODEL_OPERATION_KIND.WEB_SEARCH].includes(
+      operationKind,
+    ) &&
+    (providerEvidence?.modeRelated === true || providerEvidence?.recognized === false);
+  const revision = modeRecovery
+    ? MODEL_REQUEST_REVISION.SET_STREAMING_MODE
+    : (REVISIONS.get(kind) ?? null);
   let action = MODEL_RECOVERY_ACTION.STOP;
   if (revision) action = MODEL_RECOVERY_ACTION.REVISE_REQUEST;
   else if (RETRY_SAME_KINDS.has(kind)) action = MODEL_RECOVERY_ACTION.RETRY_SAME;

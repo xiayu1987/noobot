@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { filePath as path } from "@noobot/path-resolver";
 import { createPluginArtifactEnvelope } from "@noobot/event-protocol/plugin-artifact-event";
 import { PartitionJournal } from "../../src/session/partition-storage/partition-journal.js";
 import { PartitionSessionMessages } from "../../src/session/partition-storage/partition-session-messages.js";
@@ -367,7 +368,7 @@ test("artifact publication failure preserves metadata, projection and event orde
   setFsAdapter({
     ...adapter,
     async rename(source, target) {
-      if (String(target).endsWith("/CURRENT")) {
+      if (String(target) === path.join(root, "CURRENT")) {
         injected = true;
         throw new Error("artifact publication fault");
       }

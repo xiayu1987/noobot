@@ -32,7 +32,7 @@ test("@core PBE-013 运行中刷新后执行记录可展开并收敛到终态", 
     uniquePrompt(
       testInfo,
       [
-        "Call execute_script exactly once with command `sleep 20`, foreground mode and low risk.",
+        'Call execute_script exactly once with command `node -e "setTimeout(() => {}, 20000)"`, foreground mode and low risk.',
         "After that tool returns, reply with exactly CASE013-OK. Do not call any other tool.",
       ].join(" "),
     ),
@@ -55,9 +55,7 @@ test("@core PBE-013 运行中刷新后执行记录可展开并收敛到终态", 
   );
   const liveShell = noobot.page.locator(".thinking-realtime-shell").last();
   await expect(liveShell).toBeVisible();
-  await expect(liveShell.locator(".thinking-detail-action-button")).toHaveText(
-    /Thinking Details \([1-9]\d*\)/,
-  );
+  await expect(liveShell.locator(".thinking-detail-action-button")).toHaveText(/\([1-9]\d*\)$/);
   const liveToolLine = liveShell.locator(".base-thinking-log-line.is-tool").first();
   await liveToolLine.locator(".base-thinking-log-line__text").click();
   await expect(liveToolLine.locator(".base-thinking-log-line__detail")).not.toBeEmpty();
@@ -85,9 +83,7 @@ test("@core PBE-013 运行中刷新后执行记录可展开并收敛到终态", 
     .filter({ has: noobot.page.locator(".thinking-details-panel") })
     .last();
   await expect(detailsDrawer.locator(".thinking-details-panel")).toBeVisible();
-  await expect(thinkingShell.locator(".thinking-detail-action-button")).toHaveText(
-    /Thinking Details \([1-9]\d*\)/,
-  );
+  await expect(thinkingShell.locator(".thinking-detail-action-button")).toHaveText(/\([1-9]\d*\)$/);
   const runningToolLine = detailsDrawer.locator(".base-thinking-log-line.is-tool").first();
   await expect(runningToolLine).toBeVisible();
   await runningToolLine.locator(".base-thinking-log-line__text").click();
@@ -127,7 +123,7 @@ test("@core PBE-013 运行中刷新后执行记录可展开并收敛到终态", 
     ["execute_script", "completed"],
   ]);
   await expect(thinkingShell.locator(".thinking-detail-action-button")).toHaveText(
-    `Thinking Details (${persistedDetailCount})`,
+    new RegExp(`\\(${persistedDetailCount}\\)$`),
   );
   await noobot.page.keyboard.press("Escape");
   await expect(detailsDrawer.locator(".thinking-details-panel")).toBeHidden();

@@ -10,7 +10,8 @@ import {
 import { isMutationRef } from "@noobot/file-mutation-protocol";
 import { validateUserInterjectionFact } from "./thinking-detail-content-fact.js";
 import { decodeToolResultText, isToolResultError } from "./tool-result.js";
-import { MESSAGE_REMOVED_FIELD_NAME, isCanonicalMessageTimestamp } from "@noobot/session-protocol";
+import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol/message-identity-schema";
+import { isCanonicalMessageTimestamp } from "@noobot/session-protocol/message-entity-contract";
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
 export const MESSAGE_EVENT_WIRE_EVENT = "message_event";

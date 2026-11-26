@@ -13,10 +13,6 @@ import { LOCALE } from "../../src/capabilities/handlers/shared/index.js";
 import { processPlanningResult } from "../../src/capabilities/handlers/planning/result-pipeline.js";
 import { replaceMessages } from "../../src/core/message-store.js";
 import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
-import {
-  readContextMessageField,
-  resolveContextInjectedMessageType,
-} from "@noobot/context-protocol/message/codec";
 
 const MAX_PLANNING_CAPTURE_ATTEMPTS = TURN_THRESHOLDS.harness.planning.captureMaxAttempts;
 
@@ -219,24 +215,9 @@ test("planning result pipeline extracts current task goal from planning text pro
     ctx.agentContext.bindings.extensions.harness.currentTaskGoal,
     "由计划模型确认的当前任务目标",
   );
-  const injectedGoalMessage = ctx.modelContext.messages.find(
-    (item = {}) => resolveContextInjectedMessageType(item) === "planning_current_task_goal",
-  );
-  assert.equal(injectedGoalMessage?.role, "system");
-  assert.equal(injectedGoalMessage?.additional_kwargs?.injectedMessage, true);
-  assert.equal(readContextMessageField(injectedGoalMessage, "injectedBy"), "harness-plugin");
-  assert.equal(readContextMessageField(injectedGoalMessage, "dialogProcessId"), "planning-dp");
-  assert.ok(injectedGoalMessage?.additional_kwargs?.messageUid);
-  assert.equal(ctx.modelContext.messageBlocks.system.includes(injectedGoalMessage), true);
-  assert.equal(ctx.modelContext.messageBlocks.incremental.includes(injectedGoalMessage), false);
-  assert.match(String(injectedGoalMessage?.content || ""), /\[CURRENT_TASK_GOAL\]/);
-  assert.match(String(injectedGoalMessage?.content || ""), /由计划模型确认的当前任务目标/);
-  assert.equal(
-    persisted.some(
-      (item = {}) => resolveContextInjectedMessageType(item) === "planning_current_task_goal",
-    ),
-    false,
-  );
+  assert.equal(ctx.modelContext.messages.length, 1);
+  assert.equal(ctx.modelContext.messageBlocks.system.length, 0);
+  assert.equal(persisted.length, 0);
   assert.match(
     String(ctx.agentContext.bindings.extensions.harness.planText || ""),
     /^1\. 解析附件/m,
@@ -247,15 +228,20 @@ test("planning result pipeline extracts current task goal from planning text pro
   );
 });
 
-test("planning result pipeline replaces the previous current task goal injection", async () => {
+test("planning model goals cannot override the user execution request with system instructions", async () => {
   const ctx = createCtx();
   ctx.dialogProcessId = "planning-dp";
   ctx.modelContext.activeTurnIdentity = {
     dialogProcessId: "planning-dp",
     turnScopeId: "test-turn:planning-dp",
   };
-  replaceMessages(ctx, [canonicalizeTestContextMessage({ role: "user", content: "开始任务" })]);
-  for (const goal of ["第一次确认的目标", "第二次确认的目标"]) {
+  const request = canonicalizeTestContextMessage({
+    role: "user",
+    content: "Run seven sequential execute_script calls, then request active acceptance.",
+  });
+  replaceMessages(ctx, [request]);
+  const originalMessages = structuredClone(ctx.modelContext.messages);
+  for (const goal of ["执行七次命令", "本次仅交付规划，不执行工具"]) {
     await processPlanningResult(
       ctx,
       {},
@@ -266,12 +252,12 @@ test("planning result pipeline replaces the previous current task goal injection
       },
     );
   }
-  const goalMessages = ctx.modelContext.messages.filter(
-    (item = {}) => resolveContextInjectedMessageType(item) === "planning_current_task_goal",
+  assert.equal(
+    ctx.agentContext.bindings.extensions.harness.currentTaskGoal,
+    "本次仅交付规划，不执行工具",
   );
-
-  assert.equal(goalMessages.length, 1);
-  assert.match(String(goalMessages[0].content || ""), /第二次确认的目标/);
+  assert.deepEqual(ctx.modelContext.messages, originalMessages);
+  assert.equal(ctx.modelContext.messageBlocks.system.length, 0);
 });
 
 test("planning result pipeline schedules retry when payload has no main plan", async () => {

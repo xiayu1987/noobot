@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { assertTurnLifecycleRecordIntegrity, TURN_EVENT_VALUES } from "@noobot/session-protocol";
+import { assertTurnLifecycleRecordIntegrity } from "@noobot/session-protocol/session-invariants";
+import { TURN_EVENT_VALUES } from "@noobot/session-protocol/turn-event";
 import {
   AUTHORITY_OUTBOX_JOURNAL_OP,
   authorityOutboxSequenceKey,

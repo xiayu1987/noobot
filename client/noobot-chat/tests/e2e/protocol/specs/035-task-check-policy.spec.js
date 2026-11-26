@@ -10,6 +10,7 @@ import { resolveSessionMessageRecordInternalMessageType } from "@noobot/session-
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
 import { decodeToolResultText } from "@noobot/event-protocol/tool-result-v24";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { composeSystemInfoSections } from "../../../../../../agent/src/context/formatters/system-prompt-formatter.js";
 import {
   selectPlugins,
   sendMessage,
@@ -59,11 +60,24 @@ function harnessCapabilityEvents(records = []) {
 
 function assertCompactExecutionContext(invocations = []) {
   expect(invocations.length).toBeGreaterThan(0);
-  for (const invocation of invocations) {
-    const executionContext = invocation.data.messages.preview.find((message) =>
-      String(message.contentPreview || "").startsWith("# Current execution context"),
+  const marker = "e2e-execution-context-marker";
+  const titles = ["zh-CN", "en-US"].map((locale) => {
+    const sections = composeSystemInfoSections({
+      locale,
+      dynamicInfo: { now: marker, caller: "user", config: { allowUserInteraction: true } },
+    });
+    const context = sections.find(
+      (section) => typeof section === "string" && section.includes(marker),
     );
-    expect(executionContext).toBeTruthy();
+    expect(context).toBeDefined();
+    return `${context.split("\n", 1)[0]} `;
+  });
+  for (const invocation of invocations) {
+    const contexts = invocation.data.messages.preview.filter((message) =>
+      titles.some((title) => String(message.contentPreview || "").startsWith(title)),
+    );
+    expect(contexts).toHaveLength(1);
+    const [executionContext] = contexts;
     expect(executionContext.contentLength).toBeGreaterThan(0);
     expect(executionContext.contentLength).toBeLessThan(256);
     for (const forbidden of [

@@ -197,13 +197,45 @@ afterEach(() => {
 });
 
 describe("ChatComposer interactions", () => {
+  it("keeps attachment actions beside the camera and outside the routed drawer", async () => {
+    const wrapper = mountComposer({
+      uploadFiles: [{ clientAttachmentId: "brief", name: "brief.pdf" }],
+    });
+    const toolbar = wrapper.getComponent(ComposerAttachmentToolbar);
+    expect(toolbar.element.closest(".composer-row")).not.toBeNull();
+    expect(toolbar.element.nextElementSibling.getAttribute("title")).toBe("拍照");
+    expect(wrapper.get(".composer-more-drawer").find(".toolbar").exists()).toBe(false);
+    expect(wrapper.get(".composer-more-drawer").isVisible()).toBe(false);
+    const file = new File(["brief"], "brief.pdf");
+    const input = toolbar.get("input[type='file']");
+    Object.defineProperty(input.element, "files", { configurable: true, value: [file] });
+    await input.trigger("change");
+    expect(wrapper.emitted("append-uploads")).toEqual([[[file]]]);
+    await toolbar.get(".attachment-remove-btn").trigger("click");
+    expect(wrapper.emitted("remove-upload")).toEqual([["brief"]]);
+    await toolbar.get(".clear-files-btn").trigger("click");
+    expect(wrapper.emitted("clear-uploads")).toHaveLength(1);
+    await wrapper.setProps({ composerActionState: { canInterject: true } });
+    expect(toolbar.get(".attachment-trigger").attributes("disabled")).toBeDefined();
+    wrapper.unmount();
+  });
+
+  it("forwards drawer close through the controlled visibility used by pseudo routes", async () => {
+    const wrapper = mountComposer({ morePanelVisible: true });
+    await wrapper.get(".composer-more-drawer > .drawer-close").trigger("click");
+    expect(wrapper.emitted("update:morePanelVisible")).toEqual([[false]]);
+    await wrapper.setProps({ morePanelVisible: false });
+    expect(wrapper.get(".composer-more-drawer").isVisible()).toBe(false);
+    wrapper.unmount();
+  });
+
   it("keeps More expanded and its scroll position after selecting or dismissing the nested model drawer", async () => {
     vi.useRealTimers();
     const wrapper = mountComposer({ modelOptions: [{ alias: "test", model: "gpt-test" }] });
     await inputActions(wrapper).vm.$emit("toggle-more-panel");
     await nextTick();
-    const panel = wrapper.get(".more-panel-overlay");
-    const content = wrapper.get(".more-panel-content").element;
+    const panel = wrapper.get(".composer-more-drawer");
+    const content = panel.get(".el-drawer__body").element;
     content.scrollTop = 120;
     const picker = wrapper.findComponent(BaseModelPicker);
     await picker.get(".model-picker-trigger").trigger("click");

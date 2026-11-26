@@ -208,7 +208,11 @@ for (const stage of ["acceptance", "terminal"]) {
         { encoding: "utf8", timeout: 15000 },
       );
       assert.equal(child.error, undefined, child.stderr);
-      assert.equal(child.signal, "SIGKILL", child.stderr);
+      assert.deepEqual(
+        [child.status, child.signal],
+        process.platform === "win32" ? [1, null] : [null, "SIGKILL"],
+        child.stderr,
+      );
       const bytes = await readFile(h.currentPath, "utf8");
       await h.runtime.workspaceAdmission.withMaintenance(owner.userId, async () => {});
       const restarted = h.restart();

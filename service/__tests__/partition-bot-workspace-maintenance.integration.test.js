@@ -10,6 +10,7 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import { WebSocket } from "ws";
 import { join, relative } from "node:path";
 import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_UPGRADE_OWNER } from "@noobot/workspace-protocol";
+import { isPathWithinRoot } from "@noobot/path-resolver";
 import {
   initializeUserWorkspace,
   releaseQuarantinedUnits,
@@ -71,7 +72,7 @@ test("workspace maintenance drains Bot operations and revokes only its retained 
   const finish = Promise.withResolvers();
   const close = PartitionJournal.prototype.close;
   const fault = t.mock.method(PartitionJournal.prototype, "close", async function () {
-    if (this.root.startsWith(bot.getWorkspacePath(identity.userId) + "/")) {
+    if (isPathWithinRoot(bot.getWorkspacePath(identity.userId), this.root)) {
       journalClosing.resolve();
       await finish.promise;
     }
@@ -455,7 +456,7 @@ test("failed workspace retirement stays closed until a retry releases the reside
     const close = PartitionJournal.prototype.close;
     const fault = t.mock.method(PartitionJournal.prototype, "close", async function () {
       await close.call(this);
-      if (this.root.startsWith(bot.getWorkspacePath(identity.userId) + "/")) throw failure;
+      if (isPathWithinRoot(bot.getWorkspacePath(identity.userId), this.root)) throw failure;
     });
     try {
       for (let attempt = 0; attempt < 2; attempt += 1) {

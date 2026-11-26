@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createLocator } from "@noobot/shared/locator";
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import {
   test,
@@ -420,7 +421,7 @@ test("write_file: super user can write an absolute file outside workspace root",
 
   assert.equal(result.toolName, "write_file");
   assert.equal(result.ok, true);
-  assert.deepEqual(result.path, { view: "host", path: outsideFile });
+  assert.deepEqual(result.path, createLocator({ view: "host", path: outsideFile }));
   assert.equal(await fs.readFile(outsideFile, "utf8"), "write-outside");
 });
 

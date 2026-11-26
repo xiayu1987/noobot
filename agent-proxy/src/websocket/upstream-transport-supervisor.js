@@ -88,12 +88,6 @@ export class UpstreamTransportSupervisor {
     return true;
   }
 
-  closeOwnedConnection(connection = null, code = 1000, reason = "closed", { purpose = "" } = {}) {
-    if (!connection || !this.isCurrent(connection.socket, connection.generation)) return false;
-    if (purpose !== "" && this.purpose !== purpose) return false;
-    return this.close(code, reason);
-  }
-
   isCurrent(socket, generation = this.generation) {
     return Boolean(
       socket &&

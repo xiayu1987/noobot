@@ -79,6 +79,7 @@ function onInputKeydown(event) {
       @update:model-value="emit('update:modelValue', $event)"
       @keydown="onInputKeydown"
     />
+    <slot name="attachments" />
     <el-button
       class="composer-icon-btn noobot-icon-button"
       :title="translate('composer.capturePhoto')"
@@ -144,7 +145,7 @@ function onInputKeydown(event) {
 
 .composer-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
   gap: var(--composer-row-gap);
   align-items: end;
 }
@@ -243,6 +244,11 @@ function onInputKeydown(event) {
 @media (max-width: 480px) {
   .composer-row {
     gap: var(--noobot-space-2xs);
+    grid-template-columns: repeat(4, auto) minmax(0, 1fr);
+  }
+  .chat-input {
+    grid-column: 1 / -1;
+    grid-row: 1;
   }
   .composer-row .chat-input :deep(.el-textarea__inner) {
     font-size: var(--noobot-font-size-md);

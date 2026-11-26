@@ -26,6 +26,12 @@ function freezeClassification(kind, classificationError = null) {
   return Object.freeze({ kind, classificationError });
 }
 
+function requireProviderEvidence(evidence) {
+  if (typeof evidence?.recognized !== "boolean" || typeof evidence.modeRelated !== "boolean")
+    throw new TypeError("provider evidence must declare recognized and modeRelated");
+  return Object.freeze({ ...evidence });
+}
+
 function requireRetryAfterMs(value) {
   if (!Number.isFinite(value) || value < 0)
     throw new TypeError("model error classification.retryAfterMs must be non-negative");
@@ -48,6 +54,9 @@ export function classifyModelFailure(error, classify) {
       ...createModelFailureClassification(classification.kind),
       classificationError: null,
     };
+    if (classification.providerEvidence !== undefined) {
+      result.providerEvidence = requireProviderEvidence(classification.providerEvidence);
+    }
     if (classification.retryAfterMs !== undefined) {
       result.retryAfterMs = requireRetryAfterMs(classification.retryAfterMs);
     }

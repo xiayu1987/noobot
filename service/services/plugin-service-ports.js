@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
-import fs from "node:fs/promises";
+import * as fs from "@noobot/shared/file-system";
+import nativeFs from "node:fs/promises";
 import { createWriteStream, createReadStream } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { Transform } from "node:stream";
@@ -59,7 +60,7 @@ function createWorkspaceAssetWriter({ resolveRoot }) {
       throw error;
     }
     const assetDir = path.resolve(resolveRoot(userId), normalizedAssetId);
-    await fs.mkdir(assetDir, { recursive: true });
+    await nativeFs.mkdir(assetDir, { recursive: true });
     const temporaryPath = path.resolve(assetDir, `.upload-${randomUUID()}`);
     const hash = createHash("sha256");
     const prefixChunks = [];
@@ -95,14 +96,14 @@ function createWorkspaceAssetWriter({ resolveRoot }) {
       const version = hash.digest("hex");
       const filePath = path.resolve(assetDir, version);
       try {
-        await fs.rename(temporaryPath, filePath);
+        await nativeFs.rename(temporaryPath, filePath);
       } catch (error) {
         if (error?.code !== "EEXIST") throw error;
-        await fs.rm(temporaryPath, { force: true });
+        await nativeFs.rm(temporaryPath, { force: true });
       }
       return Object.freeze({ assetId: normalizedAssetId, version, size: actualBytes });
     } catch (error) {
-      await fs.rm(temporaryPath, { force: true });
+      await nativeFs.rm(temporaryPath, { force: true });
       throw error;
     }
   };
@@ -134,13 +135,13 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
   };
   const writeCatalog = async (userId, catalog) => {
     const root = resolveRoot(userId);
-    await fs.mkdir(root, { recursive: true });
+    await nativeFs.mkdir(root, { recursive: true });
     const temporaryPath = path.resolve(root, `.catalog-${randomUUID()}`);
     try {
-      await fs.writeFile(temporaryPath, JSON.stringify(catalog), { flag: "wx" });
-      await fs.rename(temporaryPath, resolveCatalogPath(userId));
+      await nativeFs.writeFile(temporaryPath, JSON.stringify(catalog), { flag: "wx" });
+      await nativeFs.rename(temporaryPath, resolveCatalogPath(userId));
     } catch (error) {
-      await fs.rm(temporaryPath, { force: true });
+      await nativeFs.rm(temporaryPath, { force: true });
       throw error;
     }
   };
@@ -191,7 +192,7 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
         const existed = Object.prototype.hasOwnProperty.call(catalog, normalizedAssetId);
         delete catalog[normalizedAssetId];
         await writeCatalog(userId, catalog);
-        await fs.rm(path.resolve(resolveRoot(userId), normalizedAssetId), {
+        await nativeFs.rm(path.resolve(resolveRoot(userId), normalizedAssetId), {
           recursive: true,
           force: true,
         });

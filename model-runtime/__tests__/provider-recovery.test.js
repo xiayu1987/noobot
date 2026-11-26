@@ -102,7 +102,7 @@ test("SDK error details retain provider scope across shared transport", () => {
 });
 
 for (const contentType of ["application/json", "text/plain"]) {
-  test(`malformed Responses ${contentType} fails once as protocol`, async () => {
+  test(`malformed Responses ${contentType} retries in the same mode`, async () => {
     const ctx = executorWithResponse(
       openai,
       () =>
@@ -111,8 +111,11 @@ for (const contentType of ["application/json", "text/plain"]) {
         }),
     );
     await assert.rejects(ctx.invoke(), (error) => error.kind === "protocol");
-    assert.equal(ctx.requests.length, 1);
-    assert.deepEqual(ctx.sleeps, []);
+    assert.deepEqual(
+      ctx.requests.map(({ stream }) => stream),
+      [false, false],
+    );
+    assert.deepEqual(ctx.sleeps, [0]);
     assert.equal(ctx.events.at(-1).kind, "protocol");
   });
 }
@@ -141,7 +144,7 @@ for (const [code, kind, calls] of [
   });
 }
 
-test("invalid JSON from the SDK remains a protocol failure without replay", async () => {
+test("invalid JSON from the SDK remains a protocol failure after retry exhaustion", async () => {
   const ctx = executorWithResponse(
     openai,
     () =>
@@ -150,8 +153,11 @@ test("invalid JSON from the SDK remains a protocol failure without replay", asyn
       }),
   );
   await assert.rejects(ctx.invoke(), { kind: "protocol" });
-  assert.equal(ctx.requests.length, 1);
-  assert.deepEqual(ctx.sleeps, []);
+  assert.deepEqual(
+    ctx.requests.map(({ stream }) => stream),
+    [false, false],
+  );
+  assert.deepEqual(ctx.sleeps, [0]);
 });
 
 for (const operation of operations) {
@@ -192,7 +198,7 @@ for (const operation of operations) {
 }
 
 for (const operation of operations) {
-  test(`malformed ${operation.kind} output never enters conversion or recovery retries`, async () => {
+  test(`malformed ${operation.kind} output exhausts retries in the same mode`, async () => {
     for (const output of [null, {}, [null], [{ type: "message", content: {} }]]) {
       const ctx = executorWithResponse(openai, () =>
         Response.json({
@@ -202,9 +208,12 @@ for (const operation of operations) {
         }),
       );
       await assert.rejects(ctx.invoke(operation), { kind: "protocol" });
-      assert.equal(ctx.requests.length, 1);
-      assert.deepEqual(ctx.sleeps, []);
-      assert.equal(ctx.events.filter(({ event }) => event === "model.request.finished").length, 1);
+      assert.deepEqual(
+        ctx.requests.map(({ stream }) => stream),
+        [false, false],
+      );
+      assert.deepEqual(ctx.sleeps, [0]);
+      assert.equal(ctx.events.filter(({ event }) => event === "model.request.finished").length, 2);
     }
   });
 }

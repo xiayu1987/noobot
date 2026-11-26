@@ -29,6 +29,7 @@ export function classifyOpenAiError(error, context) {
         status: error.status,
         code: error.code,
         type: error.type,
+        param: error.param,
         details: error.error?.details,
         headers: error.headers,
       },

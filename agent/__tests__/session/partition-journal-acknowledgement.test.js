@@ -24,15 +24,10 @@ test("replay cannot acknowledge a visible publication while directory durability
   let attempts = 0;
   setFsAdapter({
     ...adapter,
-    async open(file, ...args) {
-      const handle = await adapter.open(file, ...args);
-      if (String(file) !== root) return handle;
-      return wrapHandle(handle, {
-        async sync() {
-          attempts += 1;
-          throw Object.assign(new Error("Injected replay sync failure"), { code: "EIO" });
-        },
-      });
+    async syncDirectory(directory) {
+      if (directory !== root) return adapter.syncDirectory(directory);
+      attempts += 1;
+      throw Object.assign(new Error("Injected replay sync failure"), { code: "EIO" });
     },
   });
   try {

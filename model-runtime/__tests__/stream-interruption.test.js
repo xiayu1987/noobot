@@ -114,6 +114,13 @@ for (const scenario of [
 
 for (const { label, operatorId, kind, failure, retryable, outputObserved } of [
   {
+    label: "empty SSE stream without provider error",
+    operatorId: "generic",
+    kind: "protocol",
+    failure: null,
+    retryable: true,
+  },
+  {
     label: "generic gateway body timeout",
     operatorId: "generic",
     kind: "timeout",
@@ -141,7 +148,12 @@ for (const { label, operatorId, kind, failure, retryable, outputObserved } of [
     failure: new APIError(undefined, { code: "insufficient_quota", message: "quota exhausted" }),
     retryable: false,
   },
-].flatMap((scenario) => [false, true].map((outputObserved) => ({ ...scenario, outputObserved })))) {
+].flatMap((scenario) =>
+  (scenario.failure ? [false, true] : [false]).map((outputObserved) => ({
+    ...scenario,
+    outputObserved,
+  })),
+)) {
   test(`${label} through Chat adapter: outputObserved=${outputObserved}`, async () => {
     const events = [];
     const requests = [];
@@ -154,6 +166,11 @@ for (const { label, operatorId, kind, failure, retryable, outputObserved } of [
         fetchImpl: async (_url, init) => {
           requests.push(init.body);
           if (requests.length > 1) return partialOutputResponse();
+          if (failure === null) {
+            return new Response("data: [DONE]\n\n", {
+              headers: { "content-type": "text/event-stream" },
+            });
+          }
           const delta = outputObserved ? { reasoning_content: "thinking" } : { role: "assistant" };
           const event = { choices: [{ index: 0, delta, finish_reason: null }] };
           return new Response(
@@ -233,14 +250,15 @@ test("SDK preserves a documented SSE server_error for provider classification", 
     (error) => {
       assert.equal(error instanceof APIError, true);
       assert.equal(error.code, event.code);
-      assert.deepEqual(openAiCompatibleAdapter.classifyError(error, { operatorId: "openai" }), {
-        kind: "temporary_unavailable",
-      });
+      const classification = openAiCompatibleAdapter.classifyError(error, { operatorId: "openai" });
+      assert.equal(classification.kind, "temporary_unavailable");
+      assert.equal(classification.providerEvidence.recognized, true);
+      assert.equal(classification.providerEvidence.modeRelated, false);
       return true;
     },
   );
   assert.deepEqual(
-    openAiCompatibleAdapter.classifyError(new APIError(401, event), { operatorId: "openai" }),
-    { kind: "authentication" },
+    openAiCompatibleAdapter.classifyError(new APIError(401, event), { operatorId: "openai" }).kind,
+    "authentication",
   );
 });

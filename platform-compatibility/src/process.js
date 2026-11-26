@@ -83,7 +83,7 @@ export function resolveLibreOfficeExecutable({
     const value = text(sourceEnv[key]);
     if (value) return value;
   }
-  return normalizePlatform(platform) === PLATFORM.WINDOWS ? "soffice.exe" : "libreoffice";
+  return normalizePlatform(platform) === PLATFORM.WINDOWS ? "soffice.com" : "libreoffice";
 }
 
 export function resolveBrowserExecutable({

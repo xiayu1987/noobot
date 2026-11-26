@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-PLAYWRIGHT_VERSION="$(node -p "require('$ROOT_DIR/node_modules/@playwright/test/package.json').version")"
+PLAYWRIGHT_VERSION="$(cd "$ROOT_DIR" && node -p 'require("@playwright/test/package.json").version')"
 IMAGE="${NOOBOT_E2E_DOCKER_IMAGE:-noobot-e2e:node26.9.0-pw${PLAYWRIGHT_VERSION}}"
 CONTAINER="${NOOBOT_E2E_DOCKER_CONTAINER:-noobot-e2e}"
 HOST_PORT="${NOOBOT_E2E_DOCKER_HOST_PORT:-20060}"
@@ -16,12 +16,13 @@ MYSQL_PASSWORD_FILE="${NOOBOT_E2E_MYSQL_PASSWORD_FILE:-$SCRIPT_DIR/mysql-passwor
 SOURCE_WORKSPACE="$ROOT_DIR/workspace"
 E2E_WORKSPACE="$ROOT_DIR/.e2e-workspace"
 MCP_PROJECT="$ROOT_DIR/scripts/mcp-test-service"
-MCP_CONTAINER="$(node --input-type=module -e "import { MCP_TEST_SERVICE } from '$MCP_PROJECT/config.mjs'; console.log(MCP_TEST_SERVICE.hostname)")"
+MCP_CONTAINER="$(cd "$ROOT_DIR" && node --input-type=module -e 'import { MCP_TEST_SERVICE } from "./scripts/mcp-test-service/config.mjs"; console.log(MCP_TEST_SERVICE.hostname)')"
 NETWORK="noobot-e2e-network"
 MOCK_PROJECT="$ROOT_DIR/scripts/mock-model-service"
 MOCK_CONTAINER="noobot-mock-model"
 
-eval "$(env -i PATH="$PATH" node "$ROOT_DIR/scripts/lib/runtime-topology-cli.mjs" --shell)"
+TOPOLOGY_EXPORTS="$(cd "$ROOT_DIR" && env -i PATH="$PATH" node ./scripts/lib/runtime-topology-cli.mjs --shell)"
+eval "$TOPOLOGY_EXPORTS"
 CLIENT_PORT="${NOOBOT_TOPOLOGY_CLIENT_ADDR##*:}"
 SERVICE_PORT="$PORT"
 
@@ -125,6 +126,7 @@ start_service() {
   mkdir -p "${E2E_WORKSPACE}.mutation-locks" || return 1
   docker run -d --rm --name "$CONTAINER" --network "$NETWORK" \
     -e NOOBOT_ROOT="$ROOT_DIR" \
+    -e NOOBOT_MODEL_PROXY_LOG_DIR="$ROOT_DIR/model-proxy/logs" \
     -v "$ROOT_DIR:$ROOT_DIR" \
     -v "$E2E_WORKSPACE:$SOURCE_WORKSPACE" \
     -v "${E2E_WORKSPACE}.mutation-locks:${SOURCE_WORKSPACE}.mutation-locks" \

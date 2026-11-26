@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { createNamespacedToolId } from "@noobot/model-protocol/tool-identity-node";
-import { test, expect, installE2eModelPreferences } from "../fixtures/noobot.fixture.js";
+import { test, expect } from "../fixtures/noobot.fixture.js";
 import { connectThroughUi, readE2eCredentials } from "../fixtures/auth.fixture.js";
 import {
   selectPlugins,
@@ -180,7 +180,7 @@ async function assertFileMutationArtifacts(page, records, turnScopeId, filePath)
 test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async ({
   noobot,
   protocolCapture,
-  browser,
+  createClient,
 }, testInfo) => {
   test.setTimeout(PROTOCOL_TIMEOUTS.toolChain);
   await selectPlugins(noobot.page, ["harness"]);
@@ -209,10 +209,8 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   const command = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
 
   const elapsedBeforeSecondBrowser = await waitForThinkingElapsedSeconds(noobot.page);
-  const secondBrowser = await browser.browserType().launch({ chromiumSandbox: false });
-  const secondContext = await secondBrowser.newContext();
-  await installE2eModelPreferences(secondContext);
-  const secondPage = await secondContext.newPage();
+  const secondClient = await createClient();
+  const secondPage = secondClient.page;
   await installRunningThinkingElapsedCapture(secondPage);
   protocolCapture.bindPage(secondPage);
   try {
@@ -230,7 +228,7 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
       elapsedBeforeSecondBrowser,
     );
   } finally {
-    await secondBrowser.close();
+    await secondClient.close();
   }
 
   const realtimeObservation = observeRealtimeThinkingChanges(noobot.page);

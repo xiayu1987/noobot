@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 import { requireWorkspaceRootEnv } from "@noobot/runtime-topology-protocol/workspace-root";
@@ -12,6 +11,7 @@ import { request as playwrightRequest } from "@playwright/test";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 import { readE2eCredentials } from "./fixtures/auth.fixture.js";
 import { admissionRetryDelayMs } from "./helpers/http-admission.js";
+import { withNativeDesktop } from "./helpers/native-desktop.js";
 import { e2eRunId, runOpsWorkdir, runOpsWorkdirPath } from "./helpers/run-ops-workdir.js";
 import { text } from "@noobot/shared/value";
 import { validateRequestLogOrder } from "../../../../../scripts/quality/model-context-convergence/request-log-audit.mjs";
@@ -136,19 +136,20 @@ async function assertUnfilteredFullSuite(config, suite) {
 }
 
 export default class SuiteSessionCleanupReporter {
-  constructor({ failureEvidenceRoot, requestLogsRoot } = {}) {
+  constructor({ failureEvidenceRoot } = {}) {
     this.failureEvidenceRoot = text(failureEvidenceRoot);
     if (!path.isAbsolute(this.failureEvidenceRoot)) {
       throw new Error("Suite Session cleanup requires an absolute failureEvidenceRoot");
     }
-    this.requestLogsRoot =
-      requestLogsRoot ||
-      path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../../model-proxy/logs");
+    this.requestLogsRoot = process.env.NOOBOT_MODEL_PROXY_LOG_DIR;
     this.outputDirs = [];
   }
 
   onBegin(config, suite) {
     this.outputDirs = [...new Set(config.projects.map((project) => project.outputDir))];
+    if (process.env.NOOBOT_E2E_FULL_SUITE === "1" && !path.isAbsolute(this.requestLogsRoot ?? "")) {
+      throw new Error("Full suite requires an absolute NOOBOT_MODEL_PROXY_LOG_DIR");
+    }
     this.fullSuiteCheck =
       process.env.NOOBOT_E2E_FULL_SUITE === "1"
         ? assertUnfilteredFullSuite(config, suite)
@@ -156,8 +157,12 @@ export default class SuiteSessionCleanupReporter {
     this.fullSuiteCheck.catch(() => {});
   }
 
+  evidenceDirectory() {
+    return path.join(this.failureEvidenceRoot, e2eRunId());
+  }
+
   async preserveFailureEvidence(userId) {
-    const evidenceDir = path.join(this.failureEvidenceRoot, e2eRunId());
+    const evidenceDir = this.evidenceDirectory();
     await fs.mkdir(evidenceDir, { recursive: true });
     const runtimeDir = WORKSPACE_LAYOUT.RUNTIME_DIR;
     await fs.cp(
@@ -196,14 +201,26 @@ export default class SuiteSessionCleanupReporter {
       fail: (title, detail) => failures.push(detail ? `${title}\n${detail}` : title),
       pass: (title) => checked.push(title),
     });
-    if (!checked.length) failures.push("Full suite requires auditable model request logs");
     if (failures.length) {
       await this.preserveFailureEvidence(credentials.userId);
       throw new Error(`Pre-cleanup model request audit failed:\n${failures.join("\n")}`);
     }
     console.log(`[model-request-log] pre-cleanup audit passed: ${checked.length} logs`);
-    if (records.length > 0) await deleteRegisteredSessions(records, credentials);
-    await fs.rm(this.failureEvidenceRoot, { recursive: true, force: true });
+    if (records.length > 0) {
+      try {
+        if (process.env.NOOBOT_E2E_DESKTOP_EXECUTABLE) {
+          await withNativeDesktop(process.env.NOOBOT_E2E_DESKTOP_USER_DATA_DIR, () =>
+            deleteRegisteredSessions(records, credentials),
+          );
+        } else {
+          await deleteRegisteredSessions(records, credentials);
+        }
+      } catch (error) {
+        await this.preserveFailureEvidence(credentials.userId);
+        throw error;
+      }
+    }
+    await fs.rm(this.evidenceDirectory(), { recursive: true, force: true });
     await fs.rm(path.join(requireWorkspaceRootEnv(), credentials.userId, runOpsWorkdir()), {
       recursive: true,
       force: true,

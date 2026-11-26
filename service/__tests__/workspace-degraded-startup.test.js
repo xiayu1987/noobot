@@ -189,7 +189,7 @@ test("startup isolates old session storage and keeps the healthy journal readabl
     }),
   );
   const userWorkspace = await initializeUserWorkspace(workspaceRoot, userId);
-  const legacyPath = path.join(WORKSPACE_LAYOUT.SESSION_DIR, "legacy-session");
+  const legacyPath = path.posix.join(WORKSPACE_LAYOUT.SESSION_DIR, "legacy-session");
   const legacyDir = path.join(userWorkspace, legacyPath);
   const oldHead = "old immutable head bytes";
   await fs.mkdir(legacyDir, { recursive: true });

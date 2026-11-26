@@ -8,6 +8,7 @@ import test from "node:test";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { PLATFORM } from "@noobot/platform-compatibility/platform";
 import {
   executionLogProjectionIdentity,
   EXECUTION_PROJECTION_PENDING_SUFFIX,
@@ -47,6 +48,7 @@ test("locked publication reads each receipt once and still rejects replayed outp
 
 for (const failEntryBarrier of [false, true]) {
   test(`output entry and intent share a barrier; failure=${failEntryBarrier}`, async (t) => {
+    t.mock.property(process, "platform", PLATFORM.LINUX);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "projection-entry-"));
     t.after(() => fs.rm(root, { recursive: true, force: true }));
     const file = path.join(root, "output.jsonl");
@@ -65,8 +67,9 @@ for (const failEntryBarrier of [false, true]) {
     let barriers = 0;
     let outputSynced = false;
     const failure = new Error("entry barrier failed");
-    const mock = t.mock.method(fs, "open", async (target, ...flags) => {
-      const handle = await open(target, ...flags);
+    t.mock.method(fs, "open", async (target, ...flags) => {
+      const handle =
+        target === root ? { async sync() {}, async close() {} } : await open(target, ...flags);
       const sync = handle.sync.bind(handle);
       if (target === file)
         handle.sync = async () => {
@@ -95,7 +98,7 @@ for (const failEntryBarrier of [false, true]) {
       await publishProjectionOutput(file, entries, 0);
       assert.equal(barriers, 2, "entry and durable receipt barriers complete publication");
     }
-    mock.mock.restore();
+    t.mock.restoreAll();
     if (failEntryBarrier) {
       await fs.unlink(file);
       await recoverProjectionOutput(file);

@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { filePath as path } from "@noobot/path-resolver";
 import { decodeMessageContentPage } from "@noobot/session-protocol/message-read-budget";
 import { PartitionJournal } from "../../src/session/partition-storage/partition-journal.js";
 import { openPartitionSessionReader } from "../../src/session/partition-storage/partition-session-reader.js";
@@ -250,7 +251,7 @@ test("failed deletion publication preserves the suffix and command identity for 
   setFsAdapter({
     ...adapter,
     async rename(source, target) {
-      if (String(target).endsWith("/CURRENT")) {
+      if (String(target) === path.join(root, "CURRENT")) {
         injected = true;
         throw new Error("deletion publication fault");
       }

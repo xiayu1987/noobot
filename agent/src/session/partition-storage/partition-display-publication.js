@@ -26,6 +26,10 @@ import { countDisplayRowAttachments } from "../session-summary-builders/display-
 import { requireRetainedJournalSnapshotId } from "./journal-snapshots.js";
 import { PARTITION_MESSAGE_COLLECTIONS } from "@noobot/session-protocol/partition-session-messages";
 import { checkMessage } from "./partition-message-reader.js";
+import {
+  bindDisplayInterjections,
+  projectDisplayThinkingFacets,
+} from "./partition-display-thinking.js";
 
 const collection = "metadata";
 const statisticsKey = "display:statistics";
@@ -102,14 +106,15 @@ function bindDisplayTurnState(read, identity) {
 }
 
 async function describePartitionDisplayRow(
-  { read, identity, readTurnState, readThinkingDetails },
+  { read, identity, readTurnState, readThinkingFacets },
   row,
   jsonBytes,
 ) {
   if (row.turnPlaceholder === true) {
-    if (row.role !== "assistant" || !(await readThinkingDetails(row.turnScopeId)))
-      return { jsonBytes, read: () => row };
-    const message = { ...row, hasThinkingDetails: true };
+    if (row.role !== "assistant") return { jsonBytes, read: () => row };
+    const thinkingFacets = await readThinkingFacets(row.turnScopeId);
+    if (!thinkingFacets.hasThinkingDetails) return { jsonBytes, read: () => row };
+    const message = { ...row, ...thinkingFacets };
     return { jsonBytes: messageReadJsonBytes(message), read: () => message };
   }
   const { messageUid, sessionOrdinal } = row;
@@ -129,8 +134,7 @@ async function describePartitionDisplayRow(
       message.role === "assistant"
         ? projectTurnMessage(message, await readTurnState(message.turnScopeId))
         : message,
-    hasThinkingDetails:
-      message.role === "assistant" && (await readThinkingDetails(message.turnScopeId)),
+    ...(message.role === "assistant" ? await readThinkingFacets(message.turnScopeId) : {}),
     contentReference: record.contentVersion,
     contentBytes: record.contentBytes,
   });
@@ -151,18 +155,21 @@ export function readPartitionDisplayPublicationPage(
   const get = async (key) => (await read({ collection, keys: [key] })).get(key)?.value ?? null;
   const identity = { snapshot, scope, generation: scope.generation };
   const readTurnState = bindDisplayTurnState(read, identity);
+  const readInterjection = bindDisplayInterjections(journal, scope, snapshot);
   const thinkingDetails = new Map();
-  const readThinkingDetails = (turnScopeId) => {
+  const readThinkingFacets = (turnScopeId) => {
     if (!thinkingDetails.has(turnScopeId)) {
       const timeline = sessionDisplayDependencyDirectory({ get }, turnScopeId, "timeline");
       thinkingDetails.set(
         turnScopeId,
-        timeline.first().then((ordinal) => ordinal !== null),
+        Promise.all([timeline.first(), readInterjection(turnScopeId)]).then(
+          ([ordinal, interjection]) => projectDisplayThinkingFacets(ordinal !== null, interjection),
+        ),
       );
     }
     return thinkingDetails.get(turnScopeId);
   };
-  const rowSource = { read, identity, readTurnState, readThinkingDetails };
+  const rowSource = { read, identity, readTurnState, readThinkingFacets };
   let statistics;
   return readSessionDisplayPage(scope, selection, {
     async readStatistics(retained) {

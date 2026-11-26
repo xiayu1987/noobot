@@ -104,7 +104,7 @@ function contractMeasured() {
   return { missingMarker: measurementFromHits([]), forbiddenPattern: measurementFromHits([]) };
 }
 
-test("addContractHits scopes a function body past a destructured parameter closing brace", () => {
+test("addContractHits scopes exported functions independently of line endings", () => {
   const source = [
     "export function owner({",
     "  a = 1,",
@@ -116,8 +116,7 @@ test("addContractHits scopes a function body past a destructured parameter closi
     "  return canonical();",
     "}",
     "",
-  ].join("\n");
-  const measured = contractMeasured();
+  ];
   const contract = {
     required: [["owner exists", /export function owner/]],
     scoped: [
@@ -128,9 +127,12 @@ test("addContractHits scopes a function body past a destructured parameter closi
       },
     ],
   };
-  addContractHits({ measured, file: "a.js", source, contract });
-  assert.deepEqual(measured.missingMarker.samples, ["a.js owner stays canonical"]);
-  assert.deepEqual(measured.forbiddenPattern.samples, ["a.js:4 owner calls legacy"]);
+  for (const input of [source.join("\n"), source.join("\r\n"), source.slice(0, 5).join("\r\n")]) {
+    const measured = contractMeasured();
+    addContractHits({ measured, file: "a.js", source: input, contract });
+    assert.deepEqual(measured.missingMarker.samples, ["a.js owner stays canonical"]);
+    assert.deepEqual(measured.forbiddenPattern.samples, ["a.js:4 owner calls legacy"]);
+  }
 });
 
 test("addContractHits limits window scopes around the marker", () => {

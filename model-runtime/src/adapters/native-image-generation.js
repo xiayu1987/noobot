@@ -2,6 +2,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { ModelProtocolError } from "@noobot/model-protocol";
 import {
   generationArtifact,
   generationRequest,
@@ -43,17 +44,33 @@ export async function generateOpenAiImages(context) {
     prompt: input.prompt,
     n: options.n,
     output_format: "png",
+    ...(context.streaming ? { stream: true } : {}),
   };
   for (const key of ["size", "quality", "complexity"]) {
     if (options[key]) body[key] = options[key];
   }
+  const readStream = context.streaming
+    ? (events) => readOpenAiImageStream(events, options.n)
+    : undefined;
   if (!options.imageUrls.length)
-    return imagesResult(await generationRequest(context, "images/generations", body));
+    return imagesResult(
+      await generationRequest(context, "images/generations", body, { readStream }),
+    );
   const form = new FormData();
   for (const [key, value] of Object.entries(body)) form.append(key, String(value));
   for (const url of options.imageUrls)
     form.append("image[]", await imageUpload(context, url), "source");
-  return imagesResult(await generationRequest(context, "images/edits", form));
+  return imagesResult(await generationRequest(context, "images/edits", form, { readStream }));
+}
+
+async function readOpenAiImageStream(events, count) {
+  const data = [];
+  for await (const event of events) {
+    if (!["image_generation.completed", "image_edit.completed"].includes(event.type)) continue;
+    data.push({ b64_json: event.b64_json, url: event.url });
+    if (data.length === count) return { data };
+  }
+  throw new ModelProtocolError("image stream ended before all completed images arrived");
 }
 
 export async function generateXaiImages(context) {

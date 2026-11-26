@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { getEventFamily } from "@noobot/event-protocol";
+import { EVENT_FAMILY, getEventFamily } from "@noobot/event-protocol";
+import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import {
   PARTITION_OUTBOX_DELIVERY_COMPACTIONS,
   PARTITION_SESSION_ARTIFACT_EVENTS,
@@ -436,6 +437,53 @@ export async function readPartitionOutboxEvent(read, scope, snapshot, eventId) {
   const stored = await view.get("events", eventId);
   if (stored === null) return null;
   return readVisibleOutboxEvent(view, snapshot, eventRecord(stored, eventId, scope));
+}
+
+function scanCommittedTurnInterjections(events, turnScopeId, remaining) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const { envelope } = events[index];
+    if (envelope.identity.turnScopeId !== turnScopeId) continue;
+    if (
+      envelope.protocol.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
+      envelope.payload.eventType === MESSAGE_EVENT_TYPE.USER_INTERJECTION
+    ) {
+      return { remaining, interjection: envelope.payload.contentFact };
+    }
+    if (--remaining === 0) break;
+  }
+  return { remaining, interjection: null };
+}
+
+export async function readPartitionLatestUserInterjection(readPage, scope, snapshot, turnScopeId) {
+  const range = await readPage(async (read) => {
+    const view = outboxReadView(read, scope, snapshot);
+    const stored = await view.get("turnOutbox", turnScopeId);
+    return stored === null ? null : turnRange(stored, turnScopeId, await readOutboxTail(view.get));
+  });
+  if (range === null) return null;
+  let remaining = range.eventCount;
+  let end = range.lastOrdinal;
+  const limit = partitionOutboxPageLimit(snapshot);
+  while (remaining > 0 && end > range.removedThrough) {
+    const length = Math.min(limit, end - range.removedThrough);
+    const committedEvents = await readPage((read) => {
+      const view = outboxReadView(read, scope, snapshot);
+      return read.readWindow(length, async (index) => {
+        const ordinal = end - index;
+        const id = requireCommittedEventId(
+          await view.get("eventOrder", authorityOutboxPositionKey(ordinal)),
+        );
+        return committedEvent(await view.get("events", id), id, scope, ordinal);
+      });
+    });
+    committedEvents.reverse();
+    const page = scanCommittedTurnInterjections(committedEvents, turnScopeId, remaining);
+    if (page.interjection !== null) return page.interjection;
+    remaining = page.remaining;
+    end -= committedEvents.length;
+  }
+  if (remaining !== 0) corrupt("Partition outbox turn range event count mismatch");
+  return null;
 }
 
 async function readIndexedArtifactEvent(view, { scope, snapshot, id, membership }) {

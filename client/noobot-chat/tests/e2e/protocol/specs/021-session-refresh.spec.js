@@ -58,6 +58,8 @@ test("@core PBE-021 自然完成后刷新 Session 并继续发送", async ({
 test("@core PBE-022 停止后关闭浏览器再打开并继续", async ({
   noobot,
   protocolCapture,
+  reopenClientWindow,
+  baseURL,
 }, testInfo) => {
   const file = fixedAttachment("pbe-022.txt");
   const { send } = await sendAndStop({
@@ -67,10 +69,9 @@ test("@core PBE-022 停止后关闭浏览器再打开并继续", async ({
     prompt: uniquePrompt(testInfo, "stop before browser restart"),
     attachment: file,
   });
-  await noobot.page.close();
-  const page = await noobot.page.context().newPage();
+  const page = await reopenClientWindow(noobot.page);
   const receivedAtStart = protocolCapture.websocketReceived.length;
-  await page.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
+  await page.goto(new URL(`/?session=${encodeURIComponent(noobot.sessionId)}`, baseURL).href);
   await waitForReconnect(protocolCapture, receivedAtStart);
   await expect(page.locator('.session-item[aria-current="true"]')).toHaveAttribute(
     "data-session-id",

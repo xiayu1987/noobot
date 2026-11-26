@@ -187,7 +187,7 @@ for (const proxyAlreadyHealthy of [false, true]) {
         fixture.manager.ensureServiceStarted(),
         fixture.manager.ensureServiceStarted(),
       ]);
-      assert.ok(proxyChecks > 0);
+      assert.equal(proxyChecks, proxyAlreadyHealthy ? 1 : 2);
       assert.equal(fixture.calls.length, proxyAlreadyHealthy ? 0 : 1);
       if (!proxyAlreadyHealthy)
         assert.match(fixture.calls[0].args[0], /agent-proxy[/\\]agent-proxy\.js$/);
@@ -291,8 +291,10 @@ for (const failure of ["request", "body"]) {
   });
 }
 
-for (const stopAtCheck of [1, 2]) {
-  test(`stop during proxy health check ${stopAtCheck} cancels startup`, async () => {
+for (const phase of ["initial probe", "startup polling"]) {
+  test(`stop during proxy ${phase} cancels startup`, async () => {
+    const stopAtCheck = phase === "initial probe" ? 1 : 2;
+    const expectedStarts = stopAtCheck - 1;
     let proxyChecks = 0;
     const fixture = await createFixture({
       packaged: true,
@@ -300,19 +302,19 @@ for (const stopAtCheck of [1, 2]) {
         fetchImpl: async (url) => {
           const isProxy = String(url).includes(":10062");
           if (isProxy && ++proxyChecks === stopAtCheck) fixture.manager.stopManagedService();
-          return { ok: true, json: async () => ({ ok: !isProxy || stopAtCheck === 2 }) };
+          return { ok: true, json: async () => ({ ok: !isProxy || proxyChecks >= stopAtCheck }) };
         },
       },
     });
     try {
       await assert.rejects(fixture.manager.ensureServiceStarted(), /startup stopped/);
-      assert.equal(fixture.calls.length, 0);
+      assert.equal(fixture.calls.length, expectedStarts);
       assert.equal(
         fixture.statuses.some((status) => status.message === "Noobot agent proxy is ready."),
         false,
       );
       await assert.rejects(fixture.manager.ensureServiceStarted(), /startup stopped/);
-      assert.equal(fixture.calls.length, 0);
+      assert.equal(fixture.calls.length, expectedStarts);
     } finally {
       fixture.manager.stopManagedService();
       await fixture.restore();

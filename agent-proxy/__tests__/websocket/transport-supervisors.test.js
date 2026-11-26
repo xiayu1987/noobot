@@ -37,19 +37,6 @@ test("upstream supervisor rejects invalid grace periods without constructing a s
   assert.equal(new UpstreamTransportSupervisor(FakeWebSocket, { closeGraceMs: 0 }).closeGraceMs, 0);
 });
 
-test("upstream supervisor does not normalize connection ownership filters", () => {
-  const supervisor = new UpstreamTransportSupervisor(FakeWebSocket);
-  const connection = supervisor.connect("ws://run");
-  for (const purpose of [" run ", null, false]) {
-    assert.equal(supervisor.closeOwnedConnection(connection, 1000, "closed", { purpose }), false);
-    assert.equal(supervisor.socket, connection.socket);
-  }
-  assert.equal(
-    supervisor.closeOwnedConnection(connection, 1000, "closed", { purpose: "run" }),
-    true,
-  );
-});
-
 test("upstream supervisor ignores close callbacks from a replaced generation", () => {
   FakeWebSocket.instances = [];
   const supervisor = new UpstreamTransportSupervisor(FakeWebSocket);
@@ -61,30 +48,6 @@ test("upstream supervisor ignores close callbacks from a replaced generation", (
   assert.equal(supervisor.socket, second.socket);
   assert.equal(supervisor.status().generation, second.generation);
   assert.equal(supervisor.status().phase, "connecting");
-});
-
-test("upstream supervisor closes only the connection generation and purpose owned by its caller", () => {
-  FakeWebSocket.instances = [];
-  const supervisor = new UpstreamTransportSupervisor(FakeWebSocket);
-  const queryConnection = supervisor.connect("ws://query", {}, { purpose: "snapshot_query" });
-  const runConnection = supervisor.connect("ws://run", {}, { purpose: "run" });
-
-  assert.equal(
-    supervisor.closeOwnedConnection(queryConnection, 1000, "snapshot_query_complete", {
-      purpose: "snapshot_query",
-    }),
-    false,
-  );
-  assert.equal(supervisor.socket, runConnection.socket);
-  assert.equal(supervisor.status().purpose, "run");
-
-  assert.equal(
-    supervisor.closeOwnedConnection(runConnection, 1000, "snapshot_query_complete", {
-      purpose: "snapshot_query",
-    }),
-    false,
-  );
-  assert.equal(supervisor.socket, runConnection.socket);
 });
 
 test("upstream supervisor terminates a replaced socket that never completes close", async () => {

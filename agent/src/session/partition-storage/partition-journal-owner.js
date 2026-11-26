@@ -151,7 +151,7 @@ export class PartitionJournalOwner {
           }
           return remove();
         },
-        { residentJournal: entry?.journal },
+        { residentJournal: entry?.journal, sessionDir },
       );
     });
   }

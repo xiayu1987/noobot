@@ -109,8 +109,30 @@ test("runtime-events writer separates debug session logs by debug type", async (
 
   assert.equal(stateMachine.ok, true);
   assert.equal(resend.ok, true);
-  assert.match(stateMachine.file, /session-debug-files\/events\/debug-state-machine\.jsonl$/);
-  assert.match(resend.file, /session-debug-files\/events\/debug-resend\.jsonl$/);
+  assert.equal(
+    stateMachine.file,
+    path.join(
+      root,
+      "admin",
+      "runtime",
+      "session",
+      "session-debug-files",
+      "events",
+      "debug-state-machine.jsonl",
+    ),
+  );
+  assert.equal(
+    resend.file,
+    path.join(
+      root,
+      "admin",
+      "runtime",
+      "session",
+      "session-debug-files",
+      "events",
+      "debug-resend.jsonl",
+    ),
+  );
   assert.notEqual(stateMachine.file, resend.file);
   assert.equal((await readJsonl(stateMachine.file))[0].category, "debug");
   assert.equal((await readJsonl(resend.file))[0].category, "debug");
@@ -141,7 +163,18 @@ test("agent context debug logs default off and use their own file when enabled",
   const recorded = await writeRuntimeEvent(event);
   assert.equal(recorded.ok, true);
   assert.equal(recorded.skipped, undefined);
-  assert.match(recorded.file, /session-agent-context\/events\/debug-agent-context\.jsonl$/);
+  assert.equal(
+    recorded.file,
+    path.join(
+      root,
+      "admin",
+      "runtime",
+      "session",
+      "session-agent-context",
+      "events",
+      "debug-agent-context.jsonl",
+    ),
+  );
 });
 
 test("agent context debug logs honor an explicit disabled control", async () => {
@@ -201,7 +234,18 @@ test("runtime-events writer filters debug session logs by business debug control
   assert.equal(skipped.ok, true);
   assert.equal(skipped.skipped, true);
   assert.equal(recorded.ok, true);
-  assert.match(recorded.file, /session-debug-type\/events\/debug-state-machine\.jsonl$/);
+  assert.equal(
+    recorded.file,
+    path.join(
+      root,
+      "admin",
+      "runtime",
+      "session",
+      "session-debug-type",
+      "events",
+      "debug-state-machine.jsonl",
+    ),
+  );
   assert.equal((await readJsonl(recorded.file)).length, 1);
 });
 
@@ -250,7 +294,18 @@ test("runtime-events writer never suppresses an error with a disabled debug cont
 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, undefined);
-  assert.match(result.file, /session-debug-error\/events\/debug-context-identity\.jsonl$/);
+  assert.equal(
+    result.file,
+    path.join(
+      root,
+      "admin",
+      "runtime",
+      "session",
+      "session-debug-error",
+      "events",
+      "debug-context-identity.jsonl",
+    ),
+  );
 });
 
 test("disabled debug logs are skipped before payload sanitization", async () => {
@@ -316,7 +371,10 @@ test("system debug logs still honor their debug control", async () => {
   assert.equal(recorded.ok, true);
   assert.equal(recorded.skipped, undefined);
   assert.equal(recorded.record.scope, "system");
-  assert.match(recorded.file, /system\/frontend\/debug\.jsonl$/);
+  assert.equal(
+    recorded.file,
+    path.join(root, "admin", "runtime", "events", "system", "frontend", "debug.jsonl"),
+  );
   assert.equal((await readJsonl(recorded.file))[0].data.candidateCount, 100);
 });
 

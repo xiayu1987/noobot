@@ -157,7 +157,7 @@ test("restricted process environment projects only declared platform variables",
 });
 
 test("LibreOffice executable resolution is platform-owned", () => {
-  assert.equal(resolveLibreOfficeExecutable({ platform: "win32", sourceEnv: {} }), "soffice.exe");
+  assert.equal(resolveLibreOfficeExecutable({ platform: "win32", sourceEnv: {} }), "soffice.com");
   assert.equal(resolveLibreOfficeExecutable({ platform: "darwin", sourceEnv: {} }), "libreoffice");
 });
 

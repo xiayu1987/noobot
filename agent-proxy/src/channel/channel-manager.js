@@ -16,6 +16,7 @@ import { nowMs } from "../shared/utils.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { ChannelEventJournal } from "./channel-event-journal.js";
 import { resolveOptionalSessionId } from "@noobot/runtime-events/session-id";
+import { createSystemSessionLogObservation } from "@noobot/runtime-events/session-log-protocol";
 import { text } from "@noobot/shared/value";
 
 const CHANNEL_LOG_RESERVED_KEYS = [
@@ -104,13 +105,10 @@ export class ChannelManager {
       }
     }
     const { sessionId, parentSessionId } = channel.identity;
-    return this.writeSessionLog(channel, {
-      ...event,
-      sessionId,
-      parentSessionId,
-      dialogProcessId: "",
-      turnScopeId: "",
-    });
+    return this.sessionLogClient.log(
+      channel.apiKey,
+      createSystemSessionLogObservation({ ...event, sessionId, parentSessionId }),
+    );
   }
 
   logSessionEvent(channel, event = {}) {

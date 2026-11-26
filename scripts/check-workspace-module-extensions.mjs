@@ -10,6 +10,7 @@ import {
   addHit,
   defineCheck,
   emptyRuleMeasurements,
+  qualityReportPath,
   runCheckWhenMain,
 } from "./quality/check-protocol.mjs";
 import { repositoryRoot } from "./quality/repository-files.mjs";
@@ -49,7 +50,7 @@ export async function measureWorkspaceModuleExtensions(root) {
     if (workspacePackage.type !== "module") continue;
     for (const filePath of await findMjsFiles(workspaceRoot, workspaceRoot, [])) {
       addHit(measured.mjsInModuleWorkspace, {
-        file: path.relative(root, filePath).split(path.sep).join("/"),
+        file: qualityReportPath(root, filePath),
         message: '.mjs file under package-level "type": "module"',
       });
     }

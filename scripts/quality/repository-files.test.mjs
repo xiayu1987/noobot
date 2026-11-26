@@ -16,7 +16,8 @@ import {
 test("repositoryPathExists reports missing paths and rethrows other access errors", async () => {
   assert.equal(await repositoryPathExists("package.json"), true);
   assert.equal(await repositoryPathExists("zz-missing-quality-probe"), false);
-  await assert.rejects(repositoryPathExists("package.json/child"), { code: "ENOTDIR" });
+  assert.equal(await repositoryPathExists("package.json/child"), false);
+  await assert.rejects(repositoryPathExists("invalid\0path"), { code: "ERR_INVALID_ARG_VALUE" });
 });
 
 test("matchingLineHits reports one-based line numbers for every matching line", () => {

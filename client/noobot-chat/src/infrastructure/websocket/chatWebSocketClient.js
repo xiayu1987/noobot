@@ -203,11 +203,24 @@ export function createChatWebSocketClient({
 
   const recordEventProcessingTiming = createEventProcessingTimingRecorder();
 
-  function resolveEventOwner(event, hasLiveSubscriber) {
+  function resolveEventOwner({ event, data, channelSessionId }, lifecycle, hasLiveSubscriber) {
     const reconnectControlEvent =
-      event === StreamEventEnum.RECONNECT_DATA || event === StreamEventEnum.RECONNECT_COMPLETE;
+      event === StreamEventEnum.RECONNECT_DATA ||
+      event === StreamEventEnum.RECONNECT_COMPLETE ||
+      (event === AGENT_TRANSPORT_EVENT.ERROR &&
+        data.code === AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED);
     if (activeReconnectContext && reconnectControlEvent) return "reconnect_handler";
-    if (activeStreamContext?.handleProtocolEvent) return "stream_handler";
+    if (
+      activeStreamContext?.handleProtocolEvent &&
+      (lifecycle === null ||
+        isEventForStreamScope(
+          lifecycle.sessionId === channelSessionId ? lifecycle : data,
+          activeStreamContext.payload,
+          channelSessionId,
+        ))
+    ) {
+      return "stream_handler";
+    }
     if (activeReconnectContext) return "reconnect_handler";
     if (hasLiveSubscriber) return "transport_live_subscriber";
     return "unowned";
@@ -267,7 +280,7 @@ export function createChatWebSocketClient({
             return;
           }
           commandRequests.settle(event, data);
-          const owner = resolveEventOwner(event, hasLiveSubscriber);
+          const owner = resolveEventOwner(transportEvent, lifecycleData, hasLiveSubscriber);
           const dispatchEligible = owner !== "unowned";
           if (
             owner === "unowned" &&
@@ -720,9 +733,7 @@ export function createChatWebSocketClient({
           return;
         }
 
-        if (!activeStreamContext) {
-          onReconnectData(transportEvent);
-        }
+        onReconnectData(transportEvent);
       }
       activeReconnectContext = {
         requestId,

@@ -100,6 +100,18 @@ function requireSuccessfulFlush(deliveryFailures, persistenceFailures) {
   }
 }
 
+function recordDeliveryFailure(persistence, diagnostic, error, now) {
+  const failure = { ...diagnostic, error: error?.message || String(error || "") };
+  if (!diagnostic.eventId && !diagnostic.presentationMessageId) return failure;
+  const event = "execution_upstream_forward_failed";
+  try {
+    persistence.append({ event, category: "system", type: event, data: failure, ts: now() });
+  } catch (cause) {
+    persistence.recordFailure(event, cause);
+  }
+  return failure;
+}
+
 export function createExecutionEventListener({
   sessionManager,
   userId,
@@ -133,7 +145,6 @@ export function createExecutionEventListener({
   });
   const persistence = createExecutionLogQueue({ sessionManager, route, persistenceScope });
   const appendExecutionLog = persistence.append;
-  const recordPersistenceFailure = persistence.recordFailure;
   const persistenceFailures = persistence.failures;
   let deliveryTail = Promise.resolve();
   let timingTail = Promise.resolve();
@@ -146,7 +157,6 @@ export function createExecutionEventListener({
   const forwardUpstream = ({ event, data, route: deliveryRoute }) => {
     const transportData = projectExecutionTransportPayload({ data, route: deliveryRoute });
     const diagnostic = summarizeDelivery(event, transportData, deliveryRoute);
-    const shouldDiagnose = Boolean(diagnostic.eventId || diagnostic.presentationMessageId);
     const enqueuedAt = deliveryTiming ? performance.now() : 0;
     const task = deliveryTail.then(async () => {
       const startedAt = deliveryTiming ? performance.now() : 0;
@@ -161,22 +171,7 @@ export function createExecutionEventListener({
         }
         return result;
       } catch (error) {
-        const failure = { ...diagnostic, error: error?.message || String(error || "") };
-        deliveryFailures.push(failure);
-        if (shouldDiagnose) {
-          const event = "execution_upstream_forward_failed";
-          try {
-            appendExecutionLog({
-              event,
-              category: "system",
-              type: event,
-              data: failure,
-              ts: stampExecutionLogTime(),
-            });
-          } catch (cause) {
-            recordPersistenceFailure(event, cause);
-          }
-        }
+        deliveryFailures.push(recordDeliveryFailure(persistence, diagnostic, error, now));
         return false;
       } finally {
         deliveryTiming?.runMs.push(performance.now() - startedAt);
@@ -239,6 +234,7 @@ export function createExecutionEventListener({
     onEvent: (evt = {}) => {
       const event = evt?.event || "";
       const data = evt?.data || {};
+      const waitForPersistence = persistence.backpressured;
 
       if (!isTransientMessageEvent(data?.envelope)) {
         const executionRecord = projectExecutionLogRecord(event, data);
@@ -252,8 +248,11 @@ export function createExecutionEventListener({
         });
       }
 
-      if (!AGENT_RUN_EVENTS.has(event)) return undefined;
-      return forwardUpstream({ event, data, route });
+      const delivery = AGENT_RUN_EVENTS.has(event)
+        ? forwardUpstream({ event, data, route })
+        : undefined;
+      if (!waitForPersistence) return delivery;
+      return Promise.all([persistence.flush(), delivery]).then(([, result]) => result);
     },
   };
 }

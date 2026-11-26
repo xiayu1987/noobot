@@ -20,6 +20,7 @@ test(
       configFile: false,
       appType: "custom",
       root,
+      resolve: { alias: { "fixture-runtime-params": runtime } },
       plugins: [vue()],
       server: { host: "127.0.0.1", port: 0 },
     });
@@ -39,7 +40,7 @@ test(
       import 'element-plus/dist/index.css';
       import '/src/shared/styles/components/workspace-panel.css';
       import '/src/shared/styles/components/preview.css';
-      import { activateRuntimeParams, createDefaultRuntimeParamsDocument } from '/@fs/${runtime}';
+      import { activateRuntimeParams, createDefaultRuntimeParamsDocument } from 'fixture-runtime-params';
       activateRuntimeParams(createDefaultRuntimeParamsDocument());
       window.emptyFrames = [];
       window.mountMutation = (content = '<h1>Written snapshot</h1>', fileName = 'written.html', inline = false) => {

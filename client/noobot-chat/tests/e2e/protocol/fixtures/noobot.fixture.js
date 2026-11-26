@@ -224,7 +224,10 @@ async function auditModelObservation({ userId, sessionId, policy, testInfo }) {
 
 async function readSessionDetail({ page, apiKey, userId, sessionId }) {
   const response = await page.request.get(
-    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+    new URL(
+      `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+      page.url(),
+    ).href,
     { headers: { "x-api-key": apiKey } },
   );
   expect(response.ok(), "session detail read must succeed before artifact audit").toBe(true);
@@ -279,11 +282,18 @@ async function auditSessionSummaryPersistence({
 }
 
 export const test = artifactTest.extend({
-  noobot: async ({ page }, use, testInfo) => {
+  createClient: async ({ openClient }, use) => {
+    await use(async () => {
+      const client = await openClient();
+      await installE2eModelPreferences(client.context);
+      return client;
+    });
+  },
+  noobot: async ({ page, baseURL }, use, testInfo) => {
     const credentials = readE2eCredentials();
     const policy = modelObservationPolicyForTitle(testInfo.title);
     await installE2eModelPreferences(page);
-    await page.goto("/");
+    await page.goto(new URL("/", baseURL).href);
     const connectConfig = await connectThroughUi(page, credentials);
     const { apiKey: _apiKey, ...publicConnectConfig } = connectConfig || {};
     const connectEvidenceDir = testInfo.outputPath("protocol-evidence");

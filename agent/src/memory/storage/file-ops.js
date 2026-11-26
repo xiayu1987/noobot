@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, readdir, readFile } from "@noobot/shared/file-system";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { writeDurableJsonFile } from "../../shared/storage/durable-file.js";

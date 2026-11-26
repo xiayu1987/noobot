@@ -743,7 +743,7 @@ const webSearchRequest = {
   operation: { kind: MODEL_OPERATION_KIND.WEB_SEARCH, input: { query: "latest" } },
 };
 
-test("operation switches to the declared alternate mode once and caches it", async () => {
+test("operation switches once and starts the next invocation with its requested mode", async () => {
   const { adapter, calls } = createOperationAdapter({
     modes: [false, true],
     fail: (streaming) => streaming === false,
@@ -768,7 +768,7 @@ test("operation switches to the declared alternate mode once and caches it", asy
     ],
   );
   await executor.invoke(webSearchRequest);
-  assert.deepEqual(calls, [false, true, true]);
+  assert.deepEqual(calls, [false, true, false, true]);
 });
 
 test("operation declaring a single mode never switches", async () => {

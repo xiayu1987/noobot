@@ -8,7 +8,6 @@ import {
   anthropicMessagesAdapter,
   openAiCompatibleAdapter,
   createModelRequestExecutor,
-  createProviderAdapterRegistry,
   normalizeModelOutput,
 } from "../src/index.js";
 import {
@@ -340,13 +339,33 @@ const invocation = {
 function executorWithFetch(fetch, observationPort) {
   return createModelRequestExecutor({
     ...(observationPort ? { observationPort } : {}),
-    registry: createProviderAdapterRegistry([
-      {
-        ...anthropicMessagesAdapter,
-        createClient: (input) => anthropicMessagesAdapter.createClient({ ...input, fetch }),
-      },
-    ]),
+    providerRuntime: { fetchImpl: fetch },
+    clock: { now: () => 0, sleep: async () => {} },
     credentialPort: { resolve: async () => "test-key" },
+  });
+}
+
+for (const [status, kind, expectedRequests] of [
+  [401, "authentication", 1],
+  [403, "authentication", 1],
+  [502, "temporary_unavailable", 3],
+]) {
+  test(`Anthropic malformed HTTP ${status} error body follows status-based recovery`, async () => {
+    let requests = 0;
+    const events = [];
+    const executor = executorWithFetch(
+      async () => {
+        requests += 1;
+        return new Response("{invalid}", {
+          status,
+          headers: { "content-type": "application/json" },
+        });
+      },
+      { emit: (type, data) => events.push({ type, data }) },
+    );
+    await assert.rejects(executor.invoke({ invocation, model: modelSpec, messages }), { status });
+    assert.equal(requests, expectedRequests);
+    assert.equal(events.find(({ type }) => type === "model.invocation.failed").data.kind, kind);
   });
 }
 
@@ -374,7 +393,7 @@ test("Anthropic negotiates a response mode mismatch and caches the successful mo
   assert.deepEqual(modes, [true, false, false]);
 });
 
-test("Anthropic duplicate message_start fails without replaying the request", async () => {
+test("Anthropic duplicate message_start before output retries without switching mode", async () => {
   const modes = [];
   const events = [];
   const executor = executorWithFetch(
@@ -418,7 +437,7 @@ test("Anthropic duplicate message_start fails without replaying the request", as
       return true;
     },
   );
-  assert.deepEqual(modes, [true]);
+  assert.deepEqual(modes, [true, true, true]);
   assert.equal(
     events.filter((event) => event.type === "model.invocation.streaming_mode_retry").length,
     0,

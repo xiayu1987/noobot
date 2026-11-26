@@ -147,6 +147,7 @@ export class MemoryManager {
     sessionId,
     parentSessionId,
     userConfig,
+    runConfig,
     abortSignal,
     invocationIdentity,
     eventListener,
@@ -182,6 +183,7 @@ export class MemoryManager {
     const runtime = {
       globalConfig: this.globalConfig,
       userConfig,
+      runConfig,
       eventListener,
       systemRuntime: { userId, sessionId },
       sharedTools: {},

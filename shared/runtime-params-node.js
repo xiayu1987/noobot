@@ -211,13 +211,8 @@ export function createRuntimeParamsStore(filePath, { active = activeRuntimeParam
         fs.writeFileSync(temporary, `${JSON.stringify(next, null, 2)}\n`, {
           mode: 0o600,
           flag: "wx",
+          flush: true,
         });
-        const fd = fs.openSync(temporary, "r");
-        try {
-          fs.fsyncSync(fd);
-        } finally {
-          fs.closeSync(fd);
-        }
         fs.renameSync(temporary, filePath);
         return read();
       } finally {

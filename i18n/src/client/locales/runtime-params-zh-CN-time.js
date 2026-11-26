@@ -195,7 +195,7 @@ export default {
     executionLogQueueWaitMs: {
       name: "执行日志队列等待预算",
       description:
-        "日志批次开始写入前允许的最长排队时间。超时队列拒绝新记录；已接收记录继续排空，并由 flush 报告超时。不取消在途写入。",
+        "日志排队超过此时间后，等待事件完成的调用方会等待队列排空，成功写入后继续执行。写入或发送失败由 flush 报告。在途写入继续完成，记录数和字节上限仍限制队列大小。",
     },
     authorityOutboxDeliveredRetentionMs: {
       name: "智能体权威状态发件箱已送达保留",

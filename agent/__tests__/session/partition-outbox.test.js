@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import { basename } from "node:path";
 import { test } from "node:test";
 import { PartitionJournal } from "../../src/session/partition-storage/partition-journal.js";
 import { PartitionTransactions } from "../../src/session/partition-storage/partition-transactions.js";
@@ -421,7 +422,7 @@ test("failed outbox publication preserves pending delivery and retries after reo
   setFsAdapter({
     ...adapter,
     async rename(source, target) {
-      if (String(target).endsWith("/CURRENT")) {
+      if (basename(String(target)) === "CURRENT") {
         injected = true;
         throw new Error("outbox publication fault");
       }
@@ -607,7 +608,7 @@ test("failed turn removal preserves visibility and retries atomically after reop
   setFsAdapter({
     ...adapter,
     async rename(source, target) {
-      if (String(target).endsWith("/CURRENT")) {
+      if (basename(String(target)) === "CURRENT") {
         injected = true;
         throw new Error("turn removal publication fault");
       }

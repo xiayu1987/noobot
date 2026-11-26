@@ -16,6 +16,10 @@ import {
 } from "@noobot/workspace-protocol/session-tombstone";
 import { attachScopeRoot } from "../../agent/src/artifacts/service/attachment-storage-layout.js";
 import {
+  DELETION_WORKER_BUDGET,
+  runDeletionWorker,
+} from "./deletion-worker-process.test-helpers.js";
+import {
   createPartitionBotFixture,
   firstSend,
   identity,
@@ -27,6 +31,7 @@ const layout = new URL(
   import.meta.url,
 );
 const deleteSource = `
+  import { waitForDeletionStart } from ${JSON.stringify(new URL("./deletion-worker-process.test-helpers.js", import.meta.url).href)};
   import assert from "node:assert/strict";
   import { flushRuntimeEvents } from "@noobot/runtime-events";
   import { createPartitionBotRuntime, identity } from ${JSON.stringify(fixture.href)};
@@ -42,6 +47,7 @@ const deleteSource = `
     const { userId } = identity;
     const [mode, root, targets] = process.argv.slice(2);
     await withTestServer(app, async (url) => {
+      await waitForDeletionStart();
       const response = await fetch(url + "/internal/session/" + userId + "/" + root, {
         method: "DELETE",
         headers: { connection: "close" },
@@ -149,7 +155,7 @@ test("scoped directory admission holds the deletion publication fence while open
 for (const deleteAncestor of [false, true])
   test(
     `cross-process deletion of ${deleteAncestor ? "an ancestor" : "a session"} waits for retained cursors`,
-    { timeout: 15000 },
+    { timeout: 3 * DELETION_WORKER_BUDGET.startupMs + 2 * DELETION_WORKER_BUDGET.operationMs },
     async (t) => {
       const { service, workspaceRoot, budget, setBudget } = await createPartitionBotFixture(t);
       setBudget({ ...budget, maxJournals: 3 });
@@ -198,8 +204,7 @@ for (const deleteAncestor of [false, true])
       assert.equal(snapshots.entries.size, 3);
 
       const runDelete = async (mode) => {
-        const child = spawn(
-          process.execPath,
+        const { termination, output } = await runDeletionWorker(
           [
             "--import",
             new URL("../../shared/testing/runtime-params.js", import.meta.url).href,
@@ -214,11 +219,10 @@ for (const deleteAncestor of [false, true])
           {
             cwd: new URL("../", import.meta.url),
             env: { ...process.env, [WORKSPACE_ROOT_ENV]: workspaceRoot },
-            stdio: ["ignore", "ignore", "inherit"],
             signal: t.signal,
           },
         );
-        assert.deepEqual(await once(child, "exit"), [0, null]);
+        assert.deepEqual(termination, [0, null], output);
       };
       await runDelete("pinned");
       assert.equal((await readOperation()).nextStage, STAGE.DIRECTORIES);
@@ -253,6 +257,7 @@ for (const deleteAncestor of [false, true])
   );
 
 const crashSource = `
+  import { waitForDeletionStart } from ${JSON.stringify(new URL("./deletion-worker-process.test-helpers.js", import.meta.url).href)};
   import { createPartitionBotRuntime, firstSend, identity } from ${JSON.stringify(fixture.href)};
   import { attachScopeRoot } from ${JSON.stringify(layout.href)};
   import { mkdir } from "node:fs/promises";
@@ -268,6 +273,7 @@ const crashSource = `
     if (completedStage === STAGE.ATTACHMENTS) process.exit(45);
     return advance(user, key, completedStage);
   };
+  await waitForDeletionStart();
   await bot.session.deleteSessionBranch({ userId, sessionIds: [sessionId] }, async ({ stage }) => {
     if (stage === STAGE.PLAN_PLUGINS) return ["fixture"];
     if (stage === STAGE.PLUGINS) return;
@@ -278,11 +284,10 @@ const crashSource = `
 
 test(
   "branch deletion resumes an unconfirmed attachment cleanup after process exit",
-  { timeout: 15000 },
+  { timeout: 2 * DELETION_WORKER_BUDGET.startupMs + DELETION_WORKER_BUDGET.operationMs },
   async (t) => {
     const { service, workspaceRoot } = await createPartitionBotFixture(t);
-    const child = spawn(
-      process.execPath,
+    const { termination, output } = await runDeletionWorker(
       [
         "--import",
         new URL("../../shared/testing/runtime-params.js", import.meta.url).href,
@@ -293,11 +298,10 @@ test(
       ],
       {
         cwd: new URL("../", import.meta.url),
-        stdio: ["ignore", "ignore", "inherit"],
         signal: t.signal,
       },
     );
-    assert.deepEqual(await once(child, "exit"), [45, null]);
+    assert.deepEqual(termination, [45, null], output);
     const { bot } = await service.rebuildRuntimeConfig();
     const { userId, sessionId } = identity;
     const attachment = attachScopeRoot(bot.getWorkspacePath(userId), {

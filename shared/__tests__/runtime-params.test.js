@@ -218,9 +218,23 @@ test("fixed thresholds read before initialization; editable thresholds require t
 test("generic writes reject protected file, temporary siblings and symlink aliases", (t) => {
   const { file } = fixture(t);
   fs.writeFileSync(file, "{}");
-  const alias = path.join(path.dirname(file), "alias.json");
-  fs.symlinkSync(file, alias);
-  for (const target of [file, `${file}.lock`, `${file}.test.tmp`, alias]) {
+  const aliasRoot = fs.mkdtempSync(path.join(os.tmpdir(), "runtime-params-alias-"));
+  t.after(() => fs.rmSync(aliasRoot, { recursive: true, force: true }));
+  const directoryAlias = path.join(aliasRoot, "managed");
+  fs.symlinkSync(
+    path.dirname(file),
+    directoryAlias,
+    process.platform === "win32" ? "junction" : "dir",
+  );
+  const alias = path.join(directoryAlias, path.basename(file));
+  for (const target of [
+    file,
+    `${file}.lock`,
+    `${file}.test.tmp`,
+    alias,
+    `${alias}.lock`,
+    `${alias}.test.tmp`,
+  ]) {
     assert.throws(() => assertRuntimeParamsFileWriteAllowed(target, file), { statusCode: 403 });
   }
   assert.doesNotThrow(() =>

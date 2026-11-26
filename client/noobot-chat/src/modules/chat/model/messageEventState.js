@@ -16,6 +16,26 @@ export function createMessageEventState() {
   };
 }
 
+function messageEventStateKey({ sessionId, turnScopeId, dialogProcessId, presentationMessageId }) {
+  if (!sessionId || !turnScopeId || !dialogProcessId || !presentationMessageId) return null;
+  return JSON.stringify([sessionId, turnScopeId, dialogProcessId, presentationMessageId]);
+}
+
+export function continueMessageEventStates(previousMessages, nextMessages) {
+  const states = new Map();
+  for (const message of previousMessages) {
+    const state = message.messageEventState;
+    if (!state?.lastSequence) continue;
+    const key = messageEventStateKey(message);
+    if (key !== null) states.set(key, state);
+  }
+  if (!states.size) return;
+  for (const message of nextMessages) {
+    const state = states.get(messageEventStateKey(message));
+    if (state) message.messageEventState = state;
+  }
+}
+
 let consumedMessageEvents = null;
 
 function consumedMessageEventIndex() {

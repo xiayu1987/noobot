@@ -11,6 +11,7 @@ import { getTurnUiState, setTurnThinkingOpenNames } from "../../runtime/engine/t
 import ThinkingPanelRealtime from "./ThinkingPanelRealtime.vue";
 import ThinkingPanelDetails from "./ThinkingPanelDetails.vue";
 import { text } from "@noobot/shared/value";
+import { selectLatestUserInterjection } from "@noobot/event-protocol/thinking-detail-content";
 
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
@@ -45,12 +46,10 @@ const panelVisible = computed(() =>
   Boolean(panel.hasThinking.value || panel.loadedThinkingDetail.value),
 );
 const groupedToolLogs = computed(() => panel.groupExecutionLogs(props.messageItem));
-const latestUserInterjection = computed(
-  () =>
-    [...thinkingContentItems.value]
-      .reverse()
-      .find((item = {}) => item.contentKind === "user_interjection") || null,
-);
+const latestUserInterjection = computed(() => {
+  const fact = selectLatestUserInterjection(props.messageItem.thinkingContentTimeline ?? []);
+  return fact === null ? null : { ...fact, content: fact.text };
+});
 watch(panelVisible, (visible) => emit("panel-visibility-change", visible), { immediate: true });
 watch(thinkingIdentity, () => {
   if (props.messageItem?.role !== "assistant") return;

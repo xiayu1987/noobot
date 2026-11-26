@@ -140,6 +140,26 @@ describe("BasePreviewContent", () => {
     wrapper.unmount();
   });
 
+  it.each([
+    ["AbortError", false],
+    ["NotAllowedError", true],
+  ])("handles a %s from playback restoration", async (name, showsError) => {
+    const wrapper = mountPreview({ name: "sound.wav", url: "/first" });
+    const audio = wrapper.find("audio");
+    Object.defineProperty(audio.element, "paused", { value: false, configurable: true });
+    audio.element.currentTime = 5;
+    const error = new DOMException("Playback rejected", name);
+    const play = vi.spyOn(audio.element, "play").mockRejectedValue(error);
+    await wrapper.setProps({ url: "/renewed" });
+    audio.element.currentTime = 0;
+    await audio.trigger("loadedmetadata");
+    await flushPromises();
+    expect(play).toHaveBeenCalledOnce();
+    expect(wrapper.find(".preview-error").exists()).toBe(showsError);
+    if (!showsError) expect(wrapper.get("audio").element.currentTime).toBe(5);
+    wrapper.unmount();
+  });
+
   it("mounts HTML frames only after resources are ready and ignores an abandoned document", async () => {
     let finishResource;
     const resolveResource = vi.fn(

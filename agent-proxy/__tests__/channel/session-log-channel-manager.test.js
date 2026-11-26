@@ -218,7 +218,7 @@ test("ChannelManager ignores placeholder parent session ids", () => {
   assert.equal(records[0].event.data.parentSessionId, "null");
 });
 
-test("ChannelManager session logs require sessionId; channel logs use only the channel identity", () => {
+test("ChannelManager session logs require sessionId; channel observations do not require registration", () => {
   const records = [];
   const manager = new ChannelManager(
     { OPEN: 1 },
@@ -244,10 +244,16 @@ test("ChannelManager session logs require sessionId; channel logs use only the c
   });
 
   assert.equal(records.length, 1);
-  assert.equal(records[0].event.scope, "session");
-  assert.equal(records[0].event.sessionId, "session-1");
-  assert.equal(records[0].event.turnScopeId, "");
-  assert.equal(records[0].event.dialogProcessId, "");
+  assert.equal(records[0].event.scope, "system");
+  assert.equal(records[0].event.sessionId, undefined);
+  assert.equal(records[0].event.turnScopeId, undefined);
+  assert.equal(records[0].event.dialogProcessId, undefined);
+  assert.deepEqual(records[0].event.data.targetIdentity, {
+    sessionId: "session-1",
+    parentSessionId: "",
+    dialogProcessId: "",
+    turnScopeId: "",
+  });
 });
 
 test("ChannelManager channel logs reject caller-supplied session identity", () => {
@@ -297,6 +303,8 @@ test("ChannelManager reports an unlocatable invalid upstream frame on the channe
 
   const reported = records.find((item) => item.event.event === "agentProxy.upstream.message.error");
   assert.ok(reported);
-  assert.equal(reported.event.sessionId, "session-1");
+  assert.equal(reported.event.scope, "system");
+  assert.equal(reported.event.sessionId, undefined);
+  assert.equal(reported.event.data.targetIdentity.sessionId, "session-1");
   assert.equal(reported.event.data.error, entryError.message);
 });

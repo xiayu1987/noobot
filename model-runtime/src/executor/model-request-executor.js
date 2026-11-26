@@ -33,6 +33,7 @@ import {
   requireCredentialPort,
   requireObservationPort,
   requireOperationStreamingModes,
+  resolveModelGenerationStreamingModes,
   SYSTEM_CLOCK_PORT,
 } from "@noobot/model-protocol";
 import { normalizeMessages } from "../normalization/message-normalizer.js";
@@ -129,9 +130,11 @@ export function createModelRequestExecutor({
         tools: requestBase.tools,
       });
       const streamingRequired = requestBase.options.streamingRequired === true;
+      const cacheStreaming =
+        requestBase.operation.kind === MODEL_OPERATION_KIND.CHAT && !streamingRequired;
       let streaming = resolvePreferredStreaming({
         requested: input.options?.streaming === true,
-        cached: streamingRequired ? undefined : streamingModes.get(streamingCacheKey),
+        cached: cacheStreaming ? streamingModes.get(streamingCacheKey) : undefined,
       });
       const modelObservationState = resolveModelObservationState(requestBase.model);
       const observableModel = projectObservableModel(requestBase.model);
@@ -261,7 +264,7 @@ export function createModelRequestExecutor({
           attemptCount: totalAttempts,
           operationKind: requestBase.operation.kind,
         });
-        if (!streamingRequired) streamingModes.set(streamingCacheKey, streaming);
+        if (cacheStreaming) streamingModes.set(streamingCacheKey, streaming);
         return response;
       };
       const retryToolCallRecovery = async (kind, output) => {
@@ -293,6 +296,7 @@ export function createModelRequestExecutor({
         : adapter.executeOperation;
       const invokeOperationTransport = (credential) =>
         executeTransportRetry({
+          recoveryContext: { operationKind: requestBase.operation.kind },
           policy: retry.transport,
           canRetry: () => canReplay(),
           clock,
@@ -350,7 +354,7 @@ export function createModelRequestExecutor({
         }
         const modes = requireOperationStreamingModes(
           nativeGeneration
-            ? [false]
+            ? resolveModelGenerationStreamingModes(requestBase.model, requestBase.operation)
             : adapter.resolveOperationStreamingModes({
                 modelSpec: requestBase.model,
                 operation: requestBase.operation,
@@ -419,7 +423,7 @@ export function createModelRequestExecutor({
           ? clientDecorator(baseClient, { request })
           : baseClient;
       };
-      const invokeChatTransport = (request, client) =>
+      const invokeChatAttempt = (request, client, responseSource) =>
         executeTransportRetry({
           policy: retry.transport,
           canRetry: () => canReplay(),
@@ -435,7 +439,7 @@ export function createModelRequestExecutor({
               attempt: totalAttempts,
               streaming,
             });
-            return recordingAttempt(MODEL_ATTEMPT_KIND.TRANSPORT, streaming, () =>
+            const value = await recordingAttempt(MODEL_ATTEMPT_KIND.TRANSPORT, streaming, () =>
               runModelAttempt({
                 adapter,
                 client,
@@ -451,12 +455,18 @@ export function createModelRequestExecutor({
                 },
               }),
             );
+            const normalized = await recordingAttempt(MODEL_ATTEMPT_KIND.RESPONSE, streaming, () =>
+              normalizeModelResponse(value, responseSource),
+            );
+            return { value, normalized };
           },
         });
       const switchStreamingMode = async (error, modes) => {
         if (streamingRequired || !canReplay()) return false;
         const classification = classify(error);
-        const recovery = resolveModelFailureRecovery(classification);
+        const recovery = resolveModelFailureRecovery(classification, {
+          operationKind: requestBase.operation.kind,
+        });
         if (recovery.revision !== MODEL_REQUEST_REVISION.SET_STREAMING_MODE) return false;
         triedStreamingModes.add(streaming);
         const nextStreaming = resolveUntriedStreamingMode({
@@ -482,9 +492,9 @@ export function createModelRequestExecutor({
         requestBase.options.signal?.throwIfAborted();
         return true;
       };
-      const attemptChatTransport = async (request, client) => {
+      const attemptChat = async (request, client, responseSource) => {
         try {
-          return { result: await invokeChatTransport(request, client) };
+          return { result: await invokeChatAttempt(request, client, responseSource) };
         } catch (error) {
           if (!(await switchStreamingMode(error, CHAT_STREAMING_MODES))) throw error;
           return { switched: true };
@@ -560,15 +570,13 @@ export function createModelRequestExecutor({
             messages,
             options: { ...input.options, streaming },
           });
-          const transport = await attemptChatTransport(
+          const attempt = await attemptChat(
             request,
             createChatClient(request, credential),
+            responseSource,
           );
-          if (transport.switched) continue;
-          const { value } = transport.result;
-          const normalized = await recordingAttempt(MODEL_ATTEMPT_KIND.RESPONSE, streaming, () =>
-            normalizeModelResponse(value, responseSource),
-          );
+          if (attempt.switched) continue;
+          const { value, normalized } = attempt.result.value;
           if (await shouldRetryChatResponse(responseSource, value, normalized)) continue;
           pushAttempt({
             status: MODEL_ATTEMPT_STATUS.COMPLETED,

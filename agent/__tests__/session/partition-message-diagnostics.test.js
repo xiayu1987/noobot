@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
+import { filePath as path } from "@noobot/path-resolver";
 import { messageDiagnosticKey } from "@noobot/session-protocol/session-changes";
 import { emptyPartitionSession } from "../helpers/partition-session-cases.js";
 import { PartitionJournal } from "../../src/session/partition-storage/partition-journal.js";
@@ -208,12 +209,13 @@ test("publication failure exposes neither message nor diagnostic and exact retry
   const { journal, repository, sessionId, root } = await fixture(t, { autoClose: false });
   const request = await prepare(journal, repository, "failed", changes(sessionId, ["a"]));
   const previous = getFsAdapter();
-  const before = await readFile(`${root}/CURRENT`);
+  const current = path.join(root, "CURRENT");
+  const before = await readFile(current);
   let failed = false;
   setFsAdapter({
     ...previous,
     async rename(source, destination) {
-      if (String(destination) === `${root}/CURRENT` && !failed) {
+      if (String(destination) === current && !failed) {
         failed = true;
         throw new Error("diagnostic publication fault");
       }
@@ -230,7 +232,7 @@ test("publication failure exposes neither message nor diagnostic and exact retry
     setFsAdapter(previous);
   }
   assert.equal(failed, true);
-  assert.deepEqual(await readFile(`${root}/CURRENT`), before);
+  assert.deepEqual(await readFile(current), before);
   assert.deepEqual(uids(await page(journal, repository)), []);
   await assert.rejects(journal.close(), { code: "SESSION_COMMIT_UNCERTAIN" });
   const reopened = await PartitionJournal.open({ root, sessionId });

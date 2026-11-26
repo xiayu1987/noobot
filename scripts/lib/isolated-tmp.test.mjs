@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import {
   mkdirSync,
   mkdtempSync,
@@ -12,6 +14,7 @@ import {
   statSync,
   symlinkSync,
   utimesSync,
+  writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -41,10 +44,10 @@ function createAgedDir(root, name, ageMs) {
 
 const HOUR_MS = 60 * 60 * 1000;
 
-test("acquireIsolatedTmpDir reuses inherited dir without creating or pruning", (t) => {
+test("acquireIsolatedTmpDir reuses inherited dir without creating or pruning", async (t) => {
   const root = createRoot(t);
   createAgedDir(root, "p-old", 5 * HOUR_MS);
-  const result = acquireIsolatedTmpDir({
+  const result = await acquireIsolatedTmpDir({
     prefix: "p-",
     keep: 1,
     tmpRoot: root,
@@ -54,47 +57,83 @@ test("acquireIsolatedTmpDir reuses inherited dir without creating or pruning", (
   assert.deepEqual(readdirSync(root), ["p-old"]);
 });
 
-test("acquireIsolatedTmpDir keeps recent dirs and prunes only old ones beyond keep", (t) => {
+test("acquireIsolatedTmpDir keeps recent dirs and prunes only old ones beyond keep", async (t) => {
   const root = createRoot(t);
   createAgedDir(root, "p-a", 5 * HOUR_MS);
   createAgedDir(root, "p-b", 4 * HOUR_MS);
   createAgedDir(root, "p-c", 1000);
   createAgedDir(root, "other", 9 * HOUR_MS);
-  const result = acquireIsolatedTmpDir({ prefix: "p-", keep: 2, tmpRoot: root, env: {} });
+  const result = await acquireIsolatedTmpDir({ prefix: "p-", keep: 2, tmpRoot: root, env: {} });
   assert.equal(result.created, true);
   assert.equal(path.dirname(result.dir), root);
   const names = readdirSync(root).sort();
-  assert.deepEqual(names, ["other", "p-c", path.basename(result.dir)].sort());
+  assert.deepEqual(names, [".noobot-prune.lock", "other", "p-c", path.basename(result.dir)].sort());
 });
 
-test("pruneOldest never removes dirs younger than minAgeMs", (t) => {
+test("pruneOldest never removes dirs younger than minAgeMs", async (t) => {
   const root = createRoot(t);
   createAgedDir(root, "p-a", 2000);
   createAgedDir(root, "p-b", 1000);
-  pruneOldest(root, (name) => name.startsWith("p-"), 0, { minAgeMs: HOUR_MS });
-  assert.deepEqual(readdirSync(root).sort(), ["p-a", "p-b"]);
-  pruneOldest(root, (name) => name.startsWith("p-"), 0);
-  assert.deepEqual(readdirSync(root), []);
+  await pruneOldest(root, (name) => name.startsWith("p-"), 0, { minAgeMs: HOUR_MS });
+  assert.deepEqual(readdirSync(root).sort(), [".noobot-prune.lock", "p-a", "p-b"]);
+  await pruneOldest(root, (name) => name.startsWith("p-"), 0);
+  assert.deepEqual(readdirSync(root), [".noobot-prune.lock"]);
 });
 
-test("pruneOldest excludes other owners from pruning and retention counts", (t) => {
+test("pruneOldest excludes other owners from pruning and retention counts", async (t) => {
   const root = createRoot(t);
   const owned = createAgedDir(root, "p-owned", 5 * HOUR_MS);
   const uid = statSync(owned).uid;
   t.mock.method(os, "userInfo", () => ({ uid: uid + 1 }));
-  pruneOldest(root, (name) => name.startsWith("p-"), 0);
-  assert.deepEqual(readdirSync(root), ["p-owned"]);
+  await pruneOldest(root, (name) => name.startsWith("p-"), 0);
+  assert.deepEqual(readdirSync(root), [".noobot-prune.lock", "p-owned"]);
 });
 
-test("pruneOldest excludes symbolic links and surfaces filesystem errors", (t) => {
+test("pruneOldest excludes symbolic links and surfaces filesystem errors", async (t) => {
   const root = createRoot(t);
   const target = createAgedDir(root, "target", 5 * HOUR_MS);
   symlinkSync(target, path.join(root, "p-link"), "junction");
-  pruneOldest(root, (name) => name.startsWith("p-"), 0);
-  assert.deepEqual(readdirSync(root).sort(), ["p-link", "target"]);
-  assert.throws(() => pruneOldest(path.join(root, "missing"), () => true, 0), {
-    code: "ENOENT",
-  });
+  await pruneOldest(root, (name) => name.startsWith("p-"), 0);
+  assert.deepEqual(readdirSync(root).sort(), [".noobot-prune.lock", "p-link", "target"]);
+  await assert.rejects(
+    pruneOldest(path.join(root, "missing"), () => true, 0),
+    {
+      code: "ENOENT",
+    },
+  );
+});
+
+test("pruneOldest coordinates real child processes on the same directory", async (t) => {
+  const root = createRoot(t);
+  const target = createAgedDir(root, "p-shared", 5 * HOUR_MS);
+  for (let index = 0; index < 100; index++)
+    writeFileSync(path.join(target, `file-${index}`), "content");
+  const source = `import { pruneOldest } from ${JSON.stringify(new URL("./isolated-tmp.mjs", import.meta.url).href)};
+    await pruneOldest(process.argv[1], () => true, 0);`;
+  await Promise.all(
+    Array.from({ length: 4 }, () =>
+      promisify(execFile)(process.execPath, ["--input-type=module", "-e", source, root]),
+    ),
+  );
+  assert.deepEqual(readdirSync(root), [".noobot-prune.lock"]);
+});
+
+test("pruneOldest acquires ownership after a lock holder exits without closing", async (t) => {
+  const root = createRoot(t);
+  createAgedDir(root, "p-old", 5 * HOUR_MS);
+  const source = `import { open } from 'node:fs/promises';
+    import { tryAcquireDescriptorLock } from '@noobot/platform-compatibility/descriptor-lock';
+    const handle = await open(process.argv[1], 'a+');
+    if (!await tryAcquireDescriptorLock(handle)) process.exit(2);
+    process.exit(0);`;
+  await promisify(execFile)(process.execPath, [
+    "--input-type=module",
+    "-e",
+    source,
+    path.join(root, ".noobot-prune.lock"),
+  ]);
+  await pruneOldest(root, () => true, 0);
+  assert.deepEqual(readdirSync(root), [".noobot-prune.lock"]);
 });
 
 test("buildIsolatedTmpEnv points all tmp variables and marker at dir", () => {

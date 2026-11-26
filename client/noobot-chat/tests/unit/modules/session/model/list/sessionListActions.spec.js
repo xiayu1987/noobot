@@ -98,6 +98,62 @@ function createHarness(overrides = {}) {
 }
 
 describe("createSessionListActions.fetchSessions identity reconciliation", () => {
+  it.each(["", "old-local"])(
+    "preserves a new selection during list refresh targeting '%s'",
+    async (preferredId) => {
+      const sessions = ref([{ sessionId: "old-local", isLocal: true, messages: [] }]);
+      const activeSessionId = ref("old-local");
+      let completeRequest;
+      const getSessionsApi = vi.fn(
+        () =>
+          new Promise((resolve) => {
+            completeRequest = resolve;
+          }),
+      );
+      const { actions } = createHarness({ sessions, activeSessionId, getSessionsApi });
+      const loading = actions.fetchSessions(preferredId);
+      sessions.value.unshift({ sessionId: "new-local", isLocal: true, messages: [] });
+      activeSessionId.value = "new-local";
+      completeRequest(listResponse([]));
+      await expect(loading).resolves.toBe(true);
+      expect(activeSessionId.value).toBe("new-local");
+      expect(sessions.value.map((session) => session.sessionId)).toEqual([
+        "new-local",
+        "old-local",
+      ]);
+    },
+  );
+
+  it("retains a new selection while resolving a requested session outside the list", async () => {
+    const sessions = ref([{ sessionId: "old-local", isLocal: true, messages: [] }]);
+    const activeSessionId = ref("old-local");
+    let completeDetail;
+    const detailStarted = Promise.withResolvers();
+    const fetchSessionDetail = vi.fn(() => {
+      detailStarted.resolve();
+      return new Promise((resolve) => {
+        completeDetail = resolve;
+      });
+    });
+    const applySessionDetail = vi.fn();
+    const { actions } = createHarness({
+      sessions,
+      activeSessionId,
+      getSessionsApi: vi.fn().mockResolvedValue(listResponse([])),
+      fetchSessionDetail,
+      applySessionDetail,
+    });
+    const loading = actions.fetchSessions("requested-session");
+    await detailStarted.promise;
+    sessions.value.unshift({ sessionId: "new-local", isLocal: true, messages: [] });
+    activeSessionId.value = "new-local";
+    completeDetail(detailDocument("requested-session"));
+    await expect(loading).resolves.toBe(true);
+    expect(activeSessionId.value).toBe("new-local");
+    expect(applySessionDetail).not.toHaveBeenCalled();
+    expect(sessions.value.map((session) => session.sessionId)).toContain("requested-session");
+  });
+
   it("reconciles an optimistic Session by its preallocated identity", async () => {
     const turnScopeId = "client-turn:refresh-1";
     const sessions = ref([

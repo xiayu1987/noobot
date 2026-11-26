@@ -12,6 +12,7 @@ import {
   createMockSocket,
   canonicalMessageEvent,
   FakeUpstreamWebSocket,
+  observeReconnectCommands,
   getEvent,
   reconnectControl,
   deliverPendingCommand,
@@ -105,7 +106,8 @@ test("authoritative lifecycle replay is session-scoped, ordered, and deduplicate
 });
 
 test("reconnect confirms a cached active lifecycle with the authoritative snapshot", async () => {
-  const manager = new ChannelManager({ OPEN: 1 });
+  const forwarded = [];
+  const manager = new ChannelManager(observeReconnectCommands(forwarded));
   const sessionId = "session-authoritative-running";
   const turnScopeId = "turn-authoritative-running";
   const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
@@ -155,12 +157,11 @@ test("reconnect confirms a cached active lifecycle with the authoritative snapsh
       text: "buffered after refresh",
     }),
   );
-  const forwarded = [];
-  channel.transport.socket = { readyState: 1, send: (raw) => forwarded.push(JSON.parse(raw)) };
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
   const reconnectPromise = manager.handleReconnect(client, reconnectControl({ sessionId }));
   assert.equal(getEvent(client, "reconnect_data"), null);
+  await Promise.resolve();
   const commandId = forwarded[0]?.commandId;
   deliverPendingCommand(manager, channel, commandId, PENDING_COMMAND_KIND.TURN_SNAPSHOT, {
     ok: true,
@@ -274,7 +275,7 @@ test("reconnect opens a query transport without replaying the stale run command"
   );
 });
 
-test("snapshot query completion cannot close a connection claimed by a concurrent run", async () => {
+test("snapshot query completion cannot close a concurrent run connection", async () => {
   FakeUpstreamWebSocket.instances = [];
   const manager = new ChannelManager(FakeUpstreamWebSocket);
   const sessionId = "session-query-run-race";
@@ -301,7 +302,12 @@ test("snapshot query completion cannot close a connection claimed by a concurren
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
   const snapshotCommand = JSON.parse(upstream.sent[0]);
-  assert.equal(channel.transport.status().purpose, "snapshot_query");
+  assert.equal(channel.transport.socket, null);
+  const run = manager.connectUpstreamChannel(channel, client.__agentProxyApiKey, "", {
+    initialCommands: [],
+    purpose: "run",
+  }).socket;
+  run.emit("open");
 
   assert.equal(
     manager.forwardToUpstream(channel, {
@@ -342,8 +348,9 @@ test("snapshot query completion cannot close a connection claimed by a concurren
   );
   await reconnectPromise;
 
-  assert.equal(channel.transport.socket, upstream);
-  assert.equal(upstream.readyState, FakeUpstreamWebSocket.OPEN);
+  assert.equal(channel.transport.socket, run);
+  assert.equal(run.readyState, FakeUpstreamWebSocket.OPEN);
+  assert.equal(upstream.readyState, 3);
   assert.equal(channel.transport.status().purpose, "run");
 });
 
@@ -396,7 +403,8 @@ test("terminal lifecycle removes the reconnect active-run projection", () => {
 });
 
 test("reconnect confirms aggregated active lifecycle with one authoritative snapshot", async () => {
-  const manager = new ChannelManager({ OPEN: 1 });
+  const forwarded = [];
+  const manager = new ChannelManager(observeReconnectCommands(forwarded));
   const sessionId = "session-multi-channel-active";
   const turnScopeId = "turn-multi-channel-active";
   const firstChannel = manager.ensureChannel(
@@ -439,13 +447,10 @@ test("reconnect confirms aggregated active lifecycle with one authoritative snap
       phase: "processing",
     }),
   );
-  const forwarded = [];
-  const upstreamSocket = { readyState: 1, send: (raw) => forwarded.push(JSON.parse(raw)) };
-  firstChannel.transport.socket = upstreamSocket;
-  secondChannel.transport.socket = upstreamSocket;
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
   const reconnectPromise = manager.handleReconnect(client, reconnectControl({ sessionId }));
+  await Promise.resolve();
   const commandId = forwarded[0]?.commandId;
   const snapshotChannel = [firstChannel, secondChannel].find((candidate) =>
     pendingCommand(manager, candidate, commandId, PENDING_COMMAND_KIND.TURN_SNAPSHOT),

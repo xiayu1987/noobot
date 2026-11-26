@@ -211,7 +211,17 @@ test("workspace runtime events ignore placeholder parent session ids", async () 
 
   assert.equal(result.ok, true);
   assert.equal(result.record.parentSessionId, undefined);
-  assert.match(result.file, /real-session\/events\/transport\.jsonl$/);
+  assert.equal(
+    result.file,
+    path.join(
+      workspaceRoot,
+      "admin",
+      WORKSPACE_LAYOUT.SESSION_DIR,
+      "real-session",
+      "events",
+      "transport.jsonl",
+    ),
+  );
   assert.equal(
     await pathExists(path.join(workspaceRoot, "admin", WORKSPACE_LAYOUT.SESSION_DIR, "undefined")),
     false,

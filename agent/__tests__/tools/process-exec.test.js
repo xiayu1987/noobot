@@ -57,7 +57,10 @@ test("inline output uses UTF-16 thresholds without splitting surrogate pairs", a
       const result = await run(
         {
           command: process.execPath,
-          args: ["-e", `process.stdout.write(${JSON.stringify(output)})`],
+          args: [
+            "-e",
+            `process.stdout.write(${JSON.stringify(character)}.repeat(${Math.floor(length / character.length)}) + 'x'.repeat(${length % character.length}))`,
+          ],
         },
         root,
         5000,

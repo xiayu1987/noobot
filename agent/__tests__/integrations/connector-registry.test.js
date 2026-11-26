@@ -11,6 +11,10 @@ import path from "node:path";
 import { FileSystemConnectorInstanceRepository } from "../../src/session/repositories/file-system-connector-instance-repository.js";
 import { createSessionFacade } from "../../src/session/index.js";
 import { createTestSessionServices } from "../helpers/session-services.js";
+import {
+  assertPrivateStoragePermissions,
+  grantPublicReadForTest,
+} from "../../../platform-compatibility/__tests__/helpers/private-storage.js";
 
 const sealedParameters = (ciphertext = "c2VhbGVk") => ({
   version: 1,
@@ -45,7 +49,7 @@ test("Session connector repository isolates owners and persists instances with o
     );
     const registryFile = await open(registryPath, "r");
     try {
-      assert.equal((await registryFile.stat()).mode & 0o777, 0o600);
+      await assertPrivateStoragePermissions(registryPath);
       assert.doesNotMatch(await registryFile.readFile("utf8"), /password|secret/);
     } finally {
       await registryFile.close();
@@ -53,6 +57,32 @@ test("Session connector repository isolates owners and persists instances with o
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }
+});
+
+test("connector registry read restricts old registry and publication files without rewriting authority", async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-connectors-old-acl-"));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  const registry = new FileSystemConnectorInstanceRepository({ workspaceRoot });
+  const file = path.join(workspaceRoot, "u1", "runtime", "connectors", "connector-instances.json");
+  await registry.create({
+    userId: "u1",
+    connectorId: "con_old",
+    name: "old",
+    instanceType: "builtin.database.sqlite",
+    sealedParameters: sealedParameters(),
+    now: "2026-08-20T00:00:00.000Z",
+  });
+  const before = await readFile(file);
+  const stage = `${file}.publication.tmp`;
+  await writeFile(stage, "unpublished", { mode: 0o600 });
+  for (const target of [file, stage]) {
+    await grantPublicReadForTest(target);
+    await assert.rejects(assertPrivateStoragePermissions(target));
+  }
+  assert.equal((await registry.list("u1"))[0].connectorId, "con_old");
+  for (const target of [file, stage]) await assertPrivateStoragePermissions(target);
+  assert.deepEqual(await readFile(file), before);
+  assert.equal(await readFile(stage, "utf8"), "unpublished");
 });
 
 test("Session connector repository updates and deletes generic instance records", async () => {

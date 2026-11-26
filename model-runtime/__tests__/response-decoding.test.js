@@ -13,7 +13,7 @@ import { createMeasuredFetch } from "../src/executor/request-measurement.js";
 for (const format of ["chat", "responses", "anthropic"]) {
   for (const streaming of [false, true]) {
     for (const corruption of ["invalid UTF-8", "truncated UTF-8", "invalid JSON"]) {
-      test(`${format} streaming=${streaming} rejects ${corruption} without retry or contradictory terminals`, async () => {
+      test(`${format} streaming=${streaming} retries ${corruption} with one invocation failure`, async () => {
         const events = [];
         let requests = 0;
         let released = 0;
@@ -60,7 +60,7 @@ for (const format of ["chat", "responses", "anthropic"]) {
           observationPort: { emit: (type, data) => events.push({ type, data }) },
           clock: {
             now: () => 0,
-            sleep: async () => assert.fail("protocol failures must not wait"),
+            sleep: async () => {},
           },
           providerRuntime: {
             fetchImpl: async () => {
@@ -101,6 +101,7 @@ for (const format of ["chat", "responses", "anthropic"]) {
             },
             messages: [{ role: "user", content: "hello" }],
             options: { streaming },
+            policies: { retry: { transport: { maxAttempts: 2 } } },
           }),
           (error) => {
             assert.equal(error.kind, "protocol");
@@ -114,22 +115,29 @@ for (const format of ["chat", "responses", "anthropic"]) {
             return true;
           },
         );
-        assert.equal(requests, 1);
-        assert.ok(released <= 1);
-        for (const type of ["model.request.finished", "model.invocation.failed"])
-          assert.equal(events.filter((event) => event.type === type).length, 1);
+        assert.equal(requests, 2);
+        assert.ok(released <= requests);
+        assert.equal(events.filter(({ type }) => type === "model.invocation.failed").length, 1);
         assert.equal(
-          events.find((event) => event.type === "model.request.finished").data.status,
-          "failed",
+          events.filter(({ type }) => type === "model.invocation.retry_scheduled").length,
+          1,
+        );
+        assert.deepEqual(
+          events
+            .filter(({ type }) => type === "model.request.finished")
+            .map(({ data }) => data.status),
+          ["failed", "failed"],
         );
         assert.equal(
           events.filter((event) => event.type === "model.invocation.completed").length,
           0,
         );
         const usage = events.filter((event) => event.type === "model.request.usage");
-        assert.equal(usage.length, 1);
-        assert.equal(usage[0].data.usage, null);
-        assert.match(usage[0].data.measurementError, /valid (UTF-8|JSON)/);
+        assert.equal(usage.length, requests);
+        for (const { data } of usage) {
+          assert.equal(data.usage, null);
+          assert.match(data.measurementError, /valid (UTF-8|JSON)/);
+        }
       });
     }
   }

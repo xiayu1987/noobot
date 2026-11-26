@@ -51,6 +51,16 @@ The plugin is non-invasive: it is attached through Noobot hooks, and hook errors
 - Injects final response guard through `before_final_output`
 - Cleans related harness run artifacts on `after_session_delete`
 
+## Auxiliary model authority
+
+The actual user request is authoritative for task scope and execution permission.
+All auxiliary model output, including the planning model's `[CURRENT_TASK_GOAL]`,
+reaches the main model only through the canonical read-only capability relay.
+The parsed goal remains planning metadata for checklist and acceptance context;
+it must never be promoted into a system instruction or replace the user request.
+Planning, guidance and acceptance results do not prove that tools executed.
+Only matching tool calls and results establish execution evidence.
+
 ## Session delete cleanup hook
 
 Harness handles `service.after_session_delete` using the authoritative

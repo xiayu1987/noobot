@@ -110,7 +110,7 @@ async function runDashscopeVideo(context, body) {
     "services/aigc/video-generation/video-synthesis",
     body,
     {
-      "X-DashScope-Async": "enable",
+      extraHeaders: { "X-DashScope-Async": "enable" },
     },
   );
   if (created.code) throw new Error(`${created.code}: ${created.message}`);

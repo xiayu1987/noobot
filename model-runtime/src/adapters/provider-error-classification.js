@@ -24,6 +24,7 @@ export function classifyProviderError(error, { operatorId, clock }) {
           status: error.status,
           code: error.code,
           type: error.type,
+          param: error.param,
           detailCode: error.details?.error_code,
           retryAfterMs,
         })

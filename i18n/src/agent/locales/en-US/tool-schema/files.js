@@ -109,7 +109,7 @@ export const FILE_TOOL_SCHEMA = {
       },
       baseVersions: {
         key: "tools.patch_file.fieldBaseVersions",
-        text: "Base versions for every source and destination [{filePath, sha256}]. filePath matches the patch path after strip and before root; sha256 is the read result baseSha256, or null for an absent new target.",
+        text: "Base versions for every source and destination [{filePath, sha256}]. For workspace or host read results, copy path.path into filePath. For mount results, join path.mount and path.path with /. strip and root do not change filePath. Use baseSha256, or the complete target path and null for an absent new target.",
       },
       format: {
         key: "tools.patch_file.fieldFormat",

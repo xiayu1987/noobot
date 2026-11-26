@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { test, expect, installE2eModelPreferences } from "../fixtures/noobot.fixture.js";
+import { test, expect } from "../fixtures/noobot.fixture.js";
 import { connectThroughUi, readE2eCredentials } from "../fixtures/auth.fixture.js";
 import { editLatestUserMessage, stopActiveTurn } from "../helpers/browser-actions.js";
 import { sendAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
@@ -18,7 +18,8 @@ import { waitForReconnect } from "../helpers/reconnect-scenarios.js";
 test("@full PBE-023 Session version 冲突", async ({
   noobot,
   protocolCapture,
-  browser,
+  createClient,
+  baseURL,
 }, testInfo) => {
   await sendAndStop({
     page: noobot.page,
@@ -26,12 +27,13 @@ test("@full PBE-023 Session version 冲突", async ({
     sessionId: noobot.sessionId,
     prompt: uniquePrompt(testInfo, "version conflict baseline"),
   });
-  const staleContext = await browser.newContext();
-  await installE2eModelPreferences(staleContext);
-  const stalePage = await staleContext.newPage();
+  const staleClient = await createClient();
+  const stalePage = staleClient.page;
   protocolCapture.bindPage(stalePage);
   try {
-    await stalePage.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
+    await stalePage.goto(
+      new URL(`/?session=${encodeURIComponent(noobot.sessionId)}`, baseURL).href,
+    );
     await connectThroughUi(stalePage, readE2eCredentials());
     await expect(stalePage.locator(".monotonic-action-bar button.is-primary").last()).toBeVisible();
     const replacementResponses = [];
@@ -74,21 +76,32 @@ test("@full PBE-023 Session version 冲突", async ({
     );
     expect(resends).toHaveLength(1);
   } finally {
-    await staleContext.close();
+    await staleClient.close();
   }
 });
 
-test("@full PBE-024 停止命令幂等性", async ({ noobot, protocolCapture }, testInfo) => {
+test("@full PBE-024 停止命令幂等性", async ({
+  noobot,
+  protocolCapture,
+  createClient,
+  baseURL,
+}, testInfo) => {
+  const secondClient = await createClient();
+  const secondPage = secondClient.page;
+  protocolCapture.bindPage(secondPage);
   const { sendMessage } = await import("../helpers/browser-actions.js");
   await sendMessage(
     noobot.page,
-    uniquePrompt(testInfo, "调用 execute_script 执行 sleep 30，等待实际结果后回复 DONE。"),
+    uniquePrompt(
+      testInfo,
+      '调用 execute_script 执行 node -e "setTimeout(() => {}, 30000)"，等待实际结果后回复 DONE。',
+    ),
   );
   const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   await expect(noobot.page.locator(".stop-float-btn")).toBeVisible();
-  const secondPage = await noobot.page.context().newPage();
   const receivedAtStart = protocolCapture.websocketReceived.length;
-  await secondPage.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
+  await secondPage.goto(new URL(`/?session=${encodeURIComponent(noobot.sessionId)}`, baseURL).href);
+  await connectThroughUi(secondPage, readE2eCredentials());
   await waitForReconnect(protocolCapture, receivedAtStart);
   await expect(secondPage.locator('.session-item[aria-current="true"]')).toHaveAttribute(
     "data-session-id",

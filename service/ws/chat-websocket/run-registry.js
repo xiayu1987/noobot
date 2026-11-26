@@ -7,8 +7,20 @@ import { text, isFunction } from "@noobot/shared/value";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 
 const activeRunRegistry = new Map();
+const runSettlementTails = new WeakMap();
 let nextRunHandleId = 0;
 let nextTransportBindingId = 0;
+
+export function orderRunSettlement(handle, operation) {
+  const previous = runSettlementTails.get(handle);
+  const result = previous ? previous.then(operation) : Promise.resolve().then(operation);
+  const retire = () => {
+    if (runSettlementTails.get(handle) === tail) runSettlementTails.delete(handle);
+  };
+  const tail = result.then(retire, retire);
+  runSettlementTails.set(handle, tail);
+  return result;
+}
 
 function initializeInterjectionQueue(handle) {
   handle.userInterjectionQueue = [];

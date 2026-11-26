@@ -15,7 +15,7 @@ import {
   requirePartitionSessionAuthority,
 } from "@noobot/session-protocol/session-reader";
 import { lstat } from "node:fs/promises";
-import { requireSessionLocationResolver } from "@noobot/session-protocol";
+import { requireSessionLocationResolver } from "@noobot/session-protocol/persistence-scope";
 import path from "node:path";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 import {

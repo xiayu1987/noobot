@@ -10,10 +10,12 @@ import { filePath as path } from "@noobot/path-resolver";
 import { getFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import { withUnretainedJournal } from "../../src/session/partition-storage/journal-snapshots.js";
 import { createJournalCase, journalRequest } from "../helpers/partition-journal-cases.js";
+import { enableDirectorySyncCapability } from "../helpers/directory-sync-capability.js";
 
 const origin = { partition: 0, offset: 0, sequence: 0 };
 
 test("snapshot acquisition makes CURRENT durable before publishing a retained head", async (t) => {
+  enableDirectorySyncCapability(t);
   const { journal, root } = await createJournalCase(
     t,
     { retentionRecords: 1 },
@@ -266,6 +268,7 @@ test("scoped snapshots release on callback failure and preserve both operation a
 
 for (const boundary of ["delete", "sync", "lock-cleanup"]) {
   test(`scoped cleanup ${boundary} failure returns the capability without callback cooperation`, async (t) => {
+    enableDirectorySyncCapability(t);
     const { journal, root } = await createJournalCase(t, { retentionRecords: 1 });
     const adapter = getFsAdapter();
     const failure = Object.freeze(Object.assign(new Error("Cleanup interrupted"), { code: "EIO" }));
@@ -280,7 +283,7 @@ for (const boundary of ["delete", "sync", "lock-cleanup"]) {
           readingFinished &&
           !injected &&
           boundary === "delete" &&
-          target.endsWith("retentions/0.json")
+          target === path.join(root, "retentions", "0.json")
         ) {
           injected = true;
           throw failure;

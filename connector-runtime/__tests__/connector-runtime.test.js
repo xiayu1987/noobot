@@ -5,6 +5,8 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   createConnectorInstanceDefinition,
   connectorField,
@@ -107,10 +109,11 @@ test("runtime rejects unregistered instances and owns their lifecycle", async ()
 });
 
 test("runtime resolves workspace fields inside the authoritative user workspace", async () => {
+  const workspaceRoot = join(tmpdir(), "connector-workspace");
   const runtime = new ConnectorRuntime({
     repository: repository(),
     secretStore: secretStore(),
-    workspaceRoot: "/workspace",
+    workspaceRoot,
   });
   runtime.register({
     definition: createConnectorInstanceDefinition({
@@ -132,7 +135,7 @@ test("runtime resolves workspace fields inside the authoritative user workspace"
     instanceType: "test.file",
     parameters: { file: "data/example.db" },
   });
-  assert.equal(record.parameters.file, "/workspace/u1/data/example.db");
+  assert.equal(record.parameters.file, join(workspaceRoot, "u1", "data", "example.db"));
   await assert.rejects(
     runtime.createConnector({
       userId: "u1",

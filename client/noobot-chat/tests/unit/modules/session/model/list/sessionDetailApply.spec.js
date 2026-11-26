@@ -6,6 +6,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 import { createSessionDetailApplicator } from "../../../../../../src/modules/session/model/list/sessionDetailApply.js";
+import {
+  buildAppendMessage,
+  buildViewMessage,
+} from "../../../../../../src/modules/chat/model/messageModel.js";
+import { dispatchTurnEnvelope } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
+import { canonicalMessageEvent } from "../../../chat/helpers/messageEventFixture.js";
+import { createUserInterjectionContentFact } from "@noobot/event-protocol/thinking-detail-content";
 import { availableDetailDocument } from "../../../../helpers/sessionDetailFixture.js";
 
 function message(messageUid, turnScopeId) {
@@ -31,7 +38,7 @@ function document(messages, aggregateVersion = 2, sessionId = "s1", generation =
   });
 }
 
-function fixture() {
+function fixture(makeViewMessage = (value) => ({ ...value })) {
   const sessions = ref([
     { sessionId: "s1", aggregateVersion: 1, knownGeneration: null, messages: [], title: "before" },
     { sessionId: "s2", aggregateVersion: 1, knownGeneration: null, messages: [], title: "other" },
@@ -41,13 +48,85 @@ function fixture() {
   const applicator = createSessionDetailApplicator({
     sessions,
     chatStore,
-    makeViewMessage: (value) => ({ ...value }),
+    makeViewMessage,
     onSessionDetailApplied,
   });
   return { ...applicator, sessions, chatStore, onSessionDetailApplied };
 }
 
 describe("session detail authority", () => {
+  it("applies a queued interjection after a same-message snapshot and gap repair", () => {
+    const { applySessionDetail, sessions } = fixture(buildViewMessage);
+    const identity = {
+      sessionId: "s1",
+      turnScopeId: "turn-a",
+      dialogProcessId: "dialog-a",
+      presentationMessageId: "assistant-a",
+    };
+    const assistant = {
+      ...identity,
+      role: "assistant",
+      messageUid: "assistant-uid",
+      content: "",
+      attachments: [],
+      ts: "2026-01-01T00:00:00.000Z",
+    };
+    const deliver = (sequence, overrides = {}) =>
+      dispatchTurnEnvelope({
+        targetMessage: sessions.value[0].messages[0],
+        envelope: canonicalMessageEvent({
+          ...identity,
+          eventId: `event-${sequence}`,
+          sequence,
+          ...overrides,
+        }),
+      });
+    const contentFact = createUserInterjectionContentFact({
+      ...identity,
+      sequence: 1,
+      messageUid: "interjection-uid",
+      message: "latest interjection",
+      receivedAt: assistant.ts,
+    });
+
+    applySessionDetail(document([assistant], 2, "s1", 11));
+    expect(deliver(1).applied).toBe(true);
+    expect(deliver(3, { eventType: "user_interjection", contentFact }).reason).toBe("sequence_gap");
+    applySessionDetail(document([assistant], 2, "s1", 12));
+    expect(deliver(2, { eventType: "tool_call_end", success: true }).applied).toBe(true);
+    expect(sessions.value[0].messages[0].thinkingContentTimeline).toEqual([contentFact]);
+    expect(sessions.value[0].messages[0].messageEventState.lastSequence).toBe(3);
+
+    const nextTurn = { ...assistant, turnScopeId: "turn-b", dialogProcessId: "dialog-b" };
+    applySessionDetail(document([nextTurn], 3, "s1", 13));
+    expect(sessions.value[0].messages[0].messageEventState.lastSequence).toBe(0);
+    expect(sessions.value[0].messages[0].thinkingContentTimeline).toBeUndefined();
+  });
+
+  it("applies the committed snapshot while a composer draft is awaiting its message identity", () => {
+    const { applySessionDetail, sessions } = fixture(buildViewMessage);
+    const session = sessions.value[0];
+    session.messages.push(
+      buildAppendMessage({
+        sessionId: session.sessionId,
+        role: "user",
+        content: "question",
+        attachments: [],
+        options: { userMessageId: "request-user", turnScopeId: "turn-a" },
+      }),
+    );
+    expect(session.messages[0]).not.toHaveProperty("messageUid");
+
+    const committed = {
+      ...message("stored-user", "turn-a"),
+      userMessageId: "request-user",
+      content: "question",
+      ts: "2026-01-01T00:00:00.000Z",
+    };
+    expect(applySessionDetail(document([committed]))).toBe(true);
+    expect(session.messages).toEqual([expect.objectContaining(committed)]);
+  });
+
   it("preserves the authoritative source count when only a subset are display rows", () => {
     const { applySessionDetail, sessions } = fixture();
     const detail = document([message("visible", "a")]);

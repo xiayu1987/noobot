@@ -193,7 +193,14 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     expect(wrapper.vm.loadedThinkingDetail?.messageItem?.toolTimeline).toHaveLength(1);
   });
 
-  it("loads authoritative detail content on expansion even when local tool logs exist", async () => {
+  it("does not let an older detail page replace the latest interjection from the message", async () => {
+    const interjection = (sequence) => ({
+      contentId: `message:user-interjection-${sequence}`,
+      contentKind: "user_interjection",
+      sourceMessageUid: `user-interjection-${sequence}`,
+      text: `accepted interjection ${sequence}`,
+      sequence,
+    });
     const messageItem = {
       role: "assistant",
       sessionId: "session-interjection-detail",
@@ -201,29 +208,12 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       dialogProcessId: "dp-interjection-detail",
       hasThinkingDetails: true,
       toolTimeline: persistedToolTimeline("local-tool", "call-local"),
-      thinkingContentTimeline: [
-        {
-          contentId: "event:analysis",
-          contentKind: "thinking",
-          sourceEventId: "analysis",
-          text: "summary analysis",
-          sequence: 1,
-        },
-      ],
+      thinkingContentTimeline: [interjection(5)],
     };
     const getDetail = vi.fn(async () =>
       thinkingDetailPayload({
         ...messageItem,
-        thinkingContentTimeline: [
-          ...messageItem.thinkingContentTimeline,
-          {
-            contentId: "message:user-interjection",
-            contentKind: "user_interjection",
-            sourceMessageUid: "user-interjection",
-            text: "latest accepted interjection",
-            sequence: 2,
-          },
-        ],
+        thinkingContentTimeline: [interjection(2)],
       }),
     );
     detailServiceMock.getDetail = getDetail;
@@ -237,8 +227,11 @@ describe("ThinkingPanel thinking-detail recovery", () => {
 
     expect(getDetail).toHaveBeenCalledTimes(1);
     expect(wrapper.find('[data-thinking-block="user-interjection"]').text()).toContain(
-      "latest accepted interjection",
+      "accepted interjection 5",
     );
+    expect(wrapper.vm.loadedThinkingDetail.messageItem.thinkingContentTimeline).toEqual([
+      interjection(2),
+    ]);
   });
 
   it("reports missing detail without an implicit retry", async () => {
@@ -281,6 +274,60 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     ).rejects.toMatchObject({ code: API_REQUEST_ERROR_CODE.NOT_FOUND });
 
     expect(getDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders live pending tool details without requesting a persisted page", async () => {
+    detailServiceMock.getDetail = vi.fn();
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-pending-detail",
+      turnScopeId: "client-turn:pending-detail",
+      dialogProcessId: "dp-pending-detail",
+      pending: true,
+      toolTimeline: persistedToolTimeline("pending-detail", "call-pending-detail"),
+    };
+    const wrapper = mountThinkingPanel(messageItem, {
+      variant: "details",
+      userId: "user-1",
+      runtime: { running: true, terminal: false },
+    });
+    await flushAsync();
+
+    expect(detailServiceMock.getDetail).not.toHaveBeenCalled();
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(1);
+    const line = wrapper.get(".execution-log-line");
+    expect(line.attributes("data-expandable")).toBe("true");
+    await line.trigger("click");
+    expect(line.get(".execution-log-detail").text()).toContain("pending-detail.md");
+  });
+
+  it("renders drawer tool rows only from the loaded detail page", async () => {
+    const toolTimeline = persistedToolTimeline("delayed-detail", "call-delayed-detail");
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-delayed-detail",
+      turnScopeId: "client-turn:delayed-detail",
+      dialogProcessId: "dp-delayed-detail",
+      hasThinkingDetails: true,
+      toolTimeline: compactThinkingTimeline(toolTimeline),
+    };
+    const { promise, resolve } = Promise.withResolvers();
+    detailServiceMock.getDetail = vi.fn(() => promise);
+    const wrapper = mountThinkingPanel(messageItem, {
+      variant: "details",
+      userId: "user-1",
+    });
+    await flushAsync();
+
+    expect(detailServiceMock.getDetail).toHaveBeenCalledTimes(1);
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(0);
+
+    resolve(thinkingDetailPayload({ ...messageItem, toolTimeline }));
+    await flushAsync();
+    const line = wrapper.get(".execution-log-line");
+    expect(line.attributes("data-expandable")).toBe("true");
+    await line.trigger("click");
+    expect(line.get(".execution-log-detail").text()).toContain("delayed-detail.md");
   });
 
   it("loads a summary-only canonical detail in details mode", async () => {

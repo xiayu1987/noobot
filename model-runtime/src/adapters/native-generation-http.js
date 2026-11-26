@@ -2,9 +2,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createGeneratedMediaArtifact } from "@noobot/model-protocol";
+import { createGeneratedMediaArtifact, ModelProtocolError } from "@noobot/model-protocol";
+import { streamServerSentEvents } from "@noobot/shared/event-stream";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { assertResponseMode } from "./response-mode.js";
+import { isFunction } from "@noobot/shared/value";
 
 function generationUrl(baseUrl, path) {
   const base = new URL(baseUrl);
@@ -19,7 +21,12 @@ function generationError(message, details = {}) {
   return Object.assign(new Error(message), details);
 }
 
-export async function generationRequest(context, path, body, extraHeaders = {}) {
+export async function generationRequest(
+  context,
+  path,
+  body,
+  { extraHeaders = {}, readStream } = {},
+) {
   context.signal.throwIfAborted();
   const url = generationUrl(context.modelSpec.base_url, path);
   const method = body === undefined ? "GET" : "POST";
@@ -37,7 +44,8 @@ export async function generationRequest(context, path, body, extraHeaders = {}) 
       throw generationError(`HTTP ${response.status}: ${await response.text()}`, {
         status: response.status,
       });
-    await assertResponseMode({ requestedStreaming: false, response });
+    await assertResponseMode({ requestedStreaming: isFunction(readStream), response });
+    if (readStream) return await readStream(readGenerationEvents(response, context.signal));
     const payload = await response.json();
     if (payload.error)
       throw generationError(`generation API error: ${JSON.stringify(payload.error)}`, {
@@ -49,6 +57,22 @@ export async function generationRequest(context, path, body, extraHeaders = {}) 
     error.requestMethod = method;
     throw error;
   }
+}
+
+async function* readGenerationEvents(response, signal) {
+  if (!response.body) throw new ModelProtocolError("missing generation SSE response body");
+  for await (const { data } of streamServerSentEvents(response.body)) {
+    signal.throwIfAborted();
+    const event = JSON.parse(data);
+    if (event.error || event.type === "error" || event.event_type === "error")
+      throw generationError(event.error?.message || event.message || "generation stream failed", {
+        code: event.error?.code,
+        type: event.error?.type,
+        providerFailure: true,
+      });
+    yield event;
+  }
+  signal.throwIfAborted();
 }
 
 async function generationPause({ clock, signal }) {

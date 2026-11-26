@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readdir } from "node:fs/promises";
+import { readdir } from "@noobot/shared/file-system";
 
 export async function readDirectoryEntriesIfPresent(dirPath) {
   try {

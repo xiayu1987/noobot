@@ -28,7 +28,7 @@ import {
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
-test("session list projects committed heads without persisting another list document", async () => {
+test("session list projects committed heads from one tree read without persisting another list document", async (t) => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -82,7 +82,11 @@ test("session list projects committed heads without persisting another list docu
     );
     const { aggregateVersion } = await reader.readMetadata();
 
-    const summary = await runtime.repositories.sessionRepository.readSessionsSummary(userId);
+    const repository = runtime.repositories.sessionRepository;
+    const treeFile = path.join(workspaceRoot, userId, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
+    const reads = t.mock.method(repository.sessionTreeRepository.storageService, "readTextOrNull");
+    const summary = await repository.readSessionsSummary(userId);
+    assert.equal(reads.mock.calls.filter(({ arguments: [file] }) => file === treeFile).length, 1);
     assert.equal(summary.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION);
     const writtenB = summary.sessions.find((item) => item.sessionId === "B");
     assert.equal(writtenB.title, "12345678901234567890");
@@ -104,6 +108,41 @@ test("session list projects committed heads without persisting another list docu
       access(path.join(workspaceRoot, userId, "runtime", "session", "sessions.json")),
       { code: "ENOENT" },
     );
+  });
+});
+
+test("session list rechecks deletion after reading its tree snapshot", async (t) => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    const sessionId = "A";
+    await initializeUserWorkspace(workspaceRoot, userId);
+    const runtime = createTestSessionServices({ workspaceRoot });
+    const repository = runtime.repositories.sessionRepository;
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId,
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+
+    const lock = repository._withSessionLifecycleLock;
+    t.mock.method(
+      repository,
+      "_withSessionLifecycleLock",
+      async (lockedUserId, lockedSessionId, operation) => {
+        await runtime.sessionTreeService.deleteSessionBranch(
+          { userId, sessionIds: [sessionId] },
+          executeEmptySessionCleanup,
+        );
+        return lock.call(repository, lockedUserId, lockedSessionId, operation);
+      },
+      { times: 1 },
+    );
+    const { sessions } = await repository.readSessionsSummary(userId);
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0].sessionId, sessionId);
+    assert.equal(sessions[0].unavailableReason.code, "SESSION_DELETED");
+    assert.deepEqual((await repository.readSessionsSummary(userId)).sessions, []);
   });
 });
 

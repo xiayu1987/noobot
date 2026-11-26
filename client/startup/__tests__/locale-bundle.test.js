@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { build } from "vite";
+import { build, normalizePath } from "vite";
 
 test("startup bundles only its shared composer catalog and stays within the chunk budget", async () => {
   let chunkSizeWarningLimit;
@@ -28,7 +28,9 @@ test("startup bundles only its shared composer catalog and stays within the chun
     .flatMap((chunk) => chunk.moduleIds)
     .filter((id) => id.includes("/i18n/src/"));
   assert.deepEqual(localeModules, [
-    fileURLToPath(new URL("../../../i18n/src/client/composer-messages.js", import.meta.url)),
+    normalizePath(
+      fileURLToPath(new URL("../../../i18n/src/client/composer-messages.js", import.meta.url)),
+    ),
   ]);
   for (const chunk of chunks) {
     assert.ok(

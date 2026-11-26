@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import express from "express";
+import { once } from "node:events";
 export { express };
 export default express;
 
@@ -36,9 +37,8 @@ export function registerSessionRoutes(app, options = {}) {
 }
 
 export async function withTestServer(app, run) {
-  const server = await new Promise((resolve) => {
-    const started = app.listen(0, "127.0.0.1", () => resolve(started));
-  });
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
   const { port } = server.address();
   const baseUrl = `http://127.0.0.1:${port}`;
   try {

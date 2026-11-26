@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_VERSION } from "@noobot/workspace-protocol";
+import { normalizeMigrationQuarantinePath } from "@noobot/workspace-protocol/migration-quarantine";
 import { WORKSPACE_LAYOUT_UPGRADE_OWNER as OWNER } from "@noobot/workspace-protocol/layout-migration";
 import { retireUnsupportedSessionStorage } from "../src/workspace-lifecycle/session-storage-retirement.js";
 import {
@@ -217,7 +218,9 @@ test("old session attachments are retained before catalog upgrade without parsin
   assert.ok(progress.some((value) => value.processedSessions === 1));
   const records = await listQuarantinedUnits({ base });
   const held = records.find(
-    (item) => item.path === join(WORKSPACE_LAYOUT.SCOPED_ATTACH_DIR, "old"),
+    (item) =>
+      item.path ===
+      normalizeMigrationQuarantinePath(join(WORKSPACE_LAYOUT.SCOPED_ATTACH_DIR, "old")),
   );
   assert.equal(held.sessionStorage.status, "unsupported-format");
   assert.equal(
@@ -262,7 +265,9 @@ test("retirement resumes after attachments move but session move is interrupted"
   const records = await listQuarantinedUnits({ base });
   assert.equal(records.length, 2);
   const held = records.find(
-    (item) => item.path === join(WORKSPACE_LAYOUT.SCOPED_ATTACH_DIR, "interrupted"),
+    (item) =>
+      item.path ===
+      normalizeMigrationQuarantinePath(join(WORKSPACE_LAYOUT.SCOPED_ATTACH_DIR, "interrupted")),
   );
   assert.equal(
     await readFile(join(base, held.quarantinePath, "body.txt"), "utf8"),

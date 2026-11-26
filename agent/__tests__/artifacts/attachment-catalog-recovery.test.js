@@ -57,7 +57,12 @@ test("a process interruption leaves unpublished bodies invisible and the next wr
     ],
     { encoding: "utf8", timeout: 10000 },
   );
-  assert.equal(child.signal, "SIGKILL", child.stderr);
+  assert.ifError(child.error);
+  assert.deepEqual(
+    [child.status, child.signal],
+    process.platform === "win32" ? [1, null] : [null, "SIGKILL"],
+    child.stderr,
+  );
   assert.equal(child.stdout, "durable body");
   const directory = attachScopeRoot(join(workspaceRoot, "u1"), scope);
   const before = (await readdir(directory)).filter((name) => name.endsWith(".txt"));

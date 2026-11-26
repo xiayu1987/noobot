@@ -3,13 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { test as base } from "@playwright/test";
+import { test as base } from "./native-desktop.fixture.js";
 import { sanitizeUrl } from "@noobot/sanitize";
 import { createCapturedFrameLog } from "../helpers/websocket-capture.js";
 
 export const captureTest = base.extend({
   protocolCapture: async ({ page, context }, use) => {
     const received = createCapturedFrameLog();
+    const boundPages = new WeakSet();
+    const removeListeners = [];
+    const listen = (target, event, handler) => {
+      target.on(event, handler);
+      removeListeners.push(() => target.off(event, handler));
+    };
     const evidence = {
       console: [],
       httpRequests: [],
@@ -19,10 +25,12 @@ export const captureTest = base.extend({
       websocketReceived: received.records,
     };
     const bindPage = (target) => {
-      target.on("console", (message) =>
+      if (boundPages.has(target)) return;
+      boundPages.add(target);
+      listen(target, "console", (message) =>
         evidence.console.push({ type: message.type(), text: message.text() }),
       );
-      target.on("request", (request) =>
+      listen(target, "request", (request) =>
         evidence.httpRequests.push({
           atMs: performance.now(),
           method: request.method(),
@@ -31,7 +39,7 @@ export const captureTest = base.extend({
           ...(/replace-turn/i.test(request.url()) ? { postData: request.postData() } : {}),
         }),
       );
-      target.on("response", async (response) => {
+      listen(target, "response", async (response) => {
         const record = {
           atMs: performance.now(),
           status: response.status(),
@@ -42,19 +50,23 @@ export const captureTest = base.extend({
         }
         evidence.httpResponses.push(record);
       });
-      target.on("websocket", (socket) => {
+      listen(target, "websocket", (socket) => {
         const url = sanitizeUrl(socket.url());
         evidence.websockets.push({ url });
         const captureFrame = ({ payload }) =>
           Object.freeze({ atMs: performance.now(), url, payload });
-        socket.on("framesent", (frame) => evidence.websocketSent.push(captureFrame(frame)));
-        socket.on("framereceived", (frame) => received.append(captureFrame(frame)));
+        listen(socket, "framesent", (frame) => evidence.websocketSent.push(captureFrame(frame)));
+        listen(socket, "framereceived", (frame) => received.append(captureFrame(frame)));
       });
     };
     Object.defineProperty(evidence, "bindPage", { value: bindPage, enumerable: false });
     Object.defineProperty(evidence, "waitForReceivedFrame", { value: received.waitForMatch });
     bindPage(page);
-    context.on("page", bindPage);
-    await use(evidence);
+    listen(context, "page", bindPage);
+    try {
+      await use(evidence);
+    } finally {
+      for (const remove of removeListeners) remove();
+    }
   },
 });

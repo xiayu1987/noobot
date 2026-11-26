@@ -196,7 +196,7 @@ export default {
     executionLogQueueWaitMs: {
       name: "Execution log queue wait budget",
       description:
-        "Maximum wait before a log batch starts writing. An overdue queue rejects new records; accepted records drain and flush reports the budget violation. Active writes are not cancelled.",
+        "Queue age that makes awaited event producers wait for persistence to drain. Successful writes allow execution to continue. The final flush reports write or delivery failures. Active writes finish, and record and byte limits still bound the queue.",
     },
     authorityOutboxDeliveredRetentionMs: {
       name: "Agent authority outbox delivered retention",

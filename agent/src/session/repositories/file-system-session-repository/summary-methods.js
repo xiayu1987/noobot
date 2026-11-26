@@ -20,9 +20,10 @@ class SessionSummaryMethods {
   }
 
   async readSessionsSummary(userId) {
+    const { sessionTree, liveNodes } = await this._readSessionTreeListing(userId);
     const summaries = [];
-    for (const node of await this.listLiveSessionTreeNodes(userId)) {
-      summaries.push(await this._projectSessionSummaryFromSource(userId, node));
+    for (const node of liveNodes) {
+      summaries.push(await this._projectSessionSummaryFromSource(userId, node, sessionTree));
     }
     return requireSessionsSummaryPayload({
       schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION,
@@ -31,11 +32,13 @@ class SessionSummaryMethods {
     });
   }
 
-  async _projectSessionSummaryFromSource(userId, node) {
+  async _projectSessionSummaryFromSource(userId, node, sessionTree) {
     const { sessionId } = node;
     try {
-      await using reader = await this.requireSessionReader(userId, sessionId, {
-        persistenceContext: this.treePersistenceContext(userId, sessionId),
+      await using reader = await this._openSessionReader(userId, sessionId, {
+        locateScope: () =>
+          this.sessionPathResolver.locateSessionScopeInTree(userId, sessionId, sessionTree),
+        required: true,
       });
       return await this._buildSessionSummaryFromReader(reader);
     } catch (error) {

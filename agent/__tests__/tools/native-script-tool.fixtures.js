@@ -5,10 +5,15 @@
  */
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { spawn } from "node:child_process";
-import { stat } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { buildLibreOfficeUserInstallationUrl } from "../../src/tools/execution/native-script-runtime.js";
 import {
   resolveBrowserExecutable,
   resolveLibreOfficeExecutable,
+  terminateProcessTree,
+  usesDetachedProcessGroup,
 } from "@noobot/platform-compatibility/process";
 
 export const IDENTITY = Object.freeze({
@@ -35,10 +40,28 @@ export function createRuntime(basePath, patch = {}) {
 }
 
 async function canRun(executable, args) {
-  return new Promise((resolve) => {
-    const child = spawn(executable, args, { stdio: "ignore" });
-    child.once("error", () => resolve(false));
-    child.once("exit", (code) => resolve(code === 0));
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, args, {
+      stdio: "ignore",
+      windowsHide: true,
+      detached: usesDetachedProcessGroup(),
+    });
+    const timer = setTimeout(() => {
+      void terminateProcessTree(child, "SIGKILL").then(
+        () => reject(new Error(`Capability probe timed out: ${executable}`)),
+        reject,
+      );
+    }, 15000);
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      if (error.code === "ENOENT") resolve(false);
+      else reject(error);
+    });
+    child.once("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(true);
+      else reject(new Error(`Capability probe exited with code ${code}: ${executable}`));
+    });
   });
 }
 
@@ -51,7 +74,16 @@ export async function hasFfmpegCapabilities() {
 }
 
 export async function hasLibreOfficeCapability() {
-  return canRun(resolveLibreOfficeExecutable(), ["--version"]);
+  const root = await mkdtemp(path.join(os.tmpdir(), "noobot-libreoffice-probe-"));
+  try {
+    return await canRun(resolveLibreOfficeExecutable(), [
+      "--headless",
+      `-env:UserInstallation=${buildLibreOfficeUserInstallationUrl(root)}`,
+      "--version",
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 }
 
 export async function hasChromiumCapability() {

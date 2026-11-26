@@ -18,17 +18,16 @@ import {
   resolveWorkspaceRootPath,
 } from "../src/workspace-root.js";
 
-const serviceDir = path.resolve("/srv/noobot/service");
+const serviceDir = path.join(os.tmpdir(), "noobot", "service");
 
 test("resolveGlobalConfigPath prefers explicit path, then env, then the default", () => {
+  const configPath = path.join(os.tmpdir(), "config", "g.json");
+  const env = { [GLOBAL_CONFIG_PATH_ENV]: configPath };
   assert.equal(
-    resolveGlobalConfigPath({ serviceDir, filePath: "a.json", env: {} }),
+    resolveGlobalConfigPath({ serviceDir, filePath: "a.json", env }),
     path.join(serviceDir, "a.json"),
   );
-  assert.equal(
-    resolveGlobalConfigPath({ serviceDir, env: { [GLOBAL_CONFIG_PATH_ENV]: "/etc/g.json" } }),
-    "/etc/g.json",
-  );
+  assert.equal(resolveGlobalConfigPath({ serviceDir, env }), configPath);
   assert.equal(
     resolveGlobalConfigPath({ serviceDir, env: {} }),
     path.join(serviceDir, DEFAULT_GLOBAL_CONFIG_RELATIVE_PATH),
@@ -41,7 +40,11 @@ test("resolveWorkspaceRootPath resolves against serviceDir without a default", (
     resolveWorkspaceRootPath({ configuredRoot: "../workspace", serviceDir }),
     path.resolve(serviceDir, "../workspace"),
   );
-  assert.equal(resolveWorkspaceRootPath({ configuredRoot: " /data/ws ", serviceDir }), "/data/ws");
+  const workspaceRoot = path.join(os.tmpdir(), "data", "ws");
+  assert.equal(
+    resolveWorkspaceRootPath({ configuredRoot: ` ${workspaceRoot} `, serviceDir }),
+    workspaceRoot,
+  );
   for (const configuredRoot of [undefined, "", "   ", 42]) {
     assert.throws(
       () => resolveWorkspaceRootPath({ configuredRoot, serviceDir }),
@@ -77,7 +80,8 @@ test("resolveConfiguredWorkspaceRoot reads workspace_root from the config file",
 });
 
 test("requireWorkspaceRootEnv only accepts an absolute injected root", () => {
-  assert.equal(requireWorkspaceRootEnv({ [WORKSPACE_ROOT_ENV]: "/data/ws" }), "/data/ws");
+  const workspaceRoot = path.join(os.tmpdir(), "data", "ws");
+  assert.equal(requireWorkspaceRootEnv({ [WORKSPACE_ROOT_ENV]: workspaceRoot }), workspaceRoot);
   assert.throws(() => requireWorkspaceRootEnv({}), /is required/);
   assert.throws(
     () => requireWorkspaceRootEnv({ [WORKSPACE_ROOT_ENV]: "workspace" }),

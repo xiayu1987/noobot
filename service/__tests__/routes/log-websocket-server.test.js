@@ -250,6 +250,53 @@ test("log-websocket-server: reliable write failures return error and never ACK",
   }
 });
 
+test("log-websocket-server: failed batch diagnostics identify only the rejected record", () =>
+  withRuntimeEventsRoot("noobot-session-log-rejection-", async (workspaceRoot) => {
+    const server = createServer((_req, res) => res.end("not-found"));
+    const registered = registerLogWebSocketServer(server, {
+      resolveAuthByApiKey: () => ({ userId: "u1" }),
+      writeLogEvent: async (record) =>
+        record.event === "state.failed"
+          ? { ok: false, error: new Error("simulated reliable failure") }
+          : { ok: true },
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const rejectedEvent = {
+        source: "client",
+        channel: "ws",
+        scope: "session",
+        category: "state",
+        event: "state.failed",
+        sessionId: "s-failed",
+        parentSessionId: "s-parent",
+        dialogProcessId: "dialog-failed",
+        turnScopeId: "turn-failed",
+      };
+      const messages = await sendLogWs({
+        port: server.address().port,
+        payload: {
+          events: [
+            { ...rejectedEvent, event: "state.succeeded", sessionId: "s-success" },
+            { ...rejectedEvent, data: { secret: "not-for-diagnostics" } },
+          ],
+        },
+      });
+      assert.equal(messages.at(-1).event, "error");
+      assert.equal(messages.at(-1).count, 2);
+      const records = await waitForJsonLines(
+        path.join(workspaceRoot, "system/runtime/events/system/service/transport.jsonl"),
+        (items) => items.some((item) => item.event === "service.logWebSocket.write.failed"),
+      );
+      const failure = records.find((item) => item.event === "service.logWebSocket.write.failed");
+      const { category: _category, ...identity } = rejectedEvent;
+      assert.deepEqual(failure.data.rejectedEvent, identity);
+      assert.equal(JSON.stringify(failure).includes("not-for-diagnostics"), false);
+    } finally {
+      await closeLogServer(server, registered);
+    }
+  }));
+
 test("log-websocket-server: a partially failed batch settles before later messages", async () => {
   let releasePending;
   let markPendingStarted;

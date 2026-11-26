@@ -2,6 +2,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { ModelProtocolError } from "@noobot/model-protocol";
 import {
   generationArtifact,
   generationRequest,
@@ -71,6 +72,7 @@ export async function generateGeminiInteraction(context) {
   const images = await Promise.all(options.imageUrls.map((url) => imageContent(context, url)));
   const body = {
     model: context.modelSpec.model,
+    ...(context.streaming ? { stream: true } : {}),
     input: [
       { type: "text", text: input.prompt },
       ...images.map((image) => ({ type: "image", mime_type: image.mimeType, data: image.data })),
@@ -78,7 +80,9 @@ export async function generateGeminiInteraction(context) {
     response_format: interactionFormat(options, kind),
     ...(kind === "video" ? { background: true } : { store: false }),
   };
-  const created = await generationRequest(context, "interactions", body);
+  const created = await generationRequest(context, "interactions", body, {
+    readStream: context.streaming ? readInteractionStream : undefined,
+  });
   if (created.status === "completed") return interactionMedia(created, kind);
   const result = await pollGeneration(context, {
     id: created.id,
@@ -87,6 +91,22 @@ export async function generateGeminiInteraction(context) {
     initial: created,
   });
   return interactionMedia(result.payload, kind);
+}
+
+async function readInteractionStream(events) {
+  const content = [];
+  let id;
+  for await (const event of events) {
+    if (event.event_type === "interaction.created") id = event.interaction?.id;
+    if (event.event_type === "step.delta" && ["image", "text"].includes(event.delta?.type))
+      content.push(event.delta);
+    if (event.event_type === "interaction.completed") {
+      return { id, status: "completed", steps: [{ type: "model_output", content }] };
+    }
+    if (["interaction.failed", "interaction.cancelled"].includes(event.event_type))
+      throw new ModelProtocolError(`Gemini generation ended with ${event.event_type}`);
+  }
+  throw new ModelProtocolError("Gemini generation stream ended before interaction.completed");
 }
 
 export async function generateGeminiContent(context) {

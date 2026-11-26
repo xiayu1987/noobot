@@ -73,7 +73,7 @@ export function createSessionDisplayPublicationRow(row) {
 
 export function describeSessionDisplayMessageRow(
   row,
-  { message, contentReference, contentBytes, hasThinkingDetails },
+  { message, contentReference, contentBytes, hasThinkingDetails, thinkingContentTimeline },
 ) {
   requireDisplayRow(row);
   if (row.turnPlaceholder === true || row.messageUid !== message.messageUid)
@@ -89,6 +89,7 @@ export function describeSessionDisplayMessageRow(
       : {}),
     summarized: message.summarized === true,
     ...(hasThinkingDetails ? { hasThinkingDetails: true } : {}),
+    ...(thinkingContentTimeline === undefined ? {} : { thinkingContentTimeline }),
     ...(message.pending === undefined ? {} : { pending: message.pending }),
     ...(text(message.ts) ? { ts: text(message.ts) } : {}),
     contentReference,

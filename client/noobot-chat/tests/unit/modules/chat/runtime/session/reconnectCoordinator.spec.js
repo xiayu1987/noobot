@@ -19,8 +19,47 @@ import {
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { applyExecutionProjection } from "../../../../../../src/modules/chat/runtime/run-state-machine/executionRuntimeProjection.js";
 import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
+import { confirmSessionIdentity } from "../../../../../../src/modules/chat/model/sessionIdentity.js";
 
 describe("createReconnectCoordinator", () => {
+  it("restores a local draft only after the server confirms its session identity", async () => {
+    const activeSession = ref({
+      sessionId: "local-1",
+      parentSessionId: ROOT_PARENT_SESSION_ID,
+      isLocal: true,
+      messages: [],
+    });
+    const chatWebSocketClient = { reconnect: vi.fn(async () => {}), requestJson: vi.fn() };
+    const requestSessionNavigation = vi.fn();
+    const logSessionSystemEvent = vi.fn();
+    const notify = vi.fn();
+    const resolveActiveTurn = vi.fn(() => null);
+    const coordinator = createReconnectCoordinator({
+      activeSession,
+      requestSessionNavigation,
+      turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
+      chatWebSocketClient,
+      reconnectReplay: {},
+      resolveActiveTurn,
+      logSessionSystemEvent,
+      notify,
+      translate: (key) => key,
+    });
+
+    expect(await coordinator.handleReconnect()).toBe(false);
+    expect(chatWebSocketClient.reconnect).not.toHaveBeenCalled();
+    expect(requestSessionNavigation).not.toHaveBeenCalled();
+    expect(resolveActiveTurn).not.toHaveBeenCalled();
+    expect(logSessionSystemEvent).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
+
+    confirmSessionIdentity({ sessionItem: activeSession.value, sessionId: "local-1" });
+    await coordinator.handleReconnect();
+    expect(chatWebSocketClient.reconnect).toHaveBeenCalledTimes(1);
+    expect(chatWebSocketClient.reconnect.mock.calls[0][0].identity.sessionId).toBe("local-1");
+    expect(requestSessionNavigation).toHaveBeenCalledWith("local-1");
+  });
+
   it("declares the active child session parent identity on reconnect", async () => {
     const chatWebSocketClient = { reconnect: vi.fn(async () => {}), requestJson: vi.fn() };
     const logSessionSystemEvent = vi.fn();

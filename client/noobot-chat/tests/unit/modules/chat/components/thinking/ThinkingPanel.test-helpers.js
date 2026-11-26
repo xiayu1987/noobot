@@ -181,6 +181,10 @@ export function mountThinkingPanel(messageItem, props = {}, { stubs = {} } = {})
     props: { messageItem, allMessages: [], fetchExecutionReport: async () => null, ...props },
     global: {
       stubs: {
+        ElButton: {
+          props: ["disabled", "loading"],
+          template: '<button :disabled="disabled || loading"><slot /></button>',
+        },
         BaseThinkingPanelShell: {
           template: '<section><slot name="title" /><slot /><slot name="footer" /></section>',
         },

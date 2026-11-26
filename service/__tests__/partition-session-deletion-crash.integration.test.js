@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
 import { readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -28,6 +26,7 @@ import {
   attachScopeRoot,
   attachSessionRoot,
 } from "../../agent/src/artifacts/service/attachment-storage-layout.js";
+import { journalRemovalLockPath } from "../../agent/src/session/partition-storage/journal-publication-lock.js";
 import { recoverWorkspaceAttachmentCatalogs } from "../../agent/src/workspace-lifecycle/attachment-catalog-upgrade.js";
 import { readSessionDirectory } from "../../agent/src/workspace-lifecycle/session-directory-walk.js";
 import { resolveSessionArtifactMutationLock } from "../../agent/src/session/session-artifact-files.js";
@@ -38,6 +37,7 @@ import {
 } from "./partition-session-deletion-crash.test-helpers.js";
 import { registerSessionRoutes, withTestServer } from "./routes/session-routes.helpers.js";
 import { WORKSPACE_ROOT_ENV } from "@noobot/runtime-topology-protocol/workspace-root";
+import { runDeletionWorker } from "./deletion-worker-process.test-helpers.js";
 
 async function crashDeletion(workspaceRoot, retainedId, crashStage, window, ...fixtureArgs) {
   const worker = fileURLToPath(
@@ -45,8 +45,7 @@ async function crashDeletion(workspaceRoot, retainedId, crashStage, window, ...f
   );
   const env = { ...process.env, [WORKSPACE_ROOT_ENV]: workspaceRoot };
   delete env.NODE_TEST_CONTEXT;
-  const child = spawn(
-    process.execPath,
+  const { termination, output } = await runDeletionWorker(
     [
       "--import",
       new URL("../../shared/testing/runtime-params.js", import.meta.url).href,
@@ -57,17 +56,15 @@ async function crashDeletion(workspaceRoot, retainedId, crashStage, window, ...f
       window,
       ...fixtureArgs,
     ],
-    { env, stdio: ["ignore", "pipe", "pipe"], timeout: 10000, killSignal: "SIGKILL" },
+    { env },
   );
-  let output = "";
-  for (const stream of [child.stdout, child.stderr]) {
-    stream.setEncoding("utf8").on("data", (chunk) => {
-      output += chunk;
-    });
-  }
-  assert.deepEqual(await once(child, "close"), [null, "SIGKILL"], output);
   const lines = output.split("\n");
   assert.ok(lines.includes(`crash:${crashStage}:${window}`), output);
+  assert.deepEqual(
+    termination,
+    process.platform === "win32" ? [1, null] : [null, "SIGKILL"],
+    output,
+  );
 }
 
 const { DIRECTORIES, TREE, PLUGINS, ATTACHMENTS, SHORT_MEMORY, COMPLETE } = SESSION_DELETION_STAGE;
@@ -122,6 +119,7 @@ test("a parent deletion cannot take over its child's interrupted directory clean
 });
 
 const windows = [
+  [DIRECTORIES, "before-rename"],
   [DIRECTORIES, "after-rename"],
   [DIRECTORIES, "recursive-rm"],
   [DIRECTORIES, "before-lock-rm"],
@@ -153,6 +151,7 @@ for (const [crashStage, window] of windows) {
     const basePath = bot.getWorkspacePath(userId);
     const deletedDirectory = join(basePath, ...operation.targets[0].directory);
     const artifactLock = resolveSessionArtifactMutationLock(deletedDirectory);
+    const journalLock = journalRemovalLockPath(deletedDirectory);
     const stagingName = sessionDeletionStagingName(operation.targets[0].directory.at(-1));
     const staging = join(dirname(deletedDirectory), stagingName);
     const readTree = () => treeRepo.getTree(userId);
@@ -166,7 +165,14 @@ for (const [crashStage, window] of windows) {
     if (window === "before-memory-publish") assert.equal((await readMemoryStaging()).length, 1);
     const finished = (stage) =>
       stages.indexOf(stage) < crashIndex || (stage === crashStage && window === "before-ack");
-    await assert.rejects(stat(deletedDirectory), { code: "ENOENT" });
+    if (window === "before-rename") await stat(deletedDirectory);
+    else await assert.rejects(stat(deletedDirectory), { code: "ENOENT" });
+    if (
+      process.platform === "win32" &&
+      ["before-rename", "after-rename", "recursive-rm"].includes(window)
+    )
+      await stat(journalLock);
+    else await assert.rejects(stat(journalLock), { code: "ENOENT" });
     if (finished(DIRECTORIES)) await assert.rejects(stat(artifactLock), { code: "ENOENT" });
     else await stat(artifactLock);
     if (crashStage === DIRECTORIES && ["after-rename", "recursive-rm"].includes(window)) {
@@ -328,6 +334,7 @@ for (const [crashStage, window] of windows) {
     assert.deepEqual(await readOperation(), { ...operation, nextStage: COMPLETE });
     await assert.rejects(stat(deletedDirectory), { code: "ENOENT" });
     await assert.rejects(stat(artifactLock), { code: "ENOENT" });
+    await assert.rejects(stat(journalLock), { code: "ENOENT" });
     await assert.rejects(stat(staging), { code: "ENOENT" });
     assert.deepEqual(Object.keys((await readTree()).nodes), [retainedId]);
     assert.deepEqual(await bot.session.listSessionIds({ userId }), [retainedId]);

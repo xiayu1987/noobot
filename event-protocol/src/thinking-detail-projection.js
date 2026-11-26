@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { requireTurnPartitionIdentity } from "@noobot/session-protocol";
+import { requireTurnPartitionIdentity } from "@noobot/session-protocol/turn-partition-identity";
 import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import { createTurnArtifactRevision } from "@noobot/session-protocol/turn-lookup-key";
 import {

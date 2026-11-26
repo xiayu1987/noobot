@@ -12,6 +12,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { withoutRuntimeInstancePaths } from "@noobot/runtime-topology-protocol/instance-paths";
 
 async function availablePort() {
@@ -54,12 +55,20 @@ async function waitForServer(child, port, errors) {
 
 test("proxy entrypoints reject invalid URLs before frontend serving or WebSocket upgrade", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "proxy-url-contract-"));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  let child = null;
+  t.after(async () => {
+    if (child && child.exitCode === null && child.signalCode === null) {
+      const closed = once(child, "close");
+      child.kill();
+      await closed;
+    }
+    await fs.rm(root, { recursive: true, force: true });
+  });
   await fs.writeFile(path.join(root, "index.html"), "url-contract-home");
   const port = await availablePort();
-  const child = spawn(
+  child = spawn(
     process.execPath,
-    [new URL("../../agent-proxy.js", import.meta.url).pathname],
+    [fileURLToPath(new URL("../../agent-proxy.js", import.meta.url))],
     {
       env: {
         ...withoutRuntimeInstancePaths(process.env),
@@ -74,12 +83,6 @@ test("proxy entrypoints reject invalid URLs before frontend serving or WebSocket
   let stderr = "";
   child.stderr.on("data", (data) => {
     stderr += data;
-  });
-  t.after(async () => {
-    if (child.exitCode !== null || child.signalCode !== null) return;
-    const closed = once(child, "close");
-    child.kill();
-    await closed;
   });
   await waitForServer(child, port, () => stderr);
   const home = await exchange(port, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close");

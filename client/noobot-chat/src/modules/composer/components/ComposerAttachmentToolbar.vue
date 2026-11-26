@@ -10,6 +10,7 @@ import { useLocale } from "../../../shared/i18n/useLocale.js";
 
 const props = defineProps({
   uploadFiles: { type: Array, default: () => [] },
+  disabled: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["append-uploads", "clear-uploads", "remove-upload"]);
@@ -19,6 +20,7 @@ const { translate } = useLocale();
 const attachmentCount = computed(() => (props.uploadFiles || []).length);
 
 function openFilePicker() {
+  if (props.disabled) return;
   const input = fileInputRef.value;
   if (!input) return;
   input.value = "";
@@ -58,40 +60,55 @@ defineExpose({
       multiple
       @change="onFileSelected"
     />
-    <el-button
-      size="small"
-      class="poe-upload-btn noobot-action-btn noobot-flat-soft-btn"
-      @click="openFilePicker"
-    >
-      <el-icon class="btn-icon"><Paperclip /></el-icon>
-      {{ translate("composer.attachments") }}
-    </el-button>
-    <div class="attachment-tags" v-if="attachmentCount">
-      <div
-        class="attachment-pill noobot-flat-chip"
-        v-for="uploadFile in uploadFiles"
-        :key="uploadFile.clientAttachmentId"
-      >
-        <span class="attachment-name" :title="uploadFile.name">{{ uploadFile.name }}</span>
-        <button
-          type="button"
-          class="attachment-remove-btn noobot-icon-button noobot-flat-icon-btn"
-          :title="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
-          :aria-label="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
-          @click.stop="onRemoveUpload(uploadFile.clientAttachmentId)"
+    <el-popover placement="top" trigger="click" :width="320" :disabled="disabled">
+      <template #reference>
+        <el-button
+          class="attachment-trigger noobot-icon-button"
+          :title="translate('composer.attachments')"
+          :aria-label="translate('composer.attachments')"
+          :disabled="disabled"
         >
-          <el-icon><Close /></el-icon>
-        </button>
+          <el-icon><Paperclip /></el-icon>
+        </el-button>
+      </template>
+      <div class="attachment-menu">
+        <el-button
+          size="small"
+          class="poe-upload-btn noobot-action-btn noobot-flat-soft-btn"
+          :disabled="disabled"
+          @click="openFilePicker"
+        >
+          <el-icon class="btn-icon"><Paperclip /></el-icon>
+          {{ translate("composer.attachments") }}
+        </el-button>
+        <div class="attachment-tags" v-if="attachmentCount">
+          <div
+            class="attachment-pill noobot-flat-chip"
+            v-for="uploadFile in uploadFiles"
+            :key="uploadFile.clientAttachmentId"
+          >
+            <span class="attachment-name" :title="uploadFile.name">{{ uploadFile.name }}</span>
+            <button
+              type="button"
+              class="attachment-remove-btn noobot-icon-button noobot-flat-icon-btn"
+              :title="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
+              :aria-label="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
+              @click.stop="onRemoveUpload(uploadFile.clientAttachmentId)"
+            >
+              <el-icon><Close /></el-icon>
+            </button>
+          </div>
+          <el-button
+            size="small"
+            text
+            class="clear-files-btn noobot-action-btn"
+            @click="onClearUploads"
+          >
+            {{ translate("composer.clear") }}
+          </el-button>
+        </div>
       </div>
-      <el-button
-        size="small"
-        text
-        class="clear-files-btn noobot-action-btn"
-        @click="onClearUploads"
-      >
-        {{ translate("composer.clear") }}
-      </el-button>
-    </div>
+    </el-popover>
   </div>
 </template>
 
@@ -101,6 +118,29 @@ defineExpose({
   align-items: center;
   gap: var(--noobot-space-xs);
   flex-wrap: wrap;
+}
+
+.attachment-trigger {
+  width: var(--composer-icon-size);
+  height: var(--composer-icon-size);
+  min-width: var(--composer-icon-size);
+  padding: 0;
+  margin: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--noobot-text-secondary);
+}
+
+.attachment-trigger:hover {
+  background: var(--noobot-surface-soft);
+  color: var(--noobot-text-main);
+}
+
+.attachment-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--noobot-space-md);
+  min-width: 0;
 }
 
 .native-file-input {

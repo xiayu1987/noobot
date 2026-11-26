@@ -8,27 +8,13 @@ import assert from "node:assert/strict";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { flushRuntimeEvents } from "@noobot/runtime-events";
 
 import { createWorkspaceUsersService } from "../services/workspace-users-service.js";
 import { withRuntimeEventsRoot } from "./runtime-events-root.test-helpers.js";
 
 async function createTempDir(prefix = "noobot-workspace-users-test-") {
   return mkdtemp(path.join(os.tmpdir(), prefix));
-}
-
-async function waitForFile(file, { timeoutMs = 1000 } = {}) {
-  const deadline = Date.now() + timeoutMs;
-  let lastError;
-  while (Date.now() < deadline) {
-    try {
-      await access(file);
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-  }
-  throw lastError;
 }
 
 async function readJsonl(file) {
@@ -83,7 +69,7 @@ test("workspace-users-service: corrupt users file fails and writes sanitized sys
         "service",
         "config.jsonl",
       );
-      await waitForFile(eventFile);
+      await flushRuntimeEvents();
       const [record] = await readJsonl(eventFile);
 
       assert.equal(record.scope, "system");

@@ -179,8 +179,17 @@ export async function auditSessionSummaryArtifacts(
       metadata.sessionId === sessionId &&
       (summary.title !== indexedSession.title ||
         listProjection.messageCount !== indexedSession.messageCount)
-    )
+    ) {
+      report.projectionMismatch = {
+        detailGeneration: reader.generation,
+        indexedTitle: indexedSession.title,
+        detailTitle: summary.title,
+        indexedMessageCount: indexedSession.messageCount,
+        detailMessageCount: listProjection.messageCount,
+        lifecycle: await reader.readLifecycleHead(),
+      };
       failSummaryAudit(`session list and detail projections disagree: ${sessionId}`, report);
+    }
     const presentations = new Set();
     let detailBytes = 0;
     let thinkingDetailCount = 0;

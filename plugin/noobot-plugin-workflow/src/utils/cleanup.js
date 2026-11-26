@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from "node:fs/promises";
+import { rm } from "@noobot/shared/file-system";
 import path from "node:path";
 import { WORKFLOW_DATA_SCOPE, resolveWorkflowDataRelativePath } from "../core/constants.js";
 import { isCanonicalText } from "@noobot/shared/value";
@@ -16,6 +16,6 @@ export async function cleanupWorkflowBySessionIds(basePath, sessionIds) {
     path.resolve(basePath, resolveWorkflowDataRelativePath(WORKFLOW_DATA_SCOPE.SESSION, sessionId)),
   );
   for (const target of targets) {
-    await fs.rm(target, { recursive: true, force: true });
+    await rm(target, { recursive: true, force: true });
   }
 }

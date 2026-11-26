@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from "node:fs/promises";
+import * as fs from "@noobot/shared/file-system";
+import nativeFs from "node:fs/promises";
 import path from "node:path";
 import { hash } from "node:crypto";
 import { syncDirectory } from "@noobot/platform-compatibility/file-system";
@@ -95,7 +96,7 @@ async function pruneRunDirs(harnessRunsDir, dirNames) {
   for (const dir of dirNames) {
     const target = path.join(harnessRunsDir, dir);
     try {
-      await fs.rm(target, { recursive: true, force: true });
+      await nativeFs.rm(target, { recursive: true, force: true });
       discardRunBuffers(target);
       result.deleted += 1;
     } catch (error) {
@@ -152,7 +153,7 @@ async function stageAndRemoveRuns(basePath, targetIds, signal) {
     const manifest = await readRunManifest(target);
     if (!manifestSessionIds(manifest).some((id) => targetIds.has(id))) continue;
     const name = `${stagingPrefix}${hash("sha256", runId)}`;
-    await fs.rename(target, path.join(harnessRunsDir, name));
+    await nativeFs.rename(target, path.join(harnessRunsDir, name));
     discardRunBuffers(target);
     staged.push(name);
   }
@@ -160,7 +161,7 @@ async function stageAndRemoveRuns(basePath, targetIds, signal) {
   await syncRuns();
   for (const name of staged) {
     signal?.throwIfAborted();
-    await fs.rm(path.join(harnessRunsDir, name), { recursive: true, force: true });
+    await nativeFs.rm(path.join(harnessRunsDir, name), { recursive: true, force: true });
   }
   await syncRuns();
   return { deleted: staged.length, matchedRuns: staged.length };

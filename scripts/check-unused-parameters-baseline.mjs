@@ -9,6 +9,7 @@ import {
   addHit,
   defineCheck,
   emptyMeasurement,
+  qualityReportPath,
   runCheckWhenMain,
 } from "./quality/check-protocol.mjs";
 import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
@@ -31,7 +32,7 @@ export function createUnusedParameterLinter(repositoryRoot = root) {
 export function measureLintResults(results, repositoryRoot = root) {
   const measurement = emptyMeasurement();
   for (const result of results) {
-    const file = path.relative(repositoryRoot, result.filePath);
+    const file = qualityReportPath(repositoryRoot, result.filePath);
     for (const { ruleId, line, message } of result.messages) {
       if (ruleId === UNUSED_VARS_RULE_ID) addHit(measurement, { file, line, message });
     }

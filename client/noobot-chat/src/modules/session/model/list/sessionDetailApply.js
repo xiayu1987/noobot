@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { RoleEnum } from "../../../chat/model/chatConstants.js";
+import { continueMessageEventStates } from "../../../chat/model/messageEventState.js";
 import { findVisibleLastMessage } from "../../../chat/model/messageModel.js";
 import {
   findSessionByAnyId as findSessionByAnyIdInList,
@@ -79,7 +80,7 @@ export function createSessionDetailApplicator({
   function applyAvailableEntry({ detail, sessionItem, mainEntry }) {
     const sessionId = detail.sessionId;
     const canonicalDetail = mergeCanonicalSessionDetail(
-      { sessionId, messages: [] },
+      { sessionId, messages: sessionItem.messages },
       { sessionId, messages: mainEntry.messages },
       { replaceFields: ["messages"] },
     );
@@ -93,6 +94,7 @@ export function createSessionDetailApplicator({
     revokeMessagePreviewUrls(sessionItem.messages);
 
     const normalizedDetailMessages = detailProjection.messages;
+    continueMessageEventStates(sessionItem.messages, normalizedDetailMessages);
     logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailSnapshotReceived", () => ({
       sessionId,
       rawMessageCount: mainEntry.messages.length,

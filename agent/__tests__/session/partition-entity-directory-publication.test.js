@@ -445,10 +445,14 @@ test("directory appends sync page data and publish new segment entries before CU
   const events = [];
   setFsAdapter({
     ...adapter,
+    async syncDirectory(directory) {
+      const result = await adapter.syncDirectory(directory);
+      if (directory === catalog) events.push("directory");
+      return result;
+    },
     async open(file, ...args) {
       const handle = await adapter.open(file, ...args);
-      const kind =
-        String(file) === catalog ? "directory" : String(file).endsWith(".pages") ? "pages" : null;
+      const kind = String(file).endsWith(".pages") ? "pages" : null;
       if (kind === null) return handle;
       return new Proxy(handle, {
         get(target, key) {

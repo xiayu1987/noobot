@@ -6,6 +6,7 @@
 import test from "node:test";
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import assert from "node:assert/strict";
+import path from "node:path";
 
 import {
   createTestRuntimeContext,
@@ -83,7 +84,10 @@ test("buildStaticInfo exposes host default directories", () => {
 
   assert.equal(staticInfo.directories?.view, "host");
   assert.equal(staticInfo.directories?.rootDirectory, "/host/workspaces/u1");
-  assert.equal(staticInfo.directories?.opsWorkdir, "/host/workspaces/u1/runtime/ops_workdir");
+  assert.equal(
+    staticInfo.directories?.opsWorkdir,
+    path.join("/host/workspaces/u1", "runtime/ops_workdir"),
+  );
   assert.equal(staticInfo.directories?.currentDirectory, "/host/workspaces/u1");
   assert.deepEqual(staticInfo.directories?.allowedRoots, ["/host/workspaces/u1"]);
 });

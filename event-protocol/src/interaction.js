@@ -6,12 +6,14 @@
 import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 import {
   createSessionPersistenceScope,
+  validateSessionPersistenceScope,
+} from "@noobot/session-protocol/persistence-scope";
+import {
   createSessionScope,
   createTurnIdentity,
-  validateSessionPersistenceScope,
   validateSessionScope,
-  validateTurnIdentity,
-} from "@noobot/session-protocol";
+} from "@noobot/session-protocol/identity";
+import { validateTurnIdentity } from "@noobot/session-protocol/turn-identity";
 
 const INTERACTION_AUTHORITY_FIELDS = Object.freeze(["session", "turn", "persistenceScope"]);
 const TURN_IDENTITY_FIELDS = Object.freeze(["dialogProcessId", "turnScopeId"]);

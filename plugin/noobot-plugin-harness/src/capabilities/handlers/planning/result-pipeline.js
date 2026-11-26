@@ -26,13 +26,6 @@ import { executePlanMutation } from "../shared/plan/mutation-facade.js";
 import { resetPlanAcceptanceStatusForPlanChange } from "../shared/plan/acceptance-status.js";
 import { extractChangedMainStepIndexes } from "../shared/plan/revision-helpers.js";
 import { resolveOperationDirectoryContext } from "../shared/operation-directory.js";
-import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
-import {
-  appendMessage,
-  replaceMessages,
-  resolveModelMessages,
-} from "../../../core/message-store.js";
-import { isHarnessInjectedMessage } from "../shared/message/utils.js";
 import { text } from "@noobot/shared/value";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
@@ -45,7 +38,6 @@ const DEFAULT_PLAN_REASON_I18N_KEY = Object.freeze({
 const CURRENT_TASK_GOAL_BLOCK_RE =
   /\[CURRENT_TASK_GOAL\]([\s\S]*?)(?=\[PLAN\]|\[PLAN_PATCH\]|\[CURRENT_PLAN\]|$)/i;
 const PLAN_BLOCK_MARKER_RE = /^\s*\[(?:PLAN|PLAN_PATCH|CURRENT_PLAN)\]\s*$/gim;
-const CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE = "planning_current_task_goal";
 
 function resolveDefaultPlanReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
   const normalizedReason = text(reason) || "planning_empty_response";
@@ -69,47 +61,6 @@ function parsePlanningTextProtocol(sourceText = "") {
     .replace(PLAN_BLOCK_MARKER_RE, "")
     .trim();
   return { currentTaskGoal, planText: planText || raw };
-}
-
-function isCurrentTaskGoalInjectedMessage(message = {}) {
-  return isHarnessInjectedMessage(message, { type: CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE });
-}
-
-function removeCurrentTaskGoalInjectedMessagesFromList(messages = []) {
-  if (!Array.isArray(messages)) return 0;
-  let removed = 0;
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (!isCurrentTaskGoalInjectedMessage(messages[index])) continue;
-    messages.splice(index, 1);
-    removed += 1;
-  }
-  return removed;
-}
-
-function removeCurrentTaskGoalInjectedMessages(ctx = {}) {
-  const messages = resolveModelMessages(ctx);
-  const removed = removeCurrentTaskGoalInjectedMessagesFromList(messages);
-  if (removed) replaceMessages(ctx, messages);
-  return removed;
-}
-
-function buildCurrentTaskGoalSystemContent(currentTaskGoal = "") {
-  return ["<!-- noobot-harness-current-task-goal -->", "[CURRENT_TASK_GOAL]", text(currentTaskGoal)]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function injectCurrentTaskGoalSystemMessage(ctx = {}, currentTaskGoal = "") {
-  const normalizedGoal = text(currentTaskGoal);
-  if (!normalizedGoal) return false;
-  removeCurrentTaskGoalInjectedMessages(ctx);
-  const message = buildHarnessInjectedMessage(buildCurrentTaskGoalSystemContent(normalizedGoal), {
-    role: "system",
-    dialogProcessId: ctx.dialogProcessId,
-    injectedMessageType: CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE,
-  });
-  appendMessage(ctx, message, { block: "system" });
-  return true;
 }
 
 function applyPlanText(
@@ -139,7 +90,6 @@ function applyPlanText(
   bucket.planText = appliedMutation.nextPlanText;
   if (parsedProtocol.currentTaskGoal) {
     bucket.currentTaskGoal = parsedProtocol.currentTaskGoal;
-    injectCurrentTaskGoalSystemMessage(ctx, parsedProtocol.currentTaskGoal);
   }
   resetPlanAcceptanceStatusForPlanChange(
     bucket,

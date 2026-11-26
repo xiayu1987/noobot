@@ -23,6 +23,7 @@ import {
   runsDirectory,
 } from "./partition-session-deletion-crash.test-helpers.js";
 import { registerSessionRoutes, withTestServer } from "./routes/session-routes.helpers.js";
+import { waitForDeletionStart } from "./deletion-worker-process.test-helpers.js";
 
 test("terminate while processing a session deletion", async (t) => {
   const [workspaceRoot, retainedId, crashStage, window, ancestorId] = process.argv.slice(2);
@@ -78,7 +79,7 @@ test("terminate while processing a session deletion", async (t) => {
     writeSync(1, `crash:${crashStage}:${window}\n`);
     process.kill(process.pid, "SIGKILL");
   };
-  if (["recursive-rm", "after-rename", "before-lock-rm"].includes(window)) {
+  if (["before-rename", "recursive-rm", "after-rename", "before-lock-rm"].includes(window)) {
     const { sessionDir } = await bot.session.locateSessionScope(identity);
     const staged = join(sessionDir, "..", sessionDeletionStagingName(sessionId));
     const artifactLock = resolveSessionArtifactMutationLock(sessionDir);
@@ -86,6 +87,7 @@ test("terminate while processing a session deletion", async (t) => {
     setFsAdapter({
       ...fs,
       async rename(source, target) {
+        if (window === "before-rename" && source === sessionDir && target === staged) terminate();
         await fs.rename(source, target);
         if (window === "after-rename" && source === sessionDir && target === staged) terminate();
       },
@@ -136,6 +138,7 @@ test("terminate while processing a session deletion", async (t) => {
   const { app, pluginHost } = await createDeletionHttpFixture(t, access);
   registerSessionRoutes(app, { bot: access, runBotOperation: access.runOperation, pluginHost });
   await withTestServer(app, async (url) => {
+    await waitForDeletionStart();
     const response = await fetch(`${url}/internal/session/${userId}/${sessionId}`, {
       method: "DELETE",
     });

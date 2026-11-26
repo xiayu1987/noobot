@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import "../../shared/testing/runtime-params.js";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";

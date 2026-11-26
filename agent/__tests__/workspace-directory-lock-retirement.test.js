@@ -7,6 +7,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import path from "node:path";
 import { syncBuiltinESMExports } from "node:module";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import fsPromises, { access, mkdir, readFile, symlink, utimes, writeFile } from "node:fs/promises";
 import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_VERSION } from "@noobot/workspace-protocol";
 import {
@@ -140,6 +142,100 @@ test("concurrent directory retirement is safe and the file coordinator works aft
       );
     });
   }));
+
+test("independent processes elect one directory retirer and remove coordination files", async () =>
+  withTemp(async (base) => {
+    const lockPath = path.join(base, "process.lock");
+    await oldLock(lockPath);
+    const moduleUrl = new URL(
+      "../src/workspace-lifecycle/directory-lock-retirement.js",
+      import.meta.url,
+    ).href;
+    const runtimeUrl = new URL("../../shared/testing/runtime-params.js", import.meta.url).href;
+    const script = `import {retireDirectoryLockIfPresent} from ${JSON.stringify(moduleUrl)}; console.log(await retireDirectoryLockIfPresent(process.argv[1]));`;
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        promisify(execFile)(process.execPath, [
+          "--import",
+          runtimeUrl,
+          "--input-type=module",
+          "-e",
+          script,
+          lockPath,
+        ]),
+      ),
+    );
+    assert.equal(results.filter(({ stdout }) => stdout.trim() === "true").length, 1);
+    assert.equal(results.filter(({ stdout }) => stdout.trim() === "false").length, 7);
+    assert.deepEqual(await fsPromises.readdir(base), []);
+  }));
+
+for (const phase of ["unlink", "rmdir"]) {
+  test(`retirement resumes after process death before ${phase} and removes coordination files`, async () =>
+    withTemp(async (base) => {
+      const lockPath = path.join(base, "interrupted.lock");
+      await oldLock(lockPath);
+      const moduleUrl = new URL(
+        "../src/workspace-lifecycle/directory-lock-retirement.js",
+        import.meta.url,
+      ).href;
+      const runtimeUrl = new URL("../../shared/testing/runtime-params.js", import.meta.url).href;
+      const script = `
+        import fs from "node:fs/promises";
+        import { syncBuiltinESMExports } from "node:module";
+        const original = fs[${JSON.stringify(phase)}];
+        fs[${JSON.stringify(phase)}] = async (target, ...args) => {
+          if (target === ${JSON.stringify(phase === "unlink" ? path.join(lockPath, "owner") : lockPath)}) process.exit(44);
+          return original(target, ...args);
+        };
+        syncBuiltinESMExports();
+        const { retireDirectoryLockIfPresent } = await import(${JSON.stringify(moduleUrl)});
+        await retireDirectoryLockIfPresent(${JSON.stringify(lockPath)});
+      `;
+      await assert.rejects(
+        promisify(execFile)(process.execPath, [
+          "--import",
+          runtimeUrl,
+          "--input-type=module",
+          "-e",
+          script,
+        ]),
+        { code: 44 },
+      );
+      assert.deepEqual(
+        (await fsPromises.readdir(lockPath)).sort(),
+        phase === "unlink" ? ["owner"] : [],
+      );
+      const expired = new Date(Date.now() - 120000);
+      await utimes(`${lockPath}.retirement-lock`, expired, expired);
+      assert.equal(await retireDirectoryLockIfPresent(lockPath), true);
+      assert.deepEqual(await fsPromises.readdir(base), []);
+    }));
+}
+
+for (const phase of ["unlink", "rmdir"]) {
+  test(`retirement reports ${phase} I/O errors and succeeds after the fault is removed`, async (t) =>
+    withTemp(async (base) => {
+      const lockPath = path.join(base, "io-error.lock");
+      await oldLock(lockPath);
+      const original = fsPromises[phase];
+      const failure = Object.assign(new Error("Injected retirement I/O failure"), { code: "EIO" });
+      t.mock.method(fsPromises, phase, async (target, ...args) => {
+        if (target === (phase === "unlink" ? path.join(lockPath, "owner") : lockPath))
+          throw failure;
+        return original(target, ...args);
+      });
+      syncBuiltinESMExports();
+      try {
+        await assert.rejects(retireDirectoryLockIfPresent(lockPath), (error) => error === failure);
+      } finally {
+        t.mock.restoreAll();
+        syncBuiltinESMExports();
+      }
+      assert.equal(await retireDirectoryLockIfPresent(lockPath), true);
+      assert.deepEqual(await fsPromises.readdir(base), []);
+    }));
+}
 
 test("workspace directory lock is retired before ensure obtains its external lock", async () =>
   withTemp(async (root) => {

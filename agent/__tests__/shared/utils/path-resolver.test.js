@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 
 import {
   PATH_PLATFORMS,
@@ -92,7 +93,7 @@ test("ordinary tool paths reject sandbox and ambiguous virtual views", () => {
   });
   assert.equal(workspaceRelative.ok, true);
   assert.equal(workspaceRelative.view, TOOL_PATH_VIEWS.WORKSPACE_RELATIVE);
-  assert.equal(workspaceRelative.resolvedPath, "/workspace-root/u1/src/a.js");
+  assert.equal(workspaceRelative.resolvedPath, path.resolve("/workspace-root/u1", "src/a.js"));
 
   const sandboxAbsolute = resolveToolInputPath({
     inputPath: "/workspace/u1/src/a.js",
@@ -223,7 +224,10 @@ test("resolveRuntimePathContext projects host directories", () => {
   assert.equal(hostContext.sandbox, null);
   assert.equal(hostContext.directories.currentDirectory, "/host/workspaces/u1");
   assert.equal(hostContext.directories.rootDirectory, "/host/workspaces/u1");
-  assert.equal(hostContext.directories.opsWorkdir, "/host/workspaces/u1/runtime/ops_workdir");
+  assert.equal(
+    hostContext.directories.opsWorkdir,
+    path.join("/host/workspaces/u1", "runtime/ops_workdir"),
+  );
   assert.deepEqual(hostContext.directories.allowedRoots, ["/host/workspaces/u1"]);
   assert.equal(Object.hasOwn(hostContext.directories, "hostAbsolutePaths"), false);
 });
@@ -290,7 +294,7 @@ test("resolveRuntimeOpsWorkdir is the single ops workdir source for both views",
       userId: "u1",
       executionPolicy: executeScriptPolicy(),
     }),
-    { view: "host", opsWorkdir: "/host/workspaces/u1/runtime/ops_workdir" },
+    { view: "host", opsWorkdir: path.join("/host/workspaces/u1", "runtime/ops_workdir") },
   );
   assert.deepEqual(
     resolveRuntimeOpsWorkdir({
@@ -344,7 +348,7 @@ test("sandbox mount targets are shared by all file-related tools through global 
   assert.equal(sandboxProject.ok, true);
   assert.equal(
     sandboxProject.resolvedPath,
-    "/host/projects/noobot/client/noobot-chat/src/app/App.vue",
+    path.resolve("/host/projects/noobot", "client/noobot-chat/src/app/App.vue"),
   );
   assert.deepEqual(sandboxProject.mountPathRef, {
     view: "mount",
@@ -374,7 +378,7 @@ test("sandbox mount targets are shared by all file-related tools through global 
     },
   });
   assert.equal(arbitraryMount.ok, true);
-  assert.equal(arbitraryMount.resolvedPath, "/host/assets/images/a.png");
+  assert.equal(arbitraryMount.resolvedPath, path.resolve("/host/assets", "images/a.png"));
   assert.deepEqual(arbitraryMount.mountPathRef, {
     view: "mount",
     mount: "/shared-assets",

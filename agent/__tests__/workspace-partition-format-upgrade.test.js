@@ -14,6 +14,7 @@ import {
 import { PARTITION_SESSION_METADATA } from "@noobot/session-protocol/partition-transaction";
 import { PARTITION_TITLE_CANDIDATES_ROOT } from "@noobot/session-protocol/partition-title-index";
 import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_VERSION } from "@noobot/workspace-protocol";
+import { normalizeMigrationQuarantinePath } from "@noobot/workspace-protocol/migration-quarantine";
 import { journalPartitionPath } from "../src/session/partition-storage/journal-io.js";
 import { PartitionJournal } from "../src/session/partition-storage/partition-journal.js";
 import { openPartitionSessionReader } from "../src/session/partition-storage/partition-session-reader.js";
@@ -318,7 +319,8 @@ test("mixed unsupported, corrupt and conflicting sessions do not block a healthy
   const units = await listQuarantinedUnits({ base });
   assert.equal(units.length, failures.length, JSON.stringify(units));
   for (const [id, files, format, status] of failures) {
-    const unit = units.find((entry) => entry.path === join(WORKSPACE_LAYOUT.SESSION_DIR, id));
+    const expectedPath = normalizeMigrationQuarantinePath(join(WORKSPACE_LAYOUT.SESSION_DIR, id));
+    const unit = units.find((entry) => entry.path === expectedPath);
     assert.deepEqual(unit.sessionStorage, { format, status });
     for (const [name, bytes] of Object.entries(files))
       assert.equal(await readFile(join(base, unit.quarantinePath, name), "utf8"), bytes);

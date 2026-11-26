@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { lstat, realpath, stat } from "node:fs/promises";
+import { lstat, realpath, stat } from "@noobot/shared/file-system";
 import {
   authorizePathRef,
   PATH_CAPABILITIES,

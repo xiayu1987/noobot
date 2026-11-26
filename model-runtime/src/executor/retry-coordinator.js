@@ -16,6 +16,7 @@ export async function executeTransportRetry({
   canRetry,
   clock,
   observe,
+  recoveryContext,
   signal = null,
 }) {
   for (let attempt = 1; ; attempt++) {
@@ -30,7 +31,14 @@ export async function executeTransportRetry({
   async function waitForRetry(error, attempt) {
     if (signal?.aborted || !canRetry()) throw error;
     const classification = classify(error);
-    if (!shouldRetryTransport({ classification, attempt, maxAttempts: policy.maxAttempts }))
+    if (
+      !shouldRetryTransport({
+        classification,
+        attempt,
+        maxAttempts: policy.maxAttempts,
+        recoveryContext,
+      })
+    )
       throw error;
     const delayMs = resolveModelRetryDelay({
       attempt,
@@ -43,7 +51,7 @@ export async function executeTransportRetry({
       nextAttempt: attempt + 1,
       delayMs,
       classification,
-      recovery: resolveModelFailureRecovery(classification),
+      recovery: resolveModelFailureRecovery(classification, recoveryContext),
     });
     await clock.sleep(delayMs, { signal });
     signal?.throwIfAborted();

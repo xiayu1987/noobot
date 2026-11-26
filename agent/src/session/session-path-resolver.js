@@ -57,6 +57,10 @@ export class SessionPathResolver {
 
   async locateSessionScope(userId, sessionId) {
     const tree = await this.treeRepository.getTree(userId);
+    return this.locateSessionScopeInTree(userId, sessionId, tree);
+  }
+
+  locateSessionScopeInTree(userId, sessionId, tree) {
     if (!isSessionTreeNodeRegistered(tree, sessionId)) return null;
     return this._scopeOf(userId, sessionId, true, () => resolveSessionTreeChain(tree, sessionId));
   }

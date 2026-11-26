@@ -247,7 +247,7 @@ test("darwin managed dependency probe falls back to --version when no version ar
 test("win32 registry default value is parsed and checked for executable candidates", async () => {
   await withPlatform("win32", async () => {
     const installPath = "C:\\Program Files\\LibreOffice";
-    const existingPath = "C:/Program Files/LibreOffice/program/soffice.exe";
+    const existingPath = "C:/Program Files/LibreOffice/program/soffice.com";
     const detector = createDependencyDetector({
       runProcess: async (command, args) => {
         assert.equal(command, "reg");
@@ -639,7 +639,7 @@ test("win32 dependency runtime env uses semicolon PATH semantics with slash-norm
     const existing = new Set([
       "C:/Tools/ffmpeg/bin/ffmpeg.exe",
       "C:/Tools/ffmpeg/bin/ffprobe.exe",
-      "C:/Program Files/LibreOffice/program/soffice.exe",
+      "C:/Program Files/LibreOffice/program/soffice.com",
       "C:/Tools/node/bin/node.exe",
     ]);
     const runtimeEnv = buildDependencyRuntimeEnv({
@@ -653,7 +653,7 @@ test("win32 dependency runtime env uses semicolon PATH semantics with slash-norm
 
     assert.equal(runtimeEnv.NOOBOT_FFMPEG_PATH, "C:/Tools/ffmpeg/bin/ffmpeg.exe");
     assert.equal(runtimeEnv.NOOBOT_FFPROBE_PATH, "C:/Tools/ffmpeg/bin/ffprobe.exe");
-    assert.equal(runtimeEnv.LIBRE_OFFICE_EXE, "C:/Program Files/LibreOffice/program/soffice.exe");
+    assert.equal(runtimeEnv.LIBRE_OFFICE_EXE, "C:/Program Files/LibreOffice/program/soffice.com");
     assert.equal(runtimeEnv.PATH.split(";")[0], "C:/Program Files/LibreOffice/program");
     assert.equal(
       runtimeEnv.PATH,

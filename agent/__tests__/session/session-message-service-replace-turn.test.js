@@ -10,7 +10,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { parseTurnReplaceRequest } from "@noobot/session-protocol";
 import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
-import { PARTITION_JOURNAL_HEAD_FILE } from "@noobot/session-protocol/partition-journal";
+import { journalHeadPath } from "../../src/session/partition-storage/journal-io.js";
 import {
   PARTITION_MESSAGE_COLLECTIONS,
   partitionMessageEntryKey,
@@ -484,10 +484,13 @@ test("replaceTurn head publication failure retains the old graph and retries the
   await complete(f, "drop");
   const before = await f.open();
   const original = await before.exportSession();
+  let injected = false;
   setFsAdapter({
     rename: async (source, target) => {
-      if (target === `${f.scope.sessionDir}/${PARTITION_JOURNAL_HEAD_FILE}`)
+      if (target === journalHeadPath(f.scope.sessionDir)) {
+        injected = true;
         throw Object.assign(new Error("injected"), { code: "EIO" });
+      }
       return rename(source, target);
     },
   });
@@ -498,6 +501,7 @@ test("replaceTurn head publication failure retains the old graph and retries the
   } finally {
     resetFsAdapter();
   }
+  assert.equal(injected, true);
   await f.reopen();
   const failed = await f.open();
   assert.equal(failed.generation, before.generation);

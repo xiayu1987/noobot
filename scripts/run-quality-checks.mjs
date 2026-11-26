@@ -8,11 +8,13 @@ import { spawnSync } from "node:child_process";
 import { QUALITY_STEPS } from "./quality/quality-steps.mjs";
 import { repositoryRoot } from "./quality/repository-files.mjs";
 
+const npmCli = process.env.npm_execpath;
+if (!npmCli) throw new Error("Run quality checks through npm run check:quality");
+
 function runStep(step) {
-  const result = spawnSync("npm", ["run", "-s", step], {
+  const result = spawnSync(process.execPath, [npmCli, "run", "-s", step], {
     cwd: repositoryRoot,
     stdio: "inherit",
-    shell: process.platform === "win32",
   });
   if (result.error) throw result.error;
   return result.status ?? 1;

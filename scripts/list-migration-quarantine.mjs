@@ -79,9 +79,7 @@ function printReport(workspaceRoot, users) {
   process.stdout.write(`${lines.join("\n")}\n`);
 }
 
-const isMain =
-  process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url).pathname;
-if (isMain) {
+if (import.meta.main) {
   const [rootArg = process.cwd(), ...flags] = process.argv.slice(2);
   const serviceDir = path.join(path.resolve(rootArg), "service");
   const globalConfigPath = resolveGlobalConfigPath({ serviceDir, env: process.env });

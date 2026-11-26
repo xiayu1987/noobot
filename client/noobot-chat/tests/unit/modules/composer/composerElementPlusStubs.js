@@ -79,8 +79,25 @@ const ElOptionStub = defineComponent({
 
 const ElIconStub = defineComponent({ name: "ElIcon", template: "<span><slot /></span>" });
 
+const ElDrawerStub = defineComponent({
+  name: "ElDrawer",
+  props: { modelValue: { type: Boolean, default: false } },
+  emits: ["update:modelValue"],
+  template:
+    '<section v-show="modelValue"><button class="drawer-close" @click="$emit(\'update:modelValue\', false)"></button><div class="el-drawer__body"><slot /></div></section>',
+});
+
+const ElPopoverStub = defineComponent({
+  name: "ElPopover",
+  template: '<div><slot name="reference" /><slot /></div>',
+});
+
 export const composerElementPlusStubs = Object.freeze({
   ...elementPlusStubs,
+  ElDrawer: ElDrawerStub,
+  "el-drawer": ElDrawerStub,
+  ElPopover: ElPopoverStub,
+  "el-popover": ElPopoverStub,
   ElButton: ElButtonStub,
   "el-button": ElButtonStub,
   ElInput: ElInputStub,

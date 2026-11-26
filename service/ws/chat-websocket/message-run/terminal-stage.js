@@ -10,8 +10,15 @@ import {
   createTurnLifecycleRejectedError,
 } from "@noobot/session-protocol";
 import { isUserStopRunAbort } from "../stop-lifecycle.js";
+import { orderRunSettlement } from "../run-registry.js";
 
-export async function finalizeRunResult(context, run, accepted) {
+export function finalizeRunResult(context, run, accepted) {
+  return orderRunSettlement(context.state.currentRunHandle, () =>
+    settleRunResult(context, run, accepted),
+  );
+}
+
+async function settleRunResult(context, run, accepted) {
   if (context.state.currentRunTimedOut && context.state.currentAbortSignal?.aborted) {
     await context.finalizeTimeout(context.buildRunStateSnapshot());
     return;

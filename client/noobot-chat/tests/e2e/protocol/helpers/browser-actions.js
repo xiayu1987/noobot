@@ -8,14 +8,25 @@ import { waitForTurnTerminal } from "./scenario-assertions.js";
 import { PROTOCOL_TIMEOUTS } from "./protocol-timeouts.js";
 import { text } from "@noobot/shared/value";
 
+export async function openComposerOptions(page) {
+  const drawer = page.locator(".composer-more-drawer");
+  if (!(await drawer.isVisible())) await page.locator(".composer-icon-btn").first().click();
+  await expect(drawer).toBeVisible();
+  return drawer;
+}
+
+export async function closeComposerOptions(page) {
+  const drawer = page.locator(".composer-more-drawer");
+  await drawer.locator(".el-drawer__close-btn").click();
+  await expect(drawer).toBeHidden();
+}
+
 async function withComposerOptionsPanel(page, callback) {
-  const overlay = page.locator(".more-panel-overlay");
-  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
+  const panel = await openComposerOptions(page);
   try {
-    return await callback(page.locator(".more-panel"));
+    return await callback(panel);
   } finally {
-    await page.locator(".more-collapse-btn").click();
-    await expect(page.locator(".more-panel-overlay")).toBeHidden();
+    await closeComposerOptions(page);
   }
 }
 
@@ -115,19 +126,20 @@ export async function stopActiveTurn(page) {
 }
 
 export async function addAttachment(page, file) {
-  const more = page.locator(".composer-icon-btn").first();
-  await more.click();
+  await page.locator(".attachment-trigger").click();
+  const menu = page.locator(".attachment-menu:visible");
+  await expect(menu).toBeVisible();
   const input = page.locator(".native-file-input");
   await input.setInputFiles(file);
-  await expect(page.locator(".attachment-name")).toContainText(file.name);
-  await page.locator(".more-collapse-btn").click();
-  await expect(page.locator(".more-panel-overlay")).toBeHidden();
+  await expect(menu.locator(".attachment-name")).toContainText(file.name);
+  await page.locator(".chat-input textarea").click();
+  await expect(menu).toBeHidden();
 }
 
 export async function selectPlugins(page, pluginKeys = []) {
-  const overlay = page.locator(".more-panel-overlay");
-  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
-  const buttons = page.locator(".plugin-option-button");
+  const panel = await openComposerOptions(page);
+  const buttons = panel.locator(".plugin-option-button");
+  await expect(buttons.first()).toBeVisible();
   for (let index = 0; index < (await buttons.count()); index += 1) {
     const button = buttons.nth(index);
     const key = String((await button.getAttribute("title")) || (await button.textContent()) || "")
@@ -139,14 +151,11 @@ export async function selectPlugins(page, pluginKeys = []) {
       (await button.evaluate((node) => node.classList.contains("el-button--primary")));
     if (selected !== shouldSelect) await button.click();
   }
-  await page.locator(".more-collapse-btn").click();
-  await expect(page.locator(".more-panel-overlay")).toBeHidden();
+  await closeComposerOptions(page);
 }
 
 export async function selectScenario(page, scenarioKey) {
-  const panel = page.locator(".more-panel");
-  const overlay = page.locator(".more-panel-overlay");
-  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
+  const panel = await openComposerOptions(page);
   const scenario = text(scenarioKey).toLowerCase();
   const target = panel
     .locator(".scenario-option-button")
@@ -157,28 +166,22 @@ export async function selectScenario(page, scenarioKey) {
   await expect(target).toBeVisible();
   await target.click();
   await expect(target).toHaveClass(/el-button--primary/);
-  await page.locator(".more-collapse-btn").click();
-  await expect(page.locator(".more-panel-overlay")).toBeHidden();
+  await closeComposerOptions(page);
 }
 
 export async function setHarnessCapability(page, label, enabled) {
-  const panel = page.locator(".more-panel");
-  const overlay = page.locator(".more-panel-overlay");
-  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
+  const panel = await openComposerOptions(page);
   const field = panel.locator(".plugin-model-field").filter({
     has: page.locator(".plugin-model-label").getByText(label, { exact: true }),
   });
   const target = field.locator(".plugin-capability-toggle .el-radio-button").nth(enabled ? 0 : 1);
   await target.click();
   await expect(target).toHaveClass(/is-active/);
-  await page.locator(".more-collapse-btn").click();
-  await expect(page.locator(".more-panel-overlay")).toBeHidden();
+  await closeComposerOptions(page);
 }
 
 export async function setHarnessGuidanceAnalysisIntensity(page, value) {
-  const panel = page.locator(".more-panel");
-  const overlay = page.locator(".more-panel-overlay");
-  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
+  const panel = await openComposerOptions(page);
   const control = panel.locator(".plugin-guidance-analysis-control");
   await expect(control).toBeVisible();
   const slider = control.locator(".el-slider__button-wrapper[role='slider']");
@@ -196,8 +199,7 @@ export async function setHarnessGuidanceAnalysisIntensity(page, value) {
     current += step;
     await expect(display).toHaveText(String(current));
   }
-  await page.locator(".more-collapse-btn").click();
-  await expect(page.locator(".more-panel-overlay")).toBeHidden();
+  await closeComposerOptions(page);
 }
 
 export async function setHarnessRuntimeThresholds(page, thresholds = {}) {

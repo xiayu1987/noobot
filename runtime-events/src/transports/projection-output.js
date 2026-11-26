@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from "node:fs/promises";
+import * as fs from "@noobot/shared/file-system";
+import nativeFs from "node:fs/promises";
 import path from "node:path";
 import { syncDirectory } from "@noobot/platform-compatibility/file-system";
 import {
@@ -15,7 +16,7 @@ import {
   requireExecutionProjectionIntent,
   requireExecutionProjectionReceipt,
   executionProjectionPendingReceipts,
-} from "@noobot/session-protocol";
+} from "@noobot/session-protocol/execution-log-projection-output";
 
 const pendingDirectorySyncs = new Map();
 
@@ -71,7 +72,7 @@ async function readOptional(file) {
 
 async function prepareRecord(file, value) {
   const temporary = `${file}.tmp`;
-  await fs.writeFile(temporary, encodeExecutionProjectionOutputRecord(value), {
+  await nativeFs.writeFile(temporary, encodeExecutionProjectionOutputRecord(value), {
     encoding: "utf8",
     flush: true,
   });
@@ -80,7 +81,7 @@ async function prepareRecord(file, value) {
 async function replaceRecord(file, value) {
   await prepareRecord(file, value);
   const temporary = `${file}.tmp`;
-  await fs.rename(temporary, file);
+  await nativeFs.rename(temporary, file);
 }
 
 async function settleOutputOperations(operations) {
@@ -124,7 +125,7 @@ async function completeProjectionOutput(file, intent, unconfirmed, writeOutput) 
       ),
     ]);
     await settleOutputOperations(
-      unconfirmed.map((receipt) => fs.rename(`${receipt.file}.tmp`, receipt.file)),
+      unconfirmed.map((receipt) => nativeFs.rename(`${receipt.file}.tmp`, receipt.file)),
     );
   }
 

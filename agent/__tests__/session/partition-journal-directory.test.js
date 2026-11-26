@@ -169,7 +169,7 @@ test("one batch seals byte-limited partitions with exact bounds and point reads 
       const [{ reference }] = receipts;
       assert.equal((await journal.readRecord({ snapshot, reference })).request.sequence, 1);
       assert.deepEqual(
-        opened.filter((file) => file.endsWith("/START")),
+        opened.filter((file) => path.basename(file) === "START"),
         [journalDirectoryPath(root, 0)],
       );
       opened.length = 0;
@@ -218,7 +218,7 @@ test("cold sequence lookup stops when a sealed extent contains the record", asyn
     setFsAdapter({
       ...adapter,
       async open(file, ...args) {
-        if (String(file).endsWith("/START")) opened.push(String(file));
+        if (path.basename(String(file)) === "START") opened.push(String(file));
         return adapter.open(file, ...args);
       },
     });
