@@ -33,6 +33,7 @@ import {
 } from "./routes/chat-websocket-server.test-helpers.js";
 import { express, registerSessionRoutes, withTestServer } from "./routes/session-routes.helpers.js";
 import { withRuntimeEventsEnv } from "./runtime-events-root.test-helpers.js";
+import { flushRuntimeEvents } from "@noobot/runtime-events";
 import { TURN_EVENT } from "@noobot/session-protocol";
 import {
   createPartitionBotFixture,
@@ -348,6 +349,7 @@ test(
         for (const ws of sockets) ws.terminate();
         await closeServer(server);
         await maintenance;
+        await flushRuntimeEvents();
       }
     });
   },

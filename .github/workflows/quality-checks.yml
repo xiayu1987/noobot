@@ -72,6 +72,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify Windows journal removal locks
+        run: npm run -w agent test:windows:session-storage
+
       - name: Verify native storage durability and scoped locks
         run: >-
           node scripts/run-with-isolated-tmp.mjs node --test

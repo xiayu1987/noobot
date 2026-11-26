@@ -446,13 +446,13 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
 test("execute_script: foreground timeout terminates the process group and settles", async (t) => {
   if (process.platform === "win32") return t.skip("POSIX process-group semantics");
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-timeout-group-"));
-  const startedAt = Date.now();
+  const startedAt = performance.now();
   const result = await run("sh -c 'trap \"\" TERM; while :; do sleep 1; done'", cwd, 50, null, {
     generatedDataRoot: cwd,
   });
 
   assert.equal(result.code, SCRIPT_FAILURE_CODE.timeout);
-  assert.ok(Date.now() - startedAt < 4000);
+  assert.ok(performance.now() - startedAt < 4000);
   assert.match(result.error, /timed out after 50ms/);
 });
 

@@ -320,7 +320,7 @@ export function createFileMutationCoordinator(filesystem, path = nodePath) {
       const key = path.resolve(lockPath);
       const heldLocks = this.asyncHeldLocks.getStore();
       if (heldLocks?.get(key)?.released === false) return operation();
-      const deadline = Date.now() + this.timeoutMs;
+      const deadline = performance.now() + this.timeoutMs;
       const previous = this.localQueues.get(key) ?? Promise.resolve();
       const released = Promise.withResolvers();
       const tail = previous.then(() => released.promise);
@@ -344,11 +344,11 @@ export function createFileMutationCoordinator(filesystem, path = nodePath) {
       const expired = Promise.withResolvers();
       const timer = setTimeout(
         () => expired.reject(this.timeoutError()),
-        Math.max(0, deadline - Date.now()),
+        Math.max(0, deadline - performance.now()),
       );
       try {
         await Promise.race([previous, expired.promise]);
-        if (Date.now() >= deadline) throw this.timeoutError();
+        this.assertBeforeDeadline(deadline);
       } finally {
         clearTimeout(timer);
       }
@@ -362,6 +362,7 @@ export function createFileMutationCoordinator(filesystem, path = nodePath) {
         return await withLockCleanup(
           async () => {
             handle = await this.acquire(key, waiter, ownerToken, deadline);
+            this.assertBeforeDeadline(deadline);
             return handle;
           },
           () => closeWaiter(waiter),
@@ -380,50 +381,63 @@ export function createFileMutationCoordinator(filesystem, path = nodePath) {
     }
 
     async acquire(key, waiter, ownerToken, deadline) {
-      const contention = { transientSince: 0 };
+      const contention = { transientSince: null, heartbeat: null };
       while (true) {
+        this.assertBeforeDeadline(deadline);
         waiter.heartbeat.assertHealthy();
-        const attempt = await this.tryAcquire(key, waiter.name, ownerToken, contention);
+        const attempt = await this.tryAcquire(key, waiter.name, ownerToken, contention, deadline);
         if (attempt.handle) return attempt.handle;
-        if (attempt.retry) continue;
-        if (Date.now() >= deadline) throw this.timeoutError();
-        await new Promise((resolve) => setTimeout(resolve, this.pollMs));
+        if (!attempt.retry) {
+          const remaining = this.assertBeforeDeadline(deadline);
+          await new Promise((resolve) => setTimeout(resolve, Math.min(this.pollMs, remaining)));
+        }
       }
     }
 
-    async tryAcquire(key, waiterName, ownerToken, contention) {
+    async tryAcquire(key, waiterName, ownerToken, contention, deadline) {
       if (!(await isElectedWaiter(key, this.staleMs, ownerToken, waiterName))) {
         return { retry: false };
       }
+      this.assertBeforeDeadline(deadline);
       let handle;
       try {
         handle = await fsOpen(key, "wx");
       } catch (error) {
-        return { retry: await this.retryAfterCreateFailure(key, error, contention) };
+        return { retry: await this.resolveCreateFailure(key, error, contention, deadline) };
       }
       return { handle: await initializeLock(key, ownerToken, handle) };
     }
 
-    async retryAfterCreateFailure(key, error, contention) {
-      try {
-        return await this.resolveCreateFailure(key, error, contention);
-      } catch (statError) {
-        if (statError?.code === "ENOENT") return true;
-        throw statError;
-      }
-    }
-
-    async resolveCreateFailure(key, error, contention) {
+    async resolveCreateFailure(key, error, contention, deadline) {
       const current = await statAfterExclusiveCreateFailure(key, error);
-      if (!current && !isTransientExclusiveCreateFailure(error)) return true;
+      this.assertBeforeDeadline(deadline);
       if (!current) {
-        contention.transientSince ||= Date.now();
-        if (Date.now() - contention.transientSince > this.transientCreateWindowMs) throw error;
+        contention.heartbeat = null;
+        if (!isTransientExclusiveCreateFailure(error)) return true;
+        const now = performance.now();
+        contention.transientSince ??= now;
+        if (now - contention.transientSince > this.transientCreateWindowMs) throw error;
         return true;
       }
-      contention.transientSince = 0;
-      if (isHeartbeatFresh(current, this.staleMs)) return false;
+      contention.transientSince = null;
+      const now = performance.now();
+      const { heartbeat } = contention;
+      const { dev, ino, mtimeMs, ctimeMs } = current;
+      if (!heartbeat || heartbeat.dev !== dev || heartbeat.ino !== ino) {
+        contention.heartbeat = {
+          dev,
+          ino,
+          mtimeMs,
+          ctimeMs,
+          refreshedAt: now - Math.max(0, Date.now() - mtimeMs),
+        };
+      } else if (heartbeat.mtimeMs !== mtimeMs || heartbeat.ctimeMs !== ctimeMs) {
+        // Once observed, only a change to the heartbeat can reset its monotonic age.
+        Object.assign(heartbeat, { mtimeMs, ctimeMs, refreshedAt: now });
+      }
+      if (now - contention.heartbeat.refreshedAt <= this.staleMs) return false;
       await reclaimStaleLock(key);
+      contention.heartbeat = null;
       return true;
     }
 
@@ -443,6 +457,12 @@ export function createFileMutationCoordinator(filesystem, path = nodePath) {
         () => handle.close(),
         () => releaseOwnedLock(key, ownerToken),
       );
+    }
+
+    assertBeforeDeadline(deadline) {
+      const remaining = deadline - performance.now();
+      if (remaining <= 0) throw this.timeoutError();
+      return remaining;
     }
 
     timeoutError() {

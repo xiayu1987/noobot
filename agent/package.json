@@ -36,6 +36,7 @@
     "check:tool-schema": "node scripts/check-openai-tool-schema.js --userId admin --global-config-path ../service/config/global.config.json --workspace-root ../workspace",
     "check:tool-schema:live:gemini:admin": "node scripts/check-openai-tool-schema.js --live --model gemini_3_flash --userId admin --global-config-path ../service/config/global.config.json --workspace-root ../workspace",
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test \"__tests__/**/*.test.js\"",
+    "test:windows:session-storage": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/session/journal-removal-lock.windows.js",
     "test:e2e:execution-isolation": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/e2e/execution-isolation.e2e.js",
     "test:e2e:session-storage": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/e2e/session-storage-performance.e2e.js __tests__/e2e/partition-journal-performance.e2e.js __tests__/e2e/partition-owner-performance.e2e.js __tests__/e2e/partition-transactions-performance.e2e.js __tests__/e2e/partition-directory-cold-performance.e2e.js __tests__/e2e/current-turn-persistence-batches.e2e.js",
     "test:bot": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/bot/*.test.js",

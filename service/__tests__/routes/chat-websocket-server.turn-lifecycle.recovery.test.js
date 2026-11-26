@@ -31,6 +31,14 @@ useProvisionedRuntimeEventsWorkspace(["primary-user", "u1"], {
   u1: ["s-snapshot-restart", "s-live-snapshot"],
 });
 
+function advancePastOrphanGrace(authoritative, turnScopeId) {
+  const { updatedAt } = authoritative.lifecycle().turns[turnScopeId];
+  const observedAt = new Date(
+    Date.parse(updatedAt) + TIME_THRESHOLDS.service.orphanedTurnRecoveryGraceMs + 1,
+  ).toISOString();
+  authoritative.bot.session.readServerNow = () => observedAt;
+}
+
 test("socket close detaches an accepted turn which still completes and releases the session mutex", async () => {
   const authoritative = createAuthoritativeBot();
   let aborted = false;
@@ -146,9 +154,7 @@ test("a new action recovers a stale persisted turn lost after service restart", 
     eventType: TURN_EVENT.PROCESSING_STARTED,
     phase: "processing",
   });
-  authoritative.lifecycle().turns["turn-before-restart"].updatedAt = new Date(
-    Date.now() - TIME_THRESHOLDS.service.orphanedTurnRecoveryGraceMs - 1,
-  ).toISOString();
+  advancePastOrphanGrace(authoritative, "turn-before-restart");
 
   const server = await startAuthoritativeServerWithWs({
     bot: authoritative.bot,
@@ -217,9 +223,7 @@ test("snapshot get only annotates an orphan; finalize settles it exactly once", 
     eventType: TURN_EVENT.PROCESSING_STARTED,
     phase: TURN_PHASE.PROCESSING,
   });
-  authoritative.lifecycle().turns["turn-snapshot-restart"].updatedAt = new Date(
-    Date.now() - TIME_THRESHOLDS.service.orphanedTurnRecoveryGraceMs - 1,
-  ).toISOString();
+  advancePastOrphanGrace(authoritative, "turn-snapshot-restart");
 
   const server = await startAuthoritativeServerWithWs({
     bot: authoritative.bot,
@@ -302,9 +306,7 @@ test("snapshot reconnect does not terminate a matching live execution", async ()
     eventType: TURN_EVENT.PROCESSING_STARTED,
     phase: TURN_PHASE.PROCESSING,
   });
-  authoritative.lifecycle().turns["turn-live-snapshot"].updatedAt = new Date(
-    Date.now() - TIME_THRESHOLDS.service.orphanedTurnRecoveryGraceMs - 1,
-  ).toISOString();
+  advancePastOrphanGrace(authoritative, "turn-live-snapshot");
   const liveHandle = registerActiveRun({
     userId: "u1",
     sessionId: "s-live-snapshot",
