@@ -24,6 +24,14 @@
    - 影响范围
    - 验证方式
 
+## 性能测试
+
+Node.js 性能测量和负载测试统一在用例名称中标记 `@performance`。
+GitHub Actions 通过 `NODE_OPTIONS=--test-skip-pattern=@performance` 排除这些用例，嵌套 npm 脚本同样生效。
+功能测试、性能门禁算法的确定性测试继续执行。
+本地 `npm test` 保留性能测试；性能验收在资源可控的环境执行。
+本地复现 GitHub 的选择范围：`NODE_OPTIONS=--test-skip-pattern=@performance npm test`。
+
 ## 代码建议
 
 `npm run check:quality` 包含[僵尸代码检查](./docs/dead-code-quality.md)。

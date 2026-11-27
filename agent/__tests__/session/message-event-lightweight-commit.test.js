@@ -174,11 +174,9 @@ test("message event commit has constant snapshot IO and preserves durable starts
     );
     jsonReads = [];
     manifestReads = 0;
-    const samples = [];
     for (let i = 0; i < 5; i += 1) {
       const call = { id: `call-${count}-${i}`, name: "read_file", args: {} };
       const risk = createToolRiskAssessment(call);
-      const started = performance.now();
       const result = await service.commitMessageEvent({
         userId,
         sessionId,
@@ -200,7 +198,6 @@ test("message event commit has constant snapshot IO and preserves durable starts
           parentSessionId: "",
         },
       });
-      samples.push(performance.now() - started);
       assert.equal(result.committed, true);
       committedEventIds.push(result.envelope.identity.eventId);
     }
@@ -245,9 +242,5 @@ test("message event commit has constant snapshot IO and preserves durable starts
       events: [],
       hasMore: false,
     });
-    samples.sort((a, b) => a - b);
-    t.diagnostic(
-      `${count} snapshots: message commit median ${samples[2].toFixed(2)}ms, snapshot JSON reads=0`,
-    );
   }
 });

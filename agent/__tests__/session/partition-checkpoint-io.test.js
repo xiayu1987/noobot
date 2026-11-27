@@ -48,7 +48,7 @@ async function seed(t, count, pageBytes) {
   return fixture;
 }
 
-test("a cold partition checkpoint emits work accepted by the performance gate", async (t) => {
+test("@performance a cold partition checkpoint emits work accepted by the performance gate", async (t) => {
   const { root, sessionId } = await seed(t, 64, 256 * 1024);
   const journal = await PartitionJournal.open({ root, sessionId });
   t.after(() => journal.close());
@@ -66,7 +66,7 @@ test("a cold partition checkpoint emits work accepted by the performance gate", 
   assert.equal(gate.passed, true);
 });
 
-test("cold checkpoint window and historical point reads stay within actual file I/O budgets", async (t) => {
+test("@performance cold checkpoint window and historical point reads stay within actual file I/O budgets", async (t) => {
   const limit = QUANTITY_THRESHOLDS.contextProtocol.turnSummaryCheckpointReceiptLimit;
   const costs = [];
   for (const count of [limit + 10, limit * 3 + 10]) {

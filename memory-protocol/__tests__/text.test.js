@@ -21,7 +21,7 @@ test("stripMarkdownFence returns unfenced or partially fenced text unchanged", (
   assert.equal(stripMarkdownFence(null), "");
 });
 
-test("stripMarkdownFence stays linear on long whitespace input", () => {
+test("@performance stripMarkdownFence stays linear on long whitespace input", () => {
   const input = `\`\`\`${" ".repeat(200_000)}x`;
   const startedAt = performance.now();
   assert.equal(stripMarkdownFence(input), input);

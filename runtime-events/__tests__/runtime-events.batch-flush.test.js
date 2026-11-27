@@ -135,7 +135,7 @@ test("sequentially awaited appends persist every record in order", async (t) => 
       lines.map((line) => JSON.parse(line).sequence),
       Array.from({ length: count }, (_, sequence) => sequence),
     );
-    await t.test("performance: sequential append elapsed time", () => {
+    await t.test("@performance sequential append elapsed time", () => {
       assert.ok(elapsedMs < 1000, `sequential appends took ${elapsedMs.toFixed(0)}ms`);
     });
   } finally {

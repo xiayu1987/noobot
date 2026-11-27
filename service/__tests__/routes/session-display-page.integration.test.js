@@ -371,7 +371,7 @@ test("exhausted shared page readers report capacity and recover after release", 
   return verifyReaderCapacity(t, { retentionRecords: admittedReaders + 1, admittedReaders });
 });
 
-test("cold partition HTTP first page stays within a fixed read envelope as history grows", async (t) => {
+test("@performance cold partition HTTP first page stays within a fixed read envelope as history grows", async (t) => {
   const storage = await partitionRepositoryPerformanceFixture(t);
   const scope = { userId: "u1", sessionId: "s1" };
   let count = 0;

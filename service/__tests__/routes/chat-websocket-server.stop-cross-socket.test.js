@@ -370,7 +370,10 @@ test("chat-websocket-server: the same authenticated owner stops its run without 
 
       runWs.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
-        if (parsed?.event === "turn_committed" && parsed?.data?.sessionId === "s-owner-stop") {
+        if (
+          parsed?.event === "turn_lifecycle" &&
+          parsed?.data?.payload?.eventType === TURN_EVENT.PROCESSING_STARTED
+        ) {
           resolve();
         }
       });

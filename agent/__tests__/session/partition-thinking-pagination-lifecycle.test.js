@@ -11,7 +11,7 @@ import { message, scope } from "./partition-session-messages.test-helpers.js";
 
 const selection = { userId: "u1", sessionId: "s1", ...scope, cursor: null, limit: 1 };
 
-test("a cold business thinking page does not scan a long turn or materialize its ordinary bodies", async (t) => {
+test("@performance a cold business thinking page does not scan a long turn or materialize its ordinary bodies", async (t) => {
   const f = await partitionRepositoryPerformanceFixture(t);
   const content = "x".repeat(4 * 1024);
   async function seed(from, to) {

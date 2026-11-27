@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NODE_OPTIONS: --test-skip-pattern=@performance
+
 jobs:
   quality:
     name: Quality (Node.js ${{ matrix.node-version }})

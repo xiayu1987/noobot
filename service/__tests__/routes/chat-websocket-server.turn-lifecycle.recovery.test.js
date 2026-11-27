@@ -42,7 +42,7 @@ function advancePastOrphanGrace(authoritative, turnScopeId) {
 test("socket close detaches an accepted turn which still completes and releases the session mutex", async () => {
   const authoritative = createAuthoritativeBot();
   let aborted = false;
-  let releaseRun = null;
+  const { promise: runReleased, resolve: releaseRun } = Promise.withResolvers();
   authoritative.bot.runSession = async ({ sessionId, turnScopeId, abortSignal, eventListener }) => {
     abortSignal.addEventListener(
       "abort",
@@ -60,9 +60,7 @@ test("socket close detaches an accepted turn which still completes and releases 
         dialogProcessId: "dp-socket-close",
       },
     });
-    await new Promise((resolve) => {
-      releaseRun = resolve;
-    });
+    await runReleased;
     return {
       sessionId,
       dialogProcessId: "dp-socket-close",

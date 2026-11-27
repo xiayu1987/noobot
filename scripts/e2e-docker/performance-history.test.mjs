@@ -15,7 +15,7 @@ import { initializeUserWorkspace } from "../../agent/__tests__/helpers/user-work
 import { seedPerformanceHistory } from "../../client/noobot-chat/tests/e2e/protocol/helpers/performance-history.js";
 import { PERF_HISTORY } from "../mock-model-service/performance-contract.mjs";
 
-test("performance history seeds and verifies the full workload through public session contracts", async (t) => {
+test("@performance history seeds and verifies the full workload through public session contracts", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "noobot-performance-history-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const config = JSON.parse(

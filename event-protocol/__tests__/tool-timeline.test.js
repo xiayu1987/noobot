@@ -165,7 +165,7 @@ test("canonical realtime application mutates one indexed timeline without changi
   ]);
 });
 
-test("canonical realtime application remains linear for long tool runs", () => {
+test("@performance canonical realtime application remains linear for long tool runs", () => {
   const timeline = [];
   const indexByKey = new Map();
   const startedAt = performance.now();

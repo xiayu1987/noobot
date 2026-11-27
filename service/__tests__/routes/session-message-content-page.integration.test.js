@@ -256,7 +256,7 @@ test("HTTP rejects malformed ranges and reports missing messages and changed con
   });
 });
 
-test("HTTP content performance E2E reads bounded tail pages as message bodies grow", async (t) => {
+test("@performance HTTP content E2E reads bounded tail pages as message bodies grow", async (t) => {
   for (const size of [64 * 1024, 1024 * 1024, 4 * 1024 * 1024]) {
     const content = "x".repeat(size);
     const { app, workspaceRoot } = await fixture(t, content, { appendChunkChars: 8192 });
@@ -303,7 +303,7 @@ test("HTTP content performance E2E reads bounded tail pages as message bodies gr
   }
 });
 
-test("HTTP session list performance E2E reads bounded previews as last-message bodies grow", async (t) => {
+test("@performance HTTP session list E2E reads bounded previews as last-message bodies grow", async (t) => {
   const maxima = [];
   for (const size of [64 * 1024, 1024 * 1024, 4 * 1024 * 1024]) {
     const { app, workspaceRoot } = await fixture(t, "x".repeat(size), { appendChunkChars: 8192 });

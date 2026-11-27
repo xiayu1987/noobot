@@ -24,6 +24,14 @@ Thanks for contributing to Noobot 🎉
    - scope/impact
    - test or verification steps
 
+## Performance tests
+
+Mark Node.js performance measurements and load tests with `@performance` in the test name.
+GitHub Actions excludes them using `NODE_OPTIONS=--test-skip-pattern=@performance`, including tests launched by nested npm scripts.
+Functional tests and deterministic tests of performance-gate logic remain enabled.
+Local `npm test` includes performance tests; run benchmarks on controlled hardware.
+To reproduce GitHub's selection locally: `NODE_OPTIONS=--test-skip-pattern=@performance npm test`.
+
 ## Code Guidelines
 
 `npm run check:quality` includes the [dead-code check](./docs/dead-code-quality.md).
