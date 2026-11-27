@@ -7,8 +7,11 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { app, dialog, ipcMain } from "electron";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
+import { WORKSPACE_ROOT_LAYOUT } from "@noobot/workspace-protocol/layout";
+import { initializeRuntimeParams } from "@noobot/shared/runtime-params-node";
 import { clientFilePath as path } from "../path-resolver.js";
 import { fileURLToPath } from "node:url";
+import { inspect } from "node:util";
 import { appendEarlyLog, createStartupLogger, installEarlyDiagnostics } from "./runtime/logging.js";
 import { createDesktopConfigManager } from "./runtime/config.js";
 import { registerFileIpcHandlers } from "./ipc/files.js";
@@ -95,6 +98,11 @@ const {
 });
 
 const setDesktopConfigState = (state) => {
+  if (desktopConfigState === null) {
+    initializeRuntimeParams(
+      path.join(state.workspaceRootPath, WORKSPACE_ROOT_LAYOUT.RUNTIME_PARAMS_FILE),
+    );
+  }
   desktopConfigState = state;
   refreshTrayMenu();
 };
@@ -287,7 +295,9 @@ app.on("before-quit", (event) => {
     },
     (error) => {
       backendStopping = false;
-      appendDesktopLog(`Backend shutdown failed: ${error.stack || error.message}`);
+      appendDesktopLog(
+        `Backend shutdown failed: ${inspect(error, { depth: null, colors: false })}`,
+      );
       dialog.showErrorBox("Noobot backend shutdown failed", error.message);
     },
   );
