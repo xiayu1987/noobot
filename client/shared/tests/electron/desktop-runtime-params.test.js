@@ -6,9 +6,9 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
+import { clientFilePath as path } from "../../path-resolver.js";
 
 const execute = promisify(execFile);
 const entry = new URL("../../electron/main.js", import.meta.url).href;
