@@ -47,7 +47,7 @@ async function canRun(executable, args) {
       detached: usesDetachedProcessGroup(),
     });
     const timer = setTimeout(() => {
-      void terminateProcessTree(child, "SIGKILL").then(
+      void terminateProcessTree(child.pid, { graceMs: 0, settleMs: 5000 }).then(
         () => reject(new Error(`Capability probe timed out: ${executable}`)),
         reject,
       );

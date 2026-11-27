@@ -12,6 +12,44 @@ import { AGENT_CHANNEL_STATE } from "@noobot/agent-transport-protocol";
 import { CONVERSATION_SOURCE_EVENT } from "../../src/shared/constants.js";
 import { canonicalMessageEvent } from "./channel-manager.state-consistency.test-helpers.js";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
+import { authoritativeLifecycle } from "./channel-manager.state-consistency.reconnect.fixtures.js";
+import { TURN_EVENT } from "@noobot/session-protocol";
+
+test("child lifecycle states preserve authoritative parent identity in state and log", () => {
+  const records = [];
+  const manager = new ChannelManager(
+    { OPEN: 1 },
+    {
+      sessionLogClient: { log: (_key, event) => records.push(event) },
+    },
+  );
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "parent-session" }),
+  );
+  records.length = 0;
+  manager.pushChannelEvent(
+    channel,
+    "turn_lifecycle",
+    authoritativeLifecycle({
+      eventId: "child-processing-event",
+      sessionId: "child-session",
+      parentSessionId: "parent-session",
+      turnScopeId: "child-turn",
+      dialogProcessId: "child-dialog",
+      eventType: TURN_EVENT.PROCESSING_STARTED,
+      state: "processing",
+      revision: 2,
+      sequence: 2,
+    }),
+  );
+  const record = records.find((event) => event.event === "agentProxy.conversation.state");
+  assert.equal(record.sessionId, "child-session");
+  assert.equal(record.parentSessionId, "parent-session");
+  assert.equal(
+    channel.conversationStateByScope.get("child-turn").parentSessionId,
+    "parent-session",
+  );
+});
 
 test("ChannelManager omits successful data-plane logs but retains state logs", () => {
   const records = [];

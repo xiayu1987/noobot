@@ -14,12 +14,15 @@ READY_TIMEOUT_S="${NOOBOT_E2E_DOCKER_READY_TIMEOUT_S:-300}"
 CONNECT_CODE_FILE="${NOOBOT_E2E_CONNECT_CODE_FILE:-$SCRIPT_DIR/connect-code.local}"
 MYSQL_PASSWORD_FILE="${NOOBOT_E2E_MYSQL_PASSWORD_FILE:-$SCRIPT_DIR/mysql-password.local}"
 SOURCE_WORKSPACE="$ROOT_DIR/workspace"
-E2E_WORKSPACE="$ROOT_DIR/.e2e-workspace"
+E2E_WORKSPACE="${NOOBOT_E2E_DOCKER_WORKSPACE:-$ROOT_DIR/.e2e-workspace}"
+RESULTS_DIR="${NOOBOT_E2E_DOCKER_RESULTS:-$ROOT_DIR/test-results}"
 MCP_PROJECT="$ROOT_DIR/scripts/mcp-test-service"
-MCP_CONTAINER="$(cd "$ROOT_DIR" && node --input-type=module -e 'import { MCP_TEST_SERVICE } from "./scripts/mcp-test-service/config.mjs"; console.log(MCP_TEST_SERVICE.hostname)')"
-NETWORK="noobot-e2e-network"
+MCP_HOSTNAME="$(cd "$ROOT_DIR" && node --input-type=module -e 'import { MCP_TEST_SERVICE } from "./scripts/mcp-test-service/config.mjs"; console.log(MCP_TEST_SERVICE.hostname)')"
+MCP_CONTAINER="${CONTAINER}-mcp"
+NETWORK="${NOOBOT_E2E_DOCKER_NETWORK:-${CONTAINER}-network}"
 MOCK_PROJECT="$ROOT_DIR/scripts/mock-model-service"
-MOCK_CONTAINER="noobot-mock-model"
+MOCK_CONTAINER="${CONTAINER}-mock"
+MOCK_HOSTNAME="$(cd "$ROOT_DIR" && node --input-type=module -e 'import { MOCK_MODEL } from "./scripts/mock-model-service/scenario.mjs"; console.log(MOCK_MODEL.hostname)')"
 
 TOPOLOGY_EXPORTS="$(cd "$ROOT_DIR" && env -i PATH="$PATH" node ./scripts/lib/runtime-topology-cli.mjs --shell)"
 eval "$TOPOLOGY_EXPORTS"
@@ -97,7 +100,7 @@ teardown() {
 
 start_mcp() {
   npm --prefix "$ROOT_DIR" run -s install:mcp-test-service || return 1
-  docker run -d --rm --name "$MCP_CONTAINER" --network "$NETWORK" \
+  docker run -d --rm --name "$MCP_CONTAINER" --network "$NETWORK" --network-alias "$MCP_HOSTNAME" \
     -v "$MCP_PROJECT:/app:ro" -w /app --entrypoint node \
     "$IMAGE" server.mjs >/dev/null || return 1
   local deadline=$((SECONDS + READY_TIMEOUT_S))
@@ -114,7 +117,7 @@ start_mcp() {
 
 start_mock() {
   [[ "${NOOBOT_E2E_PERF:-}" == "1" ]] || return 0
-  docker run -d --rm --name "$MOCK_CONTAINER" --network "$NETWORK" \
+  docker run -d --rm --name "$MOCK_CONTAINER" --network "$NETWORK" --network-alias "$MOCK_HOSTNAME" \
     -v "$ROOT_DIR:$ROOT_DIR:ro" -w "$MOCK_PROJECT" --entrypoint node \
     "$IMAGE" server.mjs >/dev/null || return 1
   docker exec "$MOCK_CONTAINER" node --input-type=module -e \
@@ -124,10 +127,12 @@ start_mock() {
 start_service() {
   node "$SCRIPT_DIR/prepare-workspace.mjs" "$SOURCE_WORKSPACE" "$E2E_WORKSPACE" "$ROOT_DIR/service/config/global.config.json" || return 1
   mkdir -p "${E2E_WORKSPACE}.mutation-locks" || return 1
+  mkdir -p "$RESULTS_DIR" || return 1
   docker run -d --rm --name "$CONTAINER" --network "$NETWORK" \
     -e NOOBOT_ROOT="$ROOT_DIR" \
     -e NOOBOT_MODEL_PROXY_LOG_DIR="$ROOT_DIR/model-proxy/logs" \
     -v "$ROOT_DIR:$ROOT_DIR" \
+    -v "$RESULTS_DIR:$ROOT_DIR/test-results" \
     -v "$E2E_WORKSPACE:$SOURCE_WORKSPACE" \
     -v "${E2E_WORKSPACE}.mutation-locks:${SOURCE_WORKSPACE}.mutation-locks" \
     -v "$E2E_WORKSPACE/global.config.json:$ROOT_DIR/service/config/global.config.json:ro" \
@@ -207,6 +212,13 @@ cmd_test() {
     -e NOOBOT_E2E_BASE_URL -e NOOBOT_E2E_USER_ID -e NOOBOT_E2E_MODEL_ALIAS
     -e NOOBOT_E2E_MYSQL_HOST -e NOOBOT_WORKSPACE_ROOT -e NOOBOT_E2E_CONNECT_CODE
   )
+  local name key
+  for name in PORT USER DATABASE; do
+    key="NOOBOT_E2E_MYSQL_${name}"
+    if [[ -n "${!key:-}" ]]; then
+      env_args+=(-e "$key")
+    fi
+  done
   if [[ "$suite" == perf* ]]; then
     env_args+=(-e NOOBOT_E2E_PERF -e NOOBOT_E2E_PERF_MODE -e NOOBOT_E2E_STREAM_OUTPUT=true)
   fi

@@ -74,7 +74,7 @@ class JournalJsonWriter {
       throw new TypeError("Journal JSON arrays cannot carry extra properties or holes");
     for (let index = 0; index < entry.length; index += 1) {
       if (index) this.push(",");
-      this.visit(requireDataValue(Object.getOwnPropertyDescriptor(entry, index)), depth + 1);
+      this.visitProperty(Object.getOwnPropertyDescriptor(entry, index), depth, index);
     }
   }
 
@@ -88,7 +88,18 @@ class JournalJsonWriter {
       first = false;
       this.string(this.encodeKey ? this.encodeKey(key) : key);
       this.push(":");
+      this.visitProperty(descriptor, depth, key);
+    }
+  }
+
+  visitProperty(descriptor, depth, key) {
+    try {
       this.visit(requireDataValue(descriptor), depth + 1);
+    } catch (error) {
+      if (error instanceof TypeError) {
+        error.message += ` at [${JSON.stringify(key)}]`;
+      }
+      throw error;
     }
   }
 

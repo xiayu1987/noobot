@@ -162,12 +162,21 @@ test("native browser executable prefers the client-resolved dependency path", ()
 
 test("native process termination waits for the Windows process tree to exit", async () => {
   const calls = [];
-  let releaseTaskkill;
-  const terminated = terminateProcessTree({ pid: 123 }, "SIGTERM", {
+  let releaseSnapshot;
+  let alive = true;
+  const terminated = terminateProcessTree(123, {
+    graceMs: 100,
+    settleMs: 100,
     platform: "win32",
     execFileImpl: (...args) => {
       calls.push(args);
-      releaseTaskkill = args[3];
+      releaseSnapshot = () => {
+        alive = false;
+        args[3](null, "[]");
+      };
+    },
+    processKill: () => {
+      if (!alive) throw Object.assign(new Error("gone"), { code: "ESRCH" });
     },
   });
   let settled = false;
@@ -176,9 +185,9 @@ test("native process termination waits for the Windows process tree to exit", as
   });
   await Promise.resolve();
   assert.equal(settled, false);
-  assert.equal(calls[0][0], "taskkill");
-  assert.deepEqual(calls[0][1], ["/PID", "123", "/T", "/F"]);
-  releaseTaskkill();
+  assert.equal(calls[0][0], "powershell.exe");
+  assert.match(calls[0][1].at(-1), /SELECT ProcessId, ParentProcessId, CreationDate/);
+  releaseSnapshot();
   await terminated;
   assert.equal(settled, true);
 });
@@ -186,16 +195,16 @@ test("native process termination waits for the Windows process tree to exit", as
 test("native process termination uses detached groups on Linux and macOS", async () => {
   for (const platform of ["linux", "darwin"]) {
     const processKillCalls = [];
-    const childKillCalls = [];
-    await terminateProcessTree(
-      { pid: 456, kill: (signal) => childKillCalls.push(signal) },
-      "SIGKILL",
-      {
-        platform,
-        processKill: (...args) => processKillCalls.push(args),
+    await terminateProcessTree(456, {
+      graceMs: 0,
+      settleMs: 100,
+      platform,
+      processKill: (target, signal) => {
+        assert.equal(target, -456);
+        if (signal === 0) throw Object.assign(new Error("gone"), { code: "ESRCH" });
+        processKillCalls.push([target, signal]);
       },
-    );
+    });
     assert.deepEqual(processKillCalls, [[-456, "SIGKILL"]]);
-    assert.deepEqual(childKillCalls, []);
   }
 });

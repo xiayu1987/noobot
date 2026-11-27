@@ -171,9 +171,6 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
     const selectionPayload = await selectionHttpResponse.json();
     expect(selectionPayload.selectedConnectorIds).toEqual([connectorId]);
     await pendingSend;
-    await openComposerOptions(noobot.page);
-    await expect(connectorOption.locator(".el-checkbox__input")).toHaveClass(/is-checked/);
-    await closeComposerOptions(noobot.page);
 
     const command = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send", 1);
     expect(command.session).toEqual({ createIfAbsent: false, selectedConnectorIds: [] });
@@ -183,6 +180,10 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
       sessionId: noobot.sessionId,
       turnScopeId: command.identity.turnScopeId,
     });
+
+    await openComposerOptions(noobot.page);
+    await expect(connectorOption.locator(".el-checkbox__input")).toHaveClass(/is-checked/);
+    await closeComposerOptions(noobot.page);
 
     const session = await readSessionFact(noobot.userId, noobot.sessionId);
     expect(session.selectedConnectorIds).toEqual([connectorId]);

@@ -72,6 +72,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify native Windows process tree ownership and termination
+        run: >-
+          node scripts/run-with-isolated-tmp.mjs node --test
+          platform-compatibility/__tests__/process-termination.test.js
+          agent/__tests__/tools/native-script-platform.test.js
+          agent/__tests__/tools/process-exec.test.js
+          service/__tests__/deletion-worker-process.test.js
+          client/shared/tests/electron/desktop-services-startup.test.js
+
       - name: Verify Windows journal removal locks
         run: npm run -w agent test:windows:session-storage
 

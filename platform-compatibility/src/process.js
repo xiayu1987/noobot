@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { execFile } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
 import { normalizePlatform, PLATFORM } from "./platform.js";
 import { text } from "@noobot/shared/value";
+import { forceStopWindowsTree } from "./windows-process-tree.js";
 
 const WINDOWS_PROCESS_ENV_KEYS = Object.freeze([
   "SystemRoot",
@@ -44,12 +46,6 @@ export function usesDetachedProcessGroup(platform = process.platform) {
 
 export function resolveCommandLookupExecutable(platform = process.platform) {
   return normalizePlatform(platform) === PLATFORM.WINDOWS ? "where" : "which";
-}
-
-export function resolveCommandShimExecutable(command = "", platform = process.platform) {
-  const executable = text(command);
-  if (!executable) throw new TypeError("command is required");
-  return normalizePlatform(platform) === PLATFORM.WINDOWS ? `${executable}.cmd` : executable;
 }
 
 export function decodeCommandOutput(
@@ -155,44 +151,63 @@ function buildRestrictedProcessEnvironment({ home, temp, platform, sourceEnv, ru
   return environment;
 }
 
-export async function terminateProcessTree(
-  child,
-  signal = "SIGTERM",
-  {
-    platform = process.platform,
-    processGroup = usesDetachedProcessGroup(platform),
-    execFileImpl = execFile,
-    processKill = process.kill,
-  } = {},
-) {
-  const pid = Number(child?.pid || 0);
-  if (!Number.isInteger(pid) || pid <= 0) return;
-  if (normalizePlatform(platform) === PLATFORM.WINDOWS) {
-    return new Promise((resolve, reject) => {
-      execFileImpl(
-        "taskkill",
-        ["/PID", String(pid), "/T", "/F"],
-        { windowsHide: true },
-        (error) => {
-          if (!error) return resolve();
-          try {
-            processKill(pid, 0);
-          } catch (probeError) {
-            if (probeError.code === "ESRCH") return resolve();
-          }
-          reject(error);
-        },
-      );
-    });
-  }
+function signalProcessGroup(target, signal, processKill) {
   try {
-    if (processGroup) {
-      processKill(-pid, signal);
-    } else {
-      child.kill(signal);
-    }
+    processKill(target, signal);
   } catch (error) {
     if (error.code !== "ESRCH") throw error;
+  }
+}
+
+function processTargetExists(target, processKill) {
+  try {
+    processKill(target, 0);
+    return true;
+  } catch (error) {
+    if (error.code === "ESRCH") return false;
+    throw error;
+  }
+}
+
+export function isProcessAlive(pid) {
+  return Number.isInteger(pid) && pid > 0 && processTargetExists(pid, process.kill);
+}
+
+async function waitForProcessRemoval(target, timeoutMs, processKill) {
+  const deadline = performance.now() + timeoutMs;
+  while (processTargetExists(target, processKill)) {
+    const remainingMs = deadline - performance.now();
+    if (remainingMs <= 0) return false;
+    await delay(Math.min(10, remainingMs));
+  }
+  return true;
+}
+
+export async function terminateProcessTree(
+  pid,
+  {
+    graceMs,
+    settleMs,
+    platform = process.platform,
+    execFileImpl = execFile,
+    processKill = process.kill,
+  },
+) {
+  if (!Number.isInteger(pid) || pid <= 0) throw new TypeError("Process tree PID is required");
+  if (!Number.isFinite(graceMs) || graceMs < 0 || !Number.isFinite(settleMs) || settleMs <= 0) {
+    throw new TypeError("Process tree termination requires valid graceMs and settleMs");
+  }
+  if (!usesDetachedProcessGroup(platform)) {
+    return forceStopWindowsTree(pid, { execFileImpl, settleMs });
+  }
+  const target = -pid;
+  if (graceMs > 0) {
+    signalProcessGroup(target, "SIGTERM", processKill);
+    if (await waitForProcessRemoval(target, graceMs, processKill)) return;
+  }
+  signalProcessGroup(target, "SIGKILL", processKill);
+  if (!(await waitForProcessRemoval(target, settleMs, processKill))) {
+    throw new Error(`Process tree ${pid} did not exit after forced termination`);
   }
 }
 
@@ -201,54 +216,34 @@ export function createProcessTreeTerminator(
   { graceMs, settleMs, onTerminate, terminateProcess = terminateProcessTree },
 ) {
   let operation = null;
-  const exited = Promise.withResolvers();
-  const closed = Promise.withResolvers();
-  child.once("exit", exited.resolve);
-  child.once("close", closed.resolve);
-
-  async function waitFor(completion, timeoutMs) {
-    let timer;
-    try {
-      return await Promise.race([
-        completion.then(() => true),
-        new Promise((resolve) => {
-          timer = setTimeout(() => resolve(false), timeoutMs);
-        }),
-      ]);
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  async function stopTree() {
-    await terminateProcess(child, "SIGTERM");
-    if (await waitFor(closed.promise, graceMs)) return;
-    await terminateProcess(child, "SIGKILL");
-    if (!(await waitFor(Promise.race([exited.promise, closed.promise]), settleMs))) {
-      throw new Error(`Process tree ${child.pid} did not exit after forced termination`);
-    }
-  }
+  let retry = false;
 
   return {
     terminate() {
+      if (retry) operation = null;
+      retry = false;
       operation ??= Promise.allSettled([
         Promise.resolve().then(() => onTerminate?.()),
-        stopTree(),
-      ]).then((results) => {
-        const errors = results
-          .filter((result) => result.status === "rejected")
-          .map((r) => r.reason);
-        if (errors.length === 1) throw errors[0];
-        if (errors.length > 1) throw new AggregateError(errors, "Process tree cleanup failed");
-      });
+        Promise.resolve().then(() => {
+          if (child.pid === undefined) return;
+          return terminateProcess(child.pid, { graceMs, settleMs });
+        }),
+      ])
+        .then((results) => {
+          const errors = results
+            .filter((result) => result.status === "rejected")
+            .map((r) => r.reason);
+          if (errors.length === 1) throw errors[0];
+          if (errors.length > 1) throw new AggregateError(errors, "Process tree cleanup failed");
+        })
+        .catch((error) => {
+          retry = true;
+          throw error;
+        });
       return operation;
     },
     wait() {
       return operation;
-    },
-    dispose() {
-      child.removeListener("exit", exited.resolve);
-      child.removeListener("close", closed.resolve);
     },
   };
 }

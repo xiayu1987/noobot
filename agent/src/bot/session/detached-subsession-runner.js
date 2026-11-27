@@ -483,7 +483,7 @@ function commitDetachedFailure(error, identity, lifecycle) {
     eventType: TURN_EVENT.FAILED,
     phase: TURN_PHASE.PROCESSING,
     failure,
-    terminalStatus: { command: "error", description: failure.message, error },
+    terminalStatus: { command: "error", description: failure.message, error: failure },
   });
 }
 

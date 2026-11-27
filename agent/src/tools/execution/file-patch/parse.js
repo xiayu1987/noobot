@@ -13,10 +13,10 @@ import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { text } from "@noobot/shared/value";
 
-function invalid(message, line) {
+function invalid(message, line, details = {}) {
   throw recoverableToolError(message, {
     code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-    details: { field: "patch", ...(line === undefined ? {} : { patchLine: line + 1 }) },
+    details: { field: "patch", ...(line === undefined ? {} : { patchLine: line + 1 }), ...details },
   });
 }
 
@@ -32,8 +32,9 @@ function patchLines(patch) {
 function requireChange(hunk, index) {
   if (!hunk.lines.some((line) => line.type === "+" || line.type === "-")) {
     invalid(
-      "patch hunk must contain a change (+ or - line); context-only hunks do not define scope; keep continuous context with the edit in one hunk and remove empty hunks",
+      "patch hunk must contain a change (+ or - line); context-only hunks do not define scope; keep continuous context with the edit in one hunk, or anchor the changed hunk with @@ L<line>",
       index,
+      { hunkContent: hunk.lines.map((line) => line.type + line.text).join("\n") },
     );
   }
   return hunk;
@@ -175,7 +176,18 @@ function parseUnifiedHunk(lines, start) {
   let index = start + 1;
   let oldSeen = 0;
   let newSeen = 0;
+  const countMismatch = () =>
+    invalid(
+      `unified diff hunk counts do not match body: old declared ${oldCount}, actual ${oldSeen}; new declared ${newCount}, actual ${newSeen}`,
+      start,
+      {
+        declared: { old: oldCount, new: newCount },
+        actual: { old: oldSeen, new: newSeen },
+        stoppedAtPatchLine: index + 1,
+      },
+    );
   while (index < lines.length && (oldSeen < oldCount || newSeen < newCount)) {
+    if (lines[index].startsWith("@@")) break;
     if (lines[index] === "\\ No newline at end of file") {
       markNoFinalNewline(hunk, index);
       index += 1;
@@ -185,16 +197,14 @@ function parseUnifiedHunk(lines, start) {
     hunk.lines.push(line);
     if (line.type !== "+") oldSeen += 1;
     if (line.type !== "-") newSeen += 1;
-    if (oldSeen > oldCount || newSeen > newCount)
-      invalid("unified diff hunk counts do not match body", index);
+    if (oldSeen > oldCount || newSeen > newCount) countMismatch();
     index += 1;
   }
   if (lines[index] === "\\ No newline at end of file") {
     markNoFinalNewline(hunk, index);
     index += 1;
   }
-  if (oldSeen !== oldCount || newSeen !== newCount)
-    invalid("unified diff hunk counts do not match body", start);
+  if (oldSeen !== oldCount || newSeen !== newCount) countMismatch();
   return { index, hunk: requireChange(hunk, start), ...range };
 }
 

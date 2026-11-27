@@ -765,7 +765,7 @@ test("detached sub-session propagates main runner abort and failure contracts", 
 
 test("detached sub-session failure receipt carries the committed turn failure", async () => {
   const failureError = Object.assign(new Error("model failed"), { code: "model_failed" });
-  const { deps } = createDeps({
+  const { deps, calls } = createDeps({
     sessionRunner: {
       async runSession() {
         throw failureError;
@@ -785,6 +785,13 @@ test("detached sub-session failure receipt carries the committed turn failure", 
     (error) => {
       assert.equal(error.lifecycle.state, "processing_failed");
       assert.equal(error.lifecycle.phase, "processing");
+      const committed = calls.lifecyclePayloads.at(-1);
+      assert.equal(committed.terminalStatus.error, committed.failure);
+      assert.deepEqual(
+        structuredClone(committed.terminalStatus),
+        JSON.parse(JSON.stringify(committed.terminalStatus)),
+      );
+      assert.equal(error.cause, failureError);
       assert.deepEqual(error.lifecycle.failure, {
         code: "model_failed",
         message: "model failed",

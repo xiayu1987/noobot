@@ -127,7 +127,6 @@ function createTerminationController(child, abortSignal, timeoutMs, onTerminate,
     dispose() {
       if (timeout) clearTimeout(timeout);
       abortSignal?.removeEventListener?.("abort", onAbort);
-      processTermination.dispose();
     },
   };
 }

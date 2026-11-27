@@ -97,17 +97,13 @@ export async function runDeletionWorker(args, options, budget = DELETION_WORKER_
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);
-    try {
-      if (!stopping && child.exitCode === null && child.signalCode === null) {
-        stop(new Error("Deletion worker cleanup interrupted an unfinished operation"));
-      }
-      await stopping;
-      if (cleanupFailure) {
-        throw new AggregateError([failure, cleanupFailure], "Deletion worker cleanup failed");
-      }
-      await closed;
-    } finally {
-      terminator.dispose();
+    if (!stopping && child.exitCode === null && child.signalCode === null) {
+      stop(new Error("Deletion worker cleanup interrupted an unfinished operation"));
     }
+    await stopping;
+    if (cleanupFailure) {
+      throw new AggregateError([failure, cleanupFailure], "Deletion worker cleanup failed");
+    }
+    await closed;
   }
 }

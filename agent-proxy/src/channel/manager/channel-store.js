@@ -56,6 +56,7 @@ function readLifecycleScope(eventData) {
     dialogProcessId: lifecycle.dialogProcessId,
     turnScopeId: eventData.identity.turnScopeId,
     sessionId: eventData.identity.sessionId,
+    parentSessionId: lifecycle.parentSessionId,
     seq: eventData.ordering.sequence,
   };
 }
@@ -326,6 +327,7 @@ class ChannelStoreMethods {
     {
       scope,
       sessionId,
+      parentSessionId,
       turnScopeId = "",
       dialogProcessId = "",
       state,
@@ -351,6 +353,7 @@ class ChannelStoreMethods {
     const stateItem = createAgentChannelState({
       scope,
       sessionId,
+      parentSessionId,
       turnScopeId,
       dialogProcessId,
       state,
@@ -365,6 +368,7 @@ class ChannelStoreMethods {
       category: "state",
       event: "agentProxy.conversation.state",
       sessionId: stateItem.sessionId,
+      parentSessionId: stateItem.parentSessionId,
       dialogProcessId: stateItem.dialogProcessId,
       turnScopeId: stateItem.turnScopeId,
       data: {
@@ -401,6 +405,7 @@ class ChannelStoreMethods {
       sourceEvent: scope.eventName,
       seq: scope.seq,
       sessionId: scope.sessionId,
+      parentSessionId: scope.parentSessionId,
       requestId: text(lifecycle.requestId),
       broadcast: false,
     });

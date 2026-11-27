@@ -134,8 +134,8 @@ export async function createFixture({
       calls.push({ command, args, options, child });
       return child;
     },
-    terminateProcess: (child, signal, options) => {
-      terminateCalls.push({ child, signal, options });
+    terminateProcess: (pid, options) => {
+      terminateCalls.push({ pid, options });
     },
     ...managerOptions,
   });

@@ -19,6 +19,8 @@ import {
   PATCH_CONTENT_ENCODINGS,
   PATCH_SHA256_PATTERN,
   indexPatchBaseVersions,
+  normalizePatchInput,
+  resolvePatchReadVersions,
   indexPatchOperations,
   decodePatchText,
   FILE_TEXT_ENCODING_INPUTS,
@@ -68,27 +70,37 @@ function buildPatchFailurePayload({ error, original, pathRef, encoding }) {
   };
 }
 
-function resolvePatchProtocol({ format, patch, strip }) {
-  const requestedFormat = text(format);
-  const trimmedPatch = String(patch || "").trimStart();
-  const detectedFormat = trimmedPatch.startsWith("*** Begin Patch")
-    ? "apply_patch"
-    : "unified_diff";
-  if (requestedFormat && requestedFormat !== detectedFormat) {
-    throw recoverableToolError(`patch format does not match content: expected ${detectedFormat}`, {
+function resolvePatchProtocol(input) {
+  try {
+    return { ...normalizePatchInput(input), strip: input.strip };
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    throw recoverableToolError(error.message, {
       code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-      details: { field: "format", requestedFormat, detectedFormat },
+      details: { field: "patch" },
     });
   }
-  return { format: requestedFormat || detectedFormat, strip };
 }
 
-async function preparePatchExecution({ format, patch, strip, root, agentContext }) {
-  const protocol = resolvePatchProtocol({ format, patch, strip });
-  const parsed =
-    protocol.format === "apply_patch"
-      ? parseApplyPatch(patch)
-      : parseUnifiedDiff(patch, protocol.strip);
+async function preparePatchExecution({ root, agentContext, ...input }) {
+  const protocol = resolvePatchProtocol(input);
+  const sourceLine = (line) => protocol.sourceLines[line - 1] ?? protocol.sourceLines.at(-1) + 1;
+  let parsed;
+  try {
+    parsed =
+      protocol.format === "apply_patch"
+        ? parseApplyPatch(protocol.patch)
+        : parseUnifiedDiff(protocol.patch, protocol.strip);
+  } catch (error) {
+    if (error.details?.patchLine !== undefined)
+      error.details.patchLine = sourceLine(error.details.patchLine);
+    if (error.details?.stoppedAtPatchLine !== undefined)
+      error.details.stoppedAtPatchLine = sourceLine(error.details.stoppedAtPatchLine);
+    throw error;
+  }
+  for (const item of parsed) {
+    for (const hunk of item.hunks) hunk.patchLine = sourceLine(hunk.patchLine);
+  }
   const normalizedRoot = text(root);
   const targets = await resolvePatchTargetsWithOptions({
     patches: parsed,
@@ -109,6 +121,11 @@ function buildPatchSchema(agentContext, runtime) {
       .optional()
       .describe(tTool(runtime, "tools.patch_file.fieldFormat")),
     patch: z.string().describe(buildPatchFieldDescription(agentContext, "fieldPatch")),
+    filePath: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(tTool(runtime, "tools.patch_file.fieldFilePath")),
     contentEncoding: z
       .enum(PATCH_CONTENT_ENCODINGS)
       .default("raw")
@@ -120,6 +137,7 @@ function buildPatchSchema(agentContext, runtime) {
           sha256: z.string().regex(PATCH_SHA256_PATTERN).nullable(),
         }),
       )
+      .optional()
       .describe(tTool(runtime, "tools.patch_file.fieldBaseVersions")),
     strip: z
       .number()
@@ -167,7 +185,64 @@ function indexPatchTargetPaths(targets) {
   return paths;
 }
 
-async function buildPatchPlans({ targets, contentEncoding, baseVersions, workspaceIo, encoding }) {
+function resolveImplicitPatchVersions(targets, readVersions) {
+  const sources = new Set(targets.map((item) => item.resolvedOldPath).filter(Boolean));
+  const additions = new Set(
+    targets.filter((item) => item.mode === "add").map((item) => item.resolvedNewPath),
+  );
+  const readTargets = new Map();
+  const references = targets.flatMap((item) => [
+    [item.oldPathRef, item.resolvedOldPath],
+    [item.newPathRef, item.resolvedNewPath],
+  ]);
+  for (const [pathRef, identity] of references) {
+    if (!pathRef) continue;
+    let absent = "allowed";
+    if (sources.has(identity)) absent = "forbidden";
+    if (additions.has(identity)) absent = "required";
+    readTargets.set(identity, { locator: mutationLocator(pathRef), absent });
+  }
+  return resolvePatchReadVersions([...readTargets.values()], readVersions);
+}
+
+async function validatePatchVersions({ targets, baseVersions, readVersions, readContent, hash }) {
+  const paths = indexPatchTargetPaths(targets);
+  let versions;
+  try {
+    versions = indexPatchBaseVersions(
+      baseVersions === undefined
+        ? resolveImplicitPatchVersions(targets, readVersions)
+        : baseVersions,
+      [...paths].map(([filePath, identity]) => ({ filePath, identity })),
+    );
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    throw recoverableToolError(error.message, {
+      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      details: { field: "baseVersions", contract: "baseVersions", ...error.details },
+    });
+  }
+  for (const [filePath, resolved] of paths) {
+    const actualSha256 = hash(await readContent(resolved));
+    const expectedSha256 = versions.get(resolved);
+    if (actualSha256 !== expectedSha256) {
+      throw createFileMutationError(
+        FILE_MUTATION_ERROR_CODE.CONFLICT,
+        `file changed since the base version was read: ${filePath}; read it again and rebuild the patch`,
+        { details: { filePath, expectedSha256, actualSha256 } },
+      );
+    }
+  }
+}
+
+async function buildPatchPlans({
+  targets,
+  contentEncoding,
+  baseVersions,
+  readVersions,
+  workspaceIo,
+  encoding,
+}) {
   const writePlans = [];
   const deletePlans = [];
   const initialContents = new Map();
@@ -186,8 +261,6 @@ async function buildPatchPlans({ targets, contentEncoding, baseVersions, workspa
     if (!contentHashes.has(buffer)) contentHashes.set(buffer, fileContentSha256(buffer));
     return contentHashes.get(buffer);
   };
-  const paths = indexPatchTargetPaths(targets);
-  let versions;
   let operations;
   try {
     operations = indexPatchOperations(
@@ -204,29 +277,7 @@ async function buildPatchPlans({ targets, contentEncoding, baseVersions, workspa
       details: { field: "patch", contract: "operations" },
     });
   }
-  try {
-    versions = indexPatchBaseVersions(
-      baseVersions,
-      [...paths].map(([filePath, identity]) => ({ filePath, identity })),
-    );
-  } catch (error) {
-    if (!(error instanceof TypeError)) throw error;
-    throw recoverableToolError(error.message, {
-      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-      details: { field: "baseVersions", contract: "baseVersions" },
-    });
-  }
-  for (const [filePath, resolved] of paths) {
-    const actualSha256 = hash(await readContent(resolved));
-    const expectedSha256 = versions.get(resolved);
-    if (actualSha256 !== expectedSha256) {
-      throw createFileMutationError(
-        FILE_MUTATION_ERROR_CODE.CONFLICT,
-        `file changed since the base version was read: ${filePath}; read it again and rebuild the patch`,
-        { details: { filePath, expectedSha256, actualSha256 } },
-      );
-    }
-  }
+  await validatePatchVersions({ targets, baseVersions, readVersions, readContent, hash });
   for (const item of targets) {
     const failure = await planTarget(item);
     if (failure) return failure;
@@ -408,12 +459,14 @@ function buildPatchResult({
   deletePlans,
   mutations,
   outputResources,
+  adaptations,
 }) {
   return toToolJsonResult(TOOL_NAME.PATCH_FILE, {
     ok: true,
     protocol: FILE_MUTATION_PROTOCOL,
     version: FILE_MUTATION_VERSION,
     format: normalizedFormat,
+    ...(adaptations.length ? { adaptations } : {}),
     strip: normalizedFormat === "unified_diff" ? resolvedStrip : undefined,
     dryRun: dryRun === true,
     root: projectToolPathRef(
@@ -440,9 +493,16 @@ function buildPatchResult({
   });
 }
 
-async function runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeId, args }) {
-  const { format, patch, strip, root, dryRun, riskLevel, contentEncoding, baseVersions } = args;
-  const prepared = await preparePatchExecution({ format, patch, strip, root, agentContext });
+async function runPatchFile({
+  agentContext,
+  runtime,
+  workspaceIo,
+  mutationScopeId,
+  args,
+  readVersions,
+}) {
+  const { dryRun, riskLevel, contentEncoding, baseVersions } = args;
+  const prepared = await preparePatchExecution({ ...args, agentContext });
   const patchResources = prepared.targets
     .flatMap((item) => [
       { pathRef: item.oldPathRef, resourcePath: item.oldResourcePath },
@@ -485,6 +545,7 @@ async function runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeI
         targets: prepared.targets,
         contentEncoding,
         baseVersions,
+        readVersions,
         workspaceIo,
         encoding: args.encoding,
       });
@@ -508,6 +569,7 @@ async function runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeI
   });
   return buildPatchResult({
     normalizedFormat,
+    adaptations: prepared.adaptations,
     resolvedStrip: stripAppliesToTargets ? prepared.strip : null,
     dryRun,
     resolvedRoot: prepared.root,
@@ -521,7 +583,15 @@ async function runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeI
 export function createPatchFileTool({ agentContext, runtime, workspaceIo, mutationScopeId }) {
   return structuredTool(
     runtime,
-    (args) => runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeId, args }),
+    (args, config) =>
+      runPatchFile({
+        agentContext,
+        runtime,
+        workspaceIo,
+        mutationScopeId,
+        args,
+        readVersions: config.configurable?.patchReadVersions,
+      }),
     {
       name: TOOL_NAME.PATCH_FILE,
       metadata: { pathContract: TOOL_PATH_CONTRACTS.filePatch },

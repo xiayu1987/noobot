@@ -8,6 +8,10 @@ import { requireCapabilityActivity } from "@noobot/plugin-protocol";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { createModelActivity } from "../../models/runtime/model-manager.js";
 import { requireRuntimeModelHost } from "../model-port-host.js";
+import {
+  capturePatchReadVersions,
+  bindPatchReadVersions,
+} from "../tool-execution/patch-read-context.js";
 
 export function createCapabilityModelStep({
   runtime,
@@ -32,6 +36,7 @@ export function createCapabilityModelStep({
         activityEventType: MESSAGE_EVENT_TYPE.THINKING,
         streaming,
       });
+    const readVersions = capturePatchReadVersions(messages);
     const response = await modelPort.invoke({
       model,
       messages,
@@ -46,14 +51,18 @@ export function createCapabilityModelStep({
       },
       invocation: identity.invocation,
     });
+    const boundResponse = {
+      ...response,
+      output: bindPatchReadVersions(response.output, readVersions),
+    };
     return {
-      response,
+      response: boundResponse,
       async complete() {
-        if (!modelActivity) return response;
+        if (!modelActivity) return boundResponse;
         const text = response.output.text.trim();
         if (!text) throw new Error("capability activity response is missing canonical output");
         await modelActivity.complete(text);
-        return response;
+        return boundResponse;
       },
     };
   };

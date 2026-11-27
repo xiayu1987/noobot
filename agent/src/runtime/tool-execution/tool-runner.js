@@ -61,7 +61,7 @@ import {
   runWithToolRiskAssessment,
 } from "../../tools/execution/tool-risk.js";
 import { isPlainObject, text } from "@noobot/shared/value";
-import { projectMutationRefs } from "@noobot/file-mutation-protocol";
+import { projectMutationRefs, PATCH_READ_VERSIONS } from "@noobot/file-mutation-protocol";
 import { repairToolCallArgs } from "./tool-args-repair.js";
 import { assertToolInputMatchesSchema } from "./tool-input-validation.js";
 import { validateRuntimeToolCall } from "@noobot/context-protocol/tool/context-policy";
@@ -334,6 +334,7 @@ function toolInvocationConfig(state) {
   const producer = toolProducer(state.call);
   return {
     configurable: {
+      patchReadVersions: state.call[PATCH_READ_VERSIONS],
       transferIdentity: resolveRuntimeTransferIdentity({
         runtime: state.runtime,
         producer,

@@ -5,13 +5,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { spawn } from "node:child_process";
+import electronExecutable from "electron";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 
 const runtimeTopology = resolveRuntimeTopology(process.env);
 const devClientUrl = `http://${runtimeTopology.loopbackHost}:${addressPort(runtimeTopology.clientAddr)}`;
 
-const electronCommand = process.platform === "win32" ? "electron.cmd" : "electron";
-const child = spawn(electronCommand, ["."], {
+const child = spawn(electronExecutable, ["."], {
   stdio: "inherit",
   windowsHide: true,
   env: {

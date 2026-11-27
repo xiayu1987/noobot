@@ -17,7 +17,6 @@ import {
   isTransientAtomicRenameError,
   normalizePlatform,
   resolveCommandLookupExecutable,
-  resolveCommandShimExecutable,
   resolveBrowserProfileRoot,
   resolveHostShell,
   resolveLibreOfficeExecutable,
@@ -117,9 +116,6 @@ test("process launch conventions are owned by canonical platform identity", () =
   assert.equal(resolveCommandLookupExecutable("win32"), "where");
   assert.equal(resolveCommandLookupExecutable("darwin"), "which");
   assert.equal(resolveCommandLookupExecutable("linux"), "which");
-  assert.equal(resolveCommandShimExecutable("npm", "win32"), "npm.cmd");
-  assert.equal(resolveCommandShimExecutable("npm", "darwin"), "npm");
-  assert.equal(resolveCommandShimExecutable("npm", "linux"), "npm");
 });
 
 test("Windows localized command output is decoded by locale", () => {
@@ -215,33 +211,45 @@ test("restricted process env never projects display session variables", () => {
 
 test("process tree termination uses the platform primitive", async () => {
   const calls = [];
-  await terminateProcessTree({ pid: 42 }, "SIGTERM", {
+  let alive = true;
+  await terminateProcessTree(42, {
+    graceMs: 0,
+    settleMs: 100,
     platform: "win32",
-    execFileImpl: (...args) => args[3](),
-    processKill: (...args) => calls.push(args),
+    execFileImpl: (command, args, options, done) => {
+      calls.push([command, args, options]);
+      if (args.at(-1).includes("SELECT ProcessId")) {
+        done(
+          null,
+          JSON.stringify(
+            alive ? [{ pid: 42, parentPid: 1, started: "20261126000000.000000+000" }] : [],
+          ),
+        );
+        return;
+      }
+      alive = false;
+      done();
+    },
+    processKill: () => {
+      if (!alive) throw Object.assign(new Error("gone"), { code: "ESRCH" });
+    },
   });
-  assert.deepEqual(calls, []);
+  assert.equal(calls.length, 3);
+  assert.ok(calls.every(([command]) => command === "powershell.exe"));
+  assert.match(calls[1][1].at(-1), /ProcessId = 42/);
 
-  await terminateProcessTree({ pid: 43 }, "SIGTERM", {
+  const signals = [];
+  await terminateProcessTree(43, {
+    graceMs: 100,
+    settleMs: 100,
     platform: "linux",
-    processKill: (...args) => calls.push(args),
+    processKill: (target, signal) => {
+      assert.equal(target, -43);
+      if (signal === 0) throw Object.assign(new Error("gone"), { code: "ESRCH" });
+      signals.push(signal);
+    },
   });
-  assert.deepEqual(calls, [[-43, "SIGTERM"]]);
-
-  const directSignals = [];
-  await terminateProcessTree({ pid: 44, kill: (signal) => directSignals.push(signal) }, "SIGTERM", {
-    platform: "linux",
-    processGroup: false,
-    processKill: (...args) => calls.push(args),
-  });
-  assert.deepEqual(directSignals, ["SIGTERM"]);
-  assert.deepEqual(calls, [[-43, "SIGTERM"]]);
-
-  await terminateProcessTree({ pid: "not-a-pid" }, "SIGTERM", {
-    platform: "win32",
-    execFileImpl: (...args) => calls.push(args),
-  });
-  assert.deepEqual(calls, [[-43, "SIGTERM"]]);
+  assert.deepEqual(signals, ["SIGTERM"]);
 });
 
 test("atomic write keeps a fixed-length temporary name for long target names", async () => {

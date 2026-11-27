@@ -6,6 +6,12 @@
 
 import { isPlainObject, text } from "@noobot/shared/value";
 import { createLocator, isCanonicalLocator } from "@noobot/shared/locator";
+export { normalizePatchInput } from "./patch-input.js";
+export {
+  PATCH_READ_VERSIONS,
+  createPatchReadVersions,
+  resolvePatchReadVersions,
+} from "./patch-read-versions.js";
 export {
   PATCH_FORMATS,
   PATCH_CONTENT_ENCODINGS,

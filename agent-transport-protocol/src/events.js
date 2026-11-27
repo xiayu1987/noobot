@@ -99,6 +99,7 @@ const CHANNEL_STATE_FIELDS = new Set([
   "protocolVersion",
   "scope",
   "sessionId",
+  "parentSessionId",
   "turnScopeId",
   "dialogProcessId",
   "state",
@@ -113,6 +114,7 @@ const TURN_ONLY_CHANNEL_STATE_FIELDS = ["turnScopeId", "dialogProcessId", "reque
 export function createAgentChannelState({
   scope = "",
   sessionId = "",
+  parentSessionId = "",
   turnScopeId = "",
   dialogProcessId = "",
   state = "",
@@ -127,6 +129,7 @@ export function createAgentChannelState({
     scope: text(scope),
     sessionId: text(sessionId),
     state: text(state),
+    ...(text(parentSessionId) ? { parentSessionId: text(parentSessionId) } : {}),
     sourceEvent: text(sourceEvent),
     seq: Number(seq),
     createdAtMs: Number(createdAtMs),

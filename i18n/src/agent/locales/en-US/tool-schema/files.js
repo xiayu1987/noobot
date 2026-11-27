@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { PATCH_UPDATE_EXAMPLE } from "../../../patch-file-manual.js";
+
 export const FILE_TOOL_SCHEMA = {
   read_file: {
     description: {
@@ -96,12 +98,12 @@ export const FILE_TOOL_SCHEMA = {
   patch_file: {
     description: {
       key: "tools.patch_file.description",
-      text: "Use {{tool:read_file}} for content and baseSha256; copy its returned path. Prefer @@ L<line> for the exact original start line; bare @@ requires continuous context matching uniquely after the previous hunk. Order non-overlapping hunks by source location. Reread and rebuild after failure.",
+      text: "Read the source with {{tool:read_file}} and copy its returned path. Usually pass only patch and riskLevel; runtime validates the read version. Prefer @@ L<line>; bare @@ requires unique continuous context. Order non-overlapping hunks by source location. Reread and rebuild after version conflicts.",
     },
     params: {
       patch: {
         key: "tools.patch_file.fieldPatch",
-        text: "Patch content; copy the path returned by read/search. Every apply_patch @@ section must contain a + or - line. Keep context continuous with the edit; context-only sections do not scope later sections. Example: @@ L12\n-old\n+new.",
+        text: `Patch content; copy the path returned by read/search. Every apply_patch @@ section must contain a + or - line. Keep context continuous with the edit; context-only sections do not scope later sections. Complete single-file update example\n${PATCH_UPDATE_EXAMPLE}`,
       },
       contentEncoding: {
         key: "tools.patch_file.fieldContentEncoding",
@@ -109,7 +111,11 @@ export const FILE_TOOL_SCHEMA = {
       },
       baseVersions: {
         key: "tools.patch_file.fieldBaseVersions",
-        text: "Base versions for every source and destination [{filePath, sha256}]. For workspace or host read results, copy path.path into filePath. For mount results, join path.mount and path.path with /. strip and root do not change filePath. Use baseSha256, or the complete target path and null for an absent new target.",
+        text: "Usually omit: runtime uses reads visible to this model request; missing or ambiguous parallel versions require rereading. If supplied, cover all sources and destinations [{filePath, sha256}]; values are strictly checked, never replaced. Use read baseSha256 or null for absent targets. Copy path.path, or join path.mount and path.path with / for mounts; strip/root do not rewrite filePath.",
+      },
+      filePath: {
+        key: "tools.patch_file.fieldFilePath",
+        text: "Only for headerless apply_patch update hunks: explicitly selects the single target so runtime can supply file and outer markers. Complete patches put paths in file headers.",
       },
       format: {
         key: "tools.patch_file.fieldFormat",

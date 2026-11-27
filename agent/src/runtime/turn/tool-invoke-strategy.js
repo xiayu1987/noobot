@@ -16,6 +16,10 @@ import {
 } from "./tool-choice-strategy.js";
 import { createModelActivity } from "../../models/runtime/model-manager.js";
 import { MAIN_FLOW_NO_FINAL_RESPONSE_RETRY } from "./no-final-response-recovery.js";
+import {
+  capturePatchReadVersions,
+  bindPatchReadVersions,
+} from "../tool-execution/patch-read-context.js";
 
 export function createBoundLlmToolChoiceInvoker({
   adaptedBinding,
@@ -54,8 +58,10 @@ export function createBoundLlmToolChoiceInvoker({
       streaming,
     });
 
+    const visibleMessages = filterForModelContext(messages);
+    const readVersions = capturePatchReadVersions(visibleMessages);
     const response = await modelState.modelPort.invoke({
-      messages: filterForModelContext(messages),
+      messages: visibleMessages,
       tools: boundTools,
       options: {
         streaming,
@@ -79,6 +85,6 @@ export function createBoundLlmToolChoiceInvoker({
       },
     });
     await modelActivity.complete(response.output?.text);
-    return projectBoundModelOutput(response);
+    return bindPatchReadVersions(projectBoundModelOutput(response), readVersions);
   };
 }

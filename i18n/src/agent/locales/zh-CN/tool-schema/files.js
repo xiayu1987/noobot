@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { PATCH_UPDATE_EXAMPLE } from "../../../patch-file-manual.js";
+
 export const FILE_TOOL_SCHEMA = {
   read_file: {
     description: {
@@ -96,12 +98,12 @@ export const FILE_TOOL_SCHEMA = {
   patch_file: {
     description: {
       key: "tools.patch_file.description",
-      text: "先 {{tool:read_file}} 获取内容和 baseSha256，原样使用返回路径。优先用 @@ L行号 精确定位原文起始行；裸 @@ 须在前一 hunk 之后唯一匹配连续上下文。hunk 按原文顺序排列，不重叠。失败后重读并重建。",
+      text: "先 {{tool:read_file}} 读取原文，原样使用返回路径；通常只传 patch 和 riskLevel，运行时校验读取版本。优先用 @@ L行号 定位；裸 @@ 须唯一匹配连续上下文。修改块按原文顺序排列，不重叠；版本冲突后重读并重建。",
     },
     params: {
       patch: {
         key: "tools.patch_file.fieldPatch",
-        text: "补丁内容；原样使用读取/搜索返回的 path。apply_patch 每个 @@ 段必须含 + 或 - 行；上下文须与改动连续，纯上下文段不能限定后续段的作用域。例：@@ L12\n-old\n+new。",
+        text: `补丁内容；原样使用读取/搜索返回的 path。apply_patch 每个 @@ 段必须含 + 或 - 行；上下文须与改动连续，纯上下文段不能限定后续段的作用域。完整的单文件更新示例\n${PATCH_UPDATE_EXAMPLE}`,
       },
       contentEncoding: {
         key: "tools.patch_file.fieldContentEncoding",
@@ -109,7 +111,11 @@ export const FILE_TOOL_SCHEMA = {
       },
       baseVersions: {
         key: "tools.patch_file.fieldBaseVersions",
-        text: "所有源文件与目标文件的基准版本 [{filePath, sha256}]。工作区或主机读取结果的 filePath 使用 path.path，挂载读取结果用 / 拼接 path.mount 和 path.path。strip 和 root 不改变 filePath。sha256 使用 baseSha256，不存在的新增目标用完整目标路径和 null。",
+        text: "通常省略，使用本次模型请求可见的读取版本；缺失或并行版本不明确时须重读。显式提供时必须覆盖所有源和目标 [{filePath, sha256}]，严格校验、不替换；sha256 使用读取结果 baseSha256，不存在的目标用 null。filePath 使用 path.path，挂载路径用 / 拼接 path.mount 和 path.path；不受 strip/root 改写。",
+      },
+      filePath: {
+        key: "tools.patch_file.fieldFilePath",
+        text: "仅用于没有文件头的 apply_patch 更新块，明确唯一目标；运行时补齐文件头和外层标记。完整补丁将路径写在文件头中。",
       },
       format: {
         key: "tools.patch_file.fieldFormat",

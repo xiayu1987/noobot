@@ -21,15 +21,17 @@ function withPlatform(platform, fn) {
     });
 }
 
-test("desktop startup uses npm.cmd for Windows development service launch", async () => {
+test("desktop startup uses the Electron node runtime for Windows development", async () => {
   await withPlatform("win32", async () => {
     const fixture = await createFixture({ packaged: false });
     try {
       await fixture.manager.ensureServiceStarted();
 
       assert.equal(fixture.calls.length, 1);
-      assert.equal(fixture.calls[0].command, "npm.cmd");
-      assert.deepEqual(fixture.calls[0].args.slice(0, 4), ["run", "-w", "service", "start"]);
+      assert.equal(fixture.calls[0].command, process.execPath);
+      assert.equal(fixture.calls[0].args[0], path.join(fixture.repoRoot, "service", "app.js"));
+      assert.equal(fixture.calls[0].options.env.ELECTRON_RUN_AS_NODE, "1");
+      assert.equal(fixture.calls[0].options.detached, false);
       assert.equal(fixture.calls[0].options.cwd, fixture.repoRoot);
       assert.equal(fixture.calls[0].options.env.PORT, "10061");
       assert.equal("NOOBOT_SERVICE_HOST" in fixture.calls[0].options.env, false);
@@ -89,9 +91,11 @@ test("desktop stop delegates process tree cleanup to the platform boundary", asy
 
       assert.deepEqual(fixture.terminateCalls, [
         {
-          child: fixture.calls[0].child,
-          signal: "SIGTERM",
-          options: { processGroup: false },
+          pid: fixture.calls[0].child.pid,
+          options: {
+            graceMs: TIME_THRESHOLDS.tools.processForceKillGraceMs,
+            settleMs: TIME_THRESHOLDS.tools.processSettleGraceMs,
+          },
         },
       ]);
       assert.deepEqual(fixture.calls[0].child.killCalls, []);
@@ -120,6 +124,7 @@ test("desktop stop waits for termination and permits retry after a cleanup failu
     await fixture.manager.ensureServiceStarted();
     const pending = fixture.manager.stopManagedService();
     assert.equal(fixture.manager.stopManagedService(), pending);
+    fixture.calls[0].child.emit("exit", null, "SIGTERM");
     rejectTermination(new Error("taskkill denied"));
     await assert.rejects(pending, (error) => {
       assert.equal(error.errors[0].message, "taskkill denied");
@@ -132,15 +137,17 @@ test("desktop stop waits for termination and permits retry after a cleanup failu
   }
 });
 
-test("desktop startup uses npm for macOS development service launch", async () => {
+test("desktop startup uses the Electron node runtime and a process group on macOS", async () => {
   await withPlatform("darwin", async () => {
     const fixture = await createFixture({ packaged: false });
     try {
       await fixture.manager.ensureServiceStarted();
 
       assert.equal(fixture.calls.length, 1);
-      assert.equal(fixture.calls[0].command, "npm");
-      assert.deepEqual(fixture.calls[0].args.slice(0, 4), ["run", "-w", "service", "start"]);
+      assert.equal(fixture.calls[0].command, process.execPath);
+      assert.equal(fixture.calls[0].args[0], path.join(fixture.repoRoot, "service", "app.js"));
+      assert.equal(fixture.calls[0].options.env.ELECTRON_RUN_AS_NODE, "1");
+      assert.equal(fixture.calls[0].options.detached, true);
       assert.equal(fixture.calls[0].options.cwd, fixture.repoRoot);
       assert.equal(fixture.calls[0].options.env.PORT, "10061");
       assert.equal("NOOBOT_SERVICE_HOST" in fixture.calls[0].options.env, false);

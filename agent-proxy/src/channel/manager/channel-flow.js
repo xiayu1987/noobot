@@ -42,6 +42,7 @@ function projectResolvedInteractionIdentity(resolvedEnvelope) {
     dialogProcessId: payload.dialogProcessId,
     turnScopeId: identity.turnScopeId,
     sessionId: identity.sessionId,
+    parentSessionId: payload.parentSessionId,
     sequence: ordering.sequence,
   };
 }
@@ -50,6 +51,7 @@ function buildInteractionConversationPatch({ resolved, hasRemainingInteraction, 
   return {
     scope: AGENT_CHANNEL_STATE_SCOPE.TURN,
     sessionId: resolved.sessionId,
+    parentSessionId: resolved.parentSessionId,
     dialogProcessId: resolved.dialogProcessId,
     turnScopeId: resolved.turnScopeId,
     state: hasRemainingInteraction

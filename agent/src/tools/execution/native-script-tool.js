@@ -261,7 +261,6 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
       if (timer) clearTimeout(timer);
       timer = null;
       abortSignal?.removeEventListener?.("abort", onAbort);
-      processTermination.dispose();
       await processTermination.wait();
       if (terminationError) throw terminationError;
       const exitCode = spawnError || code === null ? null : code;

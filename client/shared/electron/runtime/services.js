@@ -17,8 +17,8 @@ import {
 } from "@noobot/runtime-events";
 import { WORKSPACE_ROOT_ENV } from "@noobot/runtime-topology-protocol/workspace-root";
 import {
-  resolveCommandShimExecutable,
   terminateProcessTree,
+  usesDetachedProcessGroup,
 } from "@noobot/platform-compatibility/process";
 import { clientFilePath as path } from "../../path-resolver.js";
 import {
@@ -66,6 +66,7 @@ export function createDesktopServiceManager({
 } = {}) {
   let managedServiceProcess = null;
   let managedAgentProxyProcess = null;
+  const managedProcessTrees = new Set();
   let serviceStartupPromise = null;
   let stopping = false;
   let stopPromise = null;
@@ -134,6 +135,11 @@ export function createDesktopServiceManager({
   }
 
   async function restartCrashedProcesses() {
+    await Promise.all(
+      [...managedProcessTrees]
+        .filter((child) => child !== managedServiceProcess && child !== managedAgentProxyProcess)
+        .map(stopManagedChildProcess),
+    );
     if (!managedServiceProcess && !(await isHealthy(healthUrl))) {
       startNoobotService();
       await waitForHealthyService();
@@ -144,7 +150,11 @@ export function createDesktopServiceManager({
 
   async function stopManagedChildProcess(child) {
     if (!child) return;
-    return terminateProcess(child, "SIGTERM", { processGroup: false });
+    await terminateProcess(child.pid, {
+      graceMs: TIME_THRESHOLDS.tools.processForceKillGraceMs,
+      settleMs: TIME_THRESHOLDS.tools.processSettleGraceMs,
+    });
+    managedProcessTrees.delete(child);
   }
 
   function handleManagedChildExit(label, code, signal) {
@@ -256,9 +266,7 @@ export function createDesktopServiceManager({
     throwIfStartupInterrupted();
     if (managedServiceProcess) return;
     const isPackaged = app.isPackaged;
-    const command = isPackaged
-      ? process.execPath
-      : resolveCommandShimExecutable("npm", process.platform);
+    const command = process.execPath;
     const cwd = isPackaged ? packagedBackendRoot : repoRoot;
     const userDataPath = app.getPath("userData");
     const configState =
@@ -276,13 +284,7 @@ export function createDesktopServiceManager({
       cwd,
       configState,
     });
-    const args = isPackaged
-      ? [
-          path.join(packagedBackendRoot, "service", "app.js"),
-          "--startup-context",
-          startupContextPath,
-        ]
-      : ["run", "-w", "service", "start", "--", "--startup-context", startupContextPath];
+    const args = [path.join(cwd, "service", "app.js"), "--startup-context", startupContextPath];
     sendStatus({
       phase: "starting",
       message: [
@@ -301,7 +303,7 @@ export function createDesktopServiceManager({
       env: {
         ...process.env,
         ...dependencyEnv,
-        ELECTRON_RUN_AS_NODE: isPackaged ? "1" : process.env.ELECTRON_RUN_AS_NODE,
+        ELECTRON_RUN_AS_NODE: "1",
         PORT: String(servicePort),
         NOOBOT_USER_DATA_DIR: userDataPath,
         NOOBOT_CONFIG_DIR: configState.configDir,
@@ -313,8 +315,10 @@ export function createDesktopServiceManager({
         [STARTUP_LAUNCH_ID_ENV]: launchId,
       },
       stdio: "pipe",
+      detached: usesDetachedProcessGroup(),
       windowsHide: true,
     });
+    managedProcessTrees.add(managedServiceProcess);
 
     managedServiceProcess.stdout?.on("data", (chunk) => {
       const message = chunk.toString();
@@ -344,13 +348,9 @@ export function createDesktopServiceManager({
     throwIfStartupInterrupted();
     if (managedAgentProxyProcess) return;
     const isPackaged = app.isPackaged;
-    const command = isPackaged
-      ? process.execPath
-      : resolveCommandShimExecutable("npm", process.platform);
-    const args = isPackaged
-      ? [path.join(packagedBackendRoot, "agent-proxy", "agent-proxy.js")]
-      : ["run", "-w", "agent-proxy", "start"];
+    const command = process.execPath;
     const cwd = isPackaged ? packagedBackendRoot : repoRoot;
+    const args = [path.join(cwd, "agent-proxy", "agent-proxy.js")];
     const frontendRoot = isPackaged ? path.join(process.resourcesPath, "frontend") : "";
     const configState =
       getDesktopConfigState() ||
@@ -382,7 +382,7 @@ export function createDesktopServiceManager({
       env: {
         ...process.env,
         ...dependencyEnv,
-        ELECTRON_RUN_AS_NODE: isPackaged ? "1" : process.env.ELECTRON_RUN_AS_NODE,
+        ELECTRON_RUN_AS_NODE: "1",
         AGENT_PROXY_PORT: String(agentProxyPort),
         AGENT_PROXY_HOST: "127.0.0.1",
         AGENT_PROXY_UPSTREAM_HTTP_BASE: serviceOrigin,
@@ -393,8 +393,10 @@ export function createDesktopServiceManager({
         NOOBOT_WORKSPACE_ROOT: configState.workspaceRootPath,
       },
       stdio: "pipe",
+      detached: usesDetachedProcessGroup(),
       windowsHide: true,
     });
+    managedProcessTrees.add(managedAgentProxyProcess);
     managedAgentProxyProcess.stdout?.on("data", (chunk) => {
       const message = chunk.toString();
       appendAgentProxyLog(message);
@@ -542,17 +544,19 @@ export function createDesktopServiceManager({
 
   function stopManagedService() {
     stopping = true;
-    stopPromise ??= Promise.allSettled(
-      [managedAgentProxyProcess, managedServiceProcess].map(stopManagedChildProcess),
-    ).then((results) => {
-      const errors = results.filter((result) => result.status === "rejected").map((r) => r.reason);
-      if (errors.length) {
-        stopPromise = null;
-        throw new AggregateError(errors, "Noobot backend process cleanup failed");
-      }
-      managedAgentProxyProcess = null;
-      managedServiceProcess = null;
-    });
+    stopPromise ??= Promise.allSettled([...managedProcessTrees].map(stopManagedChildProcess)).then(
+      (results) => {
+        const errors = results
+          .filter((result) => result.status === "rejected")
+          .map((r) => r.reason);
+        if (errors.length) {
+          stopPromise = null;
+          throw new AggregateError(errors, "Noobot backend process cleanup failed");
+        }
+        managedAgentProxyProcess = null;
+        managedServiceProcess = null;
+      },
+    );
     return stopPromise;
   }
 

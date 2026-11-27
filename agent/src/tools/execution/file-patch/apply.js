@@ -3,7 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { adaptPatchHunks, decodePatchText, encodePatchText } from "@noobot/file-mutation-protocol";
+import {
+  adaptPatchHunks,
+  decodePatchText,
+  encodePatchText,
+  formatLinesWithNumbers,
+} from "@noobot/file-mutation-protocol";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 
@@ -62,6 +67,13 @@ function locateHunk(lines, hunk, cursor, hunkIndex) {
   if (candidates.length > 1) {
     fail("patch hunk context matches multiple locations", {
       candidateLines: candidates.map((start) => start + 1),
+      candidates: candidates.slice(0, 5).map((start) => {
+        const first = Math.max(0, start - 2);
+        return {
+          line: start + 1,
+          nearbyContent: formatLinesWithNumbers(lines.slice(first, start + 3), first + 1),
+        };
+      }),
       hint: "Use continuous unique context or @@ L<exact original start line>.",
     });
   }

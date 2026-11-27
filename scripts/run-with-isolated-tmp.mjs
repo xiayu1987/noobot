@@ -38,10 +38,12 @@ let cancellation;
 let terminationFailure;
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
-    cancellation ??= terminateProcessTree(child, "SIGKILL").catch((error) => {
-      terminationFailure = error;
-      process.stderr.write(`${error.stack || error.message}\n`);
-    });
+    cancellation ??= terminateProcessTree(child.pid, { graceMs: 0, settleMs: 5000 }).catch(
+      (error) => {
+        terminationFailure = error;
+        process.stderr.write(`${error.stack || error.message}\n`);
+      },
+    );
   });
 }
 

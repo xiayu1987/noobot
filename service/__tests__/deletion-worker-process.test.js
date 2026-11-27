@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { once } from "node:events";
 import { createServer } from "node:http";
-import { terminateProcessTree } from "@noobot/platform-compatibility/process";
+import { isProcessAlive } from "@noobot/platform-compatibility/process";
 import { runDeletionWorker } from "./deletion-worker-process.test-helpers.js";
 
 const helper = new URL("./deletion-worker-process.test-helpers.js", import.meta.url).href;
@@ -72,7 +72,9 @@ test(
     await once(server, "listening");
     t.after(() => new Promise((resolve) => server.close(resolve)));
     t.after(async () => {
-      if (descendantPid) await terminateProcessTree({ pid: descendantPid }, "SIGKILL");
+      if (isProcessAlive(descendantPid)) {
+        process.kill(descendantPid, "SIGKILL");
+      }
     });
     const source = `
     import { spawn } from 'node:child_process';

@@ -39,6 +39,20 @@ test("journal JSON encodes and measures the exact UTF-8 byte boundary", () => {
   assert.throws(() => measureBoundedJournalJson(value, bytes - 1, maxDepth, budgetError), exceeded);
 });
 
+test("journal JSON rejects original errors and reports each containing field", () => {
+  const value = { changes: { terminalStatus: { errors: [new Error("original")] } } };
+  assert.throws(
+    () => encodeBoundedJournalJson(value, { budget: Infinity, maxDepth: 20 }),
+    (error) => {
+      assert.equal(
+        error.message,
+        'Journal JSON requires plain objects or arrays at [0] at ["errors"] at ["terminalStatus"] at ["changes"]',
+      );
+      return true;
+    },
+  );
+});
+
 const limits = { transactionBytes: 4096 };
 const overhead = PARTITION_JOURNAL_FRAME.headerBytes + PARTITION_JOURNAL_FRAME.trailer.length;
 

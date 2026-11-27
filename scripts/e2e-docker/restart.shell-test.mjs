@@ -19,7 +19,7 @@ if (normalizePlatform(process.platform) !== PLATFORM.LINUX) {
 }
 
 for (const networkExists of [true, false]) {
-  test(`Docker restart preserves shared dependencies (network exists: ${networkExists})`, async (t) => {
+  test(`Docker full suite isolates dependencies and forwards database config (network exists: ${networkExists})`, async (t) => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "noobot-e2e-lifecycle-"));
     t.after(() => rm(directory, { recursive: true, force: true }));
     const bin = path.join(directory, "bin");
@@ -34,7 +34,7 @@ case "$1 $2" in
   'network inspect') exit "$TEST_NETWORK_MISSING" ;;
   'network rm') exit 99 ;;
   'rm -f')
-    case "$3" in noobot-e2e|noobot-mcp-test|noobot-mock-model) ;; *) exit 98 ;; esac ;;
+    case "$3" in validation|validation-mcp|validation-mock) ;; *) exit 98 ;; esac ;;
 esac
 `,
       node: `#!/bin/sh
@@ -50,23 +50,40 @@ printf 'curl %s\\n' "$*" >> "$TEST_DOCKER_LOG"
       await writeFile(path.join(bin, name), content, { mode: 0o755 });
     }
     await writeFile(bashEnv, 'export PATH="$(cd "$(dirname "$BASH_ENV")/bin" && pwd):$PATH"\n');
-    await execFileAsync(SHELL.BASH, [path.join(import.meta.dirname, "run.sh"), "restart"], {
+    await execFileAsync(SHELL.BASH, [path.join(import.meta.dirname, "run.sh"), "test", "full"], {
       env: {
         ...process.env,
         BASH_ENV: bashEnv,
         TEST_DOCKER_LOG: dockerLog,
         TEST_NETWORK_MISSING: networkExists ? "0" : "1",
+        NOOBOT_E2E_DOCKER_CONTAINER: "validation",
+        NOOBOT_E2E_DOCKER_WORKSPACE: path.join(directory, "workspace"),
+        NOOBOT_E2E_DOCKER_RESULTS: path.join(directory, "results"),
+        NOOBOT_E2E_CONNECT_CODE: "test-credential",
+        NOOBOT_E2E_MYSQL_HOST: "fixture-mysql",
+        NOOBOT_E2E_MYSQL_PORT: "3307",
+        NOOBOT_E2E_MYSQL_USER: "fixture-reader",
+        NOOBOT_E2E_MYSQL_PASSWORD: "fixture-password",
+        NOOBOT_E2E_MYSQL_DATABASE: "fixture-db",
       },
     });
     const calls = (await readFile(dockerLog, "utf8")).trim().split("\n");
-    assert.ok(calls.includes("rm -f noobot-e2e"));
-    assert.ok(calls.includes("rm -f noobot-mcp-test"));
-    assert.ok(calls.includes("network inspect noobot-e2e-network"));
+    assert.ok(calls.includes("rm -f validation"));
+    assert.ok(calls.includes("rm -f validation-mcp"));
+    assert.ok(calls.includes("network inspect validation-network"));
     assert.equal(calls.filter((call) => call.startsWith("curl -fsS http://127.0.0.1:")).length, 1);
-    assert.equal(calls.includes("network create noobot-e2e-network"), !networkExists);
+    assert.equal(calls.includes("network create validation-network"), !networkExists);
     assert.ok(!calls.some((call) => call.startsWith("network rm ")));
     const starts = calls.filter((call) => call.startsWith("run -d "));
     assert.equal(starts.length, 2);
-    assert.ok(starts.every((call) => call.includes("--network noobot-e2e-network")));
+    assert.ok(starts.every((call) => call.includes("--network validation-network")));
+    assert.ok(starts[0].includes("--network-alias noobot-mcp-test"));
+    assert.ok(starts[1].includes(`${path.join(directory, "workspace")}:`));
+    assert.ok(starts[1].includes(`${path.join(directory, "results")}:`));
+    const testCall = calls.find((call) => call.includes("test:e2e:protocol:full"));
+    for (const field of ["HOST", "PORT", "USER", "PASSWORD", "DATABASE"]) {
+      assert.ok(testCall.includes(`-e NOOBOT_E2E_MYSQL_${field}`));
+    }
+    assert.ok(!testCall.includes("fixture-password"));
   });
 }

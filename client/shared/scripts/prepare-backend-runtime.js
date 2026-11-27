@@ -94,18 +94,12 @@ function run(command, args, options) {
 }
 
 function getNpmCommand() {
-  if (process.env.npm_execpath) {
-    return {
-      command: process.execPath,
-      argsPrefix: [process.env.npm_execpath],
-      label: `${process.execPath} ${process.env.npm_execpath}`,
-    };
-  }
-
+  const npmCli = process.env.npm_execpath;
+  if (!npmCli) throw new Error("Prepare the desktop backend through an npm script");
   return {
-    command: process.platform === "win32" ? "npm.cmd" : "npm",
-    argsPrefix: [],
-    label: process.platform === "win32" ? "npm.cmd" : "npm",
+    command: process.execPath,
+    argsPrefix: [npmCli],
+    label: `${process.execPath} ${npmCli}`,
   };
 }
 
