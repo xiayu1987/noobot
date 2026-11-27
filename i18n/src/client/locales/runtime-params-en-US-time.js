@@ -256,7 +256,12 @@ export default {
     },
     processSettleGraceMs: {
       name: "Tools process settle grace",
-      description: "Retention period for tools process settle grace.",
+      description: "Maximum wait for process exit after forced termination.",
+    },
+    processControlTimeoutMs: {
+      name: "Process control command timeout",
+      description:
+        "Timeout for each Windows process snapshot or termination command, independent of the exit wait.",
     },
     nativeTaskCleanupRetryDelayMs: {
       name: "Tools native task cleanup retry delay",

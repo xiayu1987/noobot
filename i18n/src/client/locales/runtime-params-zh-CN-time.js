@@ -255,7 +255,11 @@ export default {
     },
     processSettleGraceMs: {
       name: "工具进程收尾宽限",
-      description: "工具进程收尾宽限使用的保留期限。",
+      description: "强制终止后等待进程退出的最长时间。",
+    },
+    processControlTimeoutMs: {
+      name: "进程控制命令超时",
+      description: "每条 Windows 进程快照或终止命令的超时，独立于退出等待时间。",
     },
     nativeTaskCleanupRetryDelayMs: {
       name: "工具原生任务清理重试延迟",
