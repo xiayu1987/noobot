@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { EventEmitter, once } from "node:events";
 import test from "node:test";
+import { promisify } from "node:util";
 import { createProcessTreeTerminator, terminateProcessTree } from "../src/process.js";
 
 test("Windows termination propagates process snapshot failures", async () => {
@@ -156,6 +157,50 @@ test("Windows termination finds descendants after the parent exits and retains t
   assert.ok(calls.every((script) => script.includes("ProcessId = 510")));
 });
 
+test("Windows exit confirmation starts after discovery and forced termination", async (t) => {
+  let clock = 0;
+  t.mock.method(performance, "now", () => clock);
+  const calls = [];
+  const entry = { pid: 520, parentPid: 1, started: "20261126000000.000000+000" };
+  await terminateProcessTree(520, {
+    graceMs: 0,
+    settleMs: 100,
+    platform: "win32",
+    execFileImpl: (command, args, options, done) => {
+      calls.push(options.timeout);
+      if (options.timeout < 80) return done(new Error("Control command timed out"));
+      clock += 80;
+      const entries = calls.length === 1 ? [entry] : [];
+      done(null, args.at(-1).includes("SELECT ProcessId") ? JSON.stringify(entries) : "");
+    },
+  });
+  assert.deepEqual(calls, [100, 100, 100]);
+});
+
+test("Windows exit confirmation deadline is not renewed while a process survives", async (t) => {
+  let clock = 0;
+  t.mock.method(performance, "now", () => clock);
+  const entry = { pid: 521, parentPid: 1, started: "20261126000000.000000+000" };
+  await assert.rejects(
+    terminateProcessTree(521, {
+      graceMs: 0,
+      settleMs: 100,
+      platform: "win32",
+      execFileImpl: (command, args, options, done) => {
+        clock += 60;
+        done(null, args.at(-1).includes("SELECT ProcessId") ? JSON.stringify([entry]) : "");
+      },
+    }),
+    /did not exit after forced termination/,
+  );
+  await terminateProcessTree(521, {
+    graceMs: 0,
+    settleMs: 100,
+    platform: "win32",
+    execFileImpl: (command, args, options, done) => done(null, "[]"),
+  });
+});
+
 test("termination preserves hook failures after completing process cleanup", async () => {
   const child = Object.assign(new EventEmitter(), { pid: 46 });
   const failure = new Error("external cleanup failed");
@@ -191,6 +236,53 @@ test("process group termination escalates while descendants survive the leader",
   });
   assert.deepEqual(signals, ["SIGTERM", "SIGKILL"]);
 });
+
+for (const outcome of ["gone", "reused", "alive"]) {
+  for (const throws of [false, true]) {
+    test(
+      `Windows termination rechecks identity after failure (${outcome}, throws: ${throws})`,
+      { skip: process.platform !== "win32" },
+      async () => {
+        const entry = { pid: 530, parentPid: 1, started: "20261126000000.000000+000" };
+        let script;
+        await terminateProcessTree(entry.pid, {
+          graceMs: 0,
+          settleMs: 5000,
+          platform: "win32",
+          execFileImpl: (command, args, options, done) => {
+            if (args.at(-1).includes("SELECT ProcessId")) {
+              return done(null, JSON.stringify(script ? [] : [entry]));
+            }
+            script = args.at(-1);
+            done(null, "");
+          },
+        });
+        const preparation = `
+          $script:queries=0;
+          $script:target=[pscustomobject]@{CreationDate='${entry.started}'};
+          $script:target | Add-Member -MemberType ScriptMethod -Name Terminate -Value {
+            ${throws ? "throw 'native termination failed'" : "return @{ReturnValue=9}"}
+          };
+          function Get-WmiObject {
+            $script:queries += 1;
+            if ($script:queries -eq 1) { return $script:target };
+            ${outcome === "gone" ? "return $null" : outcome === "reused" ? "return @{CreationDate='20261127000000.000000+000'}" : "return $script:target"}
+          };
+        `;
+        const operation = promisify(execFile)(
+          "powershell.exe",
+          ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", preparation + script],
+          { windowsHide: true, timeout: 5000 },
+        );
+        if (outcome === "alive") {
+          await assert.rejects(operation, /termination failed/);
+        } else {
+          await operation;
+        }
+      },
+    );
+  }
+}
 
 for (const parentExits of [false, true]) {
   test(

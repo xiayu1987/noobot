@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { once } from "node:events";
 import { createServer } from "node:http";
+import { inspect } from "node:util";
 import { isProcessAlive } from "@noobot/platform-compatibility/process";
 import { runDeletionWorker } from "./deletion-worker-process.test-helpers.js";
 
@@ -90,7 +91,10 @@ test(
   `;
     await assert.rejects(
       runDeletionWorker(sourceArgs(source), { signal: controller.signal }),
-      reason,
+      (error) => {
+        assert.equal(error, reason, inspect(error, { depth: null }));
+        return true;
+      },
     );
     assert.ok(descendantPid > 0);
     assert.throws(() => process.kill(descendantPid, 0), { code: "ESRCH" });

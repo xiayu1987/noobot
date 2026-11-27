@@ -69,21 +69,24 @@ function collectTree(pid, entries, owned) {
 }
 
 function terminationCommand(entry) {
-  return `$p=Get-WmiObject Win32_Process -Filter 'ProcessId = ${entry.pid}'; if ($p -and $p.CreationDate -eq '${entry.started}') { $r=$p.Terminate(); if ($r.ReturnValue -ne 0) { throw ('Process termination failed: ' + $r.ReturnValue) } }`;
+  const query = `Get-WmiObject Win32_Process -Filter 'ProcessId = ${entry.pid}'`;
+  const identity = `$p -and $p.CreationDate -eq '${entry.started}'`;
+  return `$p=${query}; if (${identity}) { try { $r=$p.Terminate(); if ($r.ReturnValue -ne 0) { throw ('Process ${entry.pid} termination failed: ' + $r.ReturnValue) } } catch { $p=${query}; if (${identity}) { throw } } }`;
 }
 
 export async function forceStopWindowsTree(pid, { execFileImpl, settleMs }) {
   const owned = pendingTrees.get(pid) || new Map();
   pendingTrees.set(pid, owned);
-  const deadline = performance.now() + settleMs;
-  const remaining = () => Math.max(1, Math.ceil(deadline - performance.now()));
+  let deadline;
+  const remaining = () =>
+    deadline === undefined ? settleMs : Math.max(1, Math.ceil(deadline - performance.now()));
   while (true) {
     const alive = collectTree(pid, await snapshot(execFileImpl, remaining()), owned);
     if (!alive.length) {
       pendingTrees.delete(pid);
       return;
     }
-    if (performance.now() >= deadline) {
+    if (deadline !== undefined && performance.now() >= deadline) {
       throw new Error(`Process tree ${pid} did not exit after forced termination`);
     }
     const command =
@@ -94,6 +97,7 @@ export async function forceStopWindowsTree(pid, { execFileImpl, settleMs }) {
       execFileImpl,
       remaining(),
     );
+    deadline ??= performance.now() + settleMs;
     await delay(Math.min(10, remaining()));
   }
 }

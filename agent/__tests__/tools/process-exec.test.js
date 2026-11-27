@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { inspect } from "node:util";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { SCRIPT_FAILURE_CODE } from "@noobot/execution-isolation-protocol";
 import {
@@ -232,7 +233,10 @@ test("run propagates cleanup hook failure after terminating the native process",
         },
       },
     ),
-    /cleanup rejected/,
+    (error) => {
+      assert.match(String(error), /cleanup rejected/, inspect(error, { depth: null }));
+      return true;
+    },
   );
 });
 
