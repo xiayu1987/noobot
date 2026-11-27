@@ -82,6 +82,9 @@
     "glob@>=9 <14.0.2": "14.0.4"
   },
   "scripts": {
+    "prepare": "node ./scripts/install-git-hooks.mjs",
+    "hooks:install": "node ./scripts/install-git-hooks.mjs",
+    "check:commit-identity": "node ./scripts/check-commit-identity.mjs",
     "test:model-access": "node agent/scripts/model-access-test/start.js",
     "project:launcher": "node ./scripts/project-launcher.mjs",
     "release:version": "node ./scripts/bump-version.mjs",

@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 #
 # Rejects commit messages that carry any Co-Authored-By trailer.
-# Install: cp hooks/commit-msg .git/hooks/commit-msg
+# Install all repository hooks: npm run hooks:install
 repo_root="$(git rev-parse --show-toplevel)" || exit 1
+node "$repo_root/scripts/check-commit-identity.mjs" --current || exit 1
 exec node "$repo_root/scripts/check-commit-message.mjs" "$1"

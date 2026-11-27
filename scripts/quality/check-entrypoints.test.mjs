@@ -12,6 +12,10 @@ import { readRepositoryJson, repositoryPathExists } from "./repository-files.mjs
 const QUALITY_ENTRY = "check:quality";
 const QUALITY_RUNNER = "node ./scripts/run-quality-checks.mjs";
 const HOOK_ENTRIES = Object.freeze({
+  "check-commit-identity.mjs": {
+    hook: "hooks/pre-push",
+    reason: "validates git identities and pushed revision ranges, not repository sources",
+  },
   "check-commit-message.mjs": {
     hook: "hooks/commit-msg",
     reason: "validates a commit message file passed by git, not repository sources",

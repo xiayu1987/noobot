@@ -59,6 +59,11 @@ and Git history for superseded documents. Preserve release notes and license not
 
 ## Commit Message (recommended)
 
+`npm ci` installs the tracked commit and push hooks; use `npm run hooks:install` to reinstall them.
+Authors and committers must match the repository owner's identities declared in
+`scripts/check-commit-identity.mjs`. Co-author trailers are forbidden. The same policy
+checks outgoing commits before push and incoming commits in GitHub Actions.
+
 - `feat: ...`
 - `fix: ...`
 - `docs: ...`

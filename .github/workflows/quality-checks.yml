@@ -14,6 +14,29 @@ env:
   NODE_OPTIONS: --test-skip-pattern=@performance
 
 jobs:
+  commit-identity:
+    name: Commit identity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out complete commit history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26.9.0
+      - name: Reject unapproved authors, committers and co-authors
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            node scripts/check-commit-identity.mjs --range "$HEAD_SHA"
+          else
+            node scripts/check-commit-identity.mjs --range "$BASE_SHA..$HEAD_SHA"
+          fi
+
   quality:
     name: Quality (Node.js ${{ matrix.node-version }})
     runs-on: ubuntu-latest

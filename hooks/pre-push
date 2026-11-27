@@ -1,0 +1,6 @@
+#!/bin/sh
+# Copyright (c) 2026 xiayu
+# Contact: 126240622+xiayu1987@users.noreply.github.com
+# SPDX-License-Identifier: MIT
+repo_root="$(git rev-parse --show-toplevel)" || exit 1
+exec node "$repo_root/scripts/check-commit-identity.mjs" --pre-push

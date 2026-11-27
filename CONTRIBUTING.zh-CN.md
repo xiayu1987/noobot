@@ -57,6 +57,10 @@ Node.js 和 npm 版本以根目录 `package.json` 为准。
 
 ## Commit Message（建议）
 
+`npm ci` 自动安装仓库内的提交和推送钩子；可运行 `npm run hooks:install` 重新安装。
+作者和提交者必须符合 `scripts/check-commit-identity.mjs` 中的仓库所有者身份，禁止共同署名。
+推送前和 GitHub Actions 对新增提交执行同一身份规则。
+
 - `feat: ...`
 - `fix: ...`
 - `docs: ...`

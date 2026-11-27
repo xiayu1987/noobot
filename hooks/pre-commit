@@ -12,6 +12,9 @@
 #   git commit --no-verify ...           # skip every pre-commit hook
 set -euo pipefail
 
+repo_root="$(git rev-parse --show-toplevel)"
+node "$repo_root/scripts/check-commit-identity.mjs" --current
+
 if [[ "${ALLOW_CONSOLE_LOG:-}" == "1" ]]; then
   echo "pre-commit: ALLOW_CONSOLE_LOG=1 set, skipping console.log check"
   exit 0
