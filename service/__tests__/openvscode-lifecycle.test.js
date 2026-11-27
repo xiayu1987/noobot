@@ -38,7 +38,7 @@ async function restoreRunningInstance(t) {
     },
   );
   t.after(async () => {
-    await terminateProcessTree(child.pid, { graceMs: 0, settleMs: 5000 });
+    await terminateProcessTree(child.pid, { graceMs: 0, settleMs: 5000, controlTimeoutMs: 30000 });
     await rm(root, { recursive: true, force: true });
   });
   const [ready] = await once(child.stdout, "data");

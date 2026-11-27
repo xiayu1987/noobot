@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { spawn } from "node:child_process";
+import { DEFAULT_TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { acquireIsolatedTmpDir, buildIsolatedTmpEnv } from "./lib/isolated-tmp.mjs";
 import {
   terminateProcessTree,
@@ -38,12 +39,14 @@ let cancellation;
 let terminationFailure;
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
-    cancellation ??= terminateProcessTree(child.pid, { graceMs: 0, settleMs: 5000 }).catch(
-      (error) => {
-        terminationFailure = error;
-        process.stderr.write(`${error.stack || error.message}\n`);
-      },
-    );
+    cancellation ??= terminateProcessTree(child.pid, {
+      graceMs: 0,
+      settleMs: 5000,
+      controlTimeoutMs: DEFAULT_TIME_THRESHOLDS.tools.processControlTimeoutMs,
+    }).catch((error) => {
+      terminationFailure = error;
+      process.stderr.write(`${error.stack || error.message}\n`);
+    });
   });
 }
 

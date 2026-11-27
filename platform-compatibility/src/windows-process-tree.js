@@ -74,14 +74,12 @@ function terminationCommand(entry) {
   return `$p=${query}; if (${identity}) { try { $r=$p.Terminate(); if ($r.ReturnValue -ne 0) { throw ('Process ${entry.pid} termination failed: ' + $r.ReturnValue) } } catch { $p=${query}; if (${identity}) { throw } } }`;
 }
 
-export async function forceStopWindowsTree(pid, { execFileImpl, settleMs }) {
+export async function forceStopWindowsTree(pid, { execFileImpl, settleMs, controlTimeoutMs }) {
   const owned = pendingTrees.get(pid) || new Map();
   pendingTrees.set(pid, owned);
   let deadline;
-  const remaining = () =>
-    deadline === undefined ? settleMs : Math.max(1, Math.ceil(deadline - performance.now()));
   while (true) {
-    const alive = collectTree(pid, await snapshot(execFileImpl, remaining()), owned);
+    const alive = collectTree(pid, await snapshot(execFileImpl, controlTimeoutMs), owned);
     if (!alive.length) {
       pendingTrees.delete(pid);
       return;
@@ -95,9 +93,9 @@ export async function forceStopWindowsTree(pid, { execFileImpl, settleMs }) {
       "powershell.exe",
       ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command],
       execFileImpl,
-      remaining(),
+      controlTimeoutMs,
     );
     deadline ??= performance.now() + settleMs;
-    await delay(Math.min(10, remaining()));
+    await delay(Math.min(10, Math.max(1, deadline - performance.now())));
   }
 }

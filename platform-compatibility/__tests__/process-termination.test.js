@@ -15,6 +15,7 @@ test("Windows termination propagates process snapshot failures", async () => {
   const options = {
     graceMs: 100,
     settleMs: 100,
+    controlTimeoutMs: 1000,
     platform: "win32",
     execFileImpl: (...args) => args[3](failure),
     processKill: () => {},
@@ -29,6 +30,7 @@ test("a process group termination failure cannot become a direct-child terminati
     terminateProcessTree(43, {
       graceMs: 100,
       settleMs: 100,
+      controlTimeoutMs: 1000,
       platform: "linux",
       processKill: (pid, signal) => {
         calls.push([pid, signal]);
@@ -47,13 +49,14 @@ test("termination waits for both process tree removal and the external cleanup h
   const terminator = createProcessTreeTerminator(child, {
     graceMs: 100,
     settleMs: 100,
+    controlTimeoutMs: 1000,
     onTerminate: () =>
       new Promise((resolve) => {
         releaseHook = resolve;
       }),
     terminateProcess: async (pid, options) => {
       assert.equal(pid, 44);
-      assert.deepEqual(options, { graceMs: 100, settleMs: 100 });
+      assert.deepEqual(options, { graceMs: 100, settleMs: 100, controlTimeoutMs: 1000 });
       calls++;
       child.emit("close");
     },
@@ -78,13 +81,14 @@ test("termination does not require child output pipes to close", async () => {
   const terminator = createProcessTreeTerminator(child, {
     graceMs: 1,
     settleMs: 100,
+    controlTimeoutMs: 1000,
     terminateProcess: async (pid, options) => {
       calls.push([pid, options]);
       child.emit("exit", null, "SIGTERM");
     },
   });
   await terminator.terminate();
-  assert.deepEqual(calls, [[47, { graceMs: 1, settleMs: 100 }]]);
+  assert.deepEqual(calls, [[47, { graceMs: 1, settleMs: 100, controlTimeoutMs: 1000 }]]);
   assert.equal(child.listenerCount("exit"), 0);
   assert.equal(child.listenerCount("close"), 0);
 });
@@ -95,6 +99,7 @@ test("termination preserves process tree cleanup failures", async () => {
   const terminator = createProcessTreeTerminator(child, {
     graceMs: 1,
     settleMs: 1,
+    controlTimeoutMs: 1000,
     terminateProcess: async () => {
       throw failure;
     },
@@ -111,6 +116,7 @@ test("failed termination can retry while wait preserves the previous failure", a
     {
       graceMs: 0,
       settleMs: 100,
+      controlTimeoutMs: 1000,
       terminateProcess: async () => {
         if (++calls === 1) throw failure;
       },
@@ -135,6 +141,7 @@ test("Windows termination finds descendants after the parent exits and retains t
   const options = {
     graceMs: 0,
     settleMs: 1000,
+    controlTimeoutMs: 1000,
     platform: "win32",
     execFileImpl: (command, args, settings, done) => {
       assert.equal(command, "powershell.exe");
@@ -165,16 +172,17 @@ test("Windows exit confirmation starts after discovery and forced termination", 
   await terminateProcessTree(520, {
     graceMs: 0,
     settleMs: 100,
+    controlTimeoutMs: 1000,
     platform: "win32",
     execFileImpl: (command, args, options, done) => {
       calls.push(options.timeout);
-      if (options.timeout < 80) return done(new Error("Control command timed out"));
-      clock += 80;
+      if (options.timeout < 800) return done(new Error("Control command timed out"));
+      clock += 800;
       const entries = calls.length === 1 ? [entry] : [];
       done(null, args.at(-1).includes("SELECT ProcessId") ? JSON.stringify(entries) : "");
     },
   });
-  assert.deepEqual(calls, [100, 100, 100]);
+  assert.deepEqual(calls, [1000, 1000, 1000]);
 });
 
 test("Windows exit confirmation deadline is not renewed while a process survives", async (t) => {
@@ -185,8 +193,10 @@ test("Windows exit confirmation deadline is not renewed while a process survives
     terminateProcessTree(521, {
       graceMs: 0,
       settleMs: 100,
+      controlTimeoutMs: 1000,
       platform: "win32",
       execFileImpl: (command, args, options, done) => {
+        assert.equal(options.timeout, 1000);
         clock += 60;
         done(null, args.at(-1).includes("SELECT ProcessId") ? JSON.stringify([entry]) : "");
       },
@@ -196,6 +206,7 @@ test("Windows exit confirmation deadline is not renewed while a process survives
   await terminateProcessTree(521, {
     graceMs: 0,
     settleMs: 100,
+    controlTimeoutMs: 1000,
     platform: "win32",
     execFileImpl: (command, args, options, done) => done(null, "[]"),
   });
@@ -207,6 +218,7 @@ test("termination preserves hook failures after completing process cleanup", asy
   const terminator = createProcessTreeTerminator(child, {
     graceMs: 100,
     settleMs: 100,
+    controlTimeoutMs: 1000,
     onTerminate: () => {
       throw failure;
     },
@@ -222,6 +234,7 @@ test("process group termination escalates while descendants survive the leader",
   await terminateProcessTree(48, {
     graceMs: 1,
     settleMs: 100,
+    controlTimeoutMs: 1000,
     platform: "linux",
     processKill: (pid, signal) => {
       assert.equal(pid, -48);
@@ -248,6 +261,7 @@ for (const outcome of ["gone", "reused", "alive"]) {
         await terminateProcessTree(entry.pid, {
           graceMs: 0,
           settleMs: 5000,
+          controlTimeoutMs: 30000,
           platform: "win32",
           execFileImpl: (command, args, options, done) => {
             if (args.at(-1).includes("SELECT ProcessId")) {
@@ -304,11 +318,12 @@ for (const parentExits of [false, true]) {
         stdio: ["ignore", "ignore", "ignore", "ipc"],
         windowsHide: true,
       });
-      t.after(() => terminateProcessTree(child.pid, { graceMs: 0, settleMs: 5000 }));
+      const budgets = { graceMs: 0, settleMs: 5000, controlTimeoutMs: 30000 };
+      t.after(() => terminateProcessTree(child.pid, budgets));
       const [grandchildPid] = await once(child, "message");
-      t.after(() => terminateProcessTree(grandchildPid, { graceMs: 0, settleMs: 5000 }));
+      t.after(() => terminateProcessTree(grandchildPid, budgets));
       if (parentExits && child.exitCode === null) await once(child, "exit");
-      const terminator = createProcessTreeTerminator(child, { graceMs: 1000, settleMs: 5000 });
+      const terminator = createProcessTreeTerminator(child, budgets);
       await terminator.terminate();
       for (const pid of [child.pid, grandchildPid]) {
         assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });

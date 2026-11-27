@@ -215,6 +215,7 @@ test("process tree termination uses the platform primitive", async () => {
   await terminateProcessTree(42, {
     graceMs: 0,
     settleMs: 100,
+    controlTimeoutMs: 1000,
     platform: "win32",
     execFileImpl: (command, args, options, done) => {
       calls.push([command, args, options]);
@@ -242,6 +243,7 @@ test("process tree termination uses the platform primitive", async () => {
   await terminateProcessTree(43, {
     graceMs: 100,
     settleMs: 100,
+    controlTimeoutMs: 1000,
     platform: "linux",
     processKill: (target, signal) => {
       assert.equal(target, -43);

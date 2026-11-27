@@ -97,6 +97,7 @@ function createTerminationController(child, abortSignal, timeoutMs, onTerminate,
   const processTermination = createProcessTreeTerminator(child, {
     graceMs: TIME_THRESHOLDS.tools.processForceKillGraceMs,
     settleMs: TIME_THRESHOLDS.tools.processSettleGraceMs,
+    controlTimeoutMs: TIME_THRESHOLDS.tools.processControlTimeoutMs,
     onTerminate,
   });
   const terminate = (reason = "timeout") => {

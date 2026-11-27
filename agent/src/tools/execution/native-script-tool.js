@@ -202,6 +202,7 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
     const processTermination = createProcessTreeTerminator(child, {
       graceMs: TIME_THRESHOLDS.tools.nativeScriptForceKillGraceMs,
       settleMs: TIME_THRESHOLDS.tools.processSettleGraceMs,
+      controlTimeoutMs: TIME_THRESHOLDS.tools.processControlTimeoutMs,
     });
     const terminate = (reason) => {
       if (terminalReason) return;

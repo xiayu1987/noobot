@@ -188,6 +188,7 @@ export async function terminateProcessTree(
   {
     graceMs,
     settleMs,
+    controlTimeoutMs,
     platform = process.platform,
     execFileImpl = execFile,
     processKill = process.kill,
@@ -197,8 +198,11 @@ export async function terminateProcessTree(
   if (!Number.isFinite(graceMs) || graceMs < 0 || !Number.isFinite(settleMs) || settleMs <= 0) {
     throw new TypeError("Process tree termination requires valid graceMs and settleMs");
   }
+  if (!Number.isFinite(controlTimeoutMs) || controlTimeoutMs <= 0) {
+    throw new TypeError("Process tree termination requires a positive controlTimeoutMs");
+  }
   if (!usesDetachedProcessGroup(platform)) {
-    return forceStopWindowsTree(pid, { execFileImpl, settleMs });
+    return forceStopWindowsTree(pid, { execFileImpl, settleMs, controlTimeoutMs });
   }
   const target = -pid;
   if (graceMs > 0) {
@@ -213,7 +217,7 @@ export async function terminateProcessTree(
 
 export function createProcessTreeTerminator(
   child,
-  { graceMs, settleMs, onTerminate, terminateProcess = terminateProcessTree },
+  { graceMs, settleMs, controlTimeoutMs, onTerminate, terminateProcess = terminateProcessTree },
 ) {
   let operation = null;
   let retry = false;
@@ -226,7 +230,7 @@ export function createProcessTreeTerminator(
         Promise.resolve().then(() => onTerminate?.()),
         Promise.resolve().then(() => {
           if (child.pid === undefined) return;
-          return terminateProcess(child.pid, { graceMs, settleMs });
+          return terminateProcess(child.pid, { graceMs, settleMs, controlTimeoutMs });
         }),
       ])
         .then((results) => {

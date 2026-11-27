@@ -45,5 +45,6 @@ export async function stopInstance(instance, { forceAfterMs }) {
   await terminateProcessTree(pid, {
     graceMs: forceAfterMs,
     settleMs: TIME_THRESHOLDS.tools.processSettleGraceMs,
+    controlTimeoutMs: TIME_THRESHOLDS.tools.processControlTimeoutMs,
   });
 }

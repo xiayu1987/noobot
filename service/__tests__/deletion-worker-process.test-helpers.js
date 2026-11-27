@@ -36,6 +36,7 @@ export async function runDeletionWorker(args, options, budget = DELETION_WORKER_
   const terminator = createProcessTreeTerminator(child, {
     graceMs: TIME_THRESHOLDS.tools.processForceKillGraceMs,
     settleMs: TIME_THRESHOLDS.tools.processSettleGraceMs,
+    controlTimeoutMs: TIME_THRESHOLDS.tools.processControlTimeoutMs,
   });
   let output = "";
   let failure;

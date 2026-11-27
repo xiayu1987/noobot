@@ -167,6 +167,7 @@ test("native process termination waits for the Windows process tree to exit", as
   const terminated = terminateProcessTree(123, {
     graceMs: 100,
     settleMs: 100,
+    controlTimeoutMs: 1000,
     platform: "win32",
     execFileImpl: (...args) => {
       calls.push(args);
@@ -198,6 +199,7 @@ test("native process termination uses detached groups on Linux and macOS", async
     await terminateProcessTree(456, {
       graceMs: 0,
       settleMs: 100,
+      controlTimeoutMs: 1000,
       platform,
       processKill: (target, signal) => {
         assert.equal(target, -456);

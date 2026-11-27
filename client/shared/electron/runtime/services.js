@@ -153,6 +153,7 @@ export function createDesktopServiceManager({
     await terminateProcess(child.pid, {
       graceMs: TIME_THRESHOLDS.tools.processForceKillGraceMs,
       settleMs: TIME_THRESHOLDS.tools.processSettleGraceMs,
+      controlTimeoutMs: TIME_THRESHOLDS.tools.processControlTimeoutMs,
     });
     managedProcessTrees.delete(child);
   }

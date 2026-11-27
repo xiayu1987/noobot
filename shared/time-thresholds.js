@@ -121,6 +121,7 @@ export const DEFAULT_TIME_THRESHOLDS = deepFreeze({
     browserDevtoolsPortPollIntervalMs: 250,
     processForceKillGraceMs: TIME_TIERS.flushMs,
     processSettleGraceMs: TIME_TIERS.hookMs,
+    processControlTimeoutMs: TIME_TIERS.standardCommandMs,
     nativeTaskCleanupRetryDelayMs: 100,
     dockerLockWaitTimeoutMs: TIME_TIERS.oneHourMs,
   },
